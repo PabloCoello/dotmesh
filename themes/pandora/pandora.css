@@ -1,0 +1,45 @@
+/* Pandora Theme for Obsidian */
+/* Generated from palette.json */
+
+.theme-dark {
+  /* Background */
+  --background-primary: #1A191E;
+  --background-secondary: #23242A;
+  --background-tertiary: #262830;
+  
+  /* Foreground */
+  --text-normal: #F2F4F5;
+  --text-muted: #C5C9CE;
+  --text-faint: #9BA0A6;
+  
+  /* Accent colors */
+  --color-red: #FF7799;
+  --color-green: #66D9B8;
+  --color-yellow: #FFD666;
+  --color-blue: #FFAA7A;
+  --color-purple: #C299FF;
+  --color-cyan: #66CCFF;
+  
+  /* Interactive */
+  --interactive-accent: #FFAA7A;
+  --interactive-accent-hover: #66D9B8;
+  
+  /* Selection */
+  --text-selection: #23242A;
+  
+  /* Links */
+  --link-color: #FFAA7A;
+  --link-color-hover: #66D9B8;
+  
+  /* Tags */
+  --tag-color: #66D9B8;
+  --tag-background: #23242A;
+  
+  /* Code */
+  --code-background: #23242A;
+  --code-normal: #66D9B8;
+  --code-comment: #9BA0A6;
+  --code-function: #C299FF;
+  --code-keyword: #FF7799;
+  --code-string: #66D9B8;
+}

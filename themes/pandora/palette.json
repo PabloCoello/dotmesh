@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "name": "Pandora",
+  "description": "A dark, elegant color palette for a unified development environment",
+  "version": "1.0.0",
+  "colors": {
+    "background": {
+      "primary": "#1A191E",
+      "secondary": "#252429",
+      "tertiary": "#2E2D32"
+    },
+    "foreground": {
+      "primary": "#D1D3D4",
+      "secondary": "#A8AAAB",
+      "tertiary": "#7F8182"
+    },
+    "accent": {
+      "red": "#E27056",
+      "green": "#58B69D",
+      "yellow": "#E5B15D",
+      "blue": "#4F80DD",
+      "purple": "#CBAACB",
+      "cyan": "#58B69D"
+    },
+    "syntax": {
+      "comment": "#7F8182",
+      "string": "#58B69D",
+      "number": "#E5B15D",
+      "keyword": "#4F80DD",
+      "function": "#E5B15D",
+      "variable": "#D1D3D4",
+      "type": "#CBAACB",
+      "constant": "#E27056",
+      "operator": "#D1D3D4",
+      "punctuation": "#A8AAAB"
+    },
+    "ui": {
+      "selection": "#2E2D32",
+      "cursor": "#D1D3D4",
+      "cursorLine": "#252429",
+      "lineNumber": "#7F8182",
+      "border": "#2E2D32",
+      "shadow": "#0D0C0F"
+    },
+    "git": {
+      "added": "#58B69D",
+      "modified": "#E5B15D",
+      "deleted": "#E27056",
+      "ignored": "#7F8182",
+      "renamed": "#4F80DD",
+      "untracked": "#CBAACB"
+    },
+    "terminal": {
+      "black": "#1A191E",
+      "red": "#E27056",
+      "green": "#58B69D",
+      "yellow": "#E5B15D",
+      "blue": "#4F80DD",
+      "magenta": "#CBAACB",
+      "cyan": "#58B69D",
+      "white": "#D1D3D4",
+      "brightBlack": "#7F8182",
+      "brightRed": "#FF8A73",
+      "brightGreen": "#6FCDBA",
+      "brightYellow": "#FFC874",
+      "brightBlue": "#6697FA",
+      "brightMagenta": "#E2C7E8",
+      "brightCyan": "#6FCDBA",
+      "brightWhite": "#FFFFFF"
+    },
+    "diagnostic": {
+      "error": "#E27056",
+      "warning": "#E5B15D",
+      "info": "#4F80DD",
+      "hint": "#58B69D"
+    }
+  },
+  "metadata": {
+    "author": "Pablo Coello",
+    "created": "2025-12-09",
+    "license": "MIT",
+    "repository": "https://github.com/pablocoello/dotfiles"
+  }
+}

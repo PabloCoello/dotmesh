@@ -1,0 +1,9 @@
+# Ignore non-stowable VS Code assets.
+^/extensions
+^/themes
+^/scripts
+^/package.json
+^/CHANGELOG\.md
+^/README\.md
+^/USAGE\.md
+^/Makefile

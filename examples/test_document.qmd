@@ -1,0 +1,22 @@
+---
+title: "Prueba Quarto"
+format: html
+---
+
+# Encabezado
+
+Documento de prueba para validar Quarto desde Neovim.
+
+```{r}
+#| label: setup
+#| message: false
+greet <- function(name) paste0("Hola, ", name, "!")
+greet("Neovim + Quarto")
+```
+
+```{python}
+def squares(nums):
+    return [n * n for n in nums]
+
+squares([1, 2, 3, 4])
+```

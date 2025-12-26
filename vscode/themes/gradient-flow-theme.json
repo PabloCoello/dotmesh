@@ -1,0 +1,615 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "Gradient Flow",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#1E2A32",
+    "editor.foreground": "#F5F5F5",
+    "editorCursor.foreground": "#FFAA7A",
+    "editor.lineHighlightBackground": "#2A3740",
+    "editor.selectionBackground": "#FFAA7A55",
+    "editor.inactiveSelectionBackground": "#FFAA7A33",
+    "editor.wordHighlightBackground": "#06D7A055",
+    "editor.wordHighlightStrongBackground": "#FFD16766",
+    "sideBar.background": "#1E2A32",
+    "sideBar.foreground": "#F5F5F5",
+    "activityBar.background": "#16212A",
+    "activityBar.foreground": "#06D7A0",
+    "activityBarBadge.background": "#FFAA7A",
+    "activityBarBadge.foreground": "#FFFFFF",
+    "statusBar.background": "#16212A",
+    "statusBar.foreground": "#06D7A0",
+    "titleBar.activeBackground": "#16212A",
+    "titleBar.activeForeground": "#F5F5F5",
+    "titleBar.inactiveForeground": "#8BB3C7",
+    "panel.background": "#1E2A32",
+    "panel.border": "#3A4A55",
+    "input.background": "#2A3740",
+    "input.foreground": "#F5F5F5",
+    "input.placeholderForeground": "#8BB3C7",
+    "input.border": "#06D7A0",
+    "list.hoverBackground": "#2A3740",
+    "list.activeSelectionBackground": "#3A4A55",
+    "list.activeSelectionForeground": "#F5F5F5",
+    "list.highlightForeground": "#FFAA7A",
+    "badge.background": "#FFAA7A",
+    "badge.foreground": "#FFFFFF",
+    "tab.activeBackground": "#1E2A32",
+    "tab.inactiveBackground": "#16212A",
+    "tab.activeForeground": "#F5F5F5",
+    "tab.inactiveForeground": "#8BB3C7",
+    "tab.border": "#3A4A55",
+    "editorWidget.background": "#2A3740",
+    "editorWidget.border": "#06D7A0",
+    "editorHoverWidget.background": "#2A3740",
+    "editorHoverWidget.border": "#06D7A0",
+    "diffEditor.insertedTextBackground": "#06D7A055",
+    "diffEditor.removedTextBackground": "#FFAA7A55",
+    "gitDecoration.addedResourceForeground": "#06D7A0",
+    "gitDecoration.modifiedResourceForeground": "#FFD167",
+    "gitDecoration.deletedResourceForeground": "#FFAA7A",
+    "gitDecoration.untrackedResourceForeground": "#78C6AA",
+    "terminal.background": "#1E2A32",
+    "terminal.foreground": "#F5F5F5",
+    "terminal.ansiBlack": "#16212A",
+    "terminal.ansiRed": "#FFAA7A",
+    "terminal.ansiGreen": "#06D7A0",
+    "terminal.ansiYellow": "#FFD167",
+    "terminal.ansiBlue": "#108AB1",
+    "terminal.ansiMagenta": "#78C6AA",
+    "terminal.ansiCyan": "#06D7A0",
+    "terminal.ansiWhite": "#F5F5F5",
+    "terminal.ansiBrightBlack": "#8BB3C7",
+    "terminal.ansiBrightRed": "#FFB199",
+    "terminal.ansiBrightGreen": "#33E5B8",
+    "terminal.ansiBrightYellow": "#FFE585",
+    "terminal.ansiBrightBlue": "#44B5D1",
+    "terminal.ansiBrightMagenta": "#A3D4B8",
+    "terminal.ansiBrightCyan": "#66E5C7",
+    "terminal.ansiBrightWhite": "#FFFFFF",
+    "editor.findMatchBackground": "#FFD16777",
+    "editor.findMatchHighlightBackground": "#FFD16744",
+    "editorLineNumber.foreground": "#6B7A88",
+    "editorLineNumber.activeForeground": "#06D7A0",
+    "editorIndentGuide.background1": "#1E2A3200",
+    "editorIndentGuide.background2": "#1E2A3200",
+    "editorIndentGuide.background3": "#1E2A3200",
+    "editorIndentGuide.activeBackground1": "#FFAA7A55",
+    "editorIndentGuide.activeBackground2": "#FFAA7A55",
+    "editorIndentGuide.activeBackground3": "#FFAA7A55",
+    "editorWhitespace.foreground": "#3A4A55",
+    "editorRuler.foreground": "#3A4A55",
+    "scrollbarSlider.background": "#6B7A8866",
+    "scrollbarSlider.hoverBackground": "#6B7A8899",
+    "scrollbarSlider.activeBackground": "#6B7A88CC",
+    "editorBracketMatch.background": "#FFAA7A66",
+    "editorBracketMatch.border": "#FFAA7A"
+  },
+  "semanticHighlighting": false,
+  "tokenColors": [
+    {
+      "name": "Comments",
+      "scope": [
+        "comment",
+        "punctuation.definition.comment"
+      ],
+      "settings": {
+        "foreground": "#8BB3C7",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Variables and basic text",
+      "scope": [
+        "variable",
+        "meta.object-literal.key",
+        "support.variable.property"
+      ],
+      "settings": {
+        "foreground": "#F8F8F8"
+      }
+    },
+    {
+      "name": "Keywords and control flow",
+      "scope": [
+        "keyword",
+        "storage.type",
+        "storage.modifier",
+        "keyword.control"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A",
+        "fontStyle": ""
+      }
+    },
+    {
+      "name": "Functions",
+      "scope": [
+        "entity.name.function",
+        "support.function",
+        "meta.function-call"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Strings",
+      "scope": [
+        "string",
+        "constant.other.symbol"
+      ],
+      "settings": {
+        "foreground": "#FFD167"
+      }
+    },
+    {
+      "name": "Numbers and booleans",
+      "scope": [
+        "constant.numeric",
+        "constant.language.boolean"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "Types and classes",
+      "scope": [
+        "entity.name.type",
+        "support.type",
+        "entity.name.class"
+      ],
+      "settings": {
+        "foreground": "#108AB1"
+      }
+    },
+    {
+      "name": "Error highlighting",
+      "scope": [
+        "invalid",
+        "invalid.illegal"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A",
+        "fontStyle": "underline"
+      }
+    },
+    {
+      "name": "Python: Classes",
+      "scope": [
+        "entity.name.type.class.python",
+        "support.type.python"
+      ],
+      "settings": {
+        "foreground": "#108AB1"
+      }
+    },
+    {
+      "name": "Python: Function definitions",
+      "scope": [
+        "entity.name.function.python"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Python: Decorators",
+      "scope": [
+        "entity.name.function.decorator.python",
+        "punctuation.definition.decorator.python"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "Python: Built-in functions",
+      "scope": [
+        "support.function.builtin.python"
+      ],
+      "settings": {
+        "foreground": "#06D7A0",
+        "fontStyle": ""
+      }
+    },
+    {
+      "name": "Python: Magic methods",
+      "scope": [
+        "support.function.magic.python"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "Python: Keywords",
+      "scope": [
+        "keyword.control.import.python",
+        "keyword.control.flow.python",
+        "keyword.operator.logical.python"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "Python: Self parameter",
+      "scope": [
+        "variable.language.special.self.python"
+      ],
+      "settings": {
+        "foreground": "#C299FF",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Python: Exception types",
+      "scope": [
+        "support.type.exception.python"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "Python: Docstrings",
+      "scope": [
+        "string.quoted.docstring.multi.python"
+      ],
+      "settings": {
+        "foreground": "#8BB3C7",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Python: String formatting",
+      "scope": [
+        "constant.character.format.placeholder.other.python",
+        "meta.format.brace.python"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "Python: Module/Package names",
+      "scope": [
+        "entity.name.namespace.python"
+      ],
+      "settings": {
+        "foreground": "#108AB1"
+      }
+    },
+    {
+      "name": "Python: Data science libraries",
+      "scope": [
+        "meta.function-call.python support.function.builtin.python"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Python: Pandas methods",
+      "scope": [
+        "meta.function-call.python variable.function.python"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Python: NumPy/SciPy functions",
+      "scope": [
+        "support.function.scientific.python"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "R: Function names",
+      "scope": [
+        "entity.name.function.r",
+        "support.function.r"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "R: Built-in functions",
+      "scope": [
+        "support.function.builtin.r"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "R: Assignment operators",
+      "scope": [
+        "keyword.operator.assignment.r"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "R: Pipe operator",
+      "scope": [
+        "keyword.operator.pipe.r"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "R: Variables",
+      "scope": [
+        "variable.other.r",
+        "variable.language.r"
+      ],
+      "settings": {
+        "foreground": "#F8F8F8"
+      }
+    },
+    {
+      "name": "R: Data frame columns",
+      "scope": [
+        "variable.other.member.r"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "R: Package names and namespaces",
+      "scope": [
+        "entity.name.namespace.r",
+        "support.class.r"
+      ],
+      "settings": {
+        "foreground": "#108AB1"
+      }
+    },
+    {
+      "name": "R: Control flow",
+      "scope": [
+        "keyword.control.r"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "R: Logical constants",
+      "scope": [
+        "constant.language.logical.r"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "R: Numeric constants",
+      "scope": [
+        "constant.numeric.r"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "R: Strings",
+      "scope": [
+        "string.quoted.double.r",
+        "string.quoted.single.r"
+      ],
+      "settings": {
+        "foreground": "#FFD167"
+      }
+    },
+    {
+      "name": "R: Tidyverse functions",
+      "scope": [
+        "support.function.tidyverse.r"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "R: ggplot2 functions",
+      "scope": [
+        "support.function.ggplot2.r"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "R: dplyr verbs",
+      "scope": [
+        "support.function.dplyr.r"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Markdown: Headings",
+      "scope": [
+        "markup.heading.markdown",
+        "entity.name.section.markdown"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "Markdown: Bold text",
+      "scope": [
+        "markup.bold.markdown"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "Markdown: Italic text",
+      "scope": [
+        "markup.italic.markdown"
+      ],
+      "settings": {
+        "foreground": "#06D7A0",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Markdown: Links",
+      "scope": [
+        "markup.underline.link.markdown",
+        "string.other.link.title.markdown"
+      ],
+      "settings": {
+        "foreground": "#108AB1",
+        "fontStyle": "underline"
+      }
+    },
+    {
+      "name": "Markdown: Inline code",
+      "scope": [
+        "markup.inline.raw.markdown"
+      ],
+      "settings": {
+        "foreground": "#FFD167"
+      }
+    },
+    {
+      "name": "Markdown: Code blocks",
+      "scope": [
+        "markup.fenced_code.block.markdown"
+      ],
+      "settings": {
+        "foreground": "#F8F8F8"
+      }
+    },
+    {
+      "name": "YAML: Keys",
+      "scope": [
+        "entity.name.tag.yaml"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "YAML: Values",
+      "scope": [
+        "string.unquoted.plain.out.yaml",
+        "string.quoted.double.yaml",
+        "string.quoted.single.yaml"
+      ],
+      "settings": {
+        "foreground": "#FFD167"
+      }
+    },
+    {
+      "name": "JSON: Property names",
+      "scope": [
+        "support.type.property-name.json"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "JSON: Values",
+      "scope": [
+        "string.quoted.double.json"
+      ],
+      "settings": {
+        "foreground": "#FFD167"
+      }
+    },
+    {
+      "name": "Comparison operators",
+      "scope": [
+        "keyword.operator.comparison",
+        "keyword.operator.comparison.python",
+        "keyword.operator.relational"
+      ],
+      "settings": {
+        "foreground": "#C299FF"
+      }
+    },
+    {
+      "name": "Operators",
+      "scope": [
+        "keyword.operator",
+        "keyword.operator.assignment",
+        "keyword.operator.arithmetic",
+        "keyword.operator.logical"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    },
+    {
+      "name": "Punctuation and brackets",
+      "scope": [
+        "punctuation.definition.string.begin",
+        "punctuation.definition.string.end",
+        "punctuation.definition.parameters.begin",
+        "punctuation.definition.parameters.end",
+        "punctuation.separator.comma",
+        "punctuation.terminator"
+      ],
+      "settings": {
+        "foreground": "#8BB3C7"
+      }
+    },
+    {
+      "name": "Special characters and symbols",
+      "scope": [
+        "constant.character.escape",
+        "punctuation.definition.raw.markdown"
+      ],
+      "settings": {
+        "foreground": "#78C6AA"
+      }
+    },
+    {
+      "name": "Data Science: DataFrame methods",
+      "scope": [
+        "meta.function-call.python meta.qualified-name.python variable.other.member.python"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Data Science: Statistical functions",
+      "scope": [
+        "support.function.statistical.python",
+        "support.function.statistical.r"
+      ],
+      "settings": {
+        "foreground": "#06D7A0"
+      }
+    },
+    {
+      "name": "Data Science: Plot functions",
+      "scope": [
+        "support.function.plot.python",
+        "support.function.plot.r"
+      ],
+      "settings": {
+        "foreground": "#FFAA7A"
+      }
+    }
+  ]
+}
