@@ -1,0 +1,7 @@
+.DS_Store
+*.tar.gz
+*.bak
+*~
+
+# Stow may produce this when conflicts occur
+*.orig

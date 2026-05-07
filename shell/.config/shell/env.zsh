@@ -89,3 +89,9 @@ if command -v fd &> /dev/null; then
   export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 fi
 
+# ─────────────────────────────────────────────
+# ➤ SECRETS (untracked, lives outside the repo)
+# ─────────────────────────────────────────────
+# Tokens for MCPs and other services. Format: see docs/SECRETS.md.
+[[ -f "$HOME/.zsh.secrets" ]] && source "$HOME/.zsh.secrets"
+
