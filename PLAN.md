@@ -1,149 +1,263 @@
-# Plan: adaptar /super-git para commits atómicos desde cambios grandes
+# Plan: incorporar un core pack de skills para trabajo diario con agentes
 
 ## Resumen
 
-Actualizar `/super-git` para que pase de commitear el staging existente a guiar una serie de commits atómicos desde todo el working tree. La implementación debe vivir en el archivo del comando y, si procede, actualizar la documentación que menciona el comportamiento anterior.
+Actualizar la biblioteca de skills de los dotfiles para que `agents/.agents/skills/` contenga un core pack diario de 14 skills. La implementación debe combinar tres movimientos: auditar lo existente, adaptar contenido útil de las skills de referencia y añadir las skills que faltan sin duplicar instrucciones ni meter procesos innecesarios.
 
 ## Decisiones de diseño
 
-- Mantener el nombre `/super-git` porque sustituye al flujo actual.
-- Analizar staged, unstaged y untracked antes de proponer commits.
-- Confirmar cada commit antes de prepararlo.
-- Usar `git add -p` cuando un archivo mezcle hunks de distintos grupos. Es más seguro que generar patches temporales no interactivos en repositorios con cambios locales sensibles o heterogéneos.
-- Usar `git diff --check --cached` como verificación mínima antes de cada commit.
-- Usar `git commit -m "<mensaje>"` para evitar bloquear sesiones no interactivas con un editor.
-- No ejecutar push ni comandos destructivos.
+- Usar `agents/.agents/skills/` como única fuente de verdad.
+- No importar el repositorio externo completo.
+- Añadir las skills que faltan como directorios nuevos con `SKILL.md`.
+- Mejorar las skills existentes solo cuando el cambio aporte criterios de activación, verificación o límites más claros.
+- Mantener `anti-ai-style` y `castellano-peninsular` como skills locales adicionales, fuera del core pack de ingeniería.
+- Crear o actualizar documentación de índice para que el setup explique qué skills están disponibles y cuándo usarlas.
 
 ## Tareas atómicas
 
-### Tarea 1: localizar referencias actuales al comportamiento staged-only
+### Tarea 1: auditar las skills existentes y el índice actual
 
-**Descripción:** Revisar los archivos de configuración y documentación que mencionan `/super-git` para identificar dónde se afirma que requiere staging previo.
+**Descripción:** Revisar `agents/.agents/skills/`, `AGENTS.md` y cualquier índice relacionado para confirmar qué skills existen, qué rutas documentan y qué contradicciones hay.
 
-**Criterio de hecho:** Hay una lista de archivos y líneas que deben actualizarse o mantenerse.
+**Criterio de hecho:** Hay una lista de skills existentes, skills ausentes y documentación que debe actualizarse.
 
 **Dependencias:** Ninguna.
 
 **Verificación:** Ejecutar búsquedas equivalentes a:
 
 ```bash
-rg "super-git|requiere algo en staging|staged diff|git diff --staged" opencode agents CHECKPOINT.md README.md
+find agents/.agents/skills -maxdepth 2 -name SKILL.md | sort
+rg "skills|\.agents|\.opencode|context-engineering|debugging-and-error-recovery" AGENTS.md agents README.md
 ```
 
 **Archivos previstos:** Ninguno en esta tarea; solo lectura.
 
-### Tarea 2: reescribir el contrato operativo de `/super-git`
+### Tarea 2: definir la política de adaptación de contenido
 
-**Descripción:** Actualizar `opencode/.config/opencode/commands/super-git.md` para describir el nuevo flujo: inspección del working tree, propuesta de grupos, confirmación por commit, preparación selectiva, verificación y commit editable.
+**Descripción:** Redactar una guía breve de decisión para aplicar durante la incorporación: qué se copia, qué se resume, qué se elimina y cuándo se fusiona con una skill existente.
 
-**Criterio de hecho:** El comando ya no dice que se detenga si `git diff --staged` está vacío. Describe qué hacer si no hay ningún cambio en el working tree.
+**Criterio de hecho:** Existe un criterio operativo escrito que evita copiar contenido externo de forma acrítica.
 
 **Dependencias:** Tarea 1.
 
-**Verificación:** Leer el archivo y comprobar que los pasos coinciden con `SPEC.md`.
+**Verificación:** Comprobar que la guía cubre ejemplos, frontmatter, activación, verificación, señales de alerta y duplicidades.
 
 **Archivos previstos:**
 
-- `opencode/.config/opencode/commands/super-git.md`
+- `agents/.agents/skills/README.md` o documento equivalente de índice.
 
-### Tarea 3: definir reglas de agrupación y preparación de cambios
+### Tarea 3: añadir `context-engineering`
 
-**Descripción:** Añadir al comando criterios concretos para agrupar cambios: por intención, tipo Conventional Commits, scope, rutas relacionadas y separabilidad de hunks. Incluir el uso de `git add -p` para archivos con cambios mixtos.
+**Descripción:** Crear la skill para preparar y mantener contexto útil entre sesiones, proyectos y herramientas. Debe cubrir carga selectiva de contexto, conflictos entre instrucciones, contexto externo no fiable y cuándo pedir aclaración.
 
-**Criterio de hecho:** El comando indica cómo decidir el siguiente commit y cómo actuar ante archivos con cambios mezclados.
+**Criterio de hecho:** La skill existe y puede activarse al iniciar sesiones, cambiar de proyecto, detectar deriva de contexto o preparar una tarea compleja.
 
 **Dependencias:** Tarea 2.
 
-**Verificación:** Revisar que el flujo cubre staged, unstaged y untracked, y que no depende de preparar todo un archivo si solo procede un hunk.
+**Verificación:** Leer el `SKILL.md` y confirmar que incluye proceso, señales de alerta y checklist de verificación.
 
 **Archivos previstos:**
 
-- `opencode/.config/opencode/commands/super-git.md`
+- `agents/.agents/skills/context-engineering/SKILL.md`
 
-### Tarea 4: incorporar la verificación previa a cada commit
+### Tarea 4: añadir `debugging-and-error-recovery`
 
-**Descripción:** Añadir la obligación de ejecutar `git diff --check --cached` después de preparar cada grupo y antes de `git commit`.
+**Descripción:** Crear la skill para depuración sistemática. Debe imponer reproducir, localizar, reducir, corregir causa raíz, añadir protección y verificar antes de seguir.
 
-**Criterio de hecho:** El comando especifica que, si la verificación falla, se detiene y no crea el commit.
+**Criterio de hecho:** La skill existe y se activa ante tests fallidos, builds rotos, errores de ejecución o comportamiento inesperado.
 
 **Dependencias:** Tarea 2.
 
-**Verificación:** Buscar en el comando `git diff --check --cached` y revisar el manejo de fallo.
+**Verificación:** Confirmar que la skill prohíbe avanzar con nuevas funciones mientras haya un fallo sin diagnosticar.
 
 **Archivos previstos:**
 
-- `opencode/.config/opencode/commands/super-git.md`
+- `agents/.agents/skills/debugging-and-error-recovery/SKILL.md`
 
-### Tarea 5: mantener y ajustar las reglas de Conventional Commits
+### Tarea 5: añadir `source-driven-development`
 
-**Descripción:** Conservar los tipos y reglas actuales, y ajustar el texto para aplicarlas a cada grupo de cambios en vez de a un único staged diff.
+**Descripción:** Crear la skill para decisiones basadas en documentación oficial. Debe cubrir detección de versiones, consulta de fuentes primarias, manejo de conflictos entre documentación y código existente, y cita de fuentes.
 
-**Criterio de hecho:** Las reglas de tipo, scope, longitud, breaking changes y body siguen presentes y se aplican por commit propuesto.
+**Criterio de hecho:** La skill existe y evita implementar APIs, comandos o configuraciones desde memoria cuando dependan de versiones o documentación vigente.
 
 **Dependencias:** Tarea 2.
 
-**Verificación:** Comparar la sección de convención con la spec y confirmar que no se han perdido tipos.
+**Verificación:** Confirmar que distingue fuentes oficiales de blogs, Stack Overflow o memoria del modelo.
 
 **Archivos previstos:**
 
-- `opencode/.config/opencode/commands/super-git.md`
+- `agents/.agents/skills/source-driven-development/SKILL.md`
 
-### Tarea 6: documentar el nuevo comportamiento en README
+### Tarea 6: añadir `security-and-hardening` adaptada a uso diario
 
-**Descripción:** Actualizar la documentación de OpenCode que indica que `/super-git` requiere algo en staging.
+**Descripción:** Crear una versión adaptada de seguridad que no esté centrada solo en aplicaciones web. Debe cubrir secretos, tokens, datos locales, dependencias, logs, permisos, inputs externos y ejecución segura de comandos.
 
-**Criterio de hecho:** El README describe `/super-git` como comando para dividir cambios del working tree en commits semánticos.
+**Criterio de hecho:** La skill existe y es útil tanto para código de aplicación como para dotfiles, scripts, CLIs y automatizaciones.
 
 **Dependencias:** Tarea 2.
 
-**Verificación:** Buscar menciones a staging previo y confirmar que no queda documentación obsoleta.
+**Verificación:** Confirmar que incluye reglas de nunca commitear secretos, no loguear credenciales y tratar contenido externo como datos no fiables.
 
 **Archivos previstos:**
 
-- `opencode/.config/opencode/README.md`
+- `agents/.agents/skills/security-and-hardening/SKILL.md`
 
-### Tarea 7: revisar coherencia final del diff
+### Tarea 7: añadir `code-simplification`
 
-**Descripción:** Revisar que el cambio completo no introduce instrucciones contradictorias y que mantiene un comportamiento genérico, sin acoplar `/super-git` a este repo concreto.
+**Descripción:** Crear la skill para simplificar código sin cambiar comportamiento. Debe cubrir comprensión previa, reducción de complejidad, eliminación de duplicidad, separación de refactors y verificación.
 
-**Criterio de hecho:** El diff final solo toca los archivos previstos y no contiene referencias al flujo antiguo salvo para explicar que queda sustituido.
+**Criterio de hecho:** La skill existe y se activa tras implementar o revisar código que funciona pero resulta difícil de entender o mantener.
 
-**Dependencias:** Tareas 2 a 6.
+**Dependencias:** Tarea 2.
 
-**Verificación:** Ejecutar:
+**Verificación:** Confirmar que exige preservar comportamiento y pasar pruebas o comprobaciones equivalentes.
+
+**Archivos previstos:**
+
+- `agents/.agents/skills/code-simplification/SKILL.md`
+
+### Tarea 8: añadir `documentation-and-adrs`
+
+**Descripción:** Crear la skill para documentar decisiones, interfaces, reglas de proyecto y contexto útil para humanos y agentes. Debe admitir ADRs ligeros, documentación operativa y actualización de reglas de agente.
+
+**Criterio de hecho:** La skill existe y se activa cuando se toma una decisión técnica, se cambia una interfaz o aparece conocimiento que debe sobrevivir a la sesión.
+
+**Dependencias:** Tarea 2.
+
+**Verificación:** Confirmar que diferencia documentar el porqué de comentar lo obvio.
+
+**Archivos previstos:**
+
+- `agents/.agents/skills/documentation-and-adrs/SKILL.md`
+
+### Tarea 9: añadir `api-and-interface-design`
+
+**Descripción:** Crear la skill para diseñar contratos, APIs, CLIs, módulos, formatos de configuración y límites entre componentes. Debe ser útil más allá de REST o backend web.
+
+**Criterio de hecho:** La skill existe y ayuda a definir entradas, salidas, errores, compatibilidad, versionado y casos límite antes de implementar.
+
+**Dependencias:** Tarea 2.
+
+**Verificación:** Confirmar que incluye criterios para contratos estables y errores explícitos.
+
+**Archivos previstos:**
+
+- `agents/.agents/skills/api-and-interface-design/SKILL.md`
+
+### Tarea 10: añadir `idea-refine`
+
+**Descripción:** Crear la skill para convertir ideas vagas en opciones concretas antes de especificar o planificar. Debe separar exploración, criterios de decisión, alternativas y siguiente paso recomendado.
+
+**Criterio de hecho:** La skill existe y se activa cuando el usuario trae una idea incompleta, una decisión abierta o varias alternativas sin priorizar.
+
+**Dependencias:** Tarea 2.
+
+**Verificación:** Confirmar que no empuja a implementación prematura y que termina con opciones o una propuesta verificable.
+
+**Archivos previstos:**
+
+- `agents/.agents/skills/idea-refine/SKILL.md`
+
+### Tarea 11: revisar y mejorar las seis skills existentes del core pack
+
+**Descripción:** Comparar las skills existentes con los criterios de la spec y añadir solo mejoras claras: activación más precisa, verificación, límites operativos, señales de alerta o coordinación con otras skills.
+
+**Criterio de hecho:** Las seis skills existentes conservan su propósito y, si se modifican, el cambio está justificado por claridad o utilidad diaria.
+
+**Dependencias:** Tareas 3 a 10.
+
+**Verificación:** Revisar diffs de cada skill modificada y confirmar que no hay contradicciones entre spec, plan, build, test, review y git.
+
+**Archivos previstos:**
+
+- `agents/.agents/skills/git-workflow-and-versioning/SKILL.md`
+- `agents/.agents/skills/planning-and-task-breakdown/SKILL.md`
+- `agents/.agents/skills/incremental-implementation/SKILL.md`
+- `agents/.agents/skills/test-driven-development/SKILL.md`
+- `agents/.agents/skills/spec-driven-development/SKILL.md`
+- `agents/.agents/skills/code-review-and-quality/SKILL.md`
+
+### Tarea 12: documentar el core pack y las skills locales adicionales
+
+**Descripción:** Actualizar el índice de skills para listar las 14 del core pack, distinguir `anti-ai-style` y `castellano-peninsular`, y explicar la ruta fuente de verdad.
+
+**Criterio de hecho:** La documentación permite saber qué skills existen, cuándo usarlas y dónde viven.
+
+**Dependencias:** Tareas 3 a 11.
+
+**Verificación:** Comprobar que la lista documentada coincide con los directorios reales.
+
+**Archivos previstos:**
+
+- `agents/.agents/skills/README.md` o documento equivalente de índice.
+- `AGENTS.md`, si actualmente documenta una ruta o convención incorrecta.
+
+### Tarea 13: revisión final de coherencia y duplicidades
+
+**Descripción:** Revisar el conjunto completo para detectar solapamientos innecesarios, descripciones demasiado amplias, instrucciones contradictorias o contenido excesivamente específico.
+
+**Criterio de hecho:** El core pack está completo, las skills locales siguen presentes y la documentación no contradice la estructura real.
+
+**Dependencias:** Tarea 12.
+
+**Verificación:** Ejecutar comprobaciones equivalentes a:
 
 ```bash
-git diff -- opencode/.config/opencode/commands/super-git.md opencode/.config/opencode/README.md
-rg "requiere algo en staging|If empty, stop and report nothing is staged|staged diff" opencode/.config/opencode
+find agents/.agents/skills -maxdepth 2 -name SKILL.md | sort
+rg "^name:|^description:" agents/.agents/skills/*/SKILL.md
+rg "\.opencode/skills|agents/.agents/skills|core pack" AGENTS.md agents/.agents/skills
 ```
 
 **Archivos previstos:** Ninguno adicional.
 
 ## Dependencias
 
-- Tarea 1 debe ir primero porque determina el alcance documental.
-- Tarea 2 desbloquea el resto porque cambia el contrato principal del comando.
-- Tareas 3, 4 y 5 pueden hacerse después de la Tarea 2 en cualquier orden, aunque es más claro hacerlas en secuencia dentro del mismo archivo.
-- Tarea 6 depende de que el nuevo comportamiento del comando esté definido.
-- Tarea 7 debe ser la última.
+- La Tarea 1 debe ir primero porque fija el estado real.
+- La Tarea 2 debe preceder a cualquier incorporación para evitar copiar texto sin criterio.
+- Las Tareas 3 a 10 dependen de la política de adaptación, pero pueden hacerse en cualquier orden.
+- La Tarea 11 depende de tener claras las nuevas skills para evitar duplicidades con las existentes.
+- La Tarea 12 depende de que el conjunto esté cerrado.
+- La Tarea 13 debe ser la última.
 
 ## Paralelizable
 
-- Tras la Tarea 2, una persona puede revisar reglas de agrupación y otra puede revisar documentación.
-- La Tarea 6 puede hacerse en paralelo con la revisión de reglas Conventional Commits si ya está cerrado el texto base del comando.
+- Las Tareas 3 a 10 son paralelizables después de la Tarea 2.
+- La revisión de skills existentes puede dividirse por parejas: spec/plan, build/test, review/git.
+- La documentación final no debe empezar hasta saber qué nombres y descripciones quedan definitivos.
 
 ## Riesgos
 
 | Riesgo | Impacto | Mitigación |
 |---|---:|---|
-| `git add -p` requiere interacción y puede ser incómodo en algunas sesiones de agente. | Medio | Mantenerlo solo para archivos con cambios mixtos; usar staging por archivo cuando el grupo sea claro. |
-| El agente puede proponer commits demasiado amplios. | Medio | Exigir que muestre intención, archivos/hunks incluidos y cambios excluidos antes de confirmar. |
-| Untracked files pueden incluir secretos o archivos locales. | Alto | Obligar a revisar archivos untracked antes de incluirlos y mantener la regla de no commitear secretos. |
-| La documentación puede quedar contradictoria entre comando y README. | Bajo | Ejecutar búsqueda final de frases antiguas sobre staging previo. |
-| `git diff --check --cached` solo detecta problemas de whitespace, no fallos funcionales. | Bajo | Dejar claro que es verificación mínima y que comandos más largos requieren confirmación. |
+| Importar texto demasiado largo o específico del repositorio externo. | Medio | Aplicar la política de adaptación y recortar ejemplos que no sirvan para uso diario. |
+| Descripciones demasiado amplias que activen skills en exceso. | Alto | Revisar cada `description` con casos de uso y casos de no uso. |
+| Duplicar instrucciones entre skills y generar contradicciones. | Medio | Hacer revisión final de solapamientos y mantener referencias cruzadas claras. |
+| Debilitar skills existentes al editarlas. | Alto | Modificar solo secciones concretas y revisar el diff de cada skill. |
+| La documentación de rutas queda desalineada con Stow o herramientas reales. | Medio | Documentar solo `agents/.agents/skills/` como fuente de verdad y dejar fuera automatización de sincronización. |
+| `security-and-hardening` queda demasiado orientada a web. | Medio | Adaptarla explícitamente a dotfiles, scripts, CLIs, repos y proyectos de aplicación. |
 
-## Checkpoint final
+## Checkpoints
 
-- `SPEC.md` existe y recoge las decisiones cerradas.
-- `PLAN.md` existe y descompone el trabajo sin empezar la implementación.
-- El usuario revisa el plan antes de pasar a build.
+### Checkpoint 1: después de las Tareas 1 y 2
+
+- La auditoría identifica skills existentes y faltantes.
+- La política de adaptación está escrita.
+- No se ha empezado a copiar contenido de skills nuevas sin criterio.
+
+### Checkpoint 2: después de las Tareas 3 a 10
+
+- Las ocho skills nuevas existen.
+- Cada una tiene activación, proceso y verificación.
+- No se han tocado todavía las skills existentes salvo que fuera inevitable.
+
+### Checkpoint 3: después de las Tareas 11 y 12
+
+- Las 14 skills del core pack están presentes.
+- Las skills locales adicionales siguen presentes.
+- El índice o documentación coincide con la estructura real.
+
+### Checkpoint final
+
+- `SPEC.md` y `PLAN.md` describen esta incorporación de skills.
+- El plan no empieza la implementación.
+- El usuario puede pasar a build con tareas pequeñas y verificables.
