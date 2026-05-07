@@ -31,4 +31,8 @@ This repository manages personal dotfiles with GNU Stow. The current scope is a 
 
 ## Skills
 
-Stack-specific skills are installed under `.opencode/skills/` for OpenCode-compatible agents. Autoskills also created `.agents/skills/` and `skills-lock.json`; keep the skill copies in sync if autoskills continues to target `.agents` on this machine.
+Personal agent skills live under `agents/.agents/skills/` in this repository and are linked to `~/.agents/skills/` with GNU Stow. Treat this path as the source of truth for shared skills across agents.
+
+The daily core pack is documented in `agents/.agents/skills/README.md`. Keep `anti-ai-style` and `castellano-peninsular` as local additional skills.
+
+Do not add a second skill source such as `.opencode/skills/` unless the sync story is explicitly updated in the documentation.

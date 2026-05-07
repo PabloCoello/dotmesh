@@ -18,7 +18,7 @@ Configuración global para opencode con tres agentes principales, cinco subagent
 │   ├── maths.md          # openai/gpt-5.5, verificación con SymPy
 │   └── state.md          # github-copilot/claude-haiku-4.5, snapshot del workspace
 └── commands/
-    ├── setup.md          # Inicializa proyecto con autoskills
+    ├── setup.md          # Inicializa proyecto con skills compartidas
     ├── super-git.md      # Commits atómicos con Conventional Commits
     ├── checkpoint.md     # Snapshot estructurado de sesión
     └── check-last.md     # review + security en paralelo
@@ -33,7 +33,7 @@ Este directorio se enlaza a `~/.config/opencode/` con `make stow` desde la raíz
 
 Para verificar identificadores de modelo: `opencode models`. Ajusta el campo `model` en cada agente si algún nombre no coincide.
 
-Para skills locales del stack del proyecto, ejecuta `npx autoskills` en cada repo (o `/setup`).
+Las skills compartidas viven en `~/.agents/skills/`. No crees una segunda fuente como `.opencode/skills/` salvo que el proyecto lo requiera explícitamente y quede documentado cómo se sincroniza.
 
 ## Verificación
 
@@ -69,15 +69,11 @@ debate → write                                (flujo de redacción)
             └── state (al retomar sesión)
 ```
 
-## Skills externas
+## Skills compartidas
 
-Este setup asume que las skills de Addy Osmani (`spec-driven-development`, `planning-and-task-breakdown`, `incremental-implementation`, etc.) están disponibles en el proyecto. Se instalan por repo con:
+Este setup asume que las skills compartidas están disponibles en `~/.agents/skills/`, enlazadas desde el paquete `agents/` de dotmesh. El core pack está documentado en `agents/.agents/skills/README.md`.
 
-```bash
-npx autoskills
-```
-
-O manualmente clonando https://github.com/addyosmani/agent-skills y referenciando el directorio `skills/`.
+Si un proyecto necesita skills específicas adicionales, documenta antes dónde viven y cómo se sincronizan con la fuente de verdad.
 
 ## Idiomas
 

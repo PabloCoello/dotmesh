@@ -54,11 +54,34 @@ los ficheros bajo `<pkg>/...` se enlazan a la misma ruta relativa bajo `~`.
 
 ## Skills globales
 
-`agents/.agents/skills/<skill>/SKILL.md` queda enlazado en
-`~/.agents/skills/<skill>/SKILL.md` tras `make stow`. Las skills incluidas:
+`agents/.agents/skills/<skill>/SKILL.md` es la fuente de verdad y queda
+enlazado en `~/.agents/skills/<skill>/SKILL.md` tras `make stow`.
 
-- De [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills): `spec-driven-development`, `planning-and-task-breakdown`, `incremental-implementation`, `test-driven-development`, `code-review-and-quality`, `git-workflow-and-versioning`, `anti-ai-style`.
-- Propias: `castellano-peninsular` (redacción en español peninsular formal, cargada por los agentes `debate`, `design` y `docs` de OpenCode).
+El core pack diario incluye 14 skills de ingeniería, adaptadas para trabajo
+general con agentes y no copiadas de forma literal de un único proveedor:
+
+- `idea-refine`
+- `spec-driven-development`
+- `planning-and-task-breakdown`
+- `context-engineering`
+- `source-driven-development`
+- `api-and-interface-design`
+- `incremental-implementation`
+- `test-driven-development`
+- `debugging-and-error-recovery`
+- `code-review-and-quality`
+- `code-simplification`
+- `security-and-hardening`
+- `git-workflow-and-versioning`
+- `documentation-and-adrs`
+
+También se mantienen skills locales adicionales:
+
+- `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
+- `castellano-peninsular`: redacción en español peninsular formal, cargada por los agentes `debate`, `design` y `docs` de OpenCode.
+
+El índice completo vive en
+[`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
 
 OpenCode las consume vía `/setup` (ver
 [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)).
