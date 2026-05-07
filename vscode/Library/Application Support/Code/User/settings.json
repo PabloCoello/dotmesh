@@ -1,5 +1,5 @@
 {
-  "workbench.colorTheme": "Gradient Flow",
+  "workbench.colorTheme": "Atom One Dark",
   "editor.fontSize": 14,
   "editor.fontFamily": "'FiraCode-Retina', 'Fira Code', 'FiraCode Nerd Font', 'FiraCode Nerd Font Mono', Menlo, Monaco, 'Courier New', monospace",
   "editor.fontLigatures": true,
@@ -19,7 +19,7 @@
   "editor.quickSuggestions": {
     "other": true,
     "comments": false,
-    "strings": false
+    "strings": false,
   },
 
   "files.autoSave": "afterDelay",
@@ -38,7 +38,7 @@
     "**/*.pyc": true,
     "**/.venv": true,
     "**/venv": true,
-    "**/node_modules": true
+    "**/node_modules": true,
   },
 
   "terminal.integrated.fontSize": 13,
@@ -63,20 +63,20 @@
     "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit"
-    }
+      "source.organizeImports": "explicit",
+    },
   },
 
   "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
 
   "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
 
   "[json]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
 
   "[markdown]": {
@@ -84,8 +84,8 @@
     "editor.quickSuggestions": {
       "comments": "off",
       "strings": "off",
-      "other": "off"
-    }
+      "other": "off",
+    },
   },
 
   "python.defaultInterpreterPath": "python3",
@@ -97,6 +97,22 @@
   "jupyter.askForKernelRestart": false,
   "notebook.cellToolbarLocation": {
     "default": "right",
-    "jupyter-notebook": "left"
-  }
+    "jupyter-notebook": "left",
+  },
+  "jupyter.interactiveWindow.textEditor.executeSelection": true,
+  "github.copilot.enable": {
+    "quarto": false,
+    "python": false,
+  },
+  "hediet.vscode-drawio.resizeImages": null,
+  "claudeCode.preferredLocation": "panel",
+  "claudeCode.selectedModel": "opus",
+  "powermode.enabled": true,
+  "diffEditor.ignoreTrimWhitespace": false,
+  "markdown-preview-enhanced.codeBlockTheme": "dark.css",
+  "markdown-preview-enhanced.previewTheme": "github-light.css",
+  "markdown-preview-enhanced.enablePreviewZenMode": false,
+  "atlascode.rovodev.enabled": true,
+  "atlascode.jira.enabled": true,
+  "atlascode.rovodev.showEntitlementNotifications": false,
 }
