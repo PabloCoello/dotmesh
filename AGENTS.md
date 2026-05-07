@@ -36,3 +36,25 @@ Personal agent skills live under `agents/.agents/skills/` in this repository and
 The daily core pack is documented in `agents/.agents/skills/README.md`. Keep `anti-ai-style` and `castellano-peninsular` as local additional skills.
 
 Do not add a second skill source such as `.opencode/skills/` unless the sync story is explicitly updated in the documentation.
+
+## AI workspace artifacts
+
+Do not create `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` or similar planning files at the repository root unless explicitly requested.
+
+For persistent planning artifacts, use:
+
+```
+.ai/tasks/YYYY-MM-DD-slug/
+  spec.md
+  plan.md
+```
+
+For temporary scratch work, use:
+
+```
+.ai/tmp/
+```
+
+Default behavior: work in conversation. Only create persistent files if the user explicitly asks, if the task is long, or if there is a reasonable risk of losing context.
+
+Projects should ignore `.ai/tmp/` by default. `.ai/tasks/` is not ignored globally—each project decides whether to version it.

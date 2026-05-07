@@ -69,6 +69,18 @@ debate → write                                (flujo de redacción)
             └── state (al retomar sesión)
 ```
 
+## Convención de artefactos de trabajo
+
+Los agentes siguen una política global para gestionar documentos de planificación:
+
+- **No crear `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` en la raíz** salvo petición explícita.
+- **Por defecto, trabajar en conversación**. Solo crear archivos persistentes si el usuario lo pide, si la tarea es larga o si hay riesgo de perder contexto.
+- **Artefactos persistentes** van en `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
+- **Scratch temporal** va en `.ai/tmp/`.
+- **Git ignore**: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
+
+Esta convención está integrada en las instrucciones de los agentes `design` y `build`, y en el comando `/setup`.
+
 ## Skills compartidas
 
 Este setup asume que las skills compartidas están disponibles en `~/.agents/skills/`, enlazadas desde el paquete `agents/` de dotmesh. El core pack está documentado en `agents/.agents/skills/README.md`.

@@ -87,8 +87,19 @@ OpenCode las consume vía `/setup` (ver
 [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)).
 Claude Code las carga mediante el plugin `agent-skills@addy-agent-skills`
 declarado en [claude/.claude/settings.json](claude/.claude/settings.json).
-Codex tiene su propio mecanismo en `~/.codex/skills/` y mantiene
-[codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
+Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
+
+## Convención de artefactos de trabajo
+
+Los agentes siguen una política global para gestionar documentos de planificación:
+
+- **No crear `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` en la raíz** salvo petición explícita.
+- **Por defecto, trabajar en conversación**. Solo crear archivos persistentes si el usuario lo pide, si la tarea es larga o si hay riesgo de perder contexto.
+- **Artefactos persistentes** van en `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
+- **Scratch temporal** va en `.ai/tmp/`.
+- **Git ignore**: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
+
+Esta convención está integrada en las instrucciones globales de OpenCode y Codex. Claude Code no tiene mecanismo de instrucciones globales en este repo, pero puede seguir la misma convención manualmente.
 
 ## Comandos del Makefile
 
