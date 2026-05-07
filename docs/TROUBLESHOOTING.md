@@ -1,396 +1,133 @@
-# Troubleshooting - Dotfiles
+# Troubleshooting
 
-Soluciones a problemas comunes durante la instalación y uso.
+## Stow
 
-## Errores de Neovim
+### "WARNING! stowing X would cause conflicts"
 
-### Error: "Plugin pandora-theme is not installed"
+Ya existe un fichero real (no symlink) en la ruta de destino. Resuélvelo con:
 
-**Síntoma:**
-```
-Plugin pandora-theme is not installed
-Local plugin does not exist at `/Users/pablocoello/.config/nvim/colors`
-```
-
-**Solución:**
-Este error fue corregido en la última versión. El tema Pandora ahora usa `tokyonight.nvim` como base y aplica los colores directamente con `vim.api.nvim_set_hl()`.
-
-**Acción:**
 ```bash
-cd ~/Documents/GitHub/dotfiles
-git pull  # Si estás usando git
-nvim      # Lazy.nvim sincronizará automáticamente
-```
-
-### Error: "ruff_lsp is deprecated"
-
-**Síntoma:**
-```
-ruff_lsp is deprecated, use ruff instead.
-Feature will be removed in lspconfig 0.2.1
-```
-
-**Solución:**
-El LSP de Ruff fue renombrado de `ruff_lsp` a `ruff`. Ya está actualizado en la configuración.
-
-**Verificar:**
-```vim
-:Mason
-" Buscar 'ruff' en la lista
-```
-
-### Error: "markdown-preview.nvim build failed"
-
-**Síntoma:**
-```
-markdown-preview.nvim build failed
-Vim:E117: Unknown function: mkdp#util#install
-```
-
-**Solución:**
-El comando de build fue actualizado. Ahora usa `cd app && npm install`.
-
-**Requisitos:**
-- Node.js y npm instalados
-- Si no tienes npm: `brew install node`
-
-**Reinstalar manualmente:**
-```bash
-cd ~/.local/share/nvim/lazy/markdown-preview.nvim
-cd app && npm install
-```
-
-## Errores de LSP
-
-### LSP no funciona para Python
-
-**Verificar instalación:**
-```vim
-:Mason
-:LspInfo
-:checkhealth
-```
-
-**Reinstalar pyright:**
-```vim
-:Mason
-" Buscar pyright, presionar 'i' para instalar
-```
-
-### Ruff no proporciona diagnósticos
-
-**Configuración:**
-Asegúrate de tener un `pyproject.toml` o `ruff.toml` en tu proyecto:
-
-```toml
-# ruff.toml
-[lint]
-select = ["E", "F", "I"]
-ignore = []
-```
-
-### R Language Server no funciona
-
-**Instalar en R:**
-```r
-install.packages("languageserver")
-```
-
-**Verificar en Neovim:**
-```vim
-:LspInfo
-```
-
-## Errores de Plugins
-
-### Plugins no se instalan
-
-**Solución 1: Sincronizar Lazy.nvim**
-```vim
-:Lazy sync
-```
-
-**Solución 2: Limpiar caché**
-```bash
-rm -rf ~/.local/share/nvim/lazy
-nvim  # Reinstalará todo
-```
-
-**Solución 3: Verificar internet**
-```bash
-curl -I https://github.com
-```
-
-### Error de compilación de Telescope fzf-native
-
-**Síntoma:**
-```
-telescope-fzf-native.nvim build failed
-```
-
-**Solución:**
-```bash
-brew install cmake
-cd ~/.local/share/nvim/lazy/telescope-fzf-native.nvim
-make
-```
-
-### nvim-treesitter parser errors
-
-**Síntoma:**
-```
-Error executing parser
-```
-
-**Solución:**
-```vim
-:TSUpdate
-:TSInstall python r lua markdown
-```
-
-## Errores de Configuración
-
-### Symlinks no creados
-
-**Verificar stow:**
-```bash
-which stow
-# Si no existe: brew install stow
-```
-
-**Recrear symlinks:**
-```bash
-cd ~/Documents/GitHub/dotfiles
-make unstow
+mv ~/<ruta-en-conflicto> ~/dotfiles-backup/manual-$(date +%Y%m%d).bak
 make stow
 ```
 
-**Verificar symlinks:**
+### He añadido o quitado ficheros del repo y los symlinks no reflejan el cambio
+
 ```bash
-ls -la ~/.config/nvim
-ls -la ~/.zshrc
+make restow                # equivale a unstow + stow
 ```
 
-### Shell no carga módulos
+### Stow no ha tocado un subdirectorio
 
-**Verificar .zshrc:**
-```bash
-cat ~/.zshrc
-# Debe tener source de los módulos
-```
+Si en `~/<dir>` ya existe un directorio real, Stow no lo sobreescribe — entra y
+enlaza fichero a fichero. Esto es el comportamiento esperado para
+`~/.config/opencode/`, `~/.codex/`, `~/.claude/` (que contienen estado además de
+config). Si quieres que un subdirectorio entero sea un symlink, vacíalo primero.
 
-**Recargar shell:**
+## Shell
+
+### `~/.zshrc` no carga los módulos
+
 ```bash
-source ~/.zshrc
-# o
+ls -la ~/.zshrc                            # debe ser symlink al repo
+ls -la ~/.config/shell/                    # idem
 exec zsh
 ```
 
-## Errores de Ollama/AI
-
-### No puede conectar a Ollama / OpenCode
-
-**Verificar servidor Ollama:**
-```bash
-curl "${OLLAMA_HOST:-http://localhost:11434}/api/tags"
-```
-
-**Verificar API OpenCode/OpenAI:**
-```bash
-echo "$OPENCODE_BASE_URL"
-echo "$OPENCODE_API_KEY" | sed 's/./*/g'
-```
-
-**Reiniciar plugin:**
-```vim
-:Lazy reload opencode.nvim
-```
-
-## Errores de Quarto
-
-### molten-nvim no funciona
-
-**Requisitos:**
-```bash
-# Python
-pip install jupyter pynvim
-
-# R
-install.packages(c("IRkernel", "languageserver"))
-IRkernel::installspec()
-```
-
-**Verificar kernels:**
-```bash
-jupyter kernelspec list
-```
-
-### Image.nvim no muestra imágenes
-
-**Requisitos:**
-- Terminal con soporte de imágenes (Kitty, WezTerm, etc.)
-- Ghostty actualmente no soporta imágenes inline
-
-**Alternativa:**
-```vim
-:MarkdownPreview  " Para ver imágenes en navegador
-```
-
-## Errores de Performance
-
-### Neovim lento al abrir
-
-**Medir tiempo de inicio:**
-```bash
-nvim --startuptime startup.log
-less startup.log
-```
-
-**Deshabilitar plugins problemáticos:**
-Editar el plugin específico en `nvim/.config/nvim/lua/plugins/` y agregar:
-```lua
-enabled = false,
-```
-
-**Lazy loading:**
-Agregar a plugins pesados:
-```lua
-lazy = true,
-event = "VeryLazy",
-```
-
-### LSP consume mucha CPU
-
-**Deshabilitar diagnósticos en tiempo real:**
-```lua
--- En lua/plugins/lsp.lua
-vim.diagnostic.config({
-  update_in_insert = false,
-})
-```
-
-## Comandos Útiles de Diagnóstico
-
-### Neovim
-```vim
-:checkhealth          " Healthcheck completo
-:Lazy                 " Estado de plugins
-:Mason                " LSP servers instalados
-:LspInfo              " Info de LSP activo
-:TSUpdate             " Actualizar parsers
-:messages             " Ver mensajes de error
-```
-
-### Shell
-```bash
-make health           # Verificar dependencias
-which nvim            # Verificar instalación
-nvim --version        # Ver versión
-```
-
-### Git
-```bash
-git -C ~/Documents/GitHub/dotfiles status
-git -C ~/Documents/GitHub/dotfiles log --oneline -5
-```
-
-## Restaurar Backups
-
-### Restaurar configuración anterior
-
-**Backup completo:**
-```bash
-# Ver backups disponibles
-ls -la ~/dotfiles-backup/
-
-# Restaurar todo
-cp -r ~/dotfiles-backup/FECHA/* ~/
-```
-
-**Restaurar solo Neovim:**
-```bash
-rm -rf ~/.config/nvim
-cp -r ~/dotfiles-backup/FECHA/.config/nvim ~/.config/
-```
-
-**Restaurar solo shell:**
-```bash
-cp ~/dotfiles-backup/FECHA/.zshrc ~/
-```
-
-## Obtener Ayuda
-
-### Logs útiles para reportar issues
+Si los symlinks no están creados:
 
 ```bash
-# Información del sistema
-neofetch
-
-# Versiones
-nvim --version
-zsh --version
-git --version
-
-# Healthcheck de Neovim
-nvim --headless "+checkhealth" +qa > health.log
-
-# Estructura de dotfiles
-tree -L 3 ~/Documents/GitHub/dotfiles/
-```
-
-### Reportar un issue
-
-1. Crear issue en: https://github.com/pablocoello/dotfiles/issues
-2. Incluir:
-   - Sistema operativo y versión
-   - Output de `:checkhealth`
-   - Pasos para reproducir
-   - Logs relevantes
-
-## Reset Completo
-
-**¡CUIDADO! Esto borrará toda la configuración de Neovim**
-
-```bash
-# Backup previo
-cp -r ~/.config/nvim ~/.config/nvim.backup
-
-# Limpiar todo
-rm -rf ~/.config/nvim
-rm -rf ~/.local/share/nvim
-rm -rf ~/.local/state/nvim
-rm -rf ~/.cache/nvim
-
-# Reinstalar
-cd ~/Documents/GitHub/dotfiles
+cd ~/Documents/GitHub/dotmesh
 make stow
-nvim  # Instalará todo de nuevo
 ```
 
-## Preguntas Frecuentes
-
-### ¿Por qué Lazy.nvim tarda en la primera carga?
-
-Es normal. Está instalando y compilando todos los plugins. Toma 2-5 minutos.
-
-### ¿Puedo usar mi antigua config de Neovim?
-
-Sí, pero está respaldada en `~/dotfiles-backup/`. Los symlinks apuntan a la nueva config.
-
-### ¿Cómo desinstalo todo?
+### Cambios en `aliases.zsh`, `functions.zsh`… no se aplican
 
 ```bash
-cd ~/Documents/GitHub/dotfiles
-make unstow
-# Opcional: restaurar backup
-cp -r ~/dotfiles-backup/FECHA/* ~/
+exec zsh                                   # recarga la shell entera
 ```
 
-### ¿Necesito reiniciar Neovim después de cambios?
+`source ~/.zshrc` puede dejar variables stale; `exec zsh` es más fiable.
 
-Para cambios en plugins: sí, o usa `:Lazy reload PLUGIN`
-Para cambios en opciones: no, `:source %` es suficiente
+## OpenCode
 
----
+### `~/.config/opencode/agents/` aparece vacío
 
-**Más ayuda:** Abre un issue en GitHub o consulta la documentación de cada plugin en sus repositorios.
+Lo más probable: Stow no ha enlazado todavía o el directorio es real (no
+symlink) y Stow no se atreve a cruzarlo. Comprueba:
+
+```bash
+ls -la ~/.config/opencode/agents
+```
+
+Si no es symlink y el repo tiene contenido en `opencode/.config/opencode/agents/`:
+
+```bash
+rmdir ~/.config/opencode/agents 2>/dev/null    # solo si está vacío
+make restow                                    # vuelve a enlazar
+```
+
+### `opencode agent list` no muestra los 8 agentes
+
+```bash
+ls -la ~/.config/opencode/agents/              # comprueba symlinks
+opencode --version
+```
+
+Si falta alguno: revisa que los `.md` tengan el frontmatter correcto (ver
+ejemplos en [opencode/.config/opencode/agents/](../opencode/.config/opencode/agents/)).
+
+### Symlink a `mcp.json` roto
+
+dotmesh no versiona `mcp.json` (lo gestiona el usuario fuera del repo). Si
+encuentras un symlink roto:
+
+```bash
+ls -la ~/.config/opencode/mcp.json
+rm ~/.config/opencode/mcp.json                 # si apunta a una ruta inexistente
+```
+
+## Codex
+
+### `~/.codex/config.toml` se modifica con churn al usar Codex
+
+Codex puede escribir entradas como `[projects."<ruta>"] trust_level = ...` en su
+propio `config.toml`. Si quieres evitar que git vea esos cambios:
+
+```bash
+git update-index --skip-worktree codex/.codex/config.toml
+```
+
+Y para revertirlo:
+
+```bash
+git update-index --no-skip-worktree codex/.codex/config.toml
+```
+
+## Claude Code
+
+### Plugins no se cargan
+
+Comprueba que [claude/.claude/settings.json](../claude/.claude/settings.json)
+contiene tus marketplaces y plugins. Tras editar:
+
+```bash
+make restow                                    # solo si has cambiado el repo
+# Reinicia Claude Code.
+```
+
+## Backups
+
+```bash
+ls -1 ~/dotfiles-backup/                       # listar timestamps
+cp -R ~/dotfiles-backup/<timestamp>/. ~/       # restaurar
+```
+
+## Reset completo
+
+```bash
+cd ~/Documents/GitHub/dotmesh
+make unstow
+# Tus configs vuelven al estado pre-stow del último backup si lo restauras:
+cp -R ~/dotfiles-backup/<timestamp>/. ~/
+```
