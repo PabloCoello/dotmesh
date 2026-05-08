@@ -1,7 +1,7 @@
 ---
 description: Turns ideas into specs and implementation plans. Markdown only. No execution.
 mode: primary
-model: openai/gpt-5.5
+model: github-copilot/claude-sonnet-4.5
 temperature: 0.3
 permission:
   edit: allow

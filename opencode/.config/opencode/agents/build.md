@@ -1,7 +1,7 @@
 ---
 description: Implementation with full tool access. Follows plan and applies BUILD/VERIFY/REVIEW skills.
 mode: primary
-model: openai/gpt-5.5
+model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 permission:
   edit: allow
