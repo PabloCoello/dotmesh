@@ -1,8 +1,10 @@
 # dotmesh Agent Guide
 
+This file is the single source of truth for agent instructions in this repository. Claude Code reads it via an `@AGENTS.md` import inside `CLAUDE.md`. OpenCode and Codex read it directly.
+
 ## Project overview
 
-This repository manages personal dotfiles with GNU Stow. The current scope is a terminal-agent-oriented setup for shell, Git, Starship, VS Code, OpenCode, Codex, Claude, and shared agent skills.
+This repository manages personal macOS dotfiles with **GNU Stow**. Editing files here changes the user's local environment once `make stow` (or `make install`) is run. Treat changes as having a real, machine-wide blast radius.
 
 ## Stack
 
@@ -14,47 +16,78 @@ This repository manages personal dotfiles with GNU Stow. The current scope is a 
 
 ## Common commands
 
-- `make help` — show available targets
-- `make health` — check required local tools
-- `make backup` — back up existing local configuration
-- `make stow` — apply dotfile symlinks with GNU Stow
-- `make unstow` — remove dotfile symlinks
-- `make restow` — refresh dotfile symlinks
-
-## Working conventions
-
-- Treat this as a dotfiles repository: changes can affect the user's local environment.
-- Keep scripts defensive, portable where practical, and idempotent.
-- Do not commit secrets, tokens, API keys, local machine credentials, or private hostnames.
-- Prefer small, focused changes and verify with `make health` or targeted script checks when relevant.
-- Do not run destructive shell, Git, or Stow operations unless explicitly requested.
-
-## Skills
-
-Personal agent skills live under `agents/.agents/skills/` in this repository and are linked to `~/.agents/skills/` with GNU Stow. Treat this path as the source of truth for shared skills across agents.
-
-The daily core pack is documented in `agents/.agents/skills/README.md`. Keep `anti-ai-style` and `castellano-peninsular` as local additional skills.
-
-Do not add a second skill source such as `.opencode/skills/` unless the sync story is explicitly updated in the documentation.
-
-## AI workspace artifacts
-
-Do not create `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` or similar planning files at the repository root unless explicitly requested.
-
-For persistent planning artifacts, use:
-
-```
-.ai/tasks/YYYY-MM-DD-slug/
-  spec.md
-  plan.md
+```bash
+make help        # list targets
+make health      # verify zsh, stow, git, delta, starship, code, claude, codex, opencode are installed
+make backup      # snapshot existing local config to ~/dotfiles-backup/<timestamp>
+make install     # backup + stow + link-skills (full install on a fresh machine)
+make stow        # symlink every package into ~
+make unstow      # remove the symlinks
+make restow      # unstow + stow (run after adding/removing files in a package)
+make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
+make clean       # wipe ~/dotfiles-backup/*
 ```
 
-For temporary scratch work, use:
+There is no test, lint, or build step — this repo is configuration, not code. Verification is `make health` and reloading the shell (`exec zsh`).
 
-```
-.ai/tmp/
-```
+## Architecture
 
-Default behavior: work in conversation. Only create persistent files if the user explicitly asks, if the task is long, or if there is a reasonable risk of losing context.
+This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose internal structure mirrors the target path under `$HOME`. `make stow` links `<pkg>/<path>` to `~/<path>`.
 
-Projects should ignore `.ai/tmp/` by default. `.ai/tasks/` is not ignored globally—each project decides whether to version it.
+| Package | Links into | Owns |
+|---|---|---|
+| `shell/` | `~/.zshrc`, `~/.config/shell/` | Zsh + Oh-My-Zsh entrypoint and modular `env/path/functions/aliases/ai.zsh` |
+| `git/` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` | Git config + delta pager |
+| `starship/` | `~/.config/starship.toml` | Prompt |
+| `vscode/` | `~/Library/Application Support/Code/User/...` | VS Code settings, keybindings, snippets, extensions list, custom themes |
+| `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
+| `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
+| `claude/` | `~/.claude/` | Claude Code `settings.json`, `agents/`, `commands/` |
+| `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
+
+`Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
+
+The `vscode/` package contains a `.stow-local-ignore` and `package.json` because the directory doubles as a publishable VS Code theme extension; only the `Library/...` subtree is intended to be stowed.
+
+## Skills as the integration point
+
+`agents/.agents/skills/<skill>/SKILL.md` is the **single source of truth** for skills. After `make stow`, the same files appear under `~/.agents/skills/`, and after `make link-skills`, also under `~/.claude/skills/` (symlink). Each agent then picks them up:
+
+- **OpenCode** consumes them via `/setup` (see `opencode/.config/opencode/README.md`).
+- **Claude Code** discovers them automatically from `~/.claude/skills/` (the symlink).
+- **Codex** uses `codex/.codex/AGENTS.md` as its entry point.
+
+Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream marketplace plugin) without updating the sync story here and in the README.
+
+The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them.
+
+## Three-agent parity
+
+This repo aims for functional parity between OpenCode and Claude Code so the user can switch between them in the same project without changing their workflow. Codex stays as documented under `codex/.codex/AGENTS.md`.
+
+| Concern | OpenCode | Claude Code |
+|---|---|---|
+| Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md`; `CLAUDE.md` imports `AGENTS.md` via `@AGENTS.md` |
+| Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` |
+| Agents | `~/.config/opencode/agents/` (10 agents) | `~/.claude/agents/` (10 agents, same names and roles) |
+| Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) |
+| MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` |
+| Per-agent temperature | yes | not exposed — compensated in system prompts |
+| Per-agent bash granularity | yes (e.g. `npm audit*`) | only tool whitelist — bash is on/off per agent |
+
+## Conventions to respect
+
+- **Defensive, idempotent shell scripts.** `scripts/backup-current-config.sh` is the model: `set -e`, `mkdir -p`, gated `[ -e ]` checks, no destructive defaults.
+- **No secrets in the repo.** Tokens and credentials are loaded out-of-band; see `docs/SECRETS.md`. MCP servers receive secrets via environment variables, not via committed config.
+- **Don't run destructive Stow/Git operations without being asked.** `unstow`, `restow`, `clean`, `git reset --hard`, etc. all touch live user state.
+- **README and most docs are in Spanish (peninsular).** Match the existing language when editing user-facing prose.
+
+## AI workspace artifacts policy
+
+Enforced by this file and `.gitignore` (which ignores `.ai/`):
+
+- Do **not** create `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` at the repo root unless the user explicitly asks.
+- Default behavior: work in conversation. Only persist artifacts when the user asks, the task is long, or context loss is a real risk.
+- Persistent planning goes in `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
+- Throwaway scratch goes in `.ai/tmp/`.
+- Projects should ignore `.ai/tmp/` by default. `.ai/tasks/` is not globally ignored — each project decides whether to version it.
