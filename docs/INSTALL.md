@@ -1,170 +1,81 @@
-# Installation Guide
+# Instalación
 
-## Prerequisites
+## Requisitos
 
-Before installing, ensure you have:
-
-- **macOS** (tested on Apple Silicon)
-- **Homebrew** installed
-- **Git** installed
-- **Backup** of your current configs (the install script does this automatically)
-
-## Quick Install
+- macOS (Apple Silicon o Intel).
+- Homebrew, Git y GNU Stow.
+- Las herramientas que vayas a usar instaladas: Warp, VS Code, OpenCode, Codex, Claude Code.
 
 ```bash
-# Clone the repository
-git clone https://github.com/pablocoello/dotfiles.git ~/Documents/GitHub/dotfiles
-cd ~/Documents/GitHub/dotfiles
+brew install stow git-delta starship
+brew install --cask warp visual-studio-code
+```
 
-# Install GNU Stow if not installed
-brew install stow
+OpenCode, Codex y Claude Code se instalan según las instrucciones de cada
+proveedor (no van por Homebrew). Después del primer arranque de cada uno se
+crean sus directorios de config (`~/.config/opencode/`, `~/.codex/`,
+`~/.claude/`); a partir de ahí dotmesh los reemplaza con symlinks.
 
-# Run health check
-make health
+## Instalación inicial
 
-# Install everything (backs up existing configs first)
-make install
+```bash
+git clone https://github.com/pablocoello/dotmesh.git ~/Documents/GitHub/dotmesh
+cd ~/Documents/GitHub/dotmesh
 
-# Reload your shell
+make health         # comprueba que los binarios estén
+make install        # backup en ~/dotfiles-backup + stow
 exec zsh
 ```
 
-## What Gets Installed
+`make install` ejecuta:
 
-### Bloque 1 (Foundation) ✅
+1. `scripts/backup-current-config.sh` → copia tus configs actuales a
+   `~/dotfiles-backup/<timestamp>/`.
+2. `stow -t ~ <paquete>` para cada paquete del repo.
 
-- **Shell**: Modular Zsh configuration with Oh-My-Zsh
-- **Git**: Enhanced config with Delta diff viewer
-- **Ghostty**: Terminal with Pandora theme
-- **Starship**: Custom prompt configuration
-- **Themes**: Pandora color palette system
+## Qué se instala
 
-### Bloque 2 (Coming Soon)
+| Paquete | Destino |
+|---|---|
+| `shell` | `~/.zshrc` y `~/.config/shell/*.zsh` |
+| `git` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` |
+| `starship` | `~/.config/starship.toml` |
+| `vscode` | `~/Library/Application Support/Code/User/...` |
+| `opencode` | `~/.config/opencode/{agents,commands,README.md}` |
+| `codex` | `~/.codex/{config.toml, AGENTS.md}` |
+| `claude` | `~/.claude/settings.json` |
+| `agents` | `~/.agents/skills/<skill>/` |
 
-- **Neovim**: Complete IDE configuration
-- **AI Integration**: opencode.nvim (OpenCode) + Ollama
-
-### Bloque 3 (Coming Soon)
-
-- **Obsidian**: Pandora vault integration
-- **Zotero**: Reference management
-
-## Manual Steps
-
-### 1. Install Required Tools
+## Tras la instalación
 
 ```bash
-# Terminal & Shell
-brew install ghostty
-brew install starship
-
-# Git tools
-brew install git-delta
-
-# Modern CLI tools (optional but recommended)
-brew install eza bat fd ripgrep fzf
-
-# Fonts
-brew tap homebrew/cask-fonts
-brew install font-jetbrains-mono-nerd-font
+exec zsh                                    # recarga la shell
+starship --version                          # debe imprimir versión
+git diff                                    # debe usar delta
+opencode agent list                         # debe listar los 8 agentes
 ```
 
-### 2. Configure Ollama (Optional - for AI features in Bloque 2)
+Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
+sesión OpenCode en cualquier proyecto (ver
+[opencode/.config/opencode/README.md](../opencode/.config/opencode/README.md)).
+
+## Personalización
+
+| Cambio | Dónde |
+|---|---|
+| Aliases zsh | `shell/.config/shell/aliases.zsh` |
+| Funciones zsh | `shell/.config/shell/functions.zsh` |
+| PATH | `shell/.config/shell/path.zsh` |
+| Variables de entorno | `shell/.config/shell/env.zsh` |
+| Endpoints IA / Ollama | `shell/.config/shell/ai.zsh` |
+| Prompt | `starship/.config/starship.toml` |
+| Skill nueva | `agents/.agents/skills/<nombre>/SKILL.md` + `make restow agents` |
+
+## Desinstalación
 
 ```bash
-# Update OLLAMA_HOST in shell/.config/shell/ai.zsh
-# Default: http://192.168.1.100:11434
+cd ~/Documents/GitHub/dotmesh
+make unstow                                 # elimina los symlinks
+ls -1 ~/dotfiles-backup/                    # localiza el backup deseado
+cp -R ~/dotfiles-backup/<timestamp>/. ~/    # restaura si lo necesitas
 ```
-
-### 3. First Time Setup
-
-After installation:
-
-```bash
-# Source your new shell config
-exec zsh
-
-# Test Starship
-starship --version
-
-# Test Git delta
-git diff
-
-# Check AI server (if configured)
-aistatus
-```
-
-## Customization
-
-### Update RTX 3090 Server IP
-
-Edit `shell/.config/shell/ai.zsh`:
-```bash
-export OLLAMA_HOST="http://YOUR_IP:11434"
-```
-
-### Change Theme Colors
-
-1. Edit `themes/pandora/palette.json`
-2. Run `make theme` to regenerate configs
-3. Restart terminal
-
-### Add Custom Aliases
-
-Edit `shell/.config/shell/aliases.zsh` and reload:
-```bash
-exec zsh
-```
-
-## Troubleshooting
-
-### Symlinks Not Created
-
-```bash
-# Check stow is installed
-brew install stow
-
-# Manually stow a package
-cd ~/Documents/GitHub/dotfiles
-stow -v shell
-```
-
-### Shell Not Loading Configs
-
-```bash
-# Check .zshrc location
-ls -la ~/.zshrc
-
-# Should be a symlink to dotfiles/shell/.zshrc
-```
-
-### Ollama Not Connecting
-
-```bash
-# Test connection
-curl http://YOUR_IP:11434/api/tags
-
-# Check status
-aistatus
-```
-
-## Uninstall
-
-```bash
-cd ~/Documents/GitHub/dotfiles
-
-# Remove symlinks
-make unstow
-
-# Restore from backup
-cp -r ~/dotfiles-backup/LATEST/* ~/
-```
-
-## Next Steps
-
-- [ ] Explore custom functions: `qpy`, `qr`, `qrender`
-- [ ] Configure AI models (Bloque 2)
-- [ ] Set up Obsidian vault (Bloque 3)
-- [ ] Customize Neovim (Bloque 2)
-
-For more information, see [PLAN.md](../PLAN.md).

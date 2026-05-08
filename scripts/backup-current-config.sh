@@ -7,125 +7,46 @@ set -e
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="$HOME/dotfiles-backup/$TIMESTAMP"
 
-echo "🗂️  Creando backup de configuraciones actuales..."
-echo "📁 Directorio: $BACKUP_DIR"
-echo ""
-
-# Crear directorio de backup
+echo "Creando backup en $BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
 
-# ─────────────────────────────────────────────
-# ➤ SHELL
-# ─────────────────────────────────────────────
-echo "🐚 Respaldando configuraciones de shell..."
+backup_file() {
+    local src="$1"
+    local dst_rel="$2"
+    if [ -e "$src" ]; then
+        local dst="$BACKUP_DIR/$dst_rel"
+        mkdir -p "$(dirname "$dst")"
+        cp -R "$src" "$dst"
+        echo "  ok  $dst_rel"
+    fi
+}
 
-if [ -f "$HOME/.zshrc" ]; then
-    cp "$HOME/.zshrc" "$BACKUP_DIR/zshrc"
-    echo "  ✓ .zshrc"
-fi
+# Shell / prompt
+backup_file "$HOME/.zshrc"                "zshrc"
+backup_file "$HOME/.zprofile"             "zprofile"
+backup_file "$HOME/.config/shell"         "config/shell"
+backup_file "$HOME/.config/starship.toml" "config/starship.toml"
 
-if [ -f "$HOME/.zprofile" ]; then
-    cp "$HOME/.zprofile" "$BACKUP_DIR/zprofile"
-    echo "  ✓ .zprofile"
-fi
+# Git
+backup_file "$HOME/.gitconfig"        "gitconfig"
+backup_file "$HOME/.gitignore_global" "gitignore_global"
+backup_file "$HOME/.gitmessage"       "gitmessage"
 
-if [ -d "$HOME/.config/shell" ]; then
-    cp -r "$HOME/.config/shell" "$BACKUP_DIR/shell"
-    echo "  ✓ .config/shell/"
-fi
+# VS Code
+VSCODE_DIR="$HOME/Library/Application Support/Code/User"
+[ "$(uname)" = "Linux" ] && VSCODE_DIR="$HOME/.config/Code/User"
+backup_file "$VSCODE_DIR/settings.json"    "vscode/settings.json"
+backup_file "$VSCODE_DIR/keybindings.json" "vscode/keybindings.json"
+backup_file "$VSCODE_DIR/snippets"         "vscode/snippets"
 
-# ─────────────────────────────────────────────
-# ➤ NEOVIM
-# ─────────────────────────────────────────────
+# Agentes IA
+backup_file "$HOME/.config/opencode/agents"   "config/opencode/agents"
+backup_file "$HOME/.config/opencode/commands" "config/opencode/commands"
+backup_file "$HOME/.config/opencode/skills"   "config/opencode/skills"
+backup_file "$HOME/.codex/config.toml"        "codex/config.toml"
+backup_file "$HOME/.codex/AGENTS.md"          "codex/AGENTS.md"
+backup_file "$HOME/.claude/settings.json"     "claude/settings.json"
+backup_file "$HOME/.agents/skills"            "agents/skills"
+
 echo ""
-echo "⚙️  Respaldando configuración de Neovim..."
-
-if [ -d "$HOME/.config/nvim" ]; then
-    cp -r "$HOME/.config/nvim" "$BACKUP_DIR/nvim"
-    echo "  ✓ .config/nvim/"
-fi
-
-# ─────────────────────────────────────────────
-# ➤ GIT
-# ─────────────────────────────────────────────
-echo ""
-echo "🌿 Respaldando configuraciones de Git..."
-
-if [ -f "$HOME/.gitconfig" ]; then
-    cp "$HOME/.gitconfig" "$BACKUP_DIR/gitconfig"
-    echo "  ✓ .gitconfig"
-fi
-
-if [ -f "$HOME/.gitignore_global" ]; then
-    cp "$HOME/.gitignore_global" "$BACKUP_DIR/gitignore_global"
-    echo "  ✓ .gitignore_global"
-fi
-
-# ─────────────────────────────────────────────
-# ➤ GHOSTTY
-# ─────────────────────────────────────────────
-echo ""
-echo "👻 Respaldando configuración de Ghostty..."
-
-if [ -f "$HOME/.config/ghostty/config" ]; then
-    mkdir -p "$BACKUP_DIR/ghostty"
-    cp "$HOME/.config/ghostty/config" "$BACKUP_DIR/ghostty/config"
-    echo "  ✓ .config/ghostty/config"
-fi
-
-# ─────────────────────────────────────────────
-# ➤ STARSHIP
-# ─────────────────────────────────────────────
-echo ""
-echo "🚀 Respaldando configuración de Starship..."
-
-if [ -f "$HOME/.config/starship.toml" ]; then
-    cp "$HOME/.config/starship.toml" "$BACKUP_DIR/starship.toml"
-    echo "  ✓ .config/starship.toml"
-fi
-
-# ─────────────────────────────────────────────
-# ➤ VSCODE
-# ─────────────────────────────────────────────
-echo ""
-echo "🧩 Respaldando configuración de VS Code..."
-
-VSCODE_CONFIG_DIR="$HOME/Library/Application Support/Code/User"
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    VSCODE_CONFIG_DIR="$HOME/.config/Code/User"
-fi
-
-if [ -f "$VSCODE_CONFIG_DIR/settings.json" ]; then
-    mkdir -p "$BACKUP_DIR/vscode"
-    cp "$VSCODE_CONFIG_DIR/settings.json" "$BACKUP_DIR/vscode/settings.json"
-    echo "  ✓ VS Code settings.json"
-fi
-
-if [ -f "$VSCODE_CONFIG_DIR/keybindings.json" ]; then
-    mkdir -p "$BACKUP_DIR/vscode"
-    cp "$VSCODE_CONFIG_DIR/keybindings.json" "$BACKUP_DIR/vscode/keybindings.json"
-    echo "  ✓ VS Code keybindings.json"
-fi
-
-if [ -d "$VSCODE_CONFIG_DIR/snippets" ]; then
-    mkdir -p "$BACKUP_DIR/vscode/snippets"
-    cp -r "$VSCODE_CONFIG_DIR/snippets" "$BACKUP_DIR/vscode/"
-    echo "  ✓ VS Code snippets/"
-fi
-
-# ─────────────────────────────────────────────
-# ➤ RESUMEN
-# ─────────────────────────────────────────────
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ Backup completado"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "📂 Ubicación: $BACKUP_DIR"
-echo ""
-echo "Para restaurar un archivo específico:"
-echo "  cp $BACKUP_DIR/<archivo> ~/<destino>"
-echo ""
-echo "Para restaurar todo:"
-echo "  cp -r $BACKUP_DIR/* ~/"
-echo ""
+echo "Backup completado en: $BACKUP_DIR"

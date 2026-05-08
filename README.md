@@ -1,159 +1,126 @@
-# Dotfiles - Setup Unificado para Análisis de Datos
+# dotmesh
 
-> Setup modular y extensible para trabajar con Python, R y Quarto en Neovim, con integración profunda de IA (local + remota) y gestión de conocimiento.
+Dotfiles personales para macOS. Gestiona la configuración de terminal, shell, Git, Starship, VS Code, OpenCode, Codex, Claude y skills globales de agentes.
 
----
-
-## Quick Start
+## Quick start
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/pablocoello/dotmesh.git ~/.dotmesh
-cd ~/.dotmesh
+git clone https://github.com/pablocoello/dotmesh.git ~/Documents/GitHub/dotmesh
+cd ~/Documents/GitHub/dotmesh
 
-# Instalación completa (cuando esté lista)
-make install
-
-# O instalación manual por componentes
-make backup          # Respaldar configs actuales
-make stow           # Aplicar symlinks con GNU Stow
-make health         # Verificar instalación
+brew install stow                   # requisito
+make health                         # comprueba binarios
+make install                        # backup + stow
+exec zsh                            # recarga la shell
 ```
 
----
+## Stack
 
-## Estructura del Repositorio
+| Componente | Herramienta | Paquete Stow |
+|---|---|---|
+| Shell | Zsh + Oh-My-Zsh | [shell/](shell/) |
+| Prompt | Starship | [starship/](starship/) |
+| Editor | VS Code | [vscode/](vscode/) |
+| VCS | Git + delta | [git/](git/) |
+| Agente IA #1 | OpenCode | [opencode/](opencode/) |
+| Agente IA #2 | Codex (CLI OpenAI) | [codex/](codex/) |
+| Agente IA #3 | Claude Code | [claude/](claude/) |
+| Skills globales | Convención `.agents/skills/` | [agents/](agents/) |
+
+## Estructura
 
 ```
 dotmesh/
-├── nvim/              # Configuración Neovim completa
-│   └── .config/nvim/
-│       ├── init.lua
-│       └── lua/
-│           ├── core/          # Opciones, keymaps, autocommands
-│           └── plugins/       # Configuración de plugins
-├── shell/             # Configuración Zsh modularizada
-├── ghostty/           # Terminal Ghostty + tema Pandora
-├── git/               # Git config con delta
-├── starship/          # Prompt personalizado
-├── themes/            # Sistema de temas centralizado
-│   └── pandora/       # Palette + exporters
-├── vscode/            # Configuración VS Code + temas
-├── scripts/           # Scripts de automatización
-└── docs/              # Documentación completa
+├── shell/      .zshrc + .config/shell/{env,path,functions,aliases,ai}.zsh
+├── git/        .gitconfig, .gitignore_global, .gitmessage
+├── starship/   .config/starship.toml
+├── vscode/     Library/Application Support/Code/User/{settings,extensions,scripts,themes}
+├── opencode/   .config/opencode/{agents,commands,opencode.json,README.md}
+├── codex/      .codex/{config.toml,AGENTS.md}
+├── claude/     .claude/settings.json
+├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
+├── scripts/    backup-current-config.sh
+├── docs/       INSTALL.md, SECRETS.md, TROUBLESHOOTING.md
+├── Makefile
+└── README.md
 ```
 
----
+Cada paquete sigue la convención de [GNU Stow](https://www.gnu.org/software/stow/): los ficheros bajo `<pkg>/...` se enlazan a la misma ruta relativa bajo `~`.
 
-## Stack Tecnologico
+## Skills globales
 
-| Componente | Herramienta | Estado |
-|------------|-------------|--------|
-| **Shell** | Zsh + Oh-My-Zsh + Starship | Configurado |
-| **Terminal** | Ghostty 1.2.3 | Configurado |
-| **IDE** | Neovim 0.11.4 | Configurado |
-| **Editor alternativo** | VS Code | Configurado |
-| **Git** | Git + Delta | Configurado |
-| **Dotfiles** | GNU Stow | Configurado |
-| **LSP** | Python, R, Lua, Markdown | Configurado |
-| **IA (Chat)** | opencode.nvim (OpenCode) + Ollama | Configurado |
-| **IA (Local)** | Ollama (RTX 3090) | Conectado |
-| **Quarto** | quarto-nvim + molten.nvim | Configurado |
-| **Knowledge** | Obsidian + Zotero | Fase 3 |
+`agents/.agents/skills/<skill>/SKILL.md` es la fuente de verdad y queda enlazado en `~/.agents/skills/<skill>/SKILL.md` tras `make stow`.
 
----
+El core pack diario incluye 14 skills de ingeniería:
 
-## Documentacion
+- `idea-refine`
+- `spec-driven-development`
+- `planning-and-task-breakdown`
+- `context-engineering`
+- `source-driven-development`
+- `api-and-interface-design`
+- `incremental-implementation`
+- `test-driven-development`
+- `debugging-and-error-recovery`
+- `code-review-and-quality`
+- `code-simplification`
+- `security-and-hardening`
+- `git-workflow-and-versioning`
+- `documentation-and-adrs`
 
-- **[Plan Maestro](PLAN.md)** - Visión completa y arquitectura del setup
-- **[Instalación](docs/INSTALL.md)** - Guía paso a paso de instalación
-- **[Atajos](docs/KEYBINDINGS.md)** - Cheatsheet de keybindings
-- **[Workflows](docs/WORKFLOWS.md)** - Flujos de trabajo documentados
-- **[Extensibilidad](docs/EXTENDING-SETUP.md)** - Cómo extender el setup
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Solución de problemas
+También se mantienen skills locales adicionales:
 
----
+- `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
+- `castellano-peninsular`: redacción en español peninsular formal.
 
-## Comandos Utiles (Makefile)
+El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
+
+OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las carga mediante el plugin `agent-skills@addy-agent-skills` declarado en [claude/.claude/settings.json](claude/.claude/settings.json). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
+
+## Convención de artefactos de trabajo
+
+Los agentes siguen una política global para gestionar documentos de planificación:
+
+- No crear `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` en la raíz salvo petición explícita.
+- Por defecto, trabajar en conversación. Solo crear archivos persistentes si el usuario lo pide, si la tarea es larga o si hay riesgo de perder contexto.
+- Artefactos persistentes van en `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
+- Scratch temporal va en `.ai/tmp/`.
+- Git ignore: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
+
+Esta convención está integrada en las instrucciones globales de OpenCode y Codex. Claude Code no tiene mecanismo de instrucciones globales en este repo, pero puede seguir la misma convención manualmente.
+
+## Comandos del Makefile
 
 ```bash
-make install        # Instalación completa
-make backup         # Backup de configs actuales
-make stow          # Aplicar symlinks (GNU Stow)
-make unstow        # Eliminar symlinks
-make health        # Healthcheck del sistema
-make clean         # Limpiar caches de Neovim
+make help        # lista los targets
+make install     # backup + stow
+make backup      # respalda configs actuales en ~/dotfiles-backup/<timestamp>
+make stow        # crea los symlinks
+make unstow      # elimina los symlinks
+make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
+make health      # comprueba binarios
+make clean       # vacía ~/dotfiles-backup
 ```
 
----
+## Filosofía
 
-## Filosofia del Setup
+- Reproducible: un `make install` deja una máquina nueva operativa.
+- Modular: cada paquete vive aislado y se puede stow/unstow individualmente.
+- Mínimo: solo se versiona lo que el usuario edita; nada de caches ni estado generado por las herramientas.
+- Multi-proveedor: las skills viven en una ubicación canónica (`agents/.agents/skills/`) y cada agente las consume a su manera.
 
-### Principios de Diseño
+## Cómo extender
 
-1. **Reproducibilidad Primero** - Todo versionado y automatizable
-2. **Modularidad** - Componentes independientes y reutilizables
-3. **Git-Friendly** - Evitar notebooks `.ipynb`, usar scripts
-4. **Extensibilidad** - Fácil añadir agentes, temas, workflows
-5. **Documentación** - Decisiones técnicas siempre documentadas
+| Para añadir… | Crea | Y… |
+|---|---|---|
+| Una skill nueva | `agents/.agents/skills/<nombre>/SKILL.md` | `make restow agents` |
+| Un agente OpenCode | `opencode/.config/opencode/agents/<nombre>.md` | `make restow opencode` |
+| Un comando OpenCode | `opencode/.config/opencode/commands/<nombre>.md` | `make restow opencode` |
+| Un alias zsh | Edita `shell/.config/shell/aliases.zsh` | `exec zsh` |
 
-### Stack Unificado
+## Ver también
 
-Este setup busca **un único entorno** para:
-- Python (ETL, data engineering)
-- R (analisis estadistico)
-- Quarto (informes tecnicos)
-- IA (local + remota)
-- Conocimiento (Obsidian + Zotero)
-
----
-
-## FAQ
-
-### ¿Por qué no usar VSCode como principal?
-
-VSCode es excelente, pero este setup busca:
-1. **Unificación** - Mismo entorno para Python/R/Quarto
-2. **IA en terminal** - Acceso a IA desde cualquier contexto
-3. **Personalización** - Control total sobre el entorno
-4. **Terminal-first** - Workflow optimizado para terminal
-
-**Nota:** VSCode se mantiene como fallback para casos específicos.
-
-### ¿Funciona en Linux/Windows?
-
-Este setup está optimizado para **macOS**, pero puede adaptarse:
-- **Linux**: Cambiar paths de Homebrew, ajustar algunos scripts
-- **Windows**: Requiere WSL2, adaptación significativa
-
-### ¿Necesito el servidor RTX 3090?
-
-No es imprescindible. Puedes:
-- Usar solo IA remota (Copilot, Codex)
-- Instalar Ollama en tu Mac (modelos más pequeños)
-
-### ¿Cómo actualizo los dotfiles?
-
-```bash
-cd ~/Documents/GitHub/dotfiles
-git pull
-make stow  # Re-aplicar symlinks si es necesario
-```
-
----
-
-## Solucion de Problemas
-
-Ver [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) para más ayuda.
-
----
-
-## Agradecimientos
-
-- [jmbuhr/quarto-nvim-kickstarter](https://github.com/jmbuhr/quarto-nvim-kickstarter) - Base de la configuración de Quarto
-- [LazyVim](https://github.com/LazyVim/LazyVim) - Inspiración para estructura de plugins
-- Comunidad de Neovim - Por los increíbles plugins
-
----
-
-**Feliz coding**
+- [docs/INSTALL.md](docs/INSTALL.md) — guía de instalación detallada.
+- [docs/SECRETS.md](docs/SECRETS.md) — tokens y cómo cargarlos.
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problemas comunes.
+- [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md) — flujo de los agentes y comandos.

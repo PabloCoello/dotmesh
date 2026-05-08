@@ -1,58 +1,58 @@
-.PHONY: help install backup stow unstow health clean theme
+.PHONY: help install backup stow unstow restow health clean
 
-# Default target
+PACKAGES := shell git starship vscode opencode codex claude agents
+
 help:
-	@echo "Dotfiles Management"
+	@echo "dotmesh — gestión de dotfiles"
 	@echo ""
-	@echo "Usage:"
-	@echo "  make install  - Full install (backup + stow)"
-	@echo "  make backup   - Backup existing configs"
-	@echo "  make stow     - Symlink configs using GNU Stow"
-	@echo "  make unstow   - Remove symlinks"
-	@echo "  make health   - Check system health"
-	@echo "  make clean    - Remove backups"
-	@echo "  make theme    - Regenerate theme files"
+	@echo "Targets:"
+	@echo "  make install   - backup + stow"
+	@echo "  make backup    - Respalda configs actuales en ~/dotfiles-backup"
+	@echo "  make stow      - Aplica symlinks con GNU Stow"
+	@echo "  make unstow    - Elimina symlinks"
+	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
+	@echo "  make health    - Verifica que las herramientas estén instaladas"
+	@echo "  make clean     - Vacía ~/dotfiles-backup"
+	@echo ""
+	@echo "Paquetes: $(PACKAGES)"
 
 install: backup stow
-	@echo "✅ Installation complete!"
-	@echo "⚠️  Reload your shell: exec zsh"
+	@echo "Instalación completa."
+	@echo "Recarga la shell: exec zsh"
 
 backup:
-	@echo "📦 Backing up existing configs..."
 	@./scripts/backup-current-config.sh
 
 stow:
-	@echo "🔗 Creating symlinks with GNU Stow..."
-	@stow -v -t ~ shell
-	@stow -v -t ~ git
-	@stow -v -t ~ ghostty
-	@stow -v -t ~ starship
-	@stow -v -t ~ nvim
-	@stow -v -t ~ tmux
-	@stow -v -t ~ vscode
-	@echo "✅ Symlinks created"
+	@for pkg in $(PACKAGES); do \
+		echo "→ stow $$pkg"; \
+		stow -v -t ~ $$pkg; \
+	done
 
 unstow:
-	@echo "🔓 Removing symlinks..."
-	@stow -D -t ~ shell git ghostty starship nvim tmux vscode
-	@echo "✅ Symlinks removed"
+	@for pkg in $(PACKAGES); do \
+		echo "← unstow $$pkg"; \
+		stow -v -D -t ~ $$pkg; \
+	done
+
+restow:
+	@for pkg in $(PACKAGES); do \
+		echo "↻ restow $$pkg"; \
+		stow -v -R -t ~ $$pkg; \
+	done
 
 health:
-	@echo "🏥 Checking system health..."
-	@command -v nvim > /dev/null && echo "✅ Neovim installed" || echo "❌ Neovim not found"
-	@command -v stow > /dev/null && echo "✅ GNU Stow installed" || echo "❌ GNU Stow not found"
-	@command -v git > /dev/null && echo "✅ Git installed" || echo "❌ Git not found"
-	@command -v zsh > /dev/null && echo "✅ Zsh installed" || echo "❌ Zsh not found"
-	@command -v starship > /dev/null && echo "✅ Starship installed" || echo "❌ Starship not found"
-	@command -v delta > /dev/null && echo "✅ Delta installed" || echo "❌ Delta not found"
-	@command -v tmux > /dev/null && echo "✅ tmux installed" || echo "❌ tmux not found"
+	@echo "Healthcheck:"
+	@command -v zsh      >/dev/null && echo "  ok  zsh"      || echo "  --  zsh"
+	@command -v stow     >/dev/null && echo "  ok  stow"     || echo "  --  stow"
+	@command -v git      >/dev/null && echo "  ok  git"      || echo "  --  git"
+	@command -v delta    >/dev/null && echo "  ok  delta"    || echo "  --  delta"
+	@command -v starship >/dev/null && echo "  ok  starship" || echo "  --  starship"
+	@command -v code     >/dev/null && echo "  ok  code (VS Code)" || echo "  --  code (VS Code)"
+	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
+	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
+	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
 
 clean:
-	@echo "🗑️  Cleaning backups..."
 	@rm -rf ~/dotfiles-backup/*
-	@echo "✅ Backups cleaned"
-
-theme:
-	@echo "🎨 Regenerating theme files..."
-	@cd themes/pandora && python3 export.py
-	@echo "✅ Theme files updated"
+	@echo "Backups eliminados."
