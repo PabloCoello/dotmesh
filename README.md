@@ -1,8 +1,6 @@
 # dotmesh
 
-Dotfiles personales para macOS centrados en un workflow de **agentes IA en terminal**:
-Warp como terminal, OpenCode + Codex + Claude Code como agentes, VS Code como
-editor y Zotero (standalone) para bibliografía.
+Dotfiles personales para macOS. Gestiona la configuración de terminal, shell, Git, Starship, VS Code, OpenCode, Codex, Claude y skills globales de agentes.
 
 ## Quick start
 
@@ -20,7 +18,6 @@ exec zsh                            # recarga la shell
 
 | Componente | Herramienta | Paquete Stow |
 |---|---|---|
-| Terminal | Warp | *(no versionado)* |
 | Shell | Zsh + Oh-My-Zsh | [shell/](shell/) |
 | Prompt | Starship | [starship/](starship/) |
 | Editor | VS Code | [vscode/](vscode/) |
@@ -29,7 +26,6 @@ exec zsh                            # recarga la shell
 | Agente IA #2 | Codex (CLI OpenAI) | [codex/](codex/) |
 | Agente IA #3 | Claude Code | [claude/](claude/) |
 | Skills globales | Convención `.agents/skills/` | [agents/](agents/) |
-| Bibliografía | Zotero (standalone) | — |
 
 ## Estructura
 
@@ -44,21 +40,18 @@ dotmesh/
 ├── claude/     .claude/settings.json
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
 ├── scripts/    backup-current-config.sh
-├── docs/       INSTALL.md, TROUBLESHOOTING.md
+├── docs/       INSTALL.md, SECRETS.md, TROUBLESHOOTING.md
 ├── Makefile
 └── README.md
 ```
 
-Cada paquete sigue la convención de [GNU Stow](https://www.gnu.org/software/stow/):
-los ficheros bajo `<pkg>/...` se enlazan a la misma ruta relativa bajo `~`.
+Cada paquete sigue la convención de [GNU Stow](https://www.gnu.org/software/stow/): los ficheros bajo `<pkg>/...` se enlazan a la misma ruta relativa bajo `~`.
 
 ## Skills globales
 
-`agents/.agents/skills/<skill>/SKILL.md` es la fuente de verdad y queda
-enlazado en `~/.agents/skills/<skill>/SKILL.md` tras `make stow`.
+`agents/.agents/skills/<skill>/SKILL.md` es la fuente de verdad y queda enlazado en `~/.agents/skills/<skill>/SKILL.md` tras `make stow`.
 
-El core pack diario incluye 14 skills de ingeniería, adaptadas para trabajo
-general con agentes y no copiadas de forma literal de un único proveedor:
+El core pack diario incluye 14 skills de ingeniería:
 
 - `idea-refine`
 - `spec-driven-development`
@@ -78,26 +71,21 @@ general con agentes y no copiadas de forma literal de un único proveedor:
 También se mantienen skills locales adicionales:
 
 - `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
-- `castellano-peninsular`: redacción en español peninsular formal, cargada por los agentes `debate`, `design` y `docs` de OpenCode.
+- `castellano-peninsular`: redacción en español peninsular formal.
 
-El índice completo vive en
-[`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
+El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
 
-OpenCode las consume vía `/setup` (ver
-[opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)).
-Claude Code las carga mediante el plugin `agent-skills@addy-agent-skills`
-declarado en [claude/.claude/settings.json](claude/.claude/settings.json).
-Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
+OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las carga mediante el plugin `agent-skills@addy-agent-skills` declarado en [claude/.claude/settings.json](claude/.claude/settings.json). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
 
 ## Convención de artefactos de trabajo
 
 Los agentes siguen una política global para gestionar documentos de planificación:
 
-- **No crear `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` en la raíz** salvo petición explícita.
-- **Por defecto, trabajar en conversación**. Solo crear archivos persistentes si el usuario lo pide, si la tarea es larga o si hay riesgo de perder contexto.
-- **Artefactos persistentes** van en `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
-- **Scratch temporal** va en `.ai/tmp/`.
-- **Git ignore**: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
+- No crear `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` en la raíz salvo petición explícita.
+- Por defecto, trabajar en conversación. Solo crear archivos persistentes si el usuario lo pide, si la tarea es larga o si hay riesgo de perder contexto.
+- Artefactos persistentes van en `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
+- Scratch temporal va en `.ai/tmp/`.
+- Git ignore: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
 
 Esta convención está integrada en las instrucciones globales de OpenCode y Codex. Claude Code no tiene mecanismo de instrucciones globales en este repo, pero puede seguir la misma convención manualmente.
 
@@ -116,12 +104,10 @@ make clean       # vacía ~/dotfiles-backup
 
 ## Filosofía
 
-- **Reproducible**: un `make install` deja una máquina nueva operativa.
-- **Modular**: cada paquete vive aislado y se puede stow/unstow individualmente.
-- **Mínimo**: solo se versiona lo que el usuario edita; nada de caches ni estado
-  generado por las herramientas.
-- **Multi-proveedor**: las skills viven en una ubicación canónica
-  (`agents/.agents/skills/`) y cada agente las consume a su manera.
+- Reproducible: un `make install` deja una máquina nueva operativa.
+- Modular: cada paquete vive aislado y se puede stow/unstow individualmente.
+- Mínimo: solo se versiona lo que el usuario edita; nada de caches ni estado generado por las herramientas.
+- Multi-proveedor: las skills viven en una ubicación canónica (`agents/.agents/skills/`) y cada agente las consume a su manera.
 
 ## Cómo extender
 
@@ -131,22 +117,6 @@ make clean       # vacía ~/dotfiles-backup
 | Un agente OpenCode | `opencode/.config/opencode/agents/<nombre>.md` | `make restow opencode` |
 | Un comando OpenCode | `opencode/.config/opencode/commands/<nombre>.md` | `make restow opencode` |
 | Un alias zsh | Edita `shell/.config/shell/aliases.zsh` | `exec zsh` |
-
-## MCPs (solo OpenCode)
-
-Configurados en [opencode/.config/opencode/opencode.json](opencode/.config/opencode/opencode.json):
-
-| MCP | Para qué | Token |
-|---|---|---|
-| `notion` | Páginas/databases de Notion | `NOTION_TOKEN` |
-| `github` | Issues, PRs, código en GitHub | `GITHUB_TOKEN` |
-| `tavily` | Búsqueda web para `debate` y `write` | `TAVILY_API_KEY` |
-| `openalex` | ~250M papers científicos | — |
-| `zotero` | Biblioteca local | — (Zotero standalone abierto) |
-
-Tokens en `~/.zsh.secrets` (no commiteado). Ver [docs/SECRETS.md](docs/SECRETS.md).
-
-Para los otros proveedores (Codex, Claude Code) los MCPs se configuran desde su UI, no desde este repo.
 
 ## Ver también
 
