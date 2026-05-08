@@ -1,0 +1,28 @@
+{
+  "_comment": "Reference MCP servers for Claude Code. Mirrors the five servers in opencode/.config/opencode/opencode.json. Tokens come from environment variables (NOTION_API_KEY, GITHUB_TOKEN, TAVILY_API_KEY, etc.) and are not committed here. Apply with: see docs/INSTALL.md.",
+  "mcpServers": {
+    "notion": {
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"]
+    },
+    "tavily": {
+      "command": "npx",
+      "args": ["-y", "tavily-mcp"]
+    },
+    "openalex": {
+      "command": "npx",
+      "args": ["-y", "openalex-research-mcp"]
+    },
+    "zotero": {
+      "command": "uvx",
+      "args": ["zotero-mcp"],
+      "env": {
+        "ZOTERO_LOCAL": "true"
+      }
+    }
+  }
+}
