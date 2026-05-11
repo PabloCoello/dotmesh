@@ -1,6 +1,7 @@
 {
   "enabledPlugins": {
-    "miro@claude-plugins-official": true
+    "miro@claude-plugins-official": true,
+    "warp@claude-code-warp": true
   },
   "extraKnownMarketplaces": {
     "miro-ai": {
@@ -8,8 +9,14 @@
         "source": "github",
         "repo": "miroapp/miro-ai"
       }
+    },
+    "claude-code-warp": {
+      "source": {
+        "source": "github",
+        "repo": "warpdotdev/claude-code-warp"
+      }
     }
   },
   "theme": "dark-ansi",
-  "effortLevel": "max"
+  "skipDangerousModePermissionPrompt": true
 }
