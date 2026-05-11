@@ -24,7 +24,7 @@ exec zsh                            # recarga la shell
 | VCS | Git + delta | [git/](git/) |
 | Agente IA #1 | OpenCode | [opencode/](opencode/) |
 | Agente IA #2 | Codex (CLI OpenAI) | [codex/](codex/) |
-| Agente IA #3 | Claude Code | [claude/](claude/) |
+| Agente IA #3 | Claude Code | [claude/](claude/) (settings + agentes + comandos + mcp) |
 | Skills globales | Convención `.agents/skills/` | [agents/](agents/) |
 
 ## Estructura
@@ -37,7 +37,7 @@ dotmesh/
 ├── vscode/     Library/Application Support/Code/User/{settings,extensions,scripts,themes}
 ├── opencode/   .config/opencode/{agents,commands,opencode.json,README.md}
 ├── codex/      .codex/{config.toml,AGENTS.md}
-├── claude/     .claude/settings.json
+├── claude/     .claude/{settings.json,agents/,commands/,mcp/}
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
 ├── scripts/    backup-current-config.sh
 ├── docs/       INSTALL.md, SECRETS.md, TROUBLESHOOTING.md
@@ -49,7 +49,10 @@ Cada paquete sigue la convención de [GNU Stow](https://www.gnu.org/software/sto
 
 ## Skills globales
 
-`agents/.agents/skills/<skill>/SKILL.md` es la fuente de verdad y queda enlazado en `~/.agents/skills/<skill>/SKILL.md` tras `make stow`.
+`agents/.agents/skills/<skill>/SKILL.md` es la fuente de verdad. Tras `make install` queda accesible desde:
+
+- `~/.agents/skills/<skill>/SKILL.md` — vía `make stow agents` (consumido por OpenCode y Codex).
+- `~/.claude/skills/<skill>/SKILL.md` — vía `make link-skills` (symlink a la ruta anterior, consumido por Claude Code).
 
 El core pack diario incluye 14 skills de ingeniería:
 
@@ -75,7 +78,25 @@ También se mantienen skills locales adicionales:
 
 El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
 
-OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las carga mediante el plugin `agent-skills@addy-agent-skills` declarado en [claude/.claude/settings.json](claude/.claude/settings.json). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
+OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las descubre automáticamente desde `~/.claude/skills/` (symlink). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
+
+## Paridad OpenCode ↔ Claude Code
+
+El paquete `claude/` replica el flujo de OpenCode dentro de Claude Code para poder cambiar de uno a otro en mitad de un proyecto sin alterar la forma de trabajar:
+
+| Pieza | OpenCode | Claude Code |
+|---|---|---|
+| Memoria por proyecto | `AGENTS.md` directo | `CLAUDE.md` con `@AGENTS.md` (import) |
+| Skills | `~/.agents/skills/` | `~/.claude/skills/` → `~/.agents/skills/` |
+| Agentes | 10 en `~/.config/opencode/agents/` | 10 en `~/.claude/agents/` (mismos nombres y roles) |
+| Comandos custom | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` |
+| MCP | `~/.config/opencode/opencode.json` | `claude/.claude/mcp/servers.reference.json` (aplicar con `claude mcp add`, ver [docs/INSTALL.md](docs/INSTALL.md)) |
+
+Limitaciones conocidas que no se replican:
+
+- Claude Code no expone `temperature` por agente. Cada agente compensa el carácter en su system prompt.
+- Claude Code no permite granularidad fina de comandos bash por agente. Los agentes restrictivos (`security`, `maths`, `state`, `write`) declaran su scope verbalmente.
+- Los comandos `/checkpoint` y `/check-last` no se portan: el primero choca con la política de no crear `CHECKPOINT.md` en raíz, y el segundo se solapa con `/security-review` y `/review` ya nativos en Claude Code.
 
 ## Convención de artefactos de trabajo
 
@@ -93,11 +114,12 @@ Esta convención está integrada en las instrucciones globales de OpenCode y Cod
 
 ```bash
 make help        # lista los targets
-make install     # backup + stow
+make install     # backup + stow + link-skills
 make backup      # respalda configs actuales en ~/dotfiles-backup/<timestamp>
 make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
+make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
 make health      # comprueba binarios
 make clean       # vacía ~/dotfiles-backup
 ```
@@ -116,6 +138,8 @@ make clean       # vacía ~/dotfiles-backup
 | Una skill nueva | `agents/.agents/skills/<nombre>/SKILL.md` | `make restow agents` |
 | Un agente OpenCode | `opencode/.config/opencode/agents/<nombre>.md` | `make restow opencode` |
 | Un comando OpenCode | `opencode/.config/opencode/commands/<nombre>.md` | `make restow opencode` |
+| Un agente Claude Code | `claude/.claude/agents/<nombre>.md` | `make restow claude` |
+| Un comando Claude Code | `claude/.claude/commands/<nombre>.md` | `make restow claude` |
 | Un alias zsh | Edita `shell/.config/shell/aliases.zsh` | `exec zsh` |
 
 ## Ver también

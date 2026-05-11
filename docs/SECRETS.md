@@ -18,8 +18,16 @@ chmod 600 ~/.zsh.secrets
 export NOTION_TOKEN="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # GitHub: PAT (fine-grained) en https://github.com/settings/tokens
-# Scopes mínimos: repo, read:org, read:user
-export GITHUB_TOKEN="github_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Permisos mínimos para el MCP server: Contents (read), Metadata (read), Pull
+# requests (read/write) y Issues (read/write) sobre los repos que uses.
+#
+# IMPORTANTE: el nombre de la variable es DOTMESH_GITHUB_PAT, no GITHUB_TOKEN
+# ni GH_TOKEN. La razón es que la CLI `gh` da prioridad a esas dos variables
+# por encima del token de su keyring; exportar GITHUB_TOKEN aquí rompería
+# `gh pr create` para todos los agentes que hereden este entorno (Claude Code,
+# OpenCode, Codex, etc.). Con un nombre neutro, el PAT solo lo recibe el MCP
+# de GitHub, vía el bloque `env`/`environment` de su config.
+export DOTMESH_GITHUB_PAT="github_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # Tavily: web search para agentes en https://tavily.com
 export TAVILY_API_KEY="tvly-xxxxxxxxxxxxxxxxxxxxxxxx"

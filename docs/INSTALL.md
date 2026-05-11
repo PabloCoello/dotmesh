@@ -32,6 +32,9 @@ exec zsh
 1. `scripts/backup-current-config.sh` → copia tus configs actuales a
    `~/dotfiles-backup/<timestamp>/`.
 2. `stow -t ~ <paquete>` para cada paquete del repo.
+3. `make link-skills` → crea `~/.claude/skills` como symlink a
+   `~/.agents/skills` para que Claude Code consuma la misma fuente de
+   skills que OpenCode y Codex.
 
 ## Qué se instala
 
@@ -43,7 +46,7 @@ exec zsh
 | `vscode` | `~/Library/Application Support/Code/User/...` |
 | `opencode` | `~/.config/opencode/{agents,commands,README.md}` |
 | `codex` | `~/.codex/{config.toml, AGENTS.md}` |
-| `claude` | `~/.claude/settings.json` |
+| `claude` | `~/.claude/{settings.json,agents/,commands/,mcp/}` |
 | `agents` | `~/.agents/skills/<skill>/` |
 
 ## Tras la instalación
@@ -52,12 +55,45 @@ exec zsh
 exec zsh                                    # recarga la shell
 starship --version                          # debe imprimir versión
 git diff                                    # debe usar delta
-opencode agent list                         # debe listar los 8 agentes
+opencode agent list                         # debe listar los 10 agentes
+ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
+ls ~/.claude/agents/                        # debe listar los 10 agentes Claude Code
 ```
 
 Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
 sesión OpenCode en cualquier proyecto (ver
 [opencode/.config/opencode/README.md](../opencode/.config/opencode/README.md)).
+En Claude Code el equivalente es `/setup` (custom) o el `/init` nativo.
+
+## MCP en Claude Code
+
+Los 5 servidores MCP que usa OpenCode (notion, github, tavily, openalex,
+zotero) están definidos como referencia en
+[`claude/.claude/mcp/servers.reference.json`](../claude/.claude/mcp/servers.reference.json).
+Stow no los aplica a `~/.claude.json` automáticamente porque ese fichero
+lo gestiona el propio Claude Code y contiene estado de sesión. Para
+aplicarlos manualmente, usa la CLI de Claude:
+
+```bash
+# Por servidor:
+claude mcp add notion   npx -- -y @notionhq/notion-mcp-server
+claude mcp add github   npx -- -y @modelcontextprotocol/server-github
+claude mcp add tavily   npx -- -y tavily-mcp
+claude mcp add openalex npx -- -y openalex-research-mcp
+claude mcp add zotero   uvx -- zotero-mcp --env ZOTERO_LOCAL=true
+```
+
+Los tokens (`NOTION_TOKEN`, `DOTMESH_GITHUB_PAT`, `TAVILY_API_KEY`, etc.)
+deben estar exportados en el entorno antes de lanzar `claude` — ver
+[SECRETS.md](SECRETS.md). Verifica con `claude mcp list`.
+
+> `DOTMESH_GITHUB_PAT` se llama así a propósito: `gh` consume
+> `GH_TOKEN`/`GITHUB_TOKEN` por delante de su keyring, así que usar uno de
+> esos nombres romperá `gh pr create` en cualquier agente que herede tu
+> entorno. El bloque `env` del MCP en
+> [`claude/.claude/mcp/servers.reference.json`](../claude/.claude/mcp/servers.reference.json)
+> mapea explícitamente `DOTMESH_GITHUB_PAT` → `GITHUB_PERSONAL_ACCESS_TOKEN`
+> para el `@modelcontextprotocol/server-github`.
 
 ## Personalización
 

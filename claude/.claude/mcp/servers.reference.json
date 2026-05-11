@@ -1,0 +1,31 @@
+{
+  "_comment": "Reference MCP servers for Claude Code. Mirrors the five servers in opencode/.config/opencode/opencode.json. Tokens come from environment variables (NOTION_TOKEN, DOTMESH_GITHUB_PAT, TAVILY_API_KEY, etc.) and are not committed here. DOTMESH_GITHUB_PAT is deliberately named outside the GH_TOKEN/GITHUB_TOKEN set so it does not override gh's keyring auth. Apply with: see docs/INSTALL.md.",
+  "mcpServers": {
+    "notion": {
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${DOTMESH_GITHUB_PAT}"
+      }
+    },
+    "tavily": {
+      "command": "npx",
+      "args": ["-y", "tavily-mcp"]
+    },
+    "openalex": {
+      "command": "npx",
+      "args": ["-y", "openalex-research-mcp"]
+    },
+    "zotero": {
+      "command": "uvx",
+      "args": ["zotero-mcp"],
+      "env": {
+        "ZOTERO_LOCAL": "true"
+      }
+    }
+  }
+}
