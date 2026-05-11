@@ -83,9 +83,17 @@ claude mcp add openalex npx -- -y openalex-research-mcp
 claude mcp add zotero   uvx -- zotero-mcp --env ZOTERO_LOCAL=true
 ```
 
-Los tokens (`NOTION_API_KEY`, `GITHUB_TOKEN`, `TAVILY_API_KEY`, etc.)
+Los tokens (`NOTION_TOKEN`, `DOTMESH_GITHUB_PAT`, `TAVILY_API_KEY`, etc.)
 deben estar exportados en el entorno antes de lanzar `claude` — ver
 [SECRETS.md](SECRETS.md). Verifica con `claude mcp list`.
+
+> `DOTMESH_GITHUB_PAT` se llama así a propósito: `gh` consume
+> `GH_TOKEN`/`GITHUB_TOKEN` por delante de su keyring, así que usar uno de
+> esos nombres romperá `gh pr create` en cualquier agente que herede tu
+> entorno. El bloque `env` del MCP en
+> [`claude/.claude/mcp/servers.reference.json`](../claude/.claude/mcp/servers.reference.json)
+> mapea explícitamente `DOTMESH_GITHUB_PAT` → `GITHUB_PERSONAL_ACCESS_TOKEN`
+> para el `@modelcontextprotocol/server-github`.
 
 ## Personalización
 
