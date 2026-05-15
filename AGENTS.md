@@ -87,10 +87,13 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
   asks for that exact attribution.
 - **Autonomous Git flow.** `/super-git` means the agent should manage the
   non-destructive Git lifecycle end to end: fetch, fast-forward when safe,
-  branch naming, atomic commits, verification, push and PR creation. It does not
-  permit force-push, destructive resets/cleans, discarding work, staging secrets,
-  pushing to the default branch, or changing Git identity without explicit user
-  confirmation.
+  branch naming, incremental semantic commits, verification, push and PR
+  creation. Prefer branch-first, slice-by-slice work over after-the-fact sorting
+  of a large dirty worktree. If the pending diff is already tangled, split it
+  only where the boundaries are clear and ask before staging ambiguous hunks. It
+  does not permit force-push, destructive resets/cleans, discarding work, staging
+  secrets, pushing to the default branch, or changing Git identity without
+  explicit user confirmation.
 - **Don't run destructive Stow/Git operations without being asked.** `unstow`, `restow`, `clean`, `git reset --hard`, etc. all touch live user state.
 - **README and most docs are in Spanish (peninsular).** Match the existing language when editing user-facing prose.
 

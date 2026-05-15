@@ -86,11 +86,15 @@ same names in natural language as follows:
   and recommend `.ai/tmp/` in `.gitignore` if missing.
 - `/super-git`: manage the full non-destructive Git lifecycle autonomously:
   inspect state, fetch, fast-forward the default branch when safe, create or
-  reuse a task-named branch, split changes into atomic Conventional Commits, run
-  verification and secret checks, push the feature branch, and open or report the
-  PR. Treat `/super-git` as consent to push and create the PR, but not as consent
-  to force-push, reset, clean, discard changes, rewrite published history, push
-  to the default branch, stage suspected secrets, or change Git identity.
+  reuse a task-named branch, work in semantic slices, commit each verified slice
+  before starting the next one, push the feature branch, and open or report the
+  PR. Prefer this proactive flow over reconstructing commits from a large dirty
+  diff. If invoked after many changes already exist, split them only when the
+  boundaries are clear; otherwise ask before staging ambiguous hunks or creating
+  overfitted history. Treat `/super-git` as consent to push and create the PR,
+  but not as consent to force-push, reset, clean, discard changes, rewrite
+  published history, push to the default branch, stage suspected secrets, or
+  change Git identity.
 - `/check-last`: run a code-review pass and a security pass over the current
   uncommitted diff. Do not commit.
 - `/checkpoint`: because root `CHECKPOINT.md` is forbidden by default, write a

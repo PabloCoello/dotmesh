@@ -3,9 +3,28 @@ description: Autonomously manage the Git lifecycle from sync and branch setup th
 agent: build
 ---
 
-Manage the current worktree through the full Git lifecycle: synchronize with the remote, create or reuse a correctly named branch, split changes into semantic commits, push, and open a pull request with a useful description.
+Manage the current worktree through the full Git lifecycle: synchronize with the remote, create or reuse a correctly named branch, work in semantic slices, create each commit while the intent is still fresh, push, and open a pull request with a useful description.
+
+Prefer using `/super-git` before or during implementation. Do not treat it only as an after-the-fact cleanup command for a large dirty worktree.
 
 `/super-git` is explicit consent to perform non-destructive Git operations and remote publication for the current repository. Still stop for destructive operations, ambiguous staging, secrets, conflicts, divergent history, or force-push needs.
+
+## Operating model
+
+Primary mode is incremental:
+
+- Sync and create or select the branch before implementation when possible.
+- Define the next semantic slice before editing.
+- Keep the worktree focused on that slice.
+- Verify, stage, and commit the slice before starting the next one.
+- Repeat until the task is complete, then push and open the PR.
+
+Recovery mode is available when `/super-git` is invoked after changes already exist:
+
+- Inspect the full dirty worktree and infer commit groups only when the intent is clear.
+- Prefer coarse but honest commits over overfitted history when a large diff cannot be split safely.
+- Stop and ask before staging ambiguous hunks, generated noise, local-machine state, or suspected secrets.
+- If the pending diff is too tangled to separate confidently, report the risk and ask whether to create a broader commit or let the user split it manually.
 
 ## Lifecycle
 
@@ -22,12 +41,13 @@ Manage the current worktree through the full Git lifecycle: synchronize with the
 4. If on the default branch and clean, update with `git merge --ff-only origin/<base>`.
 5. If on the default branch with local changes, create a feature branch before committing. Do not stash unless needed to protect work, and immediately apply the stash after switching.
 6. If on a feature branch, keep it unless its name violates the branch naming rules. If the branch is unpushed and badly named, rename it.
-7. Inspect all pending changes and group them into atomic commits.
-8. Stage and commit each group autonomously when the grouping is clear.
-9. Run verification before each commit and before PR creation.
-10. Push the branch with upstream tracking: `git push -u origin <branch>`.
-11. Open a PR with `gh pr create --base <base> --head <branch> --title ... --body ...`.
-12. Report the branch, commits, PR URL, verification, and anything left uncommitted.
+7. When implementation work remains, make one semantic slice at a time and commit it before starting the next slice.
+8. When changes already exist, inspect all pending changes and group them into atomic commits only when the grouping is clear.
+9. Stage and commit each group autonomously when the grouping is clear.
+10. Run verification before each commit and before PR creation.
+11. Push the branch with upstream tracking: `git push -u origin <branch>`.
+12. Open a PR with `gh pr create --base <base> --head <branch> --title ... --body ...`.
+13. Report the branch, commits, PR URL, verification, and anything left uncommitted.
 
 ## Branch naming
 

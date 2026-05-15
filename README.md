@@ -100,9 +100,12 @@ Limitaciones conocidas que no se replican:
 - Codex no consume los ficheros `agents/*.md` de OpenCode ni comandos slash personalizados. Usa instrucciones globales, plugins, MCP, sandbox y aprobaciones.
 
 `/super-git` es el flujo autónomo de publicación: sincroniza con remoto, crea o
-reutiliza una rama con nombre semántico, genera commits atómicos, hace push y
-abre la PR con descripción. Para operaciones destructivas, force-push, ramas
-divergentes, secretos o hunks ambiguos, debe parar y pedir confirmación.
+reutiliza una rama con nombre semántico, trabaja por slices semánticos, genera
+cada commit atómico justo después de verificarlo, hace push y abre la PR con
+descripción. La separación a posteriori de un diff grande queda como modo de
+recuperación: si los límites no están claros, debe parar y pedir confirmación.
+Para operaciones destructivas, force-push, ramas divergentes, secretos o hunks
+ambiguos, también debe parar y pedir confirmación.
 
 ## Convención de artefactos de trabajo
 
