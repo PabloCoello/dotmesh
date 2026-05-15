@@ -19,7 +19,7 @@ Configuración global para opencode con tres agentes principales, cinco subagent
 │   └── state.md          # github-copilot/claude-haiku-4.5, snapshot del workspace
 └── commands/
     ├── setup.md          # Inicializa proyecto con skills compartidas
-    ├── super-git.md      # Commits atómicos con Conventional Commits
+    ├── super-git.md      # Flujo Git autónomo: rama, slices, commits, push y PR
     ├── checkpoint.md     # Snapshot estructurado de sesión
     └── check-last.md     # review + security en paralelo
 
@@ -46,7 +46,7 @@ Debe mostrar los ocho agentes definidos.
 ```bash
 # Dentro de opencode
 /setup       # debe inicializar AGENTS.md y skills del stack
-/super-git   # agrupa cambios del working tree en commits semánticos
+/super-git   # sincroniza, crea rama, hace commits por slices, hace push y abre PR
 /checkpoint  # genera CHECKPOINT.md
 /check-last  # review + security sobre git diff
 ```

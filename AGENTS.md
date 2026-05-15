@@ -79,6 +79,21 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 
 - **Defensive, idempotent shell scripts.** `scripts/backup-current-config.sh` is the model: `set -e`, `mkdir -p`, gated `[ -e ]` checks, no destructive defaults.
 - **No secrets in the repo.** Tokens and credentials are loaded out-of-band; see `docs/SECRETS.md`. MCP servers receive secrets via environment variables, not via committed config.
+- **No LLM authorship in Git metadata.** Branch names, commit messages and
+  trailers must describe the human intent and repository change, not the AI tool
+  that helped. Do not add `Co-authored-by`, `Author`, `Signed-off-by`,
+  `Generated-by`, branch slugs, or similar attribution for Codex, Claude,
+  OpenCode, Copilot, ChatGPT or any other LLM/agent unless the user explicitly
+  asks for that exact attribution.
+- **Autonomous Git flow.** `/super-git` means the agent should manage the
+  non-destructive Git lifecycle end to end: fetch, fast-forward when safe,
+  branch naming, incremental semantic commits, verification, push and PR
+  creation. Prefer branch-first, slice-by-slice work over after-the-fact sorting
+  of a large dirty worktree. If the pending diff is already tangled, split it
+  only where the boundaries are clear and ask before staging ambiguous hunks. It
+  does not permit force-push, destructive resets/cleans, discarding work, staging
+  secrets, pushing to the default branch, or changing Git identity without
+  explicit user confirmation.
 - **Don't run destructive Stow/Git operations without being asked.** `unstow`, `restow`, `clean`, `git reset --hard`, etc. all touch live user state.
 - **README and most docs are in Spanish (peninsular).** Match the existing language when editing user-facing prose.
 

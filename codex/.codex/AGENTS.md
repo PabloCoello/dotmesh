@@ -39,6 +39,21 @@ Do not delete artifacts automatically. The user decides retention.
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.
 
+## Git attribution
+
+Do not add Codex, ChatGPT, OpenAI, Claude, OpenCode, Copilot or any other
+LLM/agent as an author, co-author, signer, generator, branch owner, or metadata
+attribution in Git history.
+
+- Commit messages must not include `Co-authored-by`, `Author`, `Signed-off-by`,
+  `Generated-by`, "generated with", "authored by AI", or similar LLM/agent
+  attribution unless the user explicitly asks for that exact trailer or text.
+- Branch names must describe the task or change, not the AI tool. Do not include
+  model, agent, assistant, or vendor names in the branch slug unless the user
+  explicitly requests them.
+- Use the configured Git identity as-is. Do not change `git config user.name` or
+  `git config user.email` to an AI identity.
+
 ## OpenCode parity
 
 Codex does not use OpenCode's `agents/` or `commands/` directories. Treat the
@@ -69,9 +84,17 @@ same names in natural language as follows:
 - `/setup`: inspect the project stack, ensure `AGENTS.md` names relevant commands
   and boundaries, confirm shared skills are referenced from `~/.agents/skills/`,
   and recommend `.ai/tmp/` in `.gitignore` if missing.
-- `/super-git`: inspect staged, unstaged and untracked changes; group them into
-  atomic Conventional Commits; stage only the confirmed group unless the user has
-  already asked for autonomous commits.
+- `/super-git`: manage the full non-destructive Git lifecycle autonomously:
+  inspect state, fetch, fast-forward the default branch when safe, create or
+  reuse a task-named branch, work in semantic slices, commit each verified slice
+  before starting the next one, push the feature branch, and open or report the
+  PR. Prefer this proactive flow over reconstructing commits from a large dirty
+  diff. If invoked after many changes already exist, split them only when the
+  boundaries are clear; otherwise ask before staging ambiguous hunks or creating
+  overfitted history. Treat `/super-git` as consent to push and create the PR,
+  but not as consent to force-push, reset, clean, discard changes, rewrite
+  published history, push to the default branch, stage suspected secrets, or
+  change Git identity.
 - `/check-last`: run a code-review pass and a security pass over the current
   uncommitted diff. Do not commit.
 - `/checkpoint`: because root `CHECKPOINT.md` is forbidden by default, write a

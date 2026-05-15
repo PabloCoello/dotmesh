@@ -85,6 +85,22 @@ update auth.ts
 <optional body explaining why, not what>
 ```
 
+### 3.1 No AI Authorship Attribution
+
+Git history records the user's repository changes, not which LLM or agent helped.
+
+- Do not add AI tools as authors, co-authors, signers, generators or branch
+  owners.
+- Do not add `Co-authored-by`, `Author`, `Signed-off-by`, `Generated-by`,
+  "generated with", "authored by AI", or similar trailers/text for Codex,
+  Claude, OpenCode, Copilot, ChatGPT, OpenAI or any other model/vendor unless
+  the user explicitly asks for that exact attribution.
+- Branch names should describe the task or change. Do not include model, agent,
+  assistant or vendor names in the branch slug unless the user explicitly
+  requests them.
+- Use the configured Git identity as-is. Do not change `git config user.name` or
+  `git config user.email` to an AI identity.
+
 **Types:**
 - `feat` — New feature
 - `fix` — Bug fix
@@ -121,6 +137,45 @@ Target ~100 lines per commit/PR. Changes over ~1000 lines should be split. See t
 ~1000 lines → Split into smaller changes
 ```
 
+## Autonomous Git Lifecycle
+
+When the user asks for autonomous Git handling, `/super-git`, "ship this",
+"open a PR", or equivalent, manage the full non-destructive lifecycle:
+
+1. Inspect local state: branch, remotes, staged/unstaged/untracked changes,
+   recent commits.
+2. Fetch remote refs with pruning.
+3. Fast-forward the default branch when you are on it and the worktree is clean.
+4. Create or reuse a branch whose name describes the task, not the AI tool.
+5. Prefer incremental work: define one semantic slice, edit only that slice,
+   verify it, commit it, then start the next slice.
+6. If invoked after changes already exist, split the dirty worktree into atomic
+   Conventional Commits only when the grouping is clear.
+7. Run verification and secret checks before each commit.
+8. Push the feature branch with upstream tracking.
+9. Open a pull request, or report the existing PR for the branch.
+10. Report branch, commits, PR URL, verification and any remaining changes.
+
+`/super-git` or an equivalent explicit request is consent to push the current
+feature branch and create a PR. It is not consent to force-push, reset, clean,
+discard changes, rewrite published history, push to the default branch, or stage
+suspected secrets.
+
+The preferred mode is proactive, not retrospective. Use Git commits as
+checkpoints while implementing. Large after-the-fact diffs are a recovery path:
+make coarse but honest commits when the intent is clear, and ask before
+inventing fine-grained history from tangled edits.
+
+Stop and ask before:
+
+- destructive commands (`git reset --hard`, `git clean`, destructive checkout/restore);
+- force-push or history rewrite;
+- resolving merge/rebase conflicts;
+- staging ambiguous hunks or suspicious untracked files;
+- splitting a large dirty worktree whose semantic boundaries are unclear;
+- continuing after a non-fast-forward push rejection;
+- changing Git identity or credential configuration.
+
 ## Branching Strategy
 
 ### Feature Branches
@@ -128,8 +183,8 @@ Target ~100 lines per commit/PR. Changes over ~1000 lines should be split. See t
 ```
 main (always deployable)
   │
-  ├── feature/task-creation    ← One feature per branch
-  ├── feature/user-settings    ← Parallel work
+  ├── feat/task-creation       ← One feature per branch
+  ├── feat/user-settings       ← Parallel work
   └── fix/duplicate-tasks      ← Bug fixes
 ```
 
@@ -141,11 +196,15 @@ main (always deployable)
 ### Branch Naming
 
 ```
-feature/<short-description>   → feature/task-creation
-fix/<short-description>       → fix/duplicate-tasks
-chore/<short-description>     → chore/update-deps
-refactor/<short-description>  → refactor/auth-module
+feat/<short-description>       → feat/task-creation
+fix/<short-description>        → fix/duplicate-tasks
+docs/<short-description>       → docs/api-contract
+chore/<short-description>      → chore/update-deps
+refactor/<short-description>   → refactor/auth-module
 ```
+
+Allowed branch prefixes mirror commit types: `feat`, `fix`, `docs`, `refactor`,
+`test`, `chore`, `experiment`, `analysis`, and `data`.
 
 ## Working with Worktrees
 
@@ -153,8 +212,8 @@ For parallel AI agent work, use git worktrees to run multiple branches simultane
 
 ```bash
 # Create a worktree for a feature branch
-git worktree add ../project-feature-a feature/task-creation
-git worktree add ../project-feature-b feature/user-settings
+git worktree add ../project-feature-a feat/task-creation
+git worktree add ../project-feature-b feat/user-settings
 
 # Each worktree is a separate directory with its own branch
 # Agents can work in parallel without interfering
