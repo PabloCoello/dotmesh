@@ -56,6 +56,7 @@ exec zsh                                    # recarga la shell
 starship --version                          # debe imprimir versión
 git diff                                    # debe usar delta
 opencode agent list                         # debe listar los 10 agentes
+codex mcp list                              # debe listar notion/github/tavily/openalex/zotero
 ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
 ls ~/.claude/agents/                        # debe listar los 10 agentes Claude Code
 ```
@@ -64,6 +65,30 @@ Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
 sesión OpenCode en cualquier proyecto (ver
 [opencode/.config/opencode/README.md](../opencode/.config/opencode/README.md)).
 En Claude Code el equivalente es `/setup` (custom) o el `/init` nativo.
+
+## MCP en Codex
+
+Codex lee los servidores MCP directamente desde
+[`codex/.codex/config.toml`](../codex/.codex/config.toml), bajo las tablas
+`[mcp_servers.*]`. Tras `make stow`, la CLI debe mostrar los cinco servidores:
+
+```bash
+codex mcp list
+```
+
+La columna `Auth` puede aparecer como `Unsupported` para estos servidores. Es
+normal: son MCP locales por `stdio` que reciben credenciales desde variables de
+entorno. Ese estado solo indica que no admiten el flujo OAuth gestionado por
+`codex mcp login`. Puedes comprobar la inyección de variables con:
+
+```bash
+codex mcp get github
+```
+
+Los tokens se heredan desde el entorno mediante `env_vars`. Para GitHub, Codex
+no renombra variables al heredarlas; por eso `~/.zsh.secrets` debe exportar
+`GITHUB_PERSONAL_ACCESS_TOKEN` derivada de `DOTMESH_GITHUB_PAT`. Ver
+[SECRETS.md](SECRETS.md).
 
 ## MCP en Claude Code
 

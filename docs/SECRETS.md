@@ -29,6 +29,11 @@ export NOTION_TOKEN="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # de GitHub, vía el bloque `env`/`environment` de su config.
 export DOTMESH_GITHUB_PAT="github_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
+# Codex no renombra variables al heredarlas con `env_vars`, así que el MCP de
+# GitHub necesita esta variable derivada. No interfiere con `gh`; evita
+# `GH_TOKEN` y `GITHUB_TOKEN`.
+export GITHUB_PERSONAL_ACCESS_TOKEN="$DOTMESH_GITHUB_PAT"
+
 # Tavily: web search para agentes en https://tavily.com
 export TAVILY_API_KEY="tvly-xxxxxxxxxxxxxxxxxxxxxxxx"
 ```

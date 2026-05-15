@@ -63,17 +63,17 @@ The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` 
 
 ## Three-agent parity
 
-This repo aims for functional parity between OpenCode and Claude Code so the user can switch between them in the same project without changing their workflow. Codex stays as documented under `codex/.codex/AGENTS.md`.
+This repo aims for functional parity between OpenCode, Claude Code and Codex so the user can switch between them in the same project without changing their workflow. Codex cannot mirror OpenCode's agent files directly, so it carries the same workflow vocabulary in `codex/.codex/AGENTS.md`.
 
-| Concern | OpenCode | Claude Code |
-|---|---|---|
-| Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md`; `CLAUDE.md` imports `AGENTS.md` via `@AGENTS.md` |
-| Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` |
-| Agents | `~/.config/opencode/agents/` (10 agents) | `~/.claude/agents/` (10 agents, same names and roles) |
-| Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) |
-| MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` |
-| Per-agent temperature | yes | not exposed — compensated in system prompts |
-| Per-agent bash granularity | yes (e.g. `npm audit*`) | only tool whitelist — bash is on/off per agent |
+| Concern | OpenCode | Claude Code | Codex |
+|---|---|---|---|
+| Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md`; `CLAUDE.md` imports `AGENTS.md` via `@AGENTS.md` | reads `~/.codex/AGENTS.md` plus project `AGENTS.md` |
+| Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` | shared skills referenced from `~/.agents/skills/` and surfaced through Codex skill discovery |
+| Agents | `~/.config/opencode/agents/` (10 agents) | `~/.claude/agents/` (10 agents, same names and roles) | workflow modes in `codex/.codex/AGENTS.md`, not separate agent files |
+| Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) | natural-language command equivalents in `codex/.codex/AGENTS.md` |
+| MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
+| Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
+| Per-agent bash granularity | yes (e.g. `npm audit*`) | only tool whitelist — bash is on/off per agent | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
 
 ## Conventions to respect
 

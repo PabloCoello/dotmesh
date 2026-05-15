@@ -80,23 +80,24 @@ El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/s
 
 OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las descubre automáticamente desde `~/.claude/skills/` (symlink). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
 
-## Paridad OpenCode ↔ Claude Code
+## Paridad OpenCode ↔ Claude Code ↔ Codex
 
-El paquete `claude/` replica el flujo de OpenCode dentro de Claude Code para poder cambiar de uno a otro en mitad de un proyecto sin alterar la forma de trabajar:
+Los paquetes `claude/` y `codex/` replican el flujo de OpenCode dentro de los límites de cada herramienta, para poder cambiar de agente en mitad de un proyecto sin alterar la forma de trabajar:
 
-| Pieza | OpenCode | Claude Code |
-|---|---|---|
-| Memoria por proyecto | `AGENTS.md` directo | `CLAUDE.md` con `@AGENTS.md` (import) |
-| Skills | `~/.agents/skills/` | `~/.claude/skills/` → `~/.agents/skills/` |
-| Agentes | 10 en `~/.config/opencode/agents/` | 10 en `~/.claude/agents/` (mismos nombres y roles) |
-| Comandos custom | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` |
-| MCP | `~/.config/opencode/opencode.json` | `claude/.claude/mcp/servers.reference.json` (aplicar con `claude mcp add`, ver [docs/INSTALL.md](docs/INSTALL.md)) |
+| Pieza | OpenCode | Claude Code | Codex |
+|---|---|---|---|
+| Memoria por proyecto | `AGENTS.md` directo | `CLAUDE.md` con `@AGENTS.md` (import) | `~/.codex/AGENTS.md` + `AGENTS.md` del proyecto |
+| Skills | `~/.agents/skills/` | `~/.claude/skills/` → `~/.agents/skills/` | `~/.agents/skills/`, referenciadas desde `codex/.codex/AGENTS.md` |
+| Agentes | 10 en `~/.config/opencode/agents/` | 10 en `~/.claude/agents/` (mismos nombres y roles) | modos de trabajo en `codex/.codex/AGENTS.md` |
+| Comandos custom | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` | equivalentes en lenguaje natural en `codex/.codex/AGENTS.md` |
+| MCP | `~/.config/opencode/opencode.json` | `claude/.claude/mcp/servers.reference.json` (aplicar con `claude mcp add`, ver [docs/INSTALL.md](docs/INSTALL.md)) | `[mcp_servers.*]` en `codex/.codex/config.toml` |
 
 Limitaciones conocidas que no se replican:
 
 - Claude Code no expone `temperature` por agente. Cada agente compensa el carácter en su system prompt.
 - Claude Code no permite granularidad fina de comandos bash por agente. Los agentes restrictivos (`security`, `maths`, `state`, `write`) declaran su scope verbalmente.
 - Los comandos `/checkpoint` y `/check-last` no se portan: el primero choca con la política de no crear `CHECKPOINT.md` en raíz, y el segundo se solapa con `/security-review` y `/review` ya nativos en Claude Code.
+- Codex no consume los ficheros `agents/*.md` de OpenCode ni comandos slash personalizados. Usa instrucciones globales, plugins, MCP, sandbox y aprobaciones.
 
 ## Convención de artefactos de trabajo
 
