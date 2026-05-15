@@ -76,6 +76,15 @@ Codex lee los servidores MCP directamente desde
 codex mcp list
 ```
 
+La columna `Auth` puede aparecer como `Unsupported` para estos servidores. Es
+normal: son MCP locales por `stdio` que reciben credenciales desde variables de
+entorno. Ese estado solo indica que no admiten el flujo OAuth gestionado por
+`codex mcp login`. Puedes comprobar la inyección de variables con:
+
+```bash
+codex mcp get github
+```
+
 Los tokens se heredan desde el entorno mediante `env_vars`. Para GitHub, Codex
 no renombra variables al heredarlas; por eso `~/.zsh.secrets` debe exportar
 `GITHUB_PERSONAL_ACCESS_TOKEN` derivada de `DOTMESH_GITHUB_PAT`. Ver
