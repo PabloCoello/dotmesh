@@ -39,6 +39,21 @@ Do not delete artifacts automatically. The user decides retention.
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.
 
+## Git attribution
+
+Do not add Codex, ChatGPT, OpenAI, Claude, OpenCode, Copilot or any other
+LLM/agent as an author, co-author, signer, generator, branch owner, or metadata
+attribution in Git history.
+
+- Commit messages must not include `Co-authored-by`, `Author`, `Signed-off-by`,
+  `Generated-by`, "generated with", "authored by AI", or similar LLM/agent
+  attribution unless the user explicitly asks for that exact trailer or text.
+- Branch names must describe the task or change, not the AI tool. Do not include
+  model, agent, assistant, or vendor names in the branch slug unless the user
+  explicitly requests them.
+- Use the configured Git identity as-is. Do not change `git config user.name` or
+  `git config user.email` to an AI identity.
+
 ## OpenCode parity
 
 Codex does not use OpenCode's `agents/` or `commands/` directories. Treat the

@@ -84,6 +84,13 @@ All commit messages MUST follow Conventional Commits format. Apply the conventio
 3. No period at end.
 4. Max 72 characters for first line.
 5. Always include scope when possible: `feat(api):`, `fix(docker):`, `docs(readme):`.
+6. Do not add LLM/agent attribution. Never include `Co-authored-by`, `Author`,
+   `Signed-off-by`, `Generated-by`, "generated with", "authored by AI", or
+   similar trailers/text for Codex, Claude, OpenCode, Copilot, ChatGPT, OpenAI
+   or any other model/vendor unless the user explicitly asks for that exact
+   attribution.
+7. Do not change Git identity to an AI identity. Use the configured `user.name`
+   and `user.email` as-is.
 
 ### Examples
 

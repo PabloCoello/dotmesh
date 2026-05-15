@@ -85,6 +85,22 @@ update auth.ts
 <optional body explaining why, not what>
 ```
 
+### 3.1 No AI Authorship Attribution
+
+Git history records the user's repository changes, not which LLM or agent helped.
+
+- Do not add AI tools as authors, co-authors, signers, generators or branch
+  owners.
+- Do not add `Co-authored-by`, `Author`, `Signed-off-by`, `Generated-by`,
+  "generated with", "authored by AI", or similar trailers/text for Codex,
+  Claude, OpenCode, Copilot, ChatGPT, OpenAI or any other model/vendor unless
+  the user explicitly asks for that exact attribution.
+- Branch names should describe the task or change. Do not include model, agent,
+  assistant or vendor names in the branch slug unless the user explicitly
+  requests them.
+- Use the configured Git identity as-is. Do not change `git config user.name` or
+  `git config user.email` to an AI identity.
+
 **Types:**
 - `feat` — New feature
 - `fix` — Bug fix
