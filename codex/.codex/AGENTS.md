@@ -38,3 +38,53 @@ Do not delete artifacts automatically. The user decides retention.
 ## Skills
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.
+
+## OpenCode parity
+
+Codex does not use OpenCode's `agents/` or `commands/` directories. Treat the
+OpenCode setup as a workflow vocabulary and emulate it through this instruction
+file, shared skills, Codex plugins, MCP servers, and explicit user requests.
+
+### Workflow modes
+
+When the user names one of these modes, apply the matching behaviour:
+
+| Mode | Codex behaviour |
+|---|---|
+| `debate` | Read-only discussion. Sharpen the idea, surface assumptions and trade-offs, and avoid editing files. Load `idea-refine` for vague concepts. |
+| `design` | Specify and plan only. Use `spec-driven-development` and `planning-and-task-breakdown`; write `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}` only when persistent artifacts are warranted or requested. Do not implement. |
+| `build` | Implement in small verified slices. Use `context-engineering` at session start, `incremental-implementation` for multi-file changes, `test-driven-development` for behaviour changes, and `git-workflow-and-versioning` for branches and commits. |
+| `write` | Draft or revise prose only. Use `anti-ai-style`; also use `castellano-peninsular` for Spanish. Do not edit code unless the user explicitly changes scope. |
+| `review` | Review diffs or fragments. Lead with findings by severity, cite file and line, and avoid rewriting unless asked. Apply `code-review-and-quality`. |
+| `security` | Audit secrets, permissions, dependencies, external input, auth, storage and logs. Apply `security-and-hardening`; return `CLEAR` only when no issue is found. |
+| `docs` | Update durable documentation after a change. Apply `documentation-and-adrs`; match the language of the file being edited. |
+| `state` | Produce a short factual snapshot: branch, dirty files, latest commits, active `.ai/tasks/*` artifacts, and likely next step. Do not analyse quality. |
+| `maths` | Verify formulas or symbolic reasoning with a suitable local tool. Persist nothing unless the user asks. |
+
+### Command equivalents
+
+OpenCode slash commands are not portable as Codex slash commands. Interpret the
+same names in natural language as follows:
+
+- `/setup`: inspect the project stack, ensure `AGENTS.md` names relevant commands
+  and boundaries, confirm shared skills are referenced from `~/.agents/skills/`,
+  and recommend `.ai/tmp/` in `.gitignore` if missing.
+- `/super-git`: inspect staged, unstaged and untracked changes; group them into
+  atomic Conventional Commits; stage only the confirmed group unless the user has
+  already asked for autonomous commits.
+- `/check-last`: run a code-review pass and a security pass over the current
+  uncommitted diff. Do not commit.
+- `/checkpoint`: because root `CHECKPOINT.md` is forbidden by default, write a
+  checkpoint only when requested, preferably under the active `.ai/tasks/.../`
+  directory.
+
+### Boundaries
+
+- Keep `agents/.agents/skills/` as the source of truth. Do not create
+  `.codex/skills/`, `.opencode/skills/`, or a marketplace plugin copy for the same
+  skills unless the sync story is documented.
+- Do not rely on OpenCode-only frontmatter such as `temperature`, `mode`, or
+  per-agent bash permissions. In Codex, use sandboxing, approval requests,
+  explicit workflow instructions and shared skills instead.
+- MCP servers are configured in `codex/.codex/config.toml` under
+  `[mcp_servers.*]`, not in OpenCode JSON format.
