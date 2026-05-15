@@ -11,7 +11,7 @@ multi_agent = true
 [plugins."build-web-apps@openai-curated"]
 enabled = true
 
-[plugins."browser-use@openai-bundled"]
+[plugins."browser@openai-bundled"]
 enabled = true
 
 [plugins."documents@openai-primary-runtime"]
@@ -22,3 +22,34 @@ enabled = true
 
 [plugins."presentations@openai-primary-runtime"]
 enabled = true
+
+[mcp_servers.notion]
+command = "npx"
+args = ["-y", "@notionhq/notion-mcp-server"]
+env_vars = ["NOTION_TOKEN"]
+enabled = true
+
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]
+enabled = true
+
+[mcp_servers.tavily]
+command = "npx"
+args = ["-y", "tavily-mcp"]
+env_vars = ["TAVILY_API_KEY"]
+enabled = true
+
+[mcp_servers.openalex]
+command = "npx"
+args = ["-y", "openalex-research-mcp"]
+enabled = true
+
+[mcp_servers.zotero]
+command = "uvx"
+args = ["zotero-mcp"]
+enabled = true
+
+[mcp_servers.zotero.env]
+ZOTERO_LOCAL = "true"
