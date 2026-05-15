@@ -99,6 +99,11 @@ Limitaciones conocidas que no se replican:
 - Los comandos `/checkpoint` y `/check-last` no se portan: el primero choca con la política de no crear `CHECKPOINT.md` en raíz, y el segundo se solapa con `/security-review` y `/review` ya nativos en Claude Code.
 - Codex no consume los ficheros `agents/*.md` de OpenCode ni comandos slash personalizados. Usa instrucciones globales, plugins, MCP, sandbox y aprobaciones.
 
+`/super-git` es el flujo autónomo de publicación: sincroniza con remoto, crea o
+reutiliza una rama con nombre semántico, genera commits atómicos, hace push y
+abre la PR con descripción. Para operaciones destructivas, force-push, ramas
+divergentes, secretos o hunks ambiguos, debe parar y pedir confirmación.
+
 ## Convención de artefactos de trabajo
 
 Los agentes siguen una política global para gestionar documentos de planificación:

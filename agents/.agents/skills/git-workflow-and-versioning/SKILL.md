@@ -137,6 +137,36 @@ Target ~100 lines per commit/PR. Changes over ~1000 lines should be split. See t
 ~1000 lines → Split into smaller changes
 ```
 
+## Autonomous Git Lifecycle
+
+When the user asks for autonomous Git handling, `/super-git`, "ship this",
+"open a PR", or equivalent, manage the full non-destructive lifecycle:
+
+1. Inspect local state: branch, remotes, staged/unstaged/untracked changes,
+   recent commits.
+2. Fetch remote refs with pruning.
+3. Fast-forward the default branch when you are on it and the worktree is clean.
+4. Create or reuse a branch whose name describes the task, not the AI tool.
+5. Split changes into atomic Conventional Commits.
+6. Run verification and secret checks before each commit.
+7. Push the feature branch with upstream tracking.
+8. Open a pull request, or report the existing PR for the branch.
+9. Report branch, commits, PR URL, verification and any remaining changes.
+
+`/super-git` or an equivalent explicit request is consent to push the current
+feature branch and create a PR. It is not consent to force-push, reset, clean,
+discard changes, rewrite published history, push to the default branch, or stage
+suspected secrets.
+
+Stop and ask before:
+
+- destructive commands (`git reset --hard`, `git clean`, destructive checkout/restore);
+- force-push or history rewrite;
+- resolving merge/rebase conflicts;
+- staging ambiguous hunks or suspicious untracked files;
+- continuing after a non-fast-forward push rejection;
+- changing Git identity or credential configuration.
+
 ## Branching Strategy
 
 ### Feature Branches
@@ -144,8 +174,8 @@ Target ~100 lines per commit/PR. Changes over ~1000 lines should be split. See t
 ```
 main (always deployable)
   │
-  ├── feature/task-creation    ← One feature per branch
-  ├── feature/user-settings    ← Parallel work
+  ├── feat/task-creation       ← One feature per branch
+  ├── feat/user-settings       ← Parallel work
   └── fix/duplicate-tasks      ← Bug fixes
 ```
 
@@ -157,11 +187,15 @@ main (always deployable)
 ### Branch Naming
 
 ```
-feature/<short-description>   → feature/task-creation
-fix/<short-description>       → fix/duplicate-tasks
-chore/<short-description>     → chore/update-deps
-refactor/<short-description>  → refactor/auth-module
+feat/<short-description>       → feat/task-creation
+fix/<short-description>        → fix/duplicate-tasks
+docs/<short-description>       → docs/api-contract
+chore/<short-description>      → chore/update-deps
+refactor/<short-description>   → refactor/auth-module
 ```
+
+Allowed branch prefixes mirror commit types: `feat`, `fix`, `docs`, `refactor`,
+`test`, `chore`, `experiment`, `analysis`, and `data`.
 
 ## Working with Worktrees
 
@@ -169,8 +203,8 @@ For parallel AI agent work, use git worktrees to run multiple branches simultane
 
 ```bash
 # Create a worktree for a feature branch
-git worktree add ../project-feature-a feature/task-creation
-git worktree add ../project-feature-b feature/user-settings
+git worktree add ../project-feature-a feat/task-creation
+git worktree add ../project-feature-b feat/user-settings
 
 # Each worktree is a separate directory with its own branch
 # Agents can work in parallel without interfering
