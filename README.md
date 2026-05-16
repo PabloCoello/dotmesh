@@ -119,6 +119,54 @@ Los agentes siguen una política global para gestionar documentos de planificaci
 
 Esta convención está integrada en las instrucciones globales de OpenCode y Codex. Claude Code no tiene mecanismo de instrucciones globales en este repo, pero puede seguir la misma convención manualmente.
 
+## Aislamiento de sesiones de Claude
+
+`shell/.config/shell/claude-session.zsh` define una función `claude()` que envuelve el binario para que cada sesión lanzada desde un repo git trabaje en un worktree propio. Dos sesiones concurrentes sobre el mismo repo no se pisan ficheros ni ramas. El módulo es compatible con bash y zsh; si no usas el paquete `shell/` entero (porque por ejemplo trabajas en bash), basta con sourcearlo: `source ~/Documentos/GitHub/dotmesh/shell/.config/shell/claude-session.zsh` en tu `~/.bashrc` o `~/.zshrc`.
+
+Flujo cuando ejecutas `claude` dentro de un repo git:
+
+1. Crea worktree hermano en `<repo>-session-<timestamp>-<rand4>/`.
+2. Crea rama local `session/<id>` desde el `HEAD` actual. **Nunca se hace push automático.**
+3. `git fetch --quiet origin` dentro del worktree.
+4. Si existe `.claude-session-init.sh` ejecutable en la raíz del worktree, se ejecuta (ver más abajo).
+5. Lanza `claude` con el cwd en el worktree.
+6. Al salir: si la rama está limpia (sin commits ni cambios sin commitear) borra worktree y rama. Si hay trabajo, lo conserva y te indica la ruta y el id para limpiar después.
+
+Fuera de repo git, o con `CLAUDE_NO_ISOLATION=1 claude`, el wrapper es transparente y ejecuta el binario directamente.
+
+Helpers asociados:
+
+- `claude-sessions` — lista los worktrees de sesión vivos del repo actual.
+- `claude-session-cleanup <id>` — borra worktree y rama de una sesión concreta cuando ya no la necesitas.
+
+Convención de promoción de rama: `session/<id>` es local y efímera. Si el trabajo de la sesión va a publicarse, **renómbrala a `<prefix>/<task>`** (siguiendo la convención de `/super-git`) antes de pushear, para que no aparezca como ruido en los listados de ramas remotas.
+
+### Hook por repo: `.claude-session-init.sh`
+
+Permite añadir lógica específica del repo que debe correr al abrir cada sesión aislada, sin tocar el wrapper global.
+
+- Ubicación: raíz del repo (el del worktree, no el de dotmesh).
+- Debe ser ejecutable (`chmod +x`). Si no, se ignora silenciosamente.
+- Se ejecuta en un subshell con cwd en el worktree, antes de lanzar `claude`.
+- Variables exportadas **no** llegan a la sesión de `claude` (procesos independientes). Para variables de entorno usa `~/.zshrc` o `direnv`.
+- Si devuelve error (exit ≠ 0), el wrapper avisa y continúa; no bloquea el arranque de la sesión.
+- Es síncrono: lo que tarde retrasa el arranque de `claude`. Para tareas lentas, lánzalas en background dentro del script.
+- Se ejecuta en **cada** sesión: si reserva recursos (puertos, IDs, servicios) debe ser seguro frente a ejecuciones concurrentes.
+
+Casos de uso típicos: sincronizar ramas remotas antes de allocar IDs, levantar servicios de docker-compose con nombre scoped por sesión, forzar recarga de `direnv`, imprimir avisos sobre convenciones del repo.
+
+### Versionado del hook
+
+El script vive en el root del repo como fichero normal. Tres formas de gestionarlo:
+
+| Opción | Cuándo | Cómo |
+|---|---|---|
+| `.git/info/exclude` (recomendado) | Solo tú usas el wrapper; el resto del equipo no debe ver el fichero | `echo .claude-session-init.sh >> .git/info/exclude` |
+| Commitear al repo | El equipo entero adopta el wrapper como convención compartida | `git add` normal |
+| Symlink desde dotmesh | Quieres versionar el script en un sitio central y sobrevivir re-clones | Guardar el script en `dotmesh/` y crear `ln -s` desde el repo destino |
+
+`.git/info/exclude` es un `.gitignore` privado de tu clone: no se versiona, no se sincroniza, solo lo lee tu git local. El fichero existe en disco, el wrapper lo encuentra y ejecuta, pero `git status` lo ignora y `git add .` no lo incluye. Caveat: si re-clonas el repo, pierdes tanto el script como la regla de exclude — en ese caso, prefiere la opción de symlink.
+
 ## Comandos del Makefile
 
 ```bash
