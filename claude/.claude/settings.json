@@ -18,5 +18,8 @@
     }
   },
   "theme": "dark-ansi",
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
 }
