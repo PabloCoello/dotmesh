@@ -38,8 +38,17 @@ function claude() {
 
     git -C "$worktree_path" fetch --quiet origin 2>/dev/null || true
 
+    # Buscar el hook en el repo origen para que también dispare cuando el
+    # script está sin trackear (.git/info/exclude o .gitignore): los
+    # ficheros untracked no se propagan a un nuevo worktree.
+    local init_hook=""
     if [[ -x "${worktree_path}/.claude-session-init.sh" ]]; then
-        ( cd "$worktree_path" && ./.claude-session-init.sh ) || \
+        init_hook="${worktree_path}/.claude-session-init.sh"
+    elif [[ -x "${repo_root}/.claude-session-init.sh" ]]; then
+        init_hook="${repo_root}/.claude-session-init.sh"
+    fi
+    if [[ -n "$init_hook" ]]; then
+        ( cd "$worktree_path" && "$init_hook" ) || \
             echo "⚠️  .claude-session-init.sh devolvió error; continúo" >&2
     fi
 

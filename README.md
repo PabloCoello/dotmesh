@@ -128,7 +128,7 @@ Flujo cuando ejecutas `claude` dentro de un repo git:
 1. Crea worktree hermano en `<repo>-session-<timestamp>-<rand4>/`.
 2. Crea rama local `session/<id>` desde el `HEAD` actual. **Nunca se hace push automático.**
 3. `git fetch --quiet origin` dentro del worktree.
-4. Si existe `.claude-session-init.sh` ejecutable en la raíz del worktree, se ejecuta (ver más abajo).
+4. Si existe `.claude-session-init.sh` ejecutable en la raíz del worktree —o, como fallback, en la raíz del repo origen— se ejecuta (ver más abajo). El fallback es necesario porque `git worktree add` solo copia ficheros trackeados: si el hook está en `.gitignore` o `.git/info/exclude`, no aparece en el worktree y el wrapper lo busca en el repo origen.
 5. Lanza `claude` con el cwd en el worktree.
 6. Al salir: si la rama está limpia (sin commits ni cambios sin commitear) borra worktree y rama. Si hay trabajo, lo conserva y te indica la ruta y el id para limpiar después.
 
@@ -145,9 +145,9 @@ Convención de promoción de rama: `session/<id>` es local y efímera. Si el tra
 
 Permite añadir lógica específica del repo que debe correr al abrir cada sesión aislada, sin tocar el wrapper global.
 
-- Ubicación: raíz del repo (el del worktree, no el de dotmesh).
+- Ubicación: raíz del repo (el del worktree, no el de dotmesh). El wrapper prueba primero el worktree y, si ahí no lo encuentra, mira en el repo origen.
 - Debe ser ejecutable (`chmod +x`). Si no, se ignora silenciosamente.
-- Se ejecuta en un subshell con cwd en el worktree, antes de lanzar `claude`.
+- Se ejecuta en un subshell con cwd en el worktree, antes de lanzar `claude` (incluso cuando el script vive en el repo origen).
 - Variables exportadas **no** llegan a la sesión de `claude` (procesos independientes). Para variables de entorno usa `~/.zshrc` o `direnv`.
 - Si devuelve error (exit ≠ 0), el wrapper avisa y continúa; no bloquea el arranque de la sesión.
 - Es síncrono: lo que tarde retrasa el arranque de `claude`. Para tareas lentas, lánzalas en background dentro del script.
@@ -165,7 +165,7 @@ El script vive en el root del repo como fichero normal. Tres formas de gestionar
 | Commitear al repo | El equipo entero adopta el wrapper como convención compartida | `git add` normal |
 | Symlink desde dotmesh | Quieres versionar el script en un sitio central y sobrevivir re-clones | Guardar el script en `dotmesh/` y crear `ln -s` desde el repo destino |
 
-`.git/info/exclude` es un `.gitignore` privado de tu clone: no se versiona, no se sincroniza, solo lo lee tu git local. El fichero existe en disco, el wrapper lo encuentra y ejecuta, pero `git status` lo ignora y `git add .` no lo incluye. Caveat: si re-clonas el repo, pierdes tanto el script como la regla de exclude — en ese caso, prefiere la opción de symlink.
+`.git/info/exclude` es un `.gitignore` privado de tu clone: no se versiona, no se sincroniza, solo lo lee tu git local. El fichero existe en disco del repo origen, el wrapper lo encuentra (vía fallback al repo origen, porque el worktree nuevo no recibe ficheros untracked) y lo ejecuta, pero `git status` lo ignora y `git add .` no lo incluye. Caveat: si re-clonas el repo, pierdes tanto el script como la regla de exclude — en ese caso, prefiere la opción de symlink.
 
 ## Comandos del Makefile
 
