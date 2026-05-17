@@ -1,12 +1,15 @@
 # ═══════════════════════════════════════════════
-# ➤ CLAUDE CODE — SESSION ISOLATION
+# ➤ CLAUDE CODE — SESSION ISOLATION (opt-in)
 # ═══════════════════════════════════════════════
-# Cada `claude` dentro de un repo git crea un worktree efímero en
-# <repo>-session-<id>/ con rama local `session/<id>` (nunca push).
-# Al salir, si está limpio se borra. Si el repo tiene
-# `.claude-session-init.sh` ejecutable en la raíz, se ejecuta tras crear
-# el worktree (hook por repo: agora ids, docker-compose, direnv, etc.).
-# Bypass: `CLAUDE_NO_ISOLATION=1 claude ...`.
+# Por defecto `claude` se ejecuta tal cual.
+# Con `claude --isolate ...` (y dentro de un repo git) el wrapper crea un
+# worktree efímero en <repo>-session-<id>/ con rama local `session/<id>`
+# (nunca push). Al salir, si está limpio se borra; si tiene trabajo, lo
+# conserva.
+#
+# Si el repo tiene `.claude-session-init.sh` ejecutable en la raíz, se
+# ejecuta tras crear el worktree (hook por repo: agora ids, docker-compose,
+# direnv, etc.). El flag `--isolate` se consume y no se reenvía al binario.
 # Compatible con bash y zsh.
 
 function claude() {
@@ -15,8 +18,26 @@ function claude() {
         return 127
     fi
 
-    if [[ -n "$CLAUDE_NO_ISOLATION" ]] || ! git rev-parse --git-dir > /dev/null 2>&1; then
-        command claude "$@"
+    local isolate=0
+    local -a args
+    args=()
+    local arg
+    for arg in "$@"; do
+        if [[ "$arg" == "--isolate" ]]; then
+            isolate=1
+        else
+            args+=("$arg")
+        fi
+    done
+
+    if (( ! isolate )); then
+        command claude "${args[@]}"
+        return $?
+    fi
+
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "⚠️  --isolate ignorado: no estás en un repo git" >&2
+        command claude "${args[@]}"
         return $?
     fi
 
@@ -31,7 +52,7 @@ function claude() {
     echo "🌿 Claude session ${session_id} → ${worktree_path} (rama local ${branch})"
     if ! git -C "$repo_root" worktree add -b "$branch" "$worktree_path" HEAD > /dev/null; then
         echo "❌ git worktree add failed; lanzando claude sin aislamiento" >&2
-        command claude "$@"
+        command claude "${args[@]}"
         return $?
     fi
     base_sha=$(git -C "$worktree_path" rev-parse HEAD)
@@ -52,7 +73,7 @@ function claude() {
             echo "⚠️  .claude-session-init.sh devolvió error; continúo" >&2
     fi
 
-    ( cd "$worktree_path" && command claude "$@" )
+    ( cd "$worktree_path" && command claude "${args[@]}" )
     rc=$?
 
     cd "$origin_cwd" 2>/dev/null || cd "$repo_root" || cd "$HOME"
