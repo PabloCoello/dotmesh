@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  },
   "enabledPlugins": {
     "miro@claude-plugins-official": true,
     "warp@claude-code-warp": true
@@ -17,9 +20,7 @@
       }
     }
   },
-  "theme": "dark-ansi",
   "skipDangerousModePermissionPrompt": true,
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  }
+  "theme": "dark-ansi",
+  "model": "opus"
 }
