@@ -121,18 +121,19 @@ Esta convención está integrada en las instrucciones globales de OpenCode y Cod
 
 ## Aislamiento de sesiones de Claude
 
-`shell/.config/shell/claude-session.zsh` define una función `claude()` que envuelve el binario para que cada sesión lanzada desde un repo git trabaje en un worktree propio. Dos sesiones concurrentes sobre el mismo repo no se pisan ficheros ni ramas. El módulo es compatible con bash y zsh; si no usas el paquete `shell/` entero (porque por ejemplo trabajas en bash), basta con sourcearlo: `source ~/Documentos/GitHub/dotmesh/shell/.config/shell/claude-session.zsh` en tu `~/.bashrc` o `~/.zshrc`.
+`shell/.config/shell/claude-session.zsh` define una función `claude()` que envuelve el binario. Por defecto es transparente: `claude` se ejecuta tal cual. El aislamiento por worktree se activa explícitamente con el flag `--isolate`, para que dos sesiones concurrentes sobre el mismo repo no se pisen ficheros ni ramas cuando lo necesites. El módulo es compatible con bash y zsh; si no usas el paquete `shell/` entero (porque por ejemplo trabajas en bash), basta con sourcearlo: `source ~/Documentos/GitHub/dotmesh/shell/.config/shell/claude-session.zsh` en tu `~/.bashrc` o `~/.zshrc`.
 
-Flujo cuando ejecutas `claude` dentro de un repo git:
+Flujo cuando ejecutas `claude --isolate` dentro de un repo git:
 
-1. Crea worktree hermano en `<repo>-session-<timestamp>-<rand4>/`.
-2. Crea rama local `session/<id>` desde el `HEAD` actual. **Nunca se hace push automático.**
-3. `git fetch --quiet origin` dentro del worktree.
-4. Si existe `.claude-session-init.sh` ejecutable en la raíz del worktree —o, como fallback, en la raíz del repo origen— se ejecuta (ver más abajo). El fallback es necesario porque `git worktree add` solo copia ficheros trackeados: si el hook está en `.gitignore` o `.git/info/exclude`, no aparece en el worktree y el wrapper lo busca en el repo origen.
-5. Lanza `claude` con el cwd en el worktree.
-6. Al salir: si la rama está limpia (sin commits ni cambios sin commitear) borra worktree y rama. Si hay trabajo, lo conserva y te indica la ruta y el id para limpiar después.
+1. Consume el flag `--isolate` (no se reenvía al binario).
+2. Crea worktree hermano en `<repo>-session-<timestamp>-<rand4>/`.
+3. Crea rama local `session/<id>` desde el `HEAD` actual. **Nunca se hace push automático.**
+4. `git fetch --quiet origin` dentro del worktree.
+5. Si existe `.claude-session-init.sh` ejecutable en la raíz del worktree —o, como fallback, en la raíz del repo origen— se ejecuta (ver más abajo). El fallback es necesario porque `git worktree add` solo copia ficheros trackeados: si el hook está en `.gitignore` o `.git/info/exclude`, no aparece en el worktree y el wrapper lo busca en el repo origen.
+6. Lanza `claude` con el cwd en el worktree.
+7. Al salir: si la rama está limpia (sin commits ni cambios sin commitear) borra worktree y rama. Si hay trabajo, lo conserva y te indica la ruta y el id para limpiar después.
 
-Fuera de repo git, o con `CLAUDE_NO_ISOLATION=1 claude`, el wrapper es transparente y ejecuta el binario directamente.
+Sin `--isolate`, o fuera de un repo git, el wrapper es transparente y ejecuta el binario directamente. Si pasas `--isolate` fuera de un repo git, el wrapper avisa y ejecuta sin aislamiento.
 
 Helpers asociados:
 
