@@ -5,14 +5,33 @@ como alternativa a Warp.
 
 ## Qué enlaza
 
-| Fichero del paquete | Destino |
+Todos bajo `~/Library/Application Support/app.crynta.terax/`:
+
+| Fichero | Contenido |
 |---|---|
-| `Library/Application Support/app.crynta.terax/terax-settings.json` | `~/Library/Application Support/app.crynta.terax/terax-settings.json` |
+| `terax-settings.json` | Ajustes + `customInstructions` (acuerdo de trabajo global de la IA) |
+| `terax-ai-agents.json` | Agentes personalizados (Build, Debate, Docs, Editor, Maths, State, Write) |
+| `terax-ai-snippets.json` | Snippets `#super-git`, `#checkpoint`, `#check-last` |
 
 ## Qué NO se versiona
 
-- `terax-ai-sessions.json`, `terax-ai-*.json`, `.window-state.json` — estado
-  volátil (chats, ventanas). Se dejan como ficheros locales sin enlazar.
+- `terax-ai-sessions.json`, `terax-ai-todos.json`, `terax-custom-themes.json`,
+  `.window-state.json` — estado volátil (chats, ventanas). Se dejan como
+  ficheros locales sin enlazar.
+
+## Paridad con el stack del repo
+
+Terax **no soporta MCP**, así que los servidores de OpenCode (notion, github,
+tavily, openalex, zotero) no se pueden portar; `github` se cubre en parte con la
+CLI `gh` en el terminal. Sí se trae lo demás:
+
+- **Instrucciones globales** (`customInstructions`): idioma peninsular,
+  `anti-ai-style`, Conventional Commits y la regla de no-atribución de IA.
+- **Agentes**: los que no tienen equivalente built-in en Terax. Sus built-in
+  (Coder, Architect, Code Reviewer, Security, Designer) ya cubren
+  `build`/`plan`/`review`/`security`/`design` de OpenCode.
+- **Snippets**: equivalentes a los comandos `/super-git`, `/checkpoint`,
+  `/check-last`, invocables con `#handle` en el compositor.
 
 ## Dependencia: Nerd Font
 

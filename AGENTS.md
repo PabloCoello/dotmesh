@@ -44,7 +44,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
 | `claude/` | `~/.claude/` | Claude Code `settings.json`, `agents/`, `commands/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
-| `terax/` | `~/Library/Application Support/app.crynta.terax/` | Terax terminal `terax-settings.json` (Warp alternative, under evaluation). `terax-ai-sessions.json` is deliberately not versioned |
+| `terax/` | `~/Library/Application Support/app.crynta.terax/` | Terax terminal (Warp alternative, under evaluation): `terax-settings.json` (+ `customInstructions`), `terax-ai-agents.json` (custom agents), `terax-ai-snippets.json`. Volatile state (`terax-ai-sessions.json`, todos, custom-themes, window-state) is deliberately not versioned. No MCP support |
 
 `Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
 

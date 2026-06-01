@@ -3,7 +3,7 @@
 PACKAGES := shell git starship vscode opencode codex claude agents terax
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
-TERAX_SETTINGS := terax/Library/Application Support/app.crynta.terax/terax-settings.json
+TERAX_DIR := terax/Library/Application Support/app.crynta.terax
 
 help:
 	@echo "dotmesh — gestión de dotfiles"
@@ -97,12 +97,14 @@ health:
 # skip-worktree para no ver ese ruido; 'thaw' lo revierte cuando quieras
 # capturar y commitear un nuevo baseline. Es estado local de cada clon.
 terax-freeze:
-	@git update-index --skip-worktree "$(TERAX_SETTINGS)"
-	@echo "  ok  terax-settings.json congelado (cambios locales ignorados)"
+	@for f in "$(TERAX_DIR)/"*.json; do \
+		git update-index --skip-worktree "$$f" && echo "  ok  congelado $$(basename "$$f")"; \
+	done
 
 terax-thaw:
-	@git update-index --no-skip-worktree "$(TERAX_SETTINGS)"
-	@echo "  ok  terax-settings.json descongelado (vuelve a seguirse)"
+	@for f in "$(TERAX_DIR)/"*.json; do \
+		git update-index --no-skip-worktree "$$f" && echo "  ok  descongelado $$(basename "$$f")"; \
+	done
 
 clean:
 	@rm -rf ~/dotfiles-backup/*
