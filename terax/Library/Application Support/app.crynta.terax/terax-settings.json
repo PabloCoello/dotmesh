@@ -1,16 +1,15 @@
 {
-  "themeId": "tide",
-  "theme": "system",
-  "editorTheme": "nord",
-  "zoomLevel": 0.95,
-  "showHidden": false,
-  "terminalFontFamily": "JetBrainsMono Nerd Font Mono",
-  "terminalWebglEnabled": false,
-  "terminalScrollback": 10000,
-  "terminalLetterSpacing": -1,
   "defaultModelId": "gpt-5.4-mini",
+  "showHidden": false,
+  "editorTheme": "nord",
+  "terminalFontFamily": "",
+  "zoomLevel": 0.95,
+  "themeId": "tide",
+  "terminalLetterSpacing": 0,
   "recentModelIds": [
     "gpt-5.4-mini"
   ],
-  "customInstructions": "# Acuerdo de trabajo\n\n## Idioma\n- Responde en el idioma en que escribe el usuario. El código, los identificadores y los comentarios van en inglés por defecto.\n- En español, usa castellano peninsular formal: ortografía RAE con tildes también en mayúsculas, \"tú\" por defecto (nunca voseo: \"tienes\", no \"tenés\"), léxico peninsular (\"ordenador\", \"móvil\", \"fichero\", \"coche\"). Mantén en inglés los anglicismos técnicos consolidados (commit, build, deploy, log) sin traducirlos a la fuerza.\n\n## Estilo (sin tópicos de IA)\n- Sé concreto y verificable: hechos, nombres, fechas y acciones observables antes que elogios abstractos.\n- Sin relleno ni titubeos: elimina \"es importante destacar\", \"cabe mencionar\", \"como podemos ver\". No infles la importancia (\"un hito clave\", \"un momento transformador\").\n- Frases cortas, voz activa, instrucciones que empiezan por verbo (\"Lee el fichero\", no \"Hay que leer\"). No te enrolles. Si dudas, dilo claro.\n\n## Forma de trabajar\n- Lee los ficheros antes de editarlos. Respeta los patrones y la nomenclatura existentes. Haz el cambio mínimo correcto; no refactorices código adyacente sin que te lo pidan.\n- Tras cambios no triviales, ejecuta las comprobaciones del proyecto (type-check, lint, tests) cuando existan.\n\n## Git\n- Conventional Commits: `<tipo>(scope): descripción`, en imperativo, minúscula, sin punto final, ≤72 caracteres. Tipos: feat, fix, docs, refactor, test, chore.\n- Nunca añadas atribución de IA a commits, ramas ni PRs (ni \"Co-authored-by\", \"Generated-by\", \"generated with\", ni nombres de modelo/proveedor). Usa la identidad git configurada tal cual.\n- Nada de force-push, reset --hard ni clean destructivo sin permiso explícito. Nunca hagas push directo a la rama por defecto.\n\n## Artefactos de trabajo de IA\n- No crees SPEC.md, PLAN.md, TODO.md, NOTES.md ni CHECKPOINT.md en la raíz del repo salvo que te lo pidan. La planificación persistente va en .ai/tasks/YYYY-MM-DD-slug/; lo desechable en .ai/tmp/. Por defecto, trabaja en la conversación."
+  "terminalScrollback": 10000,
+  "customInstructions": "# Acuerdo de trabajo\n\n## Idioma\n- Responde en el idioma en que escribe el usuario. El código, los identificadores y los comentarios van en inglés por defecto.\n- En español, usa castellano peninsular formal: ortografía RAE con tildes también en mayúsculas, \"tú\" por defecto (nunca voseo: \"tienes\", no \"tenés\"), léxico peninsular (\"ordenador\", \"móvil\", \"fichero\", \"coche\"). Mantén en inglés los anglicismos técnicos consolidados (commit, build, deploy, log) sin traducirlos a la fuerza.\n\n## Estilo (sin tópicos de IA)\n- Sé concreto y verificable: hechos, nombres, fechas y acciones observables antes que elogios abstractos.\n- Sin relleno ni titubeos: elimina \"es importante destacar\", \"cabe mencionar\", \"como podemos ver\". No infles la importancia (\"un hito clave\", \"un momento transformador\").\n- Frases cortas, voz activa, instrucciones que empiezan por verbo (\"Lee el fichero\", no \"Hay que leer\"). No te enrolles. Si dudas, dilo claro.\n\n## Forma de trabajar\n- Lee los ficheros antes de editarlos. Respeta los patrones y la nomenclatura existentes. Haz el cambio mínimo correcto; no refactorices código adyacente sin que te lo pidan.\n- Tras cambios no triviales, ejecuta las comprobaciones del proyecto (type-check, lint, tests) cuando existan.\n\n## Git\n- Conventional Commits: `<tipo>(scope): descripción`, en imperativo, minúscula, sin punto final, ≤72 caracteres. Tipos: feat, fix, docs, refactor, test, chore.\n- Nunca añadas atribución de IA a commits, ramas ni PRs (ni \"Co-authored-by\", \"Generated-by\", \"generated with\", ni nombres de modelo/proveedor). Usa la identidad git configurada tal cual.\n- Nada de force-push, reset --hard ni clean destructivo sin permiso explícito. Nunca hagas push directo a la rama por defecto.\n\n## Artefactos de trabajo de IA\n- No crees SPEC.md, PLAN.md, TODO.md, NOTES.md ni CHECKPOINT.md en la raíz del repo salvo que te lo pidan. La planificación persistente va en .ai/tasks/YYYY-MM-DD-slug/; lo desechable en .ai/tmp/. Por defecto, trabaja en la conversación.",
+  "theme": "system"
 }

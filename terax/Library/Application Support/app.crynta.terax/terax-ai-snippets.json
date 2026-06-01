@@ -1,25 +1,25 @@
 {
   "snippets": [
     {
-      "id": "sn-dm-super-git",
-      "handle": "super-git",
-      "name": "Super Git",
+      "content": "Manage the current worktree through the full Git lifecycle, non-destructively:\n1. Inspect state: git status -sb, git remote -v, git branch --show-current, git log --oneline -5, git diff, git diff --staged.\n2. Resolve the base branch from origin/HEAD (fall back to main). git fetch --prune. Fast-forward only when on the base and clean.\n3. If on the base with changes, create a feature branch first: <type>/<slug> (feat|fix|docs|refactor|test|chore), lowercase hyphen slug, no model/vendor names.\n4. Work in semantic slices; commit each before the next. Conventional Commits, imperative, lowercase, no trailing period, ≤72 chars; explain \"why\" in the body when needed. Never add LLM/agent attribution; keep the configured git identity.\n5. Before each commit: git diff --check --cached and scan the staged diff for secrets. Run the repo's verification (here: make health).\n6. Push the feature branch with -u. Never push to the base. No --force, reset --hard, or clean without explicit consent.\n7. Open a PR with gh pr create (Summary / Verification / Notes); if one exists, report its URL.\nReport branch, commits, PR URL, verification, and anything skipped.",
       "description": "Full non-destructive Git lifecycle: branch, atomic commits, push, PR.",
-      "content": "Manage the current worktree through the full Git lifecycle, non-destructively:\n1. Inspect state: git status -sb, git remote -v, git branch --show-current, git log --oneline -5, git diff, git diff --staged.\n2. Resolve the base branch from origin/HEAD (fall back to main). git fetch --prune. Fast-forward only when on the base and clean.\n3. If on the base with changes, create a feature branch first: <type>/<slug> (feat|fix|docs|refactor|test|chore), lowercase hyphen slug, no model/vendor names.\n4. Work in semantic slices; commit each before the next. Conventional Commits, imperative, lowercase, no trailing period, ≤72 chars; explain \"why\" in the body when needed. Never add LLM/agent attribution; keep the configured git identity.\n5. Before each commit: git diff --check --cached and scan the staged diff for secrets. Run the repo's verification (here: make health).\n6. Push the feature branch with -u. Never push to the base. No --force, reset --hard, or clean without explicit consent.\n7. Open a PR with gh pr create (Summary / Verification / Notes); if one exists, report its URL.\nReport branch, commits, PR URL, verification, and anything skipped."
+      "handle": "super-git",
+      "id": "sn-dm-super-git",
+      "name": "Super Git"
     },
     {
-      "id": "sn-dm-checkpoint",
-      "handle": "checkpoint",
-      "name": "Checkpoint",
+      "content": "Produce a structured checkpoint of the current session:\n- Date and branch.\n- Done this session: concrete list of changes.\n- Pending: what remains and where.\n- Decisions made, with brief justification.\n- Next steps on resume.\nOutput it in chat by default. If it must persist, write it under .ai/tasks/<date>-<slug>/checkpoint.md — not at the repo root. No filler.",
       "description": "Structured snapshot of session state.",
-      "content": "Produce a structured checkpoint of the current session:\n- Date and branch.\n- Done this session: concrete list of changes.\n- Pending: what remains and where.\n- Decisions made, with brief justification.\n- Next steps on resume.\nOutput it in chat by default. If it must persist, write it under .ai/tasks/<date>-<slug>/checkpoint.md — not at the repo root. No filler."
+      "handle": "checkpoint",
+      "id": "sn-dm-checkpoint",
+      "name": "Checkpoint"
     },
     {
-      "id": "sn-dm-check-last",
-      "handle": "check-last",
-      "name": "Check Last",
+      "content": "Review the uncommitted diff (git diff) on two axes at once:\n- Correctness: logic errors, edge cases, race conditions, layer violations, perf cliffs.\n- Security: input validation, authn/authz, secret exposure, injection, insecure defaults, dependency risk.\nIf both are clean, say \"Ready to commit\". Otherwise list blocking issues grouped by axis as `file:line — issue → fix` and wait for a decision. Do not commit.",
       "description": "Review + security pass over the uncommitted diff.",
-      "content": "Review the uncommitted diff (git diff) on two axes at once:\n- Correctness: logic errors, edge cases, race conditions, layer violations, perf cliffs.\n- Security: input validation, authn/authz, secret exposure, injection, insecure defaults, dependency risk.\nIf both are clean, say \"Ready to commit\". Otherwise list blocking issues grouped by axis as `file:line — issue → fix` and wait for a decision. Do not commit."
+      "handle": "check-last",
+      "id": "sn-dm-check-last",
+      "name": "Check Last"
     }
   ]
 }

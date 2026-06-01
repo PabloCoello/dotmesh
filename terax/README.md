@@ -41,11 +41,12 @@ Font**. Sin una Nerd Font instalada, los glyphs de Starship salen como
 cuadraditos (□).
 
 Instálala con `make fonts` (o `brew bundle`). El healthcheck (`make health`) lo
-verifica. La config fija `terminalFontFamily` a `JetBrainsMono Nerd Font Mono`
-explícitamente para no depender del orden de autodetección.
-
-`terminalWebglEnabled` está en `false`: el render WebGL de xterm corrompe el
-atlas de glyphs con Nerd Fonts en algunos macOS (el propio Terax lo avisa).
+verifica. La config deja `terminalFontFamily` **vacío** a propósito: la
+autodetección de Terax añade la cadena de *fallback* (`…, "JetBrains Mono",
+monospace`) que hace falta para que el render salga con métricas correctas. Si
+se fija el nombre "pelado" sin ese `monospace`, el texto se ve con el espaciado
+ancho y hay que compensarlo con `terminalLetterSpacing` negativo. Mejor dejarlo
+en blanco y garantizar la fuente instalada vía Brewfile.
 
 ## Activar
 
