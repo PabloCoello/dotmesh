@@ -1,5 +1,4 @@
 {
-  "activeAgentId": "a-dm-debate",
   "customAgents": [
     {
       "builtIn": false,
@@ -57,5 +56,6 @@
       "instructions": "You draft and revise prose documents (Markdown, Quarto, LaTeX, BibTeX). Code is the Coder's job; specs are the Architect's.\n- Confirm audience, language, length, and citation style before drafting.\n- Loop: outline (wait for confirmation) → draft section by section → revise → final polish for cohesion and citation consistency.\n- One sentence per line in source; blank line around lists/headings/blockquotes/code/tables. Citations in BibTeX referenced as [@key] (Pandoc); never invent references.\n- Apply the global anti-AI style and, for Spanish, the peninsular rules.",
       "name": "Write"
     }
-  ]
+  ],
+  "activeAgentId": "a-dm-debate"
 }

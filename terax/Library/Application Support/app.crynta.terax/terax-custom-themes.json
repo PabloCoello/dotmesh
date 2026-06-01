@@ -1,0 +1,96 @@
+{
+  "themes": [
+    {
+      "description": "Custom theme.",
+      "id": "my-theme-df5dd105",
+      "name": "My Theme",
+      "variants": {
+        "dark": {
+          "colors": {
+            "accent": "#1c1c22",
+            "accentForeground": "#e8e8ea",
+            "background": "#0d0d10",
+            "border": "rgba(255,255,255,0.08)",
+            "card": "#15151a",
+            "cardForeground": "#e8e8ea",
+            "foreground": "#e8e8ea",
+            "input": "rgba(255,255,255,0.12)",
+            "muted": "#1c1c22",
+            "mutedForeground": "#a0a0a8",
+            "popover": "#15151a",
+            "popoverForeground": "#e8e8ea",
+            "primary": "#7dd3fc",
+            "primaryForeground": "#0d0d10",
+            "ring": "#7dd3fc",
+            "sidebar": "#0a0a0d",
+            "sidebarAccent": "#1c1c22",
+            "sidebarBorder": "rgba(255,255,255,0.08)",
+            "sidebarForeground": "#e8e8ea",
+            "sidebarPrimary": "#7dd3fc",
+            "sidebarRing": "#7dd3fc"
+          },
+          "terminal": {
+            "background": "#0d0d10",
+            "cursor": "#e8e8ea",
+            "cursorAccent": "#0d0d10",
+            "foreground": "#e8e8ea",
+            "selection": "rgba(125,211,252,0.22)"
+          }
+        }
+      }
+    },
+    {
+      "id": "carbon",
+      "name": "Carbon",
+      "author": "dotmesh",
+      "description": "Fondo carbón (#16181D) con la paleta del prompt de Starship.",
+      "editorTheme": { "dark": "nord" },
+      "variants": {
+        "dark": {
+          "colors": {
+            "background": "#16181D",
+            "foreground": "#D8DAE0",
+            "card": "#1C1F26",
+            "cardForeground": "#D8DAE0",
+            "popover": "#1C1F26",
+            "popoverForeground": "#D8DAE0",
+            "primary": "#58B69D",
+            "primaryForeground": "#16181D",
+            "secondary": "#232730",
+            "secondaryForeground": "#D8DAE0",
+            "muted": "#232730",
+            "mutedForeground": "#8A909C",
+            "accent": "#2A2E38",
+            "accentForeground": "#D8DAE0",
+            "destructive": "#E27056",
+            "border": "rgba(216,218,224,0.10)",
+            "input": "rgba(216,218,224,0.14)",
+            "ring": "#58B69D",
+            "sidebar": "#121419",
+            "sidebarForeground": "#D8DAE0",
+            "sidebarPrimary": "#58B69D",
+            "sidebarPrimaryForeground": "#16181D",
+            "sidebarAccent": "#2A2E38",
+            "sidebarAccentForeground": "#D8DAE0",
+            "sidebarBorder": "rgba(216,218,224,0.10)",
+            "sidebarRing": "#58B69D",
+            "radius": "0.5rem"
+          },
+          "terminal": {
+            "background": "#16181D",
+            "foreground": "#D8DAE0",
+            "cursor": "#58B69D",
+            "cursorAccent": "#16181D",
+            "selection": "rgba(88,182,157,0.22)",
+            "ansi": [
+              "#2A2E38", "#E27056", "#58B69D", "#E5B15D",
+              "#4F80DD", "#CBAACB", "#6CB6B0", "#D1D3D4",
+              "#555B66", "#EC8A7A", "#74C8AE", "#ECC178",
+              "#6E97E6", "#D8BFD8", "#82C8C2", "#F0F2F4"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

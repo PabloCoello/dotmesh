@@ -12,12 +12,12 @@ Todos bajo `~/Library/Application Support/app.crynta.terax/`:
 | `terax-settings.json` | Ajustes + `customInstructions` (acuerdo de trabajo global de la IA) |
 | `terax-ai-agents.json` | Agentes personalizados (Build, Debate, Docs, Editor, Maths, State, Write) |
 | `terax-ai-snippets.json` | Snippets `#super-git`, `#checkpoint`, `#check-last` |
+| `terax-custom-themes.json` | Tema **Carbon** (fondo `#16181D` + paleta del prompt) |
 
 ## Qué NO se versiona
 
-- `terax-ai-sessions.json`, `terax-ai-todos.json`, `terax-custom-themes.json`,
-  `.window-state.json` — estado volátil (chats, ventanas). Se dejan como
-  ficheros locales sin enlazar.
+- `terax-ai-sessions.json`, `terax-ai-todos.json`, `.window-state.json` —
+  estado volátil (chats, ventanas). Se dejan como ficheros locales sin enlazar.
 
 ## Paridad con el stack del repo
 
