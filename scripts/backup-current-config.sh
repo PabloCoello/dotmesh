@@ -48,5 +48,8 @@ backup_file "$HOME/.codex/AGENTS.md"          "codex/AGENTS.md"
 backup_file "$HOME/.claude/settings.json"     "claude/settings.json"
 backup_file "$HOME/.agents/skills"            "agents/skills"
 
+# Terminal Terax
+backup_file "$HOME/Library/Application Support/app.crynta.terax/terax-settings.json" "terax/terax-settings.json"
+
 echo ""
 echo "Backup completado en: $BACKUP_DIR"

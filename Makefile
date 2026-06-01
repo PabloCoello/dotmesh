@@ -1,8 +1,9 @@
-.PHONY: help install backup stow unstow restow link-skills health clean
+.PHONY: help install backup stow unstow restow link-skills health clean fonts terax-freeze terax-thaw
 
-PACKAGES := shell git starship vscode opencode codex claude agents
+PACKAGES := shell git starship vscode opencode codex claude agents terax
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
+TERAX_SETTINGS := terax/Library/Application Support/app.crynta.terax/terax-settings.json
 
 help:
 	@echo "dotmesh — gestión de dotfiles"
@@ -14,8 +15,12 @@ help:
 	@echo "  make unstow    - Elimina symlinks"
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
+	@echo "  make fonts     - Instala las Nerd Fonts del Brewfile (brew bundle)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
+	@echo ""
+	@echo "  make terax-freeze - Ignora cambios locales de terax-settings.json (Terax lo reescribe)"
+	@echo "  make terax-thaw   - Vuelve a seguir terax-settings.json para capturar cambios"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
@@ -25,6 +30,10 @@ install: backup stow link-skills
 
 backup:
 	@./scripts/backup-current-config.sh
+
+fonts:
+	@command -v brew >/dev/null || { echo "  --  brew no instalado"; exit 1; }
+	@brew bundle --file=Brewfile
 
 stow:
 	@for pkg in $(PACKAGES); do \
@@ -80,6 +89,20 @@ health:
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
+	@[ -d "/Applications/Terax.app" ] || [ -d "$(HOME)/Applications/Terax.app" ] && echo "  ok  Terax" || echo "  --  Terax"
+	@fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font" && echo "  ok  JetBrainsMono Nerd Font" || echo "  --  JetBrainsMono Nerd Font (ejecuta 'make fonts')"
+
+# Terax reescribe terax-settings.json en cada uso (reordena claves, modelos
+# recientes…), ensuciando 'git status'. 'freeze' marca el fichero como
+# skip-worktree para no ver ese ruido; 'thaw' lo revierte cuando quieras
+# capturar y commitear un nuevo baseline. Es estado local de cada clon.
+terax-freeze:
+	@git update-index --skip-worktree "$(TERAX_SETTINGS)"
+	@echo "  ok  terax-settings.json congelado (cambios locales ignorados)"
+
+terax-thaw:
+	@git update-index --no-skip-worktree "$(TERAX_SETTINGS)"
+	@echo "  ok  terax-settings.json descongelado (vuelve a seguirse)"
 
 clean:
 	@rm -rf ~/dotfiles-backup/*

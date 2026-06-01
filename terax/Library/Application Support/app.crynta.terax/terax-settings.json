@@ -1,0 +1,15 @@
+{
+  "themeId": "tide",
+  "theme": "system",
+  "editorTheme": "nord",
+  "zoomLevel": 0.95,
+  "showHidden": false,
+  "terminalFontFamily": "JetBrainsMono Nerd Font Mono",
+  "terminalWebglEnabled": false,
+  "terminalScrollback": 10000,
+  "terminalLetterSpacing": -1,
+  "defaultModelId": "gpt-5.4-mini",
+  "recentModelIds": [
+    "gpt-5.4-mini"
+  ]
+}

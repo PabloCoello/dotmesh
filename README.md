@@ -22,6 +22,7 @@ exec zsh                            # recarga la shell
 | Prompt | Starship | [starship/](starship/) |
 | Editor | VS Code | [vscode/](vscode/) |
 | VCS | Git + delta | [git/](git/) |
+| Terminal | Terax (en evaluación, alternativa a Warp) | [terax/](terax/) |
 | Agente IA #1 | OpenCode | [opencode/](opencode/) |
 | Agente IA #2 | Codex (CLI OpenAI) | [codex/](codex/) |
 | Agente IA #3 | Claude Code | [claude/](claude/) (settings + agentes + comandos + mcp) |
@@ -39,6 +40,7 @@ dotmesh/
 ├── codex/      .codex/{config.toml,AGENTS.md}
 ├── claude/     .claude/{settings.json,agents/,commands/,mcp/}
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
+├── terax/      Library/Application Support/app.crynta.terax/terax-settings.json
 ├── scripts/    backup-current-config.sh
 ├── docs/       INSTALL.md, SECRETS.md, TROUBLESHOOTING.md
 ├── Makefile

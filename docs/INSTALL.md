@@ -5,10 +5,14 @@
 - macOS (Apple Silicon o Intel).
 - Homebrew, Git y GNU Stow.
 - Las herramientas que vayas a usar instaladas: Warp, VS Code, OpenCode, Codex, Claude Code.
+- Terax (terminal en evaluación) se instala a mano desde https://terax.app.
 
 ```bash
+brew bundle              # instala todo lo del Brewfile (herramientas + Nerd Fonts)
+# o, manualmente:
 brew install stow git-delta starship
 brew install --cask warp visual-studio-code
+make fonts               # solo las Nerd Fonts (necesarias para los glyphs de Starship)
 ```
 
 OpenCode, Codex y Claude Code se instalan según las instrucciones de cada
