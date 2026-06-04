@@ -1,6 +1,6 @@
 ---
-name: "anti-ai-style"
-description: "Instrucciones de estilo anti-IA para redacción y revisión de documentos"
+name: anti-ai-style
+description: "Reglas de estilo para redactar con estilo humano"
 ---
 
 # Instrucciones de estilo anti-IA
@@ -15,6 +15,24 @@ El agente debe priorizar siempre:
 - precisión factual,
 - ejemplos verificables,
 - y redacción humana, específica y útil.
+
+---
+
+# Criterio rector
+
+Antes que cualquier regla concreta, este es el criterio del que todo lo demás se deriva.
+
+Escribe como alguien que domina el tema y se lo explica a un colega que respeta y que conoce el contexto. Ese lector no necesita que le vendan nada, no espera revelaciones ni suspense, y detecta enseguida cuándo una frase está ahí para impresionar en vez de para informar.
+
+El enemigo común de casi todos los patrones que se listan más abajo es el mismo: texto que finge importancia, tensión o descubrimiento en lugar de decir algo. El "no es X, es Y", la "verdad incómoda que nadie dice", la frase corta de efecto, la pregunta retórica de transición: todos simulan una carga que el contenido no tiene. Si entiendes esto, no necesitas memorizar la lista; reconoces el impulso y lo cortas.
+
+Tres preguntas resuelven la mayoría de los casos, incluidos los que ninguna regla de abajo anticipa:
+
+1. ¿Esta frase informa o solo suena bien? Si solo suena bien, sobra.
+2. ¿Estoy afirmando lo que sé, o construyendo un efecto alrededor de ello? Afirma directamente.
+3. ¿Podría decir esto mismo un experto hablando con otro, sin teatro? Si no, reescríbelo hasta que sí.
+
+Las secciones siguientes no son una lista negra que haya que agotar. Son ejemplos del mismo problema, útiles porque son verificables y porque enseñan a qué se parece el patrón. Pero el objetivo no es esquivar estas palabras concretas, sino aplicar el criterio de arriba a cualquier variante, esté listada o no.
 
 ---
 
@@ -33,7 +51,9 @@ Siempre que sea posible, sustituir frases abstractas por:
 
 ---
 
-# Patrones a evitar
+# Patrones frecuentes (ejemplos del criterio rector)
+
+Lo que sigue ilustra el criterio anterior con casos concretos. No es una lista cerrada: si encuentras una variante que no está aquí pero falla las tres preguntas del criterio rector, trátala igual.
 
 ## 1. Inflación de importancia
 
@@ -57,14 +77,14 @@ Sustituirlo por una descripción factual y verificable.
 - y por qué fue relevante en términos concretos.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “marcando un momento clave en la evolución de la gobernanza regional”
 
-**Después:**
+**Después:**  
 “se creó en 1989 para recopilar estadísticas regionales”
 
 ### Regla operativa
-Si una frase atribuye importancia, impacto o trascendencia, debe justificarlo con un hecho específico.
+Si una frase atribuye importancia, impacto o trascendencia, debe justificarlo con un hecho específico.  
 Si no puede justificarse, eliminar el énfasis.
 
 ---
@@ -90,14 +110,14 @@ Mencionar un hecho concreto atribuible a una fuente concreta.
 - y explicar su relevancia.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “citado en The New York Times, la BBC, Financial Times y The Hindu”
 
-**Después:**
+**Después:**  
 “en una entrevista publicada por The New York Times en 2024, sostuvo que...”
 
 ### Regla operativa
-No usar listas de medios o instituciones como sustituto de contenido.
+No usar listas de medios o instituciones como sustituto de contenido.  
 Toda referencia de autoridad debe ir acompañada de una afirmación concreta atribuida.
 
 ---
@@ -113,17 +133,17 @@ Uso encadenado de gerundios o verbos abstractos que parecen analíticos, pero no
 - “mostrando...”
 - “poniendo de relieve...”
 - “subrayando...”
-- “demostrando...”
+- “demostrando...”  
 cuando no se explica exactamente qué se simboliza, refleja o demuestra.
 
 ### Hacer en su lugar
 Eliminar esos verbos o ampliar la frase con evidencia, mecanismo o dato real.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “simbolizando la resiliencia y reflejando una nueva etapa de cooperación”
 
-**Después:**
+**Después:**  
 “el acuerdo creó un marco común de compras para las tres oficinas regionales”
 
 ### Regla operativa
@@ -150,15 +170,15 @@ El texto adopta un tono publicitario, turístico o institucional en lugar de des
 Describir el objeto de manera neutra y precisa.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “ubicado en una región espectacular”
 
-**Después:**
+**Después:**  
 “es una localidad de la región de Gonder”
 
 ### Regla operativa
 Usar adjetivos valorativos solo si:
-1. están claramente justificados, y
+1. están claramente justificados, y  
 2. aportan información relevante, no promoción.
 
 Si no cumplen ambas condiciones, eliminarlos.
@@ -181,10 +201,10 @@ Se introducen afirmaciones mediante sujetos difusos o indeterminados.
 Atribuir la afirmación a una fuente, estudio, encuesta, informe o autor concreto.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “los expertos creen que desempeña un papel crucial”
 
-**Después:**
+**Después:**  
 “según una encuesta de 2019 elaborada por...”
 
 ### Regla operativa
@@ -214,10 +234,10 @@ Uso de clichés narrativos del tipo “a pesar de los retos” sin especificar c
 Nombrar los problemas concretos.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “a pesar de las dificultades, el programa sigue prosperando”
 
-**Después:**
+**Después:**  
 “el programa perdió el 18 % de su financiación en 2022 y redujo sus operaciones de campo a tres distritos”
 
 ### Regla operativa
@@ -237,7 +257,7 @@ Uso de palabras o giros excesivamente frecuentes en texto generado por IA, que s
 - “mostrar”
 - “poner de relieve”
 - “aprovechar”
-- “robusto”
+- “robusto”  
 cuando no sean realmente la opción más precisa.
 
 ### Hacer en su lugar
@@ -250,10 +270,10 @@ Usar vocabulario más simple, directo y natural.
 - evitar “mostrar” si puede decirse directamente qué ocurre.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “además, el proyecto constituye un testimonio del cambiante panorama regulatorio, mostrando nuevos modelos de gobernanza”
 
-**Después:**
+**Después:**  
 “el proyecto también refleja cambios regulatorios recientes y utiliza un nuevo modelo de gobernanza”
 
 ### Regla operativa
@@ -272,7 +292,7 @@ El texto evita verbos simples como “ser”, “estar” o “tener” para son
 - “presenta”
 - “presume de”
 - “sirve como”
-- “constituye”
+- “constituye”  
 cuando podrían sustituirse por verbos mucho más claros.
 
 ### Hacer en su lugar
@@ -283,14 +303,14 @@ Usar verbos directos y naturales:
 - “contiene”
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “el museo actúa como un gran referente cultural y presenta un amplio archivo”
 
-**Después:**
+**Después:**  
 “el museo es un referente cultural y tiene un amplio archivo”
 
 ### Regla operativa
-No evitar “es”, “está” o “tiene” por razones de estilo.
+No evitar “es”, “está” o “tiene” por razones de estilo.  
 Si son la opción más clara, deben usarse.
 
 ---
@@ -310,10 +330,10 @@ Construcciones enfáticas del tipo “no es X, es Y” que suenan formulaicas y 
 Afirmar el punto directamente.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “no es solo una base de datos, es un activo estratégico”
 
-**Después:**
+**Después:**  
 “es un activo estratégico para gestionar datos de clientes”
 
 ### Regla operativa
@@ -336,14 +356,14 @@ Tendencia a agrupar ideas en tríadas retóricas aunque el contenido no lo requi
 Usar el número natural de elementos que realmente existan.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “el programa aporta innovación, inspiración e ideas”
 
-**Después:**
+**Después:**  
 “el programa mejora los informes y la toma de decisiones”
 
 ### Regla operativa
-No forzar listas de tres elementos.
+No forzar listas de tres elementos.  
 Enumerar solo los elementos que sean reales, necesarios y distintos entre sí.
 
 ---
@@ -356,21 +376,21 @@ Cambiar una palabra por múltiples sinónimos solo para evitar repeticiones, inc
 ### Evitar
 - “protagonista... personaje principal... figura central... héroe”
 - “estudio... artículo... trabajo... manuscrito”
-- “método... enfoque... marco... estrategia”
+- “método... enfoque... marco... estrategia”  
 cuando se refieren a la misma cosa y el cambio no añade precisión.
 
 ### Hacer en su lugar
 Repetir el término más claro cuando haga falta.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “el protagonista aparece pronto en la historia. Esta figura central se convierte después en el héroe del relato”
 
-**Después:**
+**Después:**  
 “el protagonista aparece pronto en la historia. El protagonista impulsa después el resto del relato”
 
 ### Regla operativa
-La claridad está por encima de la variedad léxica.
+La claridad está por encima de la variedad léxica.  
 Repetir una palabra correcta es mejor que introducir sinónimos imprecisos.
 
 ---
@@ -390,14 +410,14 @@ Uso de construcciones del tipo “de X a Y” para sugerir amplitud, aunque no d
 Listar directamente los temas o delimitar el alcance real.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “el curso explora temas que van desde el Big Bang hasta la materia oscura”
 
-**Después:**
+**Después:**  
 “el curso trata el Big Bang, la expansión cósmica y la materia oscura”
 
 ### Regla operativa
-No usar rangos retóricos para aparentar amplitud.
+No usar rangos retóricos para aparentar amplitud.  
 Nombrar los temas reales de manera directa.
 
 ---
@@ -416,14 +436,14 @@ Uso reiterado de rayas largas para introducir incisos, dramatizar frases o fragm
 Usar comas o puntos cuando basten para mantener claridad y ritmo natural.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “el problema afectó a las instituciones —no a las personas— y aun así continúa —a pesar de las advertencias repetidas—”
 
-**Después:**
+**Después:**  
 “el problema afectó a las instituciones, no a las personas. Sigue existiendo a pesar de las advertencias repetidas”
 
 ### Regla operativa
-Usar raya larga solo cuando el inciso realmente lo justifique.
+Usar raya larga solo cuando el inciso realmente lo justifique.  
 Si la frase funciona mejor con comas o puntos, sustituirla.
 
 ---
@@ -442,14 +462,14 @@ Uso de negritas para enfatizar términos de forma innecesaria o decorativa, espe
 Reservar la negrita para títulos, conceptos realmente clave o navegación estructural.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “**OKR, KPI, BMC**”
 
-**Después:**
+**Después:**  
 “OKR, KPI, BMC”
 
 ### Regla operativa
-La negrita debe ayudar a leer, no decorar.
+La negrita debe ayudar a leer, no decorar.  
 Si eliminarla no cambia la comprensión, eliminarla.
 
 ---
@@ -469,10 +489,10 @@ Construcciones tipo etiqueta + contenido breve dentro de la misma línea, que fr
 Convertir esas estructuras en prosa natural o en listas reales si corresponde.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “Rendimiento: el rendimiento mejoró.”
 
-**Después:**
+**Después:**  
 “el rendimiento mejoró durante el periodo de estudio”
 
 ### Regla operativa
@@ -494,10 +514,10 @@ Uso sistemático de mayúscula inicial en casi todas las palabras del encabezado
 Usar mayúscula solo al inicio y en nombres propios.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “Negociaciones Estratégicas Y Alianzas”
 
-**Después:**
+**Después:**  
 “Negociaciones estratégicas y alianzas”
 
 ### Regla operativa
@@ -520,10 +540,10 @@ Uso de emojis en documentos profesionales, técnicos, ejecutivos o de revisión 
 Eliminar emojis y dejar solo el texto.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “🚀 Fase de lanzamiento: 💡 Idea clave:”
 
-**Después:**
+**Después:**  
 “Fase de lanzamiento. Idea clave:”
 
 ### Regla operativa
@@ -545,14 +565,14 @@ Uso inconsistente de comillas tipográficas curvas o estilizadas, especialmente 
 Usar comillas rectas cuando el contexto sea técnico o documental, y mantener consistencia en todo el texto.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 dijo “el proyecto”
 
-**Después:**
+**Después:**  
 dijo "el proyecto"
 
 ### Regla operativa
-Mantener consistencia tipográfica.
+Mantener consistencia tipográfica.  
 En documentación técnica, markdown, código e instrucciones operativas, preferir comillas rectas.
 
 ---
@@ -573,10 +593,10 @@ El texto conserva fórmulas conversacionales propias de un asistente, innecesari
 Eliminar esas frases por completo y dejar solo el contenido útil.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “Espero que te sirva. Dime si quieres una versión más breve.”
 
-**Después:**
+**Después:**  
 [Eliminar]
 
 ### Regla operativa
@@ -599,14 +619,14 @@ El texto introduce advertencias genéricas sobre limitaciones de fuentes o falta
 Buscar una fuente concreta, acotar la afirmación o eliminarla.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “aunque los detalles disponibles son limitados, la institución probablemente desempeñó un papel importante”
 
-**Después:**
+**Después:**  
 “la institución gestionó el censo regional de 1994”
 
 ### Regla operativa
-No usar disclaimers vagos para sostener una frase débil.
+No usar disclaimers vagos para sostener una frase débil.  
 O bien se apoya con evidencia, o bien se reduce o elimina.
 
 ---
@@ -627,14 +647,14 @@ Uso de halagos automáticos o entusiasmo excesivo hacia la persona lectora, gene
 Responder directamente al contenido.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “gran pregunta. Tienes toda la razón”
 
-**Después:**
+**Después:**  
 “sí, esa distinción importa porque ambas medidas capturan cosas distintas”
 
 ### Regla operativa
-Evitar halagos automáticos.
+Evitar halagos automáticos.  
 Priorizar la respuesta clara y directa.
 
 ---
@@ -660,10 +680,10 @@ Usar formas simples:
 - “ahora”
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “con el fin de mejorar la precisión, el equipo revisó el modelo”
 
-**Después:**
+**Después:**  
 “para mejorar la precisión, el equipo revisó el modelo”
 
 ### Regla operativa
@@ -687,14 +707,14 @@ Acumulación de marcadores de duda o posibilidad que debilitan innecesariamente 
 Usar un único marcador de incertidumbre cuando realmente haga falta.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “esto podría potencialmente posiblemente afectar a la retención”
 
-**Después:**
+**Después:**  
 “esto puede afectar a la retención”
 
 ### Regla operativa
-Usar solo el grado de cautela necesario.
+Usar solo el grado de cautela necesario.  
 No apilar marcadores de duda en una misma frase.
 
 ---
@@ -715,10 +735,10 @@ Cerrar textos con frases vacías, optimistas o grandilocuentes que no añaden in
 Cerrar con hechos, implicaciones concretas, próximos pasos o decisiones derivadas.
 
 ### Ejemplo
-**Antes:**
+**Antes:**  
 “el futuro es prometedor”
 
-**Después:**
+**Después:**  
 “el siguiente paso es validar el modelo con la cohorte de 2025 y comparar la retención por segmento”
 
 ### Regla operativa
@@ -762,9 +782,6 @@ No sustituir una palabra correcta por sinónimos imprecisos solo para evitar rep
 ## 8. Cerrar con información concreta
 Toda conclusión debe terminar en un hecho, una implicación o un siguiente paso claro.
 
-## 9. Limitar el uso de bullets
-No usar listas si el contenido puede escribirse de forma clara en prosa.
-
 ---
 
 # Checklist operativo de revisión
@@ -803,7 +820,7 @@ Si la respuesta es sí en cualquiera de estos puntos, reescribir.
 
 # Instrucción directa para el agente
 
-Cuando detectes cualquiera de estos patrones:
+El criterio rector manda. Los patrones de abajo son ejemplos suyos, no una lista que baste con esquivar. Cuando detectes cualquiera de estos patrones, o una variante no listada que falle las tres preguntas del criterio rector:
 
 1. Márcalo internamente como posible redacción artificial, inflada o vacía.
 2. Reescribe la frase con lenguaje factual, sobrio y directo.
