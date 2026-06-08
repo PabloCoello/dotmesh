@@ -5,8 +5,9 @@ usando una Pull Request de GitHub y dejando que la IA aplique los comentarios.
 
 ## Por qué
 
-Las herramientas habituales no encajan del todo. Notion es muy bueno pero no es
-Markdown. Word tampoco es Markdown. La revisión por PR es lo más cercano que
+Las herramientas habituales sí encajan en general; el problema es que ninguna
+es Markdown. Notion comenta de maravilla y Word también, solo que ninguno
+guarda el texto como Markdown. La revisión por PR es lo más cercano que
 existe y funciona bastante bien para casi todo el mundo en la mayoría de los
 casos cuando se usa.
 
