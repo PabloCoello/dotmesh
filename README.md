@@ -1,6 +1,6 @@
 # dotmesh
 
-Dotfiles personales para macOS. Gestiona la configuración de terminal, shell, Git, Starship, VS Code, OpenCode, Codex, Claude y skills globales de agentes.
+Dotfiles personales para macOS. Gestiona la configuración del terminal (Warp), shell, Git, Starship, VS Code, OpenCode, Codex, Claude y skills globales de agentes.
 
 ## Quick start
 
@@ -19,6 +19,7 @@ exec zsh                            # recarga la shell
 | Componente | Herramienta | Paquete Stow |
 |---|---|---|
 | Shell | Zsh + Oh-My-Zsh | [shell/](shell/) |
+| Terminal | Warp | [warp/](warp/) |
 | Prompt | Starship | [starship/](starship/) |
 | Editor | VS Code | [vscode/](vscode/) |
 | VCS | Git + delta | [git/](git/) |
@@ -34,6 +35,7 @@ dotmesh/
 ├── shell/      .zshrc + .config/shell/{env,path,functions,aliases,ai}.zsh
 ├── git/        .gitconfig, .gitignore_global, .gitmessage
 ├── starship/   .config/starship.toml
+├── warp/       .warp/themes/carbon.yaml   (tema Carbon del terminal)
 ├── vscode/     Library/Application Support/Code/User/{settings,extensions,scripts,themes}
 ├── opencode/   .config/opencode/{agents,commands,opencode.json,README.md}
 ├── codex/      .codex/{config.toml,AGENTS.md}
