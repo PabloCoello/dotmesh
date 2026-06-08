@@ -9,6 +9,7 @@
   "esbenp.prettier-vscode",
   "github.copilot",
   "github.copilot-chat",
+  "github.vscode-pull-request-github",
   "donjayamanne.githistory",
   "yzhang.markdown-all-in-one",
   "davidanson.vscode-markdownlint",
