@@ -1,6 +1,6 @@
 .PHONY: help install backup stow unstow restow link-skills health clean
 
-PACKAGES := shell git starship vscode opencode codex claude agents
+PACKAGES := shell git starship warp vscode opencode codex claude agents
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 

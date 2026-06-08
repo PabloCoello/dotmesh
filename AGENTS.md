@@ -39,6 +39,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `shell/` | `~/.zshrc`, `~/.config/shell/` | Zsh + Oh-My-Zsh entrypoint and modular `env/path/functions/aliases/ai.zsh` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` | Git config + delta pager |
 | `starship/` | `~/.config/starship.toml` | Prompt |
+| `warp/` | `~/.warp/themes/carbon.yaml` | Tema **Carbon** del terminal Warp (fondo carbón + paleta del prompt; reciclado del Carbon de Terax) |
 | `vscode/` | `~/Library/Application Support/Code/User/...` | VS Code settings, keybindings, snippets, extensions list, custom themes |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
