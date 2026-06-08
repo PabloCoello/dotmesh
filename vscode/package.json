@@ -13,6 +13,11 @@
   "contributes": {
     "themes": [
       {
+        "label": "Carbon",
+        "uiTheme": "vs-dark",
+        "path": "./themes/carbon-color-theme.json"
+      },
+      {
         "label": "BeTheme Dark",
         "uiTheme": "vs-dark",
         "path": "./themes/betheme-dark-theme.json"
