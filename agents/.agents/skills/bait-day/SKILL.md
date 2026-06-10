@@ -8,7 +8,7 @@ description: Cierre de jornada asistido — reconcilia el día (o los días pend
 ## Principios
 
 - **Nunca en silencio.** Los worklogs se aplican solo tras confirmación explícita de la tabla final. Una sola confirmación cubre el lote del día; no pidas permiso fila a fila.
-- **Escritor único.** /bait-day es el único punto que escribe worklogs. Durante la jornada no se registra tiempo en el momento — ni en sesiones de Claude Code, ni a mano en Jira, ni con `#time` en smart commits (duplicaría contra el cierre). Durante el día solo se dejan señales: claves `BAIT-XXX` en commits y ramas, tareas ad-hoc en SP.
+- **Quién escribe y cuándo.** El trabajo de **atención plena** se registra al terminar cada sesión, vía Claude Code y a petición del usuario — eso es lo que el cierre se encuentra como «ya registrado» y prima. /bait-day escribe el resto al final del día. Nunca `#time` en smart commits ni registro silencioso: duplicarían contra el cierre.
 - **Worklog al issue operativo** (task, fase de POC, workstream), nunca a la Epic. Hereda las convenciones de `bait-jira-workflow`.
 - **Señales objetivas primero, memoria después.** El usuario solo rellena los huecos que las señales no cubren. Si no puede dar una cifra para un bloque, ese bloque no se loguea.
 - **Reparto de responsabilidades fijado por el usuario:** Jira es la única interfaz de la operativa planificada; Super Productivity queda limitado a tareas ad-hoc y reuniones (entran solas por ICAL de Outlook); Slack Later queda fuera del sistema (no tiene API y así se decidió).
@@ -87,15 +87,23 @@ Construye una tabla por día:
 | 2 | Reunión AMA seguimiento | 1h | — no se loguea (AMA) | calendario 12:00 |
 | 3 | Tarea ad-hoc: presupuesto CE | 45m | ¿? | SP, tag CE |
 
+**Modelo de jornada (8h ± 1h), en cascada:**
+
+1. **Worklogs ya registrados** (señal 5) priman tal cual — son las sesiones de atención plena que el usuario registró al cerrarlas. No se tocan.
+2. **Reuniones** completan el día con la duración del calendario (siguen sin loguearse, pero consumen jornada). Si varias solapan, pregunta a cuál asistió; nunca cuentes dos a la vez.
+3. **Commits** rellenan solo el hueco restante hasta las 8h±1, repartido entre los bloques **a partes proporcionales** a su duración aparente — nunca a valor nominal. El porqué: el trabajo semi-automatizado con IA genera muchos commits que no exigen atención plena; los bloques se comprimen para caber en el hueco.
+
+Si lo ya registrado más las reuniones ya alcanza o supera las ~9h, no propongas nada por commits: enséñalo y que decida el usuario.
+
 Reglas:
 
-- Bloques con clave `BAIT-XXX` en commits, rama o tarea SP → asignación automática.
+- Bloques con clave `BAIT-XXX` en commits, rama o tarea SP → asignación automática **del destino**; el tiempo lo fija la cascada.
 - Reuniones → fila informativa con cliente propuesto (heurística: título y asistentes contra los tags de cliente).
 - Tareas ad-hoc de SP con tiempo → propón destino si tienen clave o cliente claro; si no, marca `¿?`.
 - Tareas ad-hoc de SP hechas o creadas en D sin tiempo registrado → fila `¿?` con el tiempo en blanco; el usuario lo pone de memoria o se infiere del hueco entre bloques de commits y reuniones.
 - Bloques cubiertos por worklogs ya existentes (señal 5) → fila informativa «ya registrado», fuera del lote.
 - Huecos sin señal → fila `¿?` para que el usuario la rellene o la descarte.
-- Redondea a múltiplos de 15 min. Sanity check: lo imputable a tickets —contando lo ya registrado— no debe superar la jornada menos reuniones; si pasa, avisa antes de continuar.
+- Redondea a múltiplos de 15 min. Sanity check: el total del día (registrado + reuniones + propuesto) debe quedar en 8h ± 1h; si sale del rango, avisa y ajusta antes de continuar.
 
 ## Paso 3 — Ajuste único
 
