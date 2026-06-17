@@ -263,7 +263,7 @@ Part of code review is dependency review:
 4. Does it have known vulnerabilities? (`npm audit`)
 5. What's the license? (Must be compatible with the project.)
 
-**Rule:** Prefer standard library and existing utilities over new dependencies. Every dependency is a liability.
+**Rule:** Prefer standard library and existing utilities over new dependencies. Every dependency is a liability. This is the same hierarchy as the YAGNI gate in `code-simplification` ("Don't write it in the first place") — apply it when reviewing new code, not just new dependencies.
 
 ## The Review Checklist
 
