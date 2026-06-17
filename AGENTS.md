@@ -62,6 +62,29 @@ Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream
 
 The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them.
 
+## Skill flow is the default, not a request
+
+The engineering core pack is **opt-out, not opt-in**. On any non-trivial change, load and follow the matching skill at each phase on your own initiative — the user naming a skill is a shortcut, never a precondition. Don't ask permission to load a core-pack skill and don't narrate that you're loading it; just follow it.
+
+Default flow for a code change, and the skill that owns each phase:
+
+1. Vague idea or competing options → `idea-refine`.
+2. New feature or non-trivial change with no spec → `spec-driven-development`, then `planning-and-task-breakdown`.
+3. Behaviour that depends on external docs, versions or APIs → `source-driven-development`.
+4. **Before writing code** → walk the YAGNI gate in `code-simplification` ("Don't write it in the first place").
+5. Implementing → `incremental-implementation` (thin slices) + `test-driven-development` (prove each slice).
+6. Tests, build or runtime failing → `debugging-and-error-recovery`.
+7. Before merge → `code-review-and-quality`; security-sensitive surface → `security-and-hardening`.
+8. Working code heavier than needed → `code-simplification`.
+9. Commits, branches, PR → `git-workflow-and-versioning` (full lifecycle via `/super-git`).
+10. Durable decision or interface change → `documentation-and-adrs`.
+
+Enforcement rules:
+
+- **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour.
+- **Specificity wins.** When two skills overlap, the more specific phase owns the rule; the conventions in this file override any skill.
+- **Spanish output** also loads `castellano-peninsular`, and for prose `anti-ai-style`.
+
 ## Three-agent parity
 
 This repo aims for functional parity between OpenCode, Claude Code and Codex so the user can switch between them in the same project without changing their workflow. Codex cannot mirror OpenCode's agent files directly, so it carries the same workflow vocabulary in `codex/.codex/AGENTS.md`.

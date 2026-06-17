@@ -90,7 +90,7 @@ If Slice 1 fails, you discover it before investing in Slices 2 and 3.
 
 ### Rule 0: Simplicity First
 
-Before writing any code, ask: "What is the simplest thing that could work?"
+Before writing any code, walk the YAGNI gate in `code-simplification` ("Don't write it in the first place"): does it need to exist, does stdlib cover it, does the platform cover it, does an existing dependency cover it — and only then write the minimum. Then ask: "What is the simplest thing that could work?"
 
 After writing code, review it against these checks:
 - Can this be done in fewer lines?

@@ -9,6 +9,22 @@ description: Simplifies working code without changing behaviour. Use after code 
 
 Simplify expression, not behaviour. The goal is easier understanding, smaller blast radius and lower maintenance cost, not fewer lines at any price.
 
+The cheapest code to maintain is the code that never exists. This skill mostly simplifies code that already works, but the same instinct applies one step earlier — before writing. When you are about to add code, walk the gate below first.
+
+## Don't write it in the first place
+
+Before adding code, walk this decision hierarchy and stop at the first step that resolves the need:
+
+1. **Does it need to exist?** Confirm a real, current requirement — not a speculative one. If nothing breaks without it, do not write it.
+2. **Does the standard library cover it?** Prefer stdlib over a hand-rolled implementation.
+3. **Does the platform or runtime already do it?** Native features beat reimplementations.
+4. **Does an existing dependency already cover it?** Reuse before adding a new dependency.
+5. **Only then, write the minimum viable solution** — no wrappers, options, or abstractions without a present caller.
+
+Apply this as a lightweight gate when reviewing your own or another agent's new code, not as a reason to rewrite working code that predates it.
+
+<!-- Decision hierarchy adapted from the ponytail YAGNI ruleset (DietrichGebert/ponytail, MIT). -->
+
 ## When to Use
 
 - A feature works but the implementation feels heavy.
@@ -25,11 +41,12 @@ Simplify expression, not behaviour. The goal is easier understanding, smaller bl
 
 ## Principles
 
-1. Preserve behaviour exactly.
-2. Understand before changing.
-3. Prefer clarity over cleverness.
-4. Keep changes scoped and reviewable.
-5. Verify after each meaningful simplification.
+1. The best simplification is code never written — walk the gate above before adding.
+2. Preserve behaviour exactly.
+3. Understand before changing.
+4. Prefer clarity over cleverness.
+5. Keep changes scoped and reviewable.
+6. Verify after each meaningful simplification.
 
 ## Process
 
@@ -69,6 +86,7 @@ Run existing tests or a targeted command. If no tests exist, state the manual ch
 - Removing error handling to make code shorter.
 - Renaming or restyling unrelated files.
 - Introducing a new abstraction for a single use.
+- Adding a dependency for what stdlib, the platform or an existing dependency already covers.
 - Claiming simplification without a verification step.
 
 ## Verification
