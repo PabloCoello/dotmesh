@@ -1,0 +1,28 @@
+# dotmesh — Paper · Ink · Syntax.
+# Fondo Ink (#16171B) con cromo monocromo (rampa Graphite) y los siete
+# acentos de sintaxis muteados reservados como señal. El cursor toma `accent`
+# (teal). Pareja del tema VS Code `dotmesh` y del prompt de Starship.
+name: dotmesh
+accent: "#6CB6B0"
+background: "#16171B"
+foreground: "#E9EAEC"
+details: darker
+terminal_colors:
+  normal:
+    black: "#2D2F36"
+    red: "#E59A9A"
+    green: "#A8CBA0"
+    yellow: "#E3C58A"
+    blue: "#8FB4E3"
+    magenta: "#CBAACB"
+    cyan: "#6CB6B0"
+    white: "#C2C5CB"
+  bright:
+    black: "#565A63"
+    red: "#EAA9A9"
+    green: "#B9D6B2"
+    yellow: "#ECD2A3"
+    blue: "#A8C6EA"
+    magenta: "#D8BFD8"
+    cyan: "#84C4BF"
+    white: "#F0F1F3"
