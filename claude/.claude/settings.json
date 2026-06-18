@@ -2,15 +2,23 @@
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
+  "model": "opus[1m]",
   "enabledPlugins": {
     "miro@claude-plugins-official": true,
-    "warp@claude-code-warp": true
+    "warp@claude-code-warp": true,
+    "bait-skills@bait": true
   },
   "extraKnownMarketplaces": {
     "miro-ai": {
       "source": {
         "source": "github",
         "repo": "miroapp/miro-ai"
+      }
+    },
+    "bait": {
+      "source": {
+        "source": "github",
+        "repo": "BeWayBAIT/bait-skills"
       }
     },
     "claude-code-warp": {
@@ -20,7 +28,15 @@
       }
     }
   },
+  "effortLevel": "high",
+  "pluginConfigs": {
+    "bait-skills@bait": {
+      "options": {
+        "BAIT_TODO_CLIENT_ID": "d3bc04a0-23c4-4329-9d63-b1e1e3d302f3",
+        "BAIT_TODO_TENANT_ID": "beway.com"
+      }
+    }
+  },
   "skipDangerousModePermissionPrompt": true,
-  "theme": "dark-ansi",
-  "model": "opus"
+  "theme": "dark-ansi"
 }
