@@ -1,7 +1,7 @@
 {
-  "workbench.colorTheme": "Atom One Dark",
+  "workbench.colorTheme": "dotmesh",
   "editor.fontSize": 14,
-  "editor.fontFamily": "'FiraCode-Retina', 'Fira Code', 'FiraCode Nerd Font', 'FiraCode Nerd Font Mono', Menlo, Monaco, 'Courier New', monospace",
+  "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'JetBrainsMono Nerd Font Mono', Menlo, Monaco, 'Courier New', monospace",
   "editor.fontLigatures": true,
   "editor.lineHeight": 1.6,
   "editor.tabSize": 4,
@@ -42,7 +42,7 @@
   },
 
   "terminal.integrated.fontSize": 13,
-  "terminal.integrated.fontFamily": "MesloLGS Nerd Font, Menlo, Monaco, Courier New, monospace",
+  "terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font', 'MesloLGS Nerd Font', Menlo, Monaco, 'Courier New', monospace",
   "terminal.integrated.cursorBlinking": true,
   "terminal.integrated.cursorStyle": "line",
 
