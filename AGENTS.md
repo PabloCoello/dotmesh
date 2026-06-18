@@ -39,8 +39,8 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `shell/` | `~/.zshrc`, `~/.config/shell/` | Zsh + Oh-My-Zsh entrypoint and modular `env/path/functions/aliases/ai.zsh` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` | Git config + delta pager |
 | `starship/` | `~/.config/starship.toml` | Prompt |
-| `warp/` | `~/.warp/themes/carbon.yaml` | Tema **Carbon** del terminal Warp (fondo carbón + paleta del prompt; reciclado del Carbon de Terax) |
-| `vscode/` | `~/Library/Application Support/Code/User/...` | VS Code settings, keybindings, snippets, extensions list, custom themes |
+| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` | Temas del terminal Warp: **Carbon** (reciclado del Carbon de Terax) y **dotmesh** (Ink + sintaxis; ver `docs/DESIGN.md`) |
+| `vscode/` | `~/Library/Application Support/Code/User/...` | VS Code settings, keybindings, snippets, extensions list, custom themes (activo: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
 | `claude/` | `~/.claude/` | Claude Code `settings.json`, `agents/`, `commands/` |
@@ -120,6 +120,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
   explicit user confirmation.
 - **Don't run destructive Stow/Git operations without being asked.** `unstow`, `restow`, `clean`, `git reset --hard`, etc. all touch live user state.
 - **README and most docs are in Spanish (peninsular).** Match the existing language when editing user-facing prose.
+- **Theme colours start from `docs/DESIGN.md`.** The dotmesh visual language (palette, type, syntax map) is the single source of truth for the VS Code theme, Warp theme, Starship palette and delta/Git colours. Change colours there first, then propagate; keep the four surfaces in sync.
 
 ## AI workspace artifacts policy
 

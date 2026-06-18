@@ -33,17 +33,17 @@
 	line-numbers = true
 	syntax-theme = Pandora
 	
-	# Pandora theme colors
-	minus-style = "syntax #E27056"
-	minus-emph-style = "syntax #FF8A73"
-	plus-style = "syntax #58B69D"
-	plus-emph-style = "syntax #6FCDBA"
-	hunk-header-style = "file line-number syntax #4F80DD"
-	
+	# dotmesh — Paper · Ink · Syntax (sage = adición, rose = eliminación)
+	minus-style = "syntax #E59A9A"
+	minus-emph-style = "syntax #EAA9A9"
+	plus-style = "syntax #A8CBA0"
+	plus-emph-style = "syntax #B9D6B2"
+	hunk-header-style = "file line-number syntax #8FB4E3"
+
 	# Line numbers
-	line-numbers-minus-style = "#E27056"
-	line-numbers-plus-style = "#58B69D"
-	line-numbers-zero-style = "#7F8182"
+	line-numbers-minus-style = "#E59A9A"
+	line-numbers-plus-style = "#A8CBA0"
+	line-numbers-zero-style = "#6A6D74"
 
 [merge]
 	conflictstyle = diff3
@@ -106,17 +106,17 @@
 	ui = true
 
 [color "diff"]
-	meta = "#E5B15D"
-	frag = "#4F80DD"
-	old = "#E27056"
-	new = "#58B69D"
+	meta = "#E3C58A"
+	frag = "#8FB4E3"
+	old = "#E59A9A"
+	new = "#A8CBA0"
 
 [color "status"]
-	added = "#58B69D"
-	changed = "#E5B15D"
+	added = "#A8CBA0"
+	changed = "#E3C58A"
 	untracked = "#CBAACB"
 
 [color "branch"]
-	current = "#4F80DD"
-	local = "#D1D3D4"
-	remote = "#58B69D"
+	current = "#8FB4E3"
+	local = "#C2C5CB"
+	remote = "#A8CBA0"

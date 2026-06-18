@@ -35,7 +35,7 @@ dotmesh/
 ├── shell/      .zshrc + .config/shell/{env,path,functions,aliases,ai}.zsh
 ├── git/        .gitconfig, .gitignore_global, .gitmessage
 ├── starship/   .config/starship.toml
-├── warp/       .warp/themes/carbon.yaml   (tema Carbon del terminal)
+├── warp/       .warp/themes/{carbon,dotmesh}.yaml   (temas del terminal)
 ├── vscode/     Library/Application Support/Code/User/{settings,extensions,scripts,themes}
 ├── opencode/   .config/opencode/{agents,commands,opencode.json,README.md}
 ├── codex/      .codex/{config.toml,AGENTS.md}
@@ -48,6 +48,22 @@ dotmesh/
 ```
 
 Cada paquete sigue la convención de [GNU Stow](https://www.gnu.org/software/stow/): los ficheros bajo `<pkg>/...` se enlazan a la misma ruta relativa bajo `~`.
+
+## Tema dotmesh
+
+Un lenguaje visual único —**Paper · Ink · Syntax**— atraviesa todas las
+herramientas: cromo monocromo (blanco Paper / negro Ink / rampa Graphite) con
+siete acentos de sintaxis muteados usados solo como señal, y JetBrains Mono como
+voz de código. Se aplica como:
+
+- **VS Code** — tema `dotmesh` ([`vscode/themes/dotmesh-color-theme.json`](vscode/themes/dotmesh-color-theme.json)), activo en `settings.json`.
+- **Warp** — tema [`warp/.warp/themes/dotmesh.yaml`](warp/.warp/themes/dotmesh.yaml) (seleccionable en los ajustes de Warp).
+- **Starship** — paleta `dotmesh` en [`starship/.config/starship.toml`](starship/.config/starship.toml): segmentos grafito con iconos de sintaxis.
+- **delta/Git** — colores de diff y estado alineados con la paleta.
+
+Los temas anteriores (`carbon`, `gruvbox_dark`) se conservan para revertir. La
+referencia completa —paleta, tipografía y mapa de sintaxis— está en
+[docs/DESIGN.md](docs/DESIGN.md).
 
 ## Skills globales
 
@@ -204,6 +220,7 @@ make clean       # vacía ~/dotfiles-backup
 
 ## Ver también
 
+- [docs/DESIGN.md](docs/DESIGN.md) — lenguaje visual dotmesh (paleta, tipografía, mapa de sintaxis).
 - [docs/INSTALL.md](docs/INSTALL.md) — guía de instalación detallada.
 - [docs/SECRETS.md](docs/SECRETS.md) — tokens y cómo cargarlos.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problemas comunes.

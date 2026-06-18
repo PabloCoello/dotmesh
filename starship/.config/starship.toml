@@ -29,7 +29,29 @@ $time\
 [ ](fg:color_bg1)\
 $line_break$character"""
 
-palette = 'gruvbox_dark'
+palette = 'dotmesh'
+
+# dotmesh — Paper · Ink · Syntax.
+# Cromo monocromo: los segmentos del powerline usan la rampa Graphite y el
+# texto va en Ink claro; los iconos llevan el acento de sintaxis (señal).
+# Para volver al tema anterior: palette = 'gruvbox_dark'.
+[palettes.dotmesh]
+color_fg0    = '#E9EAEC'   # texto sobre los segmentos (Ink claro)
+color_orange = '#2A2C33'   # segmento 1 — os / usuario
+color_yellow = '#33363D'   # segmento 2 — directorio
+color_aqua   = '#3C3F47'   # segmento 3 — git
+color_blue   = '#474B54'   # segmento 4 — lenguajes
+color_bg3    = '#4F535C'   # segmento 5 — docker / conda
+color_bg1    = '#565A63'   # segmento 6 — hora
+color_green  = '#A8CBA0'   # sage  — prompt ok
+color_red    = '#E59A9A'   # rose  — prompt error
+color_purple = '#CBAACB'   # lilac — vim replace
+# iconos: señal de sintaxis sobre el cromo grafito
+color_ico_peach = '#FFAA7A'
+color_ico_teal  = '#6CB6B0'
+color_ico_sage  = '#A8CBA0'
+color_ico_blue  = '#8FB4E3'
+color_ico_muted = '#9A9DA4'
 
 [palettes.gruvbox_dark]
 color_bg1= '#D1D3D4'
@@ -45,7 +67,7 @@ color_yellow = '#E5B15D'
 
 [os]
 disabled = false
-style = "bg:color_orange fg:color_fg0"
+style = "bg:color_orange fg:color_ico_peach"
 
 [os.symbols]
 Windows = "󰍲"
@@ -92,74 +114,74 @@ truncation_symbol = "…/"
 [git_branch]
 symbol = ""
 style = "bg:color_aqua"
-format = '[[ $symbol $branch ](fg:color_fg0 bg:color_aqua)]($style)'
+format = '[[ $symbol ](fg:color_ico_sage bg:color_aqua)[$branch ](fg:color_fg0 bg:color_aqua)]($style)'
 
 [git_status]
 style = "bg:color_aqua"
-format = '[[($all_status$ahead_behind )](fg:color_fg0 bg:color_aqua)]($style)'
+format = '[[($all_status$ahead_behind )](fg:color_ico_peach bg:color_aqua)]($style)'
 
 [nodejs]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [c]
 symbol = " "
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [cpp]
 symbol = " "
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [rust]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [golang]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [php]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [java]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [kotlin]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [haskell]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [python]
 symbol = ""
 style = "bg:color_blue"
-format = '[[ $symbol( $version) ](fg:color_fg0 bg:color_blue)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_blue)[( $version) ](fg:color_fg0 bg:color_blue)]($style)'
 
 [docker_context]
 symbol = ""
 style = "bg:color_bg3"
-format = '[[ $symbol( $context) ](fg:#83a598 bg:color_bg3)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_bg3)[( $context) ](fg:color_fg0 bg:color_bg3)]($style)'
 
 [conda]
 style = "bg:color_bg3"
-format = '[[ $symbol( $environment) ](fg:#83a598 bg:color_bg3)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_bg3)[( $environment) ](fg:color_fg0 bg:color_bg3)]($style)'
 
 [pixi]
 style = "bg:color_bg3"
-format = '[[ $symbol( $version)( $environment) ](fg:color_fg0 bg:color_bg3)]($style)'
+format = '[[ $symbol ](fg:color_ico_blue bg:color_bg3)[( $version)( $environment) ](fg:color_fg0 bg:color_bg3)]($style)'
 
 [time]
 disabled = false
