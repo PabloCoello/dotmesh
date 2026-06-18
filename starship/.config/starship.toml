@@ -36,7 +36,7 @@ palette = 'dotmesh'
 # texto va en Ink claro; los iconos llevan el acento de sintaxis (señal).
 # Para volver al tema anterior: palette = 'gruvbox_dark'.
 [palettes.dotmesh]
-color_fg0    = '#E9EAEC'   # texto sobre los segmentos (Ink claro)
+color_fg0    = '#A8ADB8'   # texto sobre los segmentos (Ink claro)
 color_orange = '#2A2C33'   # segmento 1 — os / usuario
 color_yellow = '#33363D'   # segmento 2 — directorio
 color_aqua   = '#3C3F47'   # segmento 3 — git
