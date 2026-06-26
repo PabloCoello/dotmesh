@@ -3,7 +3,14 @@ name: handoff
 description: Compact the current conversation into a handoff document so another agent can pick up the work. Use when switching between OpenCode, Claude Code and Codex mid-task, or when ending a session with work still in flight.
 ---
 
-Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save it to the OS temporary directory (or `.ai/tmp/` if the project uses it) — never the workspace root.
+Write a handoff document summarising the current conversation so a fresh agent can continue the work.
+
+Where to save it:
+
+- **Long, multi-session implementation** tied to a task → `.ai/tasks/<slug>/handoff.md` (durable, versionable, the next session knows where to look).
+- **Short, throwaway** continuation → the OS temporary directory (or `.ai/tmp/`).
+
+Never the workspace root.
 
 Include:
 
