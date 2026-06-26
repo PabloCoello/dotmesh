@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # dotmesh statusline para Claude Code.
-# Muestra: modelo · barra de contexto · % · rama de git · coste de sesión.
+# Muestra: modelo · barra de contexto · tokens absolutos · rama de git · coste.
 # Filosofía dotmesh (docs/DESIGN.md): cromo monocromo en grafito, el color solo
 # donde significa estado. La barra de contexto escala sage → gold → rose por
-# umbral de llenado; la rama lleva el glifo en sage como el prompt.
+# tokens absolutos en uso; la rama lleva el glifo en sage como el prompt.
+#
+# Mide tokens ABSOLUTOS, no el % contra la ventana: con modelos de 1M, 100k se
+# verían como ~10% y nunca avisarían, pero la calidad cae mucho antes de llenar
+# la ventana. Los umbrales marcan la zona real de degradación, no el techo.
 #
 # Claude Code invoca este script pasándole el estado de la sesión como JSON por
 # stdin. Lo stowa claude/ a ~/.claude/statusline.sh y lo activa settings.json.
 set -euo pipefail
+
+# Umbrales en miles de tokens (ajustables): aviso, alerta y techo de la barra.
+WARN_K=90; ALERT_K=160; CEIL_K=200
 
 input=$(cat)
 
@@ -29,19 +36,24 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 model=$(printf '%s' "$input" | jq -r '.model.display_name // "claude"')
-pct=$(printf '%s' "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
+tokens=$(printf '%s' "$input" | jq -r '.context_window.total_input_tokens // ((.context_window.current_usage.input_tokens // 0) + (.context_window.current_usage.cache_creation_input_tokens // 0) + (.context_window.current_usage.cache_read_input_tokens // 0)) // 0')
 cwd=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
 cost=$(printf '%s' "$input" | jq -r '.cost.total_cost_usd // 0')
 
-# Color de la barra según el llenado del contexto.
-if   [ "$pct" -ge 85 ]; then fill="$ROSE"
-elif [ "$pct" -ge 60 ]; then fill="$GOLD"
-else                         fill="$SAGE"
+# Saneado: entero o 0.
+tokens=${tokens%%.*}
+[[ "$tokens" =~ ^[0-9]+$ ]] || tokens=0
+
+# Color de la barra por tokens absolutos en uso.
+if   [ "$tokens" -ge $((ALERT_K * 1000)) ]; then fill="$ROSE"
+elif [ "$tokens" -ge $((WARN_K * 1000)) ];  then fill="$GOLD"
+else                                             fill="$SAGE"
 fi
 
-# Barra de 10 caracteres: ▓ lleno, ░ hueco.
-filled=$(( pct / 10 ))
+# Barra de 10 caracteres contra el techo práctico (CEIL_K), no contra la ventana.
+filled=$(( tokens * 10 / (CEIL_K * 1000) ))
 [ "$filled" -gt 10 ] && filled=10
+[ "$filled" -lt 0 ] && filled=0
 bar=""
 i=0
 while [ "$i" -lt 10 ]; do
@@ -58,8 +70,11 @@ fi
 # Coste a 2 decimales.
 cost_fmt=$(printf '%.2f' "$cost" 2>/dev/null || printf '0.00')
 
+# Tokens legibles: "118k" a partir de 1000, si no el valor crudo.
+if [ "$tokens" -ge 1000 ]; then used="$(( tokens / 1000 ))k"; else used="$tokens"; fi
+
 # --- Ensamblado ---
-out="${TXT}${model}${RESET} ${fill}${bar}${RESET} ${SEC}${pct}%${RESET}"
+out="${TXT}${model}${RESET} ${fill}${bar}${RESET} ${SEC}${used}${RESET}"
 [ -n "$branch" ] && out="${out}  ${SAGE}⎇${RESET} ${DIM}${branch}${RESET}"
 out="${out}  ${DIM}\$${cost_fmt}${RESET}"
 

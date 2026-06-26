@@ -27,5 +27,18 @@
     "type": "command",
     "command": "~/.claude/statusline.sh",
     "padding": 1
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/block-dangerous-git.sh"
+          }
+        ]
+      }
+    ]
   }
 }
