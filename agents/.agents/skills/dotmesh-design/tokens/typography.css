@@ -1,0 +1,45 @@
+/* ============================================================
+   dotmesh — Typography
+   Hanken Grotesk for UI, JetBrains Mono for code. Generous sizing,
+   tight display tracking. Microsoft-minimal: few weights,
+   lots of air.
+   ============================================================ */
+
+:root {
+  --font-sans: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+
+  /* Weights */
+  --w-regular:  400; /* @kind font */
+  --w-medium:   500; /* @kind font */
+  --w-semibold: 600; /* @kind font */
+  --w-bold:     700; /* @kind font */
+  --w-black:    800; /* @kind font */
+
+  /* Type scale (px) */
+  --t-display-xl: 56px;
+  --t-display:    40px;
+  --t-h1:         32px;
+  --t-h2:         24px;
+  --t-h3:         19px;
+  --t-body-lg:    17px;
+  --t-body:       15px;
+  --t-body-sm:    13.5px;
+  --t-caption:    12px;
+  --t-micro:      11px;
+  --t-mono:       13.5px;
+
+  /* Line heights */
+  --lh-tight:   1.08; /* @kind font */
+  --lh-snug:    1.3;  /* @kind font */
+  --lh-normal:  1.55; /* @kind font */
+  --lh-relaxed: 1.7;  /* @kind font */
+  --lh-code:    1.6;  /* @kind font */
+
+  /* Tracking */
+  --tracking-display: -0.022em;
+  --tracking-tight:   -0.012em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-caps:    0.12em;  /* eyebrow / overline */
+}

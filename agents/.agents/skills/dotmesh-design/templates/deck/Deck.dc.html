@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Deck personal" description="Deck de slides dotmesh con plantillas variadas: título, sección, agenda, contenido, comparación, cita, código, métricas y cierre" -->
+<helmet>
+<script src="./ds-base.js"></script>
+<style>
+  @keyframes dmRise { from { transform: translateY(16px); } to { transform: none; } }
+  @media (prefers-reduced-motion: no-preference) {
+    section[data-deck-active] .dm-rise { animation: dmRise .5s cubic-bezier(.2,.7,.3,1) both; }
+    section[data-deck-active] .dm-rise:nth-child(2) { animation-delay: .06s; }
+    section[data-deck-active] .dm-rise:nth-child(3) { animation-delay: .12s; }
+    section[data-deck-active] .dm-rise:nth-child(4) { animation-delay: .18s; }
+  }
+</style>
+</helmet>
+<x-import component-from-global-scope="deck-stage" from="./deck-stage.js" width="1920" height="1080" hint-size="100%,100%">
+
+  <!-- 1 · TITLE -->
+  <section data-label="Title" style="width:1920px;height:1080px;background:var(--paper-0);color:var(--text-primary);font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;position:relative;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:22px;letter-spacing:.32em;text-transform:uppercase;color:var(--text-muted);margin-bottom:40px;">dotmesh<span style="color:var(--syntax-teal);">.</span> &nbsp;/&nbsp; deck personal</div>
+    <h1 class="dm-rise" style="font-size:128px;font-weight:800;letter-spacing:-0.025em;line-height:1.02;margin:0;max-width:1400px;">Paper, ink<br>and a little <span style="color:var(--syntax-peach);">syntax</span>.</h1>
+    <p class="dm-rise" style="font-size:30px;line-height:1.5;color:var(--text-secondary);margin:48px 0 0;max-width:900px;">Una plantilla sobria para hablar de herramientas, código y decisiones de diseño.</p>
+    <div class="dm-rise" style="position:absolute;left:160px;bottom:90px;display:flex;align-items:center;gap:18px;font-family:var(--font-mono);font-size:20px;color:var(--text-muted);">
+      <span style="width:40px;height:1px;background:var(--border-strong);"></span>Pablo Coello · 2026
+    </div>
+  </section>
+
+  <!-- 2 · SECTION DIVIDER (ink) -->
+  <section data-label="Section" data-theme="dark" style="width:1920px;height:1080px;background:var(--ink-0);color:#e9eaec;font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;position:relative;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:24px;letter-spacing:.3em;color:var(--syntax-teal);margin-bottom:34px;">01</div>
+    <h2 class="dm-rise" style="font-size:104px;font-weight:800;letter-spacing:-0.022em;line-height:1.04;margin:0;max-width:1300px;">El entorno como<br>sistema</h2>
+    <div class="dm-rise" style="position:absolute;right:160px;bottom:110px;font-family:var(--font-mono);font-size:130px;font-weight:700;color:#24252b;line-height:1;">❯_</div>
+  </section>
+
+  <!-- 3 · AGENDA -->
+  <section data-label="Agenda" style="width:1920px;height:1080px;background:var(--paper-0);color:var(--text-primary);font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:20px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);margin-bottom:48px;">Agenda</div>
+    <div style="display:flex;flex-direction:column;">
+      <div class="dm-rise" style="display:flex;align-items:baseline;gap:40px;padding:30px 0;border-top:1px solid var(--border);"><span style="font-family:var(--font-mono);font-size:26px;color:var(--syntax-peach);width:60px;">01</span><span style="font-size:46px;font-weight:600;">El entorno como sistema</span></div>
+      <div class="dm-rise" style="display:flex;align-items:baseline;gap:40px;padding:30px 0;border-top:1px solid var(--border);"><span style="font-family:var(--font-mono);font-size:26px;color:var(--syntax-lilac);width:60px;">02</span><span style="font-size:46px;font-weight:600;">Color, tipografía, ritmo</span></div>
+      <div class="dm-rise" style="display:flex;align-items:baseline;gap:40px;padding:30px 0;border-top:1px solid var(--border);"><span style="font-family:var(--font-mono);font-size:26px;color:var(--syntax-teal);width:60px;">03</span><span style="font-size:46px;font-weight:600;">De la terminal al escritorio</span></div>
+      <div class="dm-rise" style="display:flex;align-items:baseline;gap:40px;padding:30px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);"><span style="font-family:var(--font-mono);font-size:26px;color:var(--syntax-blue);width:60px;">04</span><span style="font-size:46px;font-weight:600;">Próximos pasos</span></div>
+    </div>
+  </section>
+
+  <!-- 4 · CONTENT + BULLETS -->
+  <section data-label="Content" style="width:1920px;height:1080px;background:var(--paper-0);color:var(--text-primary);font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:20px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);margin-bottom:28px;">Principio</div>
+    <h3 class="dm-rise" style="font-size:72px;font-weight:700;letter-spacing:-0.02em;line-height:1.08;margin:0 0 56px;max-width:1300px;">El cromo es monocromo. El color es señal.</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px 72px;max-width:1500px;">
+      <div class="dm-rise" style="display:flex;gap:20px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--syntax-peach);margin-top:14px;flex:none;"></span><p style="font-size:30px;line-height:1.5;color:var(--text-secondary);margin:0;">La interfaz se queda en blanco, negro y grafito para no competir con el trabajo.</p></div>
+      <div class="dm-rise" style="display:flex;gap:20px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--syntax-lilac);margin-top:14px;flex:none;"></span><p style="font-size:30px;line-height:1.5;color:var(--text-secondary);margin:0;">Los acentos solo aparecen donde hay significado: sintaxis, estado, git.</p></div>
+      <div class="dm-rise" style="display:flex;gap:20px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--syntax-teal);margin-top:14px;flex:none;"></span><p style="font-size:30px;line-height:1.5;color:var(--text-secondary);margin:0;">Bordes finos primero; las sombras solo cuando algo flota.</p></div>
+      <div class="dm-rise" style="display:flex;gap:20px;"><span style="width:12px;height:12px;border-radius:50%;background:var(--syntax-blue);margin-top:14px;flex:none;"></span><p style="font-size:30px;line-height:1.5;color:var(--text-secondary);margin:0;">Un mismo lenguaje del prompt al editor y al sistema operativo.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 · COMPARISON -->
+  <section data-label="Comparison" style="width:1920px;height:1080px;background:var(--paper-0);color:var(--text-primary);font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;">
+    <h3 class="dm-rise" style="font-size:64px;font-weight:700;letter-spacing:-0.02em;margin:0 0 60px;">Antes / después</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+      <div class="dm-rise" style="border:1px solid var(--border);border-radius:var(--radius-lg);padding:56px;">
+        <div style="font-family:var(--font-mono);font-size:20px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-muted);margin-bottom:28px;">Antes</div>
+        <p style="font-size:34px;line-height:1.45;color:var(--text-secondary);margin:0;">Cada herramienta con su propio tema. Colores que chocan, ningún hilo común.</p>
+      </div>
+      <div class="dm-rise" style="border:1px solid var(--text-primary);border-radius:var(--radius-lg);padding:56px;background:var(--bg-sunken);">
+        <div style="font-family:var(--font-mono);font-size:20px;letter-spacing:.18em;text-transform:uppercase;color:var(--syntax-teal);margin-bottom:28px;">Después</div>
+        <p style="font-size:34px;line-height:1.45;color:var(--text-primary);margin:0;">Una paleta, una tipografía, un ritmo. Coherencia de extremo a extremo.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · BIG QUOTE (ink) -->
+  <section data-label="Quote" data-theme="dark" style="width:1920px;height:1080px;background:var(--ink-0);color:#e9eaec;font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 200px;box-sizing:border-box;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:140px;line-height:.6;color:var(--syntax-peach);margin-bottom:10px;">“</div>
+    <blockquote class="dm-rise" style="font-size:76px;font-weight:600;letter-spacing:-0.02em;line-height:1.18;margin:0;max-width:1500px;">El mejor tema es el que desaparece y deja que el código sea el color.</blockquote>
+    <div class="dm-rise" style="margin-top:56px;font-family:var(--font-mono);font-size:24px;color:var(--text-muted);display:flex;align-items:center;gap:18px;"><span style="width:40px;height:1px;background:#3a3c44;"></span>manifiesto dotmesh</div>
+  </section>
+
+  <!-- 7 · CODE SHOWCASE (ink) -->
+  <section data-label="Code" data-theme="dark" style="width:1920px;height:1080px;background:var(--ink-0);color:#e9eaec;font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:20px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);margin-bottom:40px;">El tema en acción</div>
+    <div class="dm-rise" style="background:#1c1d22;border-radius:var(--radius-lg);padding:18px 0;max-width:1400px;box-shadow:var(--shadow-lg);">
+      <div style="display:flex;gap:9px;padding:6px 28px 22px;"><span style="width:14px;height:14px;border-radius:50%;background:#3c3f47;"></span><span style="width:14px;height:14px;border-radius:50%;background:#3c3f47;"></span><span style="width:14px;height:14px;border-radius:50%;background:#3c3f47;"></span></div>
+      <pre style="margin:0;padding:0 40px;font-family:var(--font-mono);font-size:32px;line-height:1.75;font-feature-settings:'calt' 1,'liga' 1;"><span style="color:#6a6d74;"># weight survey responses</span>
+<span style="color:var(--syntax-lilac);">def</span> <span style="color:var(--syntax-blue);">weight</span>(<span style="color:#9a9da4;">df</span>: <span style="color:var(--syntax-gold);">DataFrame</span>) <span style="color:#9a9da4;">-></span> <span style="color:var(--syntax-gold);">Series</span>:
+    w <span style="color:#9a9da4;">=</span> <span style="color:var(--syntax-peach);">1.0</span> <span style="color:#9a9da4;">/</span> df.<span style="color:var(--syntax-blue);">groupby</span>(<span style="color:var(--syntax-sage);">"region"</span>).<span style="color:var(--syntax-blue);">size</span>()
+    <span style="color:var(--syntax-lilac);">return</span> df.<span style="color:var(--syntax-blue);">assign</span>(w<span style="color:#9a9da4;">=</span>w)</pre>
+    </div>
+  </section>
+
+  <!-- 8 · METRICS -->
+  <section data-label="Metrics" style="width:1920px;height:1080px;background:var(--paper-0);color:var(--text-primary);font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;">
+    <div class="dm-rise" style="font-family:var(--font-mono);font-size:20px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-muted);margin-bottom:64px;">En números</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:64px;">
+      <div class="dm-rise"><div style="font-size:140px;font-weight:800;letter-spacing:-0.03em;line-height:1;">7</div><div style="font-size:28px;color:var(--text-secondary);margin-top:16px;border-top:1px solid var(--border);padding-top:20px;">acentos de sintaxis</div></div>
+      <div class="dm-rise"><div style="font-size:140px;font-weight:800;letter-spacing:-0.03em;line-height:1;">2</div><div style="font-size:28px;color:var(--text-secondary);margin-top:16px;border-top:1px solid var(--border);padding-top:20px;">tipografías · sans + mono</div></div>
+      <div class="dm-rise"><div style="font-size:140px;font-weight:800;letter-spacing:-0.03em;line-height:1;">∞<span style="color:var(--syntax-teal);">.</span></div><div style="font-size:28px;color:var(--text-secondary);margin-top:16px;border-top:1px solid var(--border);padding-top:20px;">superficies coherentes</div></div>
+    </div>
+  </section>
+
+  <!-- 9 · CLOSING (ink) -->
+  <section data-label="Closing" data-theme="dark" style="width:1920px;height:1080px;background:var(--ink-0);color:#e9eaec;font-family:var(--font-sans);display:flex;flex-direction:column;justify-content:center;padding:0 160px;box-sizing:border-box;position:relative;">
+    <h2 class="dm-rise" style="font-size:120px;font-weight:800;letter-spacing:-0.025em;line-height:1.02;margin:0;">Gracias<span style="color:var(--syntax-peach);">.</span></h2>
+    <p class="dm-rise" style="font-size:30px;color:var(--text-secondary);margin:44px 0 0;">Preguntas, ideas, retoques de color — bienvenidos.</p>
+    <div class="dm-rise" style="position:absolute;left:160px;bottom:90px;display:flex;align-items:center;gap:18px;font-family:var(--font-mono);font-size:22px;color:var(--text-muted);"><span style="color:#e9eaec;">dotmesh<span style="color:var(--syntax-teal);">.</span></span><span style="width:40px;height:1px;background:#3a3c44;"></span>github.com/PabloCoello</div>
+  </section>
+
+</x-import>
+
+</x-dc>
+</body>
+</html>

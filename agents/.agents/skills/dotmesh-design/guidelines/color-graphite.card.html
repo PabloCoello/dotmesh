@@ -1,0 +1,46 @@
+<!-- @dsCard group="Colors" viewport="700x290" name="Graphite Ramp" subtitle="Neutral scale + the ink chrome ramp for powerline segments" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 22px 24px; }
+  .row { display: flex; gap: 0; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); }
+  .cell { flex: 1; height: 64px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; }
+  .num { font-family: var(--font-mono); font-size: 10px; }
+  .labels { display: flex; margin-top: 10px; }
+  .lbl { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); }
+  .cap { font-family: var(--font-mono); font-size: 9.5px; letter-spacing:.1em; text-transform:uppercase; color: var(--text-muted); margin: 22px 0 9px; }
+  .seg { display:flex; gap:0; border-radius: var(--radius-md); overflow:hidden; }
+  .scell { flex:1; height:46px; display:flex; align-items:center; justify-content:center; gap:7px; }
+  .stext { font-family: var(--font-mono); font-size: 11px; color: var(--chrome-text); }
+  .sdot { width:7px; height:7px; border-radius:999px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="cell" style="background:var(--gray-50)"><span class="num" style="color:#16181d">50</span></div>
+    <div class="cell" style="background:var(--gray-100)"><span class="num" style="color:#16181d">100</span></div>
+    <div class="cell" style="background:var(--gray-200)"><span class="num" style="color:#16181d">200</span></div>
+    <div class="cell" style="background:var(--gray-300)"><span class="num" style="color:#16181d">300</span></div>
+    <div class="cell" style="background:var(--gray-400)"><span class="num" style="color:#16181d">400</span></div>
+    <div class="cell" style="background:var(--gray-500)"><span class="num" style="color:#fff">500</span></div>
+    <div class="cell" style="background:var(--gray-600)"><span class="num" style="color:#fff">600</span></div>
+    <div class="cell" style="background:var(--gray-700)"><span class="num" style="color:#fff">700</span></div>
+    <div class="cell" style="background:var(--gray-800)"><span class="num" style="color:#fff">800</span></div>
+    <div class="cell" style="background:var(--gray-900)"><span class="num" style="color:#fff">900</span></div>
+    <div class="cell" style="background:var(--gray-950)"><span class="num" style="color:#fff">950</span></div>
+  </div>
+
+  <div class="cap">Ink chrome — powerline segments (light text on every step)</div>
+  <div class="seg">
+    <div class="scell" style="background:var(--chrome-1)"><span class="sdot" style="background:var(--syntax-peach)"></span><span class="stext">pablo</span></div>
+    <div class="scell" style="background:var(--chrome-2)"><span class="stext">~/dev/dotmesh</span></div>
+    <div class="scell" style="background:var(--chrome-3)"><span class="sdot" style="background:var(--syntax-sage)"></span><span class="stext">main</span></div>
+    <div class="scell" style="background:var(--chrome-4)"><span class="sdot" style="background:var(--syntax-blue)"></span><span class="stext">py 3.12</span></div>
+    <div class="scell" style="background:var(--chrome-5)"><span class="sdot" style="background:var(--syntax-teal)"></span><span class="stext">conda</span></div>
+    <div class="scell" style="background:var(--chrome-6)"><span class="stext">14:32</span></div>
+  </div>
+</body>
+</html>

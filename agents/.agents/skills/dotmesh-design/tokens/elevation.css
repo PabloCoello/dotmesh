@@ -1,0 +1,32 @@
+/* ============================================================
+   dotmesh — Elevation
+   Border-first, shadow-second. Shadows are soft, neutral, low
+   alpha — a sheet of paper lifting, never a glow.
+   ============================================================ */
+
+:root {
+  --shadow-xs: 0 1px 1px rgba(20,22,26,.04);
+  --shadow-sm: 0 1px 2px rgba(20,22,26,.06), 0 1px 1px rgba(20,22,26,.04);
+  --shadow-md: 0 4px 12px rgba(20,22,26,.07), 0 1px 3px rgba(20,22,26,.05);
+  --shadow-lg: 0 14px 34px rgba(20,22,26,.12), 0 4px 10px rgba(20,22,26,.06);
+  --shadow-overlay: 0 24px 60px rgba(20,22,26,.18), 0 8px 18px rgba(20,22,26,.10);
+
+  /* Inset for pressed / inputs */
+  --shadow-inset: inset 0 1px 2px rgba(20,22,26,.06);
+
+  /* Focus ring (paired with --focus-ring color token) */
+  --ring-width: 2px;
+  --ring-offset: 2px;
+}
+
+/* On ink surfaces, lean almost entirely on borders; shadows
+   read as deeper black with a faint outer line. */
+.theme-dark,
+[data-theme="dark"] {
+  --shadow-xs: 0 1px 1px rgba(0,0,0,.30);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+  --shadow-md: 0 6px 16px rgba(0,0,0,.40);
+  --shadow-lg: 0 18px 40px rgba(0,0,0,.50);
+  --shadow-overlay: 0 28px 70px rgba(0,0,0,.60);
+  --shadow-inset: inset 0 1px 2px rgba(0,0,0,.40);
+}

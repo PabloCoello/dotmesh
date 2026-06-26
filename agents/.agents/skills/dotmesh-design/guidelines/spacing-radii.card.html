@@ -1,0 +1,37 @@
+<!-- @dsCard group="Spacing" viewport="700x160" name="Radii & Elevation" subtitle="Modest corners, soft border-first shadows" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 24px 26px; display: flex; gap: 40px; }
+  .group { display: flex; flex-direction: column; gap: 12px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); }
+  .row { display: flex; gap: 16px; align-items: center; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .box { width: 52px; height: 52px; background: var(--surface); border: 1px solid var(--border); }
+  .v { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="group">
+    <span class="eyebrow">Radius</span>
+    <div class="row">
+      <div class="item"><div class="box" style="border-radius:var(--radius-xs)"></div><span class="v">3</span></div>
+      <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div><span class="v">5</span></div>
+      <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div><span class="v">8</span></div>
+      <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div><span class="v">12</span></div>
+      <div class="item"><div class="box" style="border-radius:var(--radius-xl)"></div><span class="v">16</span></div>
+    </div>
+  </div>
+  <div class="group">
+    <span class="eyebrow">Elevation</span>
+    <div class="row">
+      <div class="item"><div class="box" style="border-color:transparent;box-shadow:var(--shadow-sm)"></div><span class="v">sm</span></div>
+      <div class="item"><div class="box" style="border-color:transparent;box-shadow:var(--shadow-md)"></div><span class="v">md</span></div>
+      <div class="item"><div class="box" style="border-color:transparent;box-shadow:var(--shadow-lg)"></div><span class="v">lg</span></div>
+    </div>
+  </div>
+</body>
+</html>
