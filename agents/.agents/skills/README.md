@@ -50,3 +50,4 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 |---|---|
 | `anti-ai-style` | Para revisar o redactar textos evitando estilo genérico de IA. |
 | `castellano-peninsular` | Para textos en español peninsular formal. |
+| `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |

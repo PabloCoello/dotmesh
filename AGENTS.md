@@ -61,7 +61,7 @@ The `vscode/` package contains a `.stow-local-ignore` and `package.json` because
 
 Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream marketplace plugin) without updating the sync story here and in the README.
 
-The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement — they don't replace — the `debate` agent, which is kept for pure divergent exploration.
+The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement — they don't replace — the `debate` agent, which is kept for pure divergent exploration. `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`.
 
 ## Skill flow is the default, not a request
 
