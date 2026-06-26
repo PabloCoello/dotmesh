@@ -1,0 +1,10 @@
+/* ============================================================
+   dotmesh — Fonts
+   Hanken Grotesk → UI / display (clean neutral grotesque)
+   JetBrains Mono → code / signature mono
+   Loaded from Google Fonts. If you self-host, replace these
+   @import lines with local @font-face rules pointing at the
+   binaries under assets/fonts/.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');

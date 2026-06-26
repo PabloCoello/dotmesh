@@ -1,0 +1,26 @@
+<!-- @dsCard group="Type" viewport="700x200" name="Body & Caption" subtitle="Reading scale and supporting text" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 24px 26px; }
+  .stack { display: flex; flex-direction: column; gap: 13px; max-width: 600px; }
+  .line { display: flex; align-items: baseline; gap: 16px; }
+  .spec { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); width: 90px; flex: none; }
+  .blg { font-size: var(--t-body-lg); line-height: var(--lh-normal); }
+  .b { font-size: var(--t-body); line-height: var(--lh-normal); color: var(--text-secondary); }
+  .cap { font-size: var(--t-caption); color: var(--text-muted); }
+  .eyebrow { font-family: var(--font-mono); font-size: var(--t-micro); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="stack">
+    <div class="line"><span class="spec">overline</span><span class="eyebrow">Visual foundations</span></div>
+    <div class="line"><span class="spec">17 · lead</span><span class="blg">A monochrome base lets the work be the colour.</span></div>
+    <div class="line"><span class="spec">15 · body</span><span class="b">Text sits on near-black ink against true white, with a graphite ramp doing the quiet structural work of borders and secondary labels.</span></div>
+    <div class="line"><span class="spec">12 · caption</span><span class="cap">Captions and metadata recede into graphite-400.</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x230" name="Syntax in Use" subtitle="The accent family mapped onto a Python snippet" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; background: var(--ink-0); padding: 0; }
+  pre { margin: 0; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.7; padding: 22px 26px; color: #e9eaec; font-feature-settings: "calt" 1, "liga" 1; }
+  .kw { color: var(--syntax-lilac); }
+  .fn { color: var(--syntax-blue); }
+  .str { color: var(--syntax-sage); }
+  .num { color: var(--syntax-peach); }
+  .ty { color: var(--syntax-gold); }
+  .cm { color: #6a6d74; font-style: italic; }
+  .op { color: #9a9da4; }
+</style>
+</head>
+<body>
+<pre><span class="cm"># weight survey responses by region</span>
+<span class="kw">def</span> <span class="fn">weight</span>(<span class="op">df</span>: <span class="ty">DataFrame</span>, <span class="op">region</span><span class="op">=</span><span class="str">"north"</span>) <span class="op">-&gt;</span> <span class="ty">Series</span>:
+    <span class="op">w</span> <span class="op">=</span> <span class="num">1.0</span> <span class="op">/</span> <span class="op">df</span>.<span class="fn">groupby</span>(<span class="str">"region"</span>).<span class="fn">size</span>()
+    <span class="kw">return</span> <span class="op">df</span>[<span class="op">df</span>.<span class="op">region</span> <span class="op">==</span> <span class="op">region</span>].<span class="fn">assign</span>(<span class="op">w</span><span class="op">=</span><span class="op">w</span>)</pre>
+</body>
+</html>

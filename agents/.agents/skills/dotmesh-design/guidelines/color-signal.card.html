@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Signal Colors" subtitle="Deeper accent siblings that pass on white" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 22px 24px; }
+  .row { display: flex; gap: 14px; }
+  .item { flex: 1; display: flex; flex-direction: column; gap: 9px; }
+  .bar { display: flex; align-items: center; gap: 9px; }
+  .dot { width: 12px; height: 12px; border-radius: var(--radius-pill); }
+  .name { font-size: 13px; font-weight: 600; }
+  .pill { align-self: flex-start; font-family: var(--font-mono); font-size: 11px; padding: 3px 9px; border-radius: var(--radius-sm); }
+  .hex { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="bar"><span class="dot" style="background:var(--signal-success)"></span><span class="name">Success</span></div><span class="pill" style="background:color-mix(in oklab,var(--signal-success) 14%,transparent);color:var(--signal-success)">passed</span><span class="hex">#3f8a5c</span></div>
+    <div class="item"><div class="bar"><span class="dot" style="background:var(--signal-warning)"></span><span class="name">Warning</span></div><span class="pill" style="background:color-mix(in oklab,var(--signal-warning) 14%,transparent);color:var(--signal-warning)">pending</span><span class="hex">#b9772f</span></div>
+    <div class="item"><div class="bar"><span class="dot" style="background:var(--signal-danger)"></span><span class="name">Danger</span></div><span class="pill" style="background:color-mix(in oklab,var(--signal-danger) 14%,transparent);color:var(--signal-danger)">failed</span><span class="hex">#bd4f4f</span></div>
+    <div class="item"><div class="bar"><span class="dot" style="background:var(--signal-info)"></span><span class="name">Info</span></div><span class="pill" style="background:color-mix(in oklab,var(--signal-info) 14%,transparent);color:var(--signal-info)">running</span><span class="hex">#4f6fb8</span></div>
+  </div>
+</body>
+</html>

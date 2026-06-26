@@ -1,0 +1,32 @@
+<!-- @dsCard group="Brand" viewport="700x200" name="Wordmark" subtitle="Monospace mark — paper · ink · syntax" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 30px 32px; display: flex; align-items: center; justify-content: space-between; gap: 30px; }
+  .mark { display: flex; flex-direction: column; gap: 12px; }
+  .word { font-family: var(--font-mono); font-size: 38px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-primary); }
+  .word .dot { color: var(--syntax-teal); }
+  .tag { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+  .mark { flex: none; }
+  .pillars { display: flex; gap: 10px; }
+  .pillar { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .swatch { width: 64px; height: 48px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .plabel { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); }
+  .syntax-swatch { background: linear-gradient(90deg, var(--syntax-peach) 0 33%, var(--syntax-lilac) 33% 66%, var(--syntax-teal) 66% 100%); }
+</style>
+</head>
+<body>
+  <div class="mark">
+    <div class="word">dotmesh<span class="dot">.</span></div>
+    <div class="tag">paper · ink · syntax</div>
+  </div>
+  <div class="pillars">
+    <div class="pillar"><div class="swatch" style="background:var(--paper-0)"></div><span class="plabel">paper</span></div>
+    <div class="pillar"><div class="swatch" style="background:var(--ink-0)"></div><span class="plabel">ink</span></div>
+    <div class="pillar"><div class="swatch syntax-swatch" style="border-color:transparent"></div><span class="plabel">syntax</span></div>
+  </div>
+</body>
+</html>

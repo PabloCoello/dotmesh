@@ -1,0 +1,68 @@
+<!-- @dsCard group="Components" viewport="700x360" name="Core" subtitle="Button · Badge · Card · Kbd" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 26px; }
+  .wrap { display: flex; flex-direction: column; gap: 22px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); width: 100%; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { Button, Badge, Card, Kbd } = window.DotmeshDesignSystem_512187;
+  function Demo() {
+    return (
+      <div className="wrap">
+        <div className="row">
+          <span className="lbl">Button</span>
+          <Button variant="primary">Run install</Button>
+          <Button variant="secondary">Switch branch</Button>
+          <Button variant="ghost">Cancel</Button>
+          <Button variant="danger">Unstow</Button>
+          <Button variant="primary" size="sm">sm</Button>
+          <Button variant="primary" disabled>disabled</Button>
+        </div>
+        <div className="row">
+          <span className="lbl">Badge</span>
+          <Badge tone="success" dot>passed</Badge>
+          <Badge tone="warning" dot>pending</Badge>
+          <Badge tone="danger" variant="solid">3 failed</Badge>
+          <Badge tone="lilac">python</Badge>
+          <Badge tone="blue">node</Badge>
+          <Badge tone="neutral" variant="outline">main</Badge>
+        </div>
+        <div className="row">
+          <span className="lbl">Kbd</span>
+          <span style={{display:"flex",gap:5}}><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
+          <span style={{display:"flex",gap:5}}><Kbd>⌃</Kbd><Kbd>R</Kbd></span>
+          <Kbd>esc</Kbd>
+        </div>
+        <div>
+          <span className="lbl" style={{marginBottom:10,display:"block"}}>Card</span>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <Card padding="md" elevation="sm">
+              <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>Warp · Carbon</div>
+              <div style={{fontSize:13,color:"var(--text-secondary)"}}>Terminal theme synced.</div>
+            </Card>
+            <Card padding="md" interactive>
+              <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>Starship</div>
+              <div style={{fontSize:13,color:"var(--text-secondary)"}}>Prompt segments restyled.</div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

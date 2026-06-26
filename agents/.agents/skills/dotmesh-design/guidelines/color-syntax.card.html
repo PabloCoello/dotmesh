@@ -1,0 +1,34 @@
+<!-- @dsCard group="Colors" viewport="700x250" name="Syntax Accents" subtitle="Muted base + bright tier for emphasis on ink" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--ink-0); color: #e9eaec; padding: 22px 24px; }
+  .row { display: flex; gap: 12px; }
+  .sw { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .chip { height: 50px; border-radius: var(--radius-md); }
+  .bright { height: 16px; border-radius: var(--radius-sm, 5px); display:flex; align-items:center; justify-content:flex-end; padding-right:6px; }
+  .bright span { font-family: var(--font-mono); font-size: 8px; letter-spacing:.08em; text-transform:uppercase; color: rgba(20,22,26,.55); }
+  .nobright { height: 16px; border-radius: var(--radius-sm, 5px); border: 1px dashed #2d2f36; display:flex; align-items:center; justify-content:center; }
+  .nobright span { font-family: var(--font-mono); font-size: 8px; letter-spacing:.08em; text-transform:uppercase; color: #565a63; }
+  .name { font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; color: #e9eaec; }
+  .role { font-family: var(--font-mono); font-size: 10px; color: #9a9da4; }
+  .hex { font-family: var(--font-mono); font-size: 10px; color: #6a6d74; }
+  .seed { position: relative; }
+  .seed::after { content: "seed"; position: absolute; top: 6px; right: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: rgba(20,22,26,.5); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip seed" style="background:var(--syntax-peach)"></div><div class="nobright"><span>base = bright</span></div><span class="name">Peach</span><span class="role">number · const</span><span class="hex">#ffaa7a</span></div>
+    <div class="sw"><div class="chip seed" style="background:var(--syntax-lilac)"></div><div class="bright" style="background:var(--syntax-lilac-bright)"><span>bright</span></div><span class="name">Lilac</span><span class="role">keyword</span><span class="hex">#cbaacb</span></div>
+    <div class="sw"><div class="chip seed" style="background:var(--syntax-teal)"></div><div class="bright" style="background:var(--syntax-teal-bright)"><span>bright</span></div><span class="name">Teal</span><span class="role">regex · cursor</span><span class="hex">#6cb6b0</span></div>
+    <div class="sw"><div class="chip" style="background:var(--syntax-blue)"></div><div class="bright" style="background:var(--syntax-blue-bright)"><span>bright</span></div><span class="name">Blue</span><span class="role">function</span><span class="hex">#8fb4e3</span></div>
+    <div class="sw"><div class="chip" style="background:var(--syntax-sage)"></div><div class="bright" style="background:var(--syntax-sage-bright)"><span>bright</span></div><span class="name">Sage</span><span class="role">string</span><span class="hex">#a8cba0</span></div>
+    <div class="sw"><div class="chip" style="background:var(--syntax-gold)"></div><div class="bright" style="background:var(--syntax-gold-bright)"><span>bright</span></div><span class="name">Gold</span><span class="role">type · class</span><span class="hex">#e3c58a</span></div>
+    <div class="sw"><div class="chip" style="background:var(--syntax-rose)"></div><div class="bright" style="background:var(--syntax-rose-bright)"><span>bright</span></div><span class="name">Rose</span><span class="role">error · tag</span><span class="hex">#e59a9a</span></div>
+  </div>
+</body>
+</html>

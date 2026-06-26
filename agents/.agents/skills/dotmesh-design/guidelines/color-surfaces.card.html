@@ -1,0 +1,40 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Paper & Ink" subtitle="Monochrome surfaces — light canvas and dark canvas" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); padding: 22px 24px; }
+  .group { display: flex; gap: 28px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); }
+  .row { display: flex; gap: 10px; }
+  .sw { display: flex; flex-direction: column; gap: 6px; }
+  .chip { width: 70px; height: 56px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .hex { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="group">
+    <div class="col">
+      <span class="eyebrow">Paper · light</span>
+      <div class="row">
+        <div class="sw"><div class="chip" style="background:var(--paper-0)"></div><span class="hex">#ffffff</span></div>
+        <div class="sw"><div class="chip" style="background:var(--paper-1)"></div><span class="hex">#fafafa</span></div>
+        <div class="sw"><div class="chip" style="background:var(--paper-2)"></div><span class="hex">#f4f4f5</span></div>
+        <div class="sw"><div class="chip" style="background:var(--paper-3)"></div><span class="hex">#ececed</span></div>
+      </div>
+    </div>
+    <div class="col">
+      <span class="eyebrow">Ink · dark</span>
+      <div class="row">
+        <div class="sw"><div class="chip" style="background:var(--ink-0)"></div><span class="hex">#16171b</span></div>
+        <div class="sw"><div class="chip" style="background:var(--ink-1)"></div><span class="hex">#1c1d22</span></div>
+        <div class="sw"><div class="chip" style="background:var(--ink-2)"></div><span class="hex">#24252b</span></div>
+        <div class="sw"><div class="chip" style="background:var(--ink-3)"></div><span class="hex">#2d2f36</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
