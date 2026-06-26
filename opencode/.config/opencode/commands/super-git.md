@@ -26,6 +26,14 @@ Recovery mode is available when `/super-git` is invoked after changes already ex
 - Stop and ask before staging ambiguous hunks, generated noise, local-machine state, or suspected secrets.
 - If the pending diff is too tangled to separate confidently, report the risk and ask whether to create a broader commit or let the user split it manually.
 
+## Context budget and multi-phase work
+
+`/super-git` shares the commit-per-slice spine with `incremental-implementation` and the long-implementation context loop in `AGENTS.md`. Honour that loop here:
+
+- **Per-slice commits can run inside a phase subagent; sync, push, and PR are the orchestrator's single finalization.** When a plan is split across `build` subagents (one per phase), let each subagent verify and commit its own slice. Run the sync, `git push`, and `gh pr create` once, from the orchestrator, after the phases land — not inside each subagent. PR creation is idempotent: if a PR already exists for the branch, report it instead of opening a duplicate.
+- **Keep the live context lean.** The per-commit inspection below (`git diff`, `git diff --staged`, the full `git diff --cached`, the secret scan) costs tokens on every slice. In a long single-context run those diffs accumulate; prefer delegating each phase to a fresh subagent that absorbs its own diff noise and returns a short summary.
+- **Watch the context counter.** When the statusline enters the gold zone (~90k tokens), close the current slice with a commit and stop expanding the session — delegate the next phase or run `handoff` — rather than pushing through to the rose zone (~160k). A clean commit is the cheapest re-orientation point a fresh session or subagent can read.
+
 ## Lifecycle
 
 1. Inspect repository state:
