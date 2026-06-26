@@ -20,9 +20,11 @@ REPO_CONFIG_DIR="$REPO_DIR/Library/Application Support/Code/User"
 VSCODE_DIR="$HOME/.vscode"
 VSCODE_CONFIG_DIR="$HOME/Library/Application Support/Code/User"
 
-# Verificar si estamos en macOS o Linux
+# Detectar plataforma: ruta de config y variante de keybindings
+KEYBINDINGS_SRC="keybindings.json"            # macOS usa cmd+
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     VSCODE_CONFIG_DIR="$HOME/.config/Code/User"
+    KEYBINDINGS_SRC="keybindings.linux.json"  # Linux usa ctrl+
 fi
 
 echo -e "${BLUE}===========================================${NC}"
@@ -71,11 +73,11 @@ else
     echo -e "${RED}✗${NC} settings.json no encontrado"
 fi
 
-if [ -f "$REPO_CONFIG_DIR/keybindings.json" ]; then
-    cp "$REPO_CONFIG_DIR/keybindings.json" "$VSCODE_CONFIG_DIR/"
-    echo -e "${GREEN}✓${NC} keybindings.json instalado"
+if [ -f "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" ]; then
+    cp "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" "$VSCODE_CONFIG_DIR/keybindings.json"
+    echo -e "${GREEN}✓${NC} keybindings.json instalado (desde $KEYBINDINGS_SRC)"
 else
-    echo -e "${RED}✗${NC} keybindings.json no encontrado"
+    echo -e "${RED}✗${NC} $KEYBINDINGS_SRC no encontrado"
 fi
 
 # Instalar temas

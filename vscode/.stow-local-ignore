@@ -1,4 +1,7 @@
 # Ignore non-stowable VS Code assets.
+# Variante de keybindings para Linux/Windows: la instala install.sh/install.ps1
+# por copia; en macOS no debe enlazarse (allí manda keybindings.json con cmd+).
+keybindings\.linux\.json
 ^/extensions
 ^/themes
 ^/scripts

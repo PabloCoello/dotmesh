@@ -1,38 +1,37 @@
-// Atajos de teclado — variante macOS (modificador cmd).
-// Espejo de keybindings.linux.json (Linux/Windows, ctrl): mantén ambos en sintonía.
-// En macOS lo enlaza `make stow`; install.sh (Linux) e install.ps1 (Windows)
-// instalan la variante .linux en su lugar.
+// Atajos de teclado — variante Linux/Windows (modificador ctrl).
+// Espejo de keybindings.json (macOS, cmd): mantén ambos en sintonía.
+// install.sh (Linux) e install.ps1 (Windows) copian este fichero como keybindings.json.
 [
   {
-    "key": "cmd+k cmd+t",
+    "key": "ctrl+k ctrl+t",
     "command": "workbench.action.selectTheme"
   },
   {
-    "key": "cmd+k cmd+s",
+    "key": "ctrl+k ctrl+s",
     "command": "workbench.action.files.save"
   },
   {
-    "key": "cmd+shift+f",
+    "key": "ctrl+shift+f",
     "command": "workbench.action.findInFiles"
   },
   {
-    "key": "cmd+b",
+    "key": "ctrl+b",
     "command": "workbench.action.toggleSidebarVisibility"
   },
   {
-    "key": "cmd+shift+e",
+    "key": "ctrl+shift+e",
     "command": "workbench.view.explorer"
   },
   {
-    "key": "cmd+shift+d",
+    "key": "ctrl+shift+d",
     "command": "workbench.view.debug"
   },
   {
-    "key": "cmd+shift+g",
+    "key": "ctrl+shift+g",
     "command": "workbench.view.scm"
   },
   {
-    "key": "cmd+shift+x",
+    "key": "ctrl+shift+x",
     "command": "workbench.view.extensions"
   },
   {
@@ -40,7 +39,7 @@
     "command": "workbench.action.terminal.toggleTerminal"
   },
   {
-    "key": "cmd+k cmd+i",
+    "key": "ctrl+k ctrl+i",
     "command": "editor.action.showHover"
   }
 ]
