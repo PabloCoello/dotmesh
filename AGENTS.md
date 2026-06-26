@@ -96,6 +96,16 @@ Enforcement rules:
 - **Specificity wins.** When two skills overlap, the more specific phase owns the rule; the conventions in this file override any skill.
 - **Spanish output** also loads `castellano-peninsular`, and for prose `anti-ai-style`.
 
+## Long implementations and context
+
+Quality degrades well before the context window fills (around 100k tokens, regardless of a 1M window). Don't fight this by stuffing more into one session — keep the durable truth on disk and the live context lean.
+
+- **The plan lives on disk, not in context.** `planning-and-task-breakdown` writes the plan and a phase checklist to `.ai/tasks/<slug>/plan.md`. That file is the source of truth; the conversation is disposable. Mark phases done there as you go.
+- **Commit per slice.** `incremental-implementation` means each slice is a commit. Git history is durable state a fresh session can read to re-orient.
+- **Watch the counter.** The statusline shows absolute tokens (`~/.claude/statusline.sh`): gold at ~90k means wrap up the current phase; rose at ~160k means stop and hand off.
+- **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return only a short summary. The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
+- **Cross real session boundaries with `handoff`.** When you stop for the day, `handoff` writes the curated state to `.ai/tasks/<slug>/handoff.md`. The next session reads it — or runs the `state` agent to orient itself — and continues.
+
 ## Three-agent parity
 
 This repo aims for functional parity between OpenCode, Claude Code and Codex so the user can switch between them in the same project without changing their workflow. Codex cannot mirror OpenCode's agent files directly, so it carries the same workflow vocabulary in `codex/.codex/AGENTS.md`.
