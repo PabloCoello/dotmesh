@@ -14,6 +14,7 @@ $RepoDir = Split-Path -Parent $ScriptDir
 $RepoConfigDir = Join-Path $RepoDir "Library\Application Support\Code\User"
 $VsCodeDir = "$env:USERPROFILE\.vscode"
 $VsCodeConfigDir = "$env:APPDATA\Code\User"
+$KeybindingsSrc = "keybindings.linux.json"  # Windows usa ctrl+ (igual que Linux)
 
 Write-Host "==========================================" -ForegroundColor Blue
 Write-Host "   Instalador de Configuración VS Code   " -ForegroundColor Blue
@@ -61,11 +62,11 @@ if (Test-Path "$RepoConfigDir\settings.json") {
     Write-Host "✗ settings.json no encontrado" -ForegroundColor Red
 }
 
-if (Test-Path "$RepoConfigDir\keybindings.json") {
-    Copy-Item "$RepoConfigDir\keybindings.json" "$VsCodeConfigDir\" -Force
-    Write-Host "✓ keybindings.json instalado" -ForegroundColor Green
+if (Test-Path "$RepoConfigDir\$KeybindingsSrc") {
+    Copy-Item "$RepoConfigDir\$KeybindingsSrc" "$VsCodeConfigDir\keybindings.json" -Force
+    Write-Host "✓ keybindings.json instalado (desde $KeybindingsSrc)" -ForegroundColor Green
 } else {
-    Write-Host "✗ keybindings.json no encontrado" -ForegroundColor Red
+    Write-Host "✗ $KeybindingsSrc no encontrado" -ForegroundColor Red
 }
 
 # Instalar temas

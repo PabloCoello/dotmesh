@@ -20,9 +20,11 @@ REPO_CONFIG_DIR="$REPO_DIR/Library/Application Support/Code/User"
 VSCODE_DIR="$HOME/.vscode"
 VSCODE_CONFIG_DIR="$HOME/Library/Application Support/Code/User"
 
-# Verificar si estamos en macOS o Linux
+# Detectar plataforma: ruta de config y variante de keybindings del repo
+KEYBINDINGS_DEST="keybindings.json"            # macOS usa cmd+
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     VSCODE_CONFIG_DIR="$HOME/.config/Code/User"
+    KEYBINDINGS_DEST="keybindings.linux.json"  # Linux usa ctrl+
 fi
 
 echo -e "${BLUE}===========================================${NC}"
@@ -46,8 +48,8 @@ fi
 
 # Backup de keybindings.json
 if [ -f "$VSCODE_CONFIG_DIR/keybindings.json" ]; then
-    cp "$VSCODE_CONFIG_DIR/keybindings.json" "$REPO_CONFIG_DIR/"
-    echo -e "${GREEN}✓${NC} keybindings.json respaldado"
+    cp "$VSCODE_CONFIG_DIR/keybindings.json" "$REPO_CONFIG_DIR/$KEYBINDINGS_DEST"
+    echo -e "${GREEN}✓${NC} keybindings.json respaldado (en $KEYBINDINGS_DEST)"
 else
     echo -e "${RED}✗${NC} keybindings.json no encontrado en VS Code"
 fi

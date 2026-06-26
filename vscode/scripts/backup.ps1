@@ -10,6 +10,7 @@ $RepoDir = Split-Path -Parent $ScriptDir
 $RepoConfigDir = Join-Path $RepoDir "Library\Application Support\Code\User"
 $VsCodeDir = "$env:USERPROFILE\.vscode"
 $VsCodeConfigDir = "$env:APPDATA\Code\User"
+$KeybindingsDest = "keybindings.linux.json"  # Windows usa ctrl+ (igual que Linux)
 
 Write-Host "==========================================" -ForegroundColor Blue
 Write-Host "   Backup de Configuración VS Code       " -ForegroundColor Blue
@@ -32,8 +33,8 @@ if (Test-Path "$VsCodeConfigDir\settings.json") {
 
 # Backup de keybindings.json
 if (Test-Path "$VsCodeConfigDir\keybindings.json") {
-    Copy-Item "$VsCodeConfigDir\keybindings.json" "$RepoConfigDir\" -Force
-    Write-Host "✓ keybindings.json respaldado" -ForegroundColor Green
+    Copy-Item "$VsCodeConfigDir\keybindings.json" "$RepoConfigDir\$KeybindingsDest" -Force
+    Write-Host "✓ keybindings.json respaldado (en $KeybindingsDest)" -ForegroundColor Green
 } else {
     Write-Host "✗ keybindings.json no encontrado en VS Code" -ForegroundColor Red
 }
