@@ -43,7 +43,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `vscode/` | `~/Library/Application Support/Code/User/...` | VS Code settings, keybindings, snippets, extensions list, custom themes (activo: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `settings.json`, `statusline.sh`, `agents/`, `commands/` |
+| `claude/` | `~/.claude/` | Claude Code `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 
 `Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
@@ -60,7 +60,7 @@ The `vscode/` package contains a `.stow-local-ignore` and `package.json` because
 
 Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream marketplace plugin) without updating the sync story here and in the README.
 
-The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them.
+The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement — they don't replace — the `debate` agent, which is kept for pure divergent exploration.
 
 ## Skill flow is the default, not a request
 
@@ -68,7 +68,7 @@ The engineering core pack is **opt-out, not opt-in**. On any non-trivial change,
 
 Default flow for a code change, and the skill that owns each phase:
 
-1. Vague idea or competing options → `idea-refine`.
+1. Figuring out what to build → pick one ideation door (see the rule below).
 2. New feature or non-trivial change with no spec → `spec-driven-development`, then `planning-and-task-breakdown`.
 3. Behaviour that depends on external docs, versions or APIs → `source-driven-development`.
 4. **Before writing code** → walk the YAGNI gate in `code-simplification` ("Don't write it in the first place").
@@ -77,7 +77,18 @@ Default flow for a code change, and the skill that owns each phase:
 7. Before merge → `code-review-and-quality`; security-sensitive surface → `security-and-hardening`.
 8. Working code heavier than needed → `code-simplification`.
 9. Commits, branches, PR → `git-workflow-and-versioning` (full lifecycle via `/super-git`).
-10. Durable decision or interface change → `documentation-and-adrs`.
+10. Durable decision or interface change → `documentation-and-adrs`; new or sharpened domain terminology → `domain-modeling` (maintains `CONTEXT.md`).
+11. Switching agents mid-task, or pausing with work in flight → `handoff`.
+
+### Ideation: which door
+
+Three tools share the "what to build" phase. Pick by what you have and what you want — only one fires at a time:
+
+- `idea-refine` — the idea is still **vague or unformed**. Shapes a rough concept into something concrete enough to act on.
+- `debate` (agent) — you want **divergent pushback**: competing framings, trade-offs, assumptions challenged, deliberately *not* converging. Read-only sparring partner in its own context.
+- `grilling` / `grill-me` — you have a **forming plan** and want to **nail it down**: a convergent, one-question-at-a-time interview that resolves the decision tree and ends ready to build. Use `grill-with-docs` when it also needs a glossary or ADRs.
+
+Rule of thumb: **no shape yet → `idea-refine`; want to be challenged → `debate`; ready to converge → `grilling`.**
 
 Enforcement rules:
 
@@ -98,6 +109,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
 | Per-agent bash granularity | yes (e.g. `npm audit*`) | only tool whitelist — bash is on/off per agent | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
+| Destructive-git guardrail | per-agent bash permission frontmatter | `PreToolUse` hook → `~/.claude/hooks/block-dangerous-git.sh` (blocks `reset --hard`, `clean -f`, `branch -D`, `checkout/restore .`, force-push; allows normal push) | sandbox + approval prompts gate destructive commands |
 | Context counter | built-in context indicator in the TUI | custom `statusLine` → `~/.claude/statusline.sh` (modelo · barra de contexto · rama · coste, paleta dotmesh) | built-in token/context indicator in the TUI |
 
 ## Conventions to respect
