@@ -43,7 +43,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `vscode/` | `~/Library/Application Support/Code/User/...` | VS Code settings, keybindings, snippets, extensions list, custom themes (activo: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `settings.json`, `agents/`, `commands/` |
+| `claude/` | `~/.claude/` | Claude Code `settings.json`, `statusline.sh`, `agents/`, `commands/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 
 `Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
@@ -98,6 +98,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
 | Per-agent bash granularity | yes (e.g. `npm audit*`) | only tool whitelist — bash is on/off per agent | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
+| Context counter | built-in context indicator in the TUI | custom `statusLine` → `~/.claude/statusline.sh` (modelo · barra de contexto · rama · coste, paleta dotmesh) | built-in token/context indicator in the TUI |
 
 ## Conventions to respect
 
