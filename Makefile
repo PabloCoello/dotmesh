@@ -1,25 +1,28 @@
-.PHONY: help install backup stow unstow restow link-skills health clean
+.PHONY: help install backup stow unstow restow link-skills link-warp health clean
 
 PACKAGES := shell git starship warp vscode opencode codex claude agents
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
+WARP_THEMES_SRC := $(abspath warp/.warp/themes)
+WARP_THEMES_DST := $(HOME)/.local/share/warp-terminal/themes
 
 help:
 	@echo "dotmesh — gestión de dotfiles"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make install   - backup + stow"
+	@echo "  make install   - backup + stow + link-skills + link-warp"
 	@echo "  make backup    - Respalda configs actuales en ~/dotfiles-backup"
 	@echo "  make stow      - Aplica symlinks con GNU Stow"
 	@echo "  make unstow    - Elimina symlinks"
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
+	@echo "  make link-warp - Symlink temas Warp a la ruta XDG (solo Linux)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
-install: backup stow link-skills
+install: backup stow link-skills link-warp
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -67,6 +70,37 @@ link-skills:
 	else \
 		ln -s "$(SKILLS_SRC)" "$(SKILLS_DST)"; \
 		echo "  ok  $(SKILLS_DST) -> $(SKILLS_SRC)"; \
+	fi
+
+# macOS lee ~/.warp/themes (vía stow); Linux lee la ruta XDG. Solo Linux
+# necesita este enlace; en macOS es un no-op informativo.
+link-warp:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "  ok  temas Warp vía stow (~/.warp/themes); link-warp solo aplica en Linux"; \
+	else \
+		mkdir -p "$(WARP_THEMES_DST)"; \
+		for src in "$(WARP_THEMES_SRC)"/*.yaml; do \
+			name=$$(basename "$$src"); \
+			dst="$(WARP_THEMES_DST)/$$name"; \
+			if [ -L "$$dst" ]; then \
+				current=$$(readlink "$$dst"); \
+				if [ "$$current" = "$$src" ]; then \
+					echo "  ok  $$dst -> $$src"; \
+				else \
+					echo "  ↻  reapuntando $$dst ($$current -> $$src)"; \
+					rm "$$dst"; \
+					ln -s "$$src" "$$dst"; \
+					echo "  ok  $$dst -> $$src"; \
+				fi; \
+			elif [ -e "$$dst" ]; then \
+				echo "  !!  $$dst existe y NO es symlink. Aborto para no perder contenido."; \
+				echo "      Mueve o elimina $$dst manualmente y reintenta."; \
+				exit 1; \
+			else \
+				ln -s "$$src" "$$dst"; \
+				echo "  ok  $$dst -> $$src"; \
+			fi; \
+		done; \
 	fi
 
 health:

@@ -20,11 +20,12 @@ This repository manages personal macOS dotfiles with **GNU Stow**. Editing files
 make help        # list targets
 make health      # verify zsh, stow, git, delta, starship, code, claude, codex, opencode are installed
 make backup      # snapshot existing local config to ~/dotfiles-backup/<timestamp>
-make install     # backup + stow + link-skills (full install on a fresh machine)
+make install     # backup + stow + link-skills + link-warp (full install on a fresh machine)
 make stow        # symlink every package into ~
 make unstow      # remove the symlinks
 make restow      # unstow + stow (run after adding/removing files in a package)
 make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
+make link-warp   # symlink Warp themes into the XDG data dir (Linux only; macOS uses Stow)
 make clean       # wipe ~/dotfiles-backup/*
 ```
 
@@ -39,7 +40,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `shell/` | `~/.zshrc`, `~/.config/shell/` | Zsh + Oh-My-Zsh entrypoint and modular `env/path/functions/aliases/ai.zsh` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` | Git config + delta pager |
 | `starship/` | `~/.config/starship.toml` | Prompt |
-| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` | Temas del terminal Warp: **Carbon** (reciclado del Carbon de Terax) y **dotmesh** (Ink + sintaxis; ver `docs/DESIGN.md`) |
+| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` (macOS, vía Stow) · `~/.local/share/warp-terminal/themes/` (Linux, vía `make link-warp`) | Temas del terminal Warp: **Carbon** (reciclado del Carbon de Terax) y **dotmesh** (Ink + sintaxis; ver `docs/DESIGN.md`) |
 | `vscode/` | `~/Library/Application Support/Code/User/...` (macOS, vía Stow) · `~/.config/Code/User/` (Linux) · `%APPDATA%\Code\User\` (Windows), estos dos por `scripts/install.sh`/`install.ps1` | VS Code settings, keybindings (`keybindings.json` cmd+ en macOS · `keybindings.linux.json` ctrl+ en Linux/Windows), snippets, extensions list, custom themes (activo: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |

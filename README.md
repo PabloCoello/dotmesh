@@ -57,7 +57,7 @@ siete acentos de sintaxis muteados usados solo como señal, y JetBrains Mono com
 voz de código. Se aplica como:
 
 - **VS Code** — tema `dotmesh` ([`vscode/themes/dotmesh-color-theme.json`](vscode/themes/dotmesh-color-theme.json)), activo en `settings.json`.
-- **Warp** — tema [`warp/.warp/themes/dotmesh.yaml`](warp/.warp/themes/dotmesh.yaml) (seleccionable en los ajustes de Warp).
+- **Warp** — tema [`warp/.warp/themes/dotmesh.yaml`](warp/.warp/themes/dotmesh.yaml) (seleccionable en los ajustes de Warp). En macOS lo enlaza `make stow` en `~/.warp/themes/`; en Linux, `make link-warp` lo enlaza en `~/.local/share/warp-terminal/themes/`, que es donde Warp/Linux busca los temas de usuario.
 - **Starship** — paleta `dotmesh` en [`starship/.config/starship.toml`](starship/.config/starship.toml): segmentos grafito con iconos de sintaxis.
 - **delta/Git** — colores de diff y estado alineados con la paleta.
 
@@ -190,12 +190,13 @@ El script vive en el root del repo como fichero normal. Tres formas de gestionar
 
 ```bash
 make help        # lista los targets
-make install     # backup + stow + link-skills
+make install     # backup + stow + link-skills + link-warp
 make backup      # respalda configs actuales en ~/dotfiles-backup/<timestamp>
 make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
 make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
+make link-warp   # enlaza los temas de Warp en la ruta XDG (solo Linux; macOS usa Stow)
 make health      # comprueba binarios
 make clean       # vacía ~/dotfiles-backup
 ```
