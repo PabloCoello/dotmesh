@@ -65,7 +65,7 @@ The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` 
 
 ## Skill flow is the default, not a request
 
-The engineering core pack is **opt-out, not opt-in**. On any non-trivial change, load and follow the matching skill at each phase on your own initiative — the user naming a skill is a shortcut, never a precondition. Don't ask permission to load a core-pack skill and don't narrate that you're loading it; just follow it.
+The engineering core pack is **opt-out, not opt-in**. On any non-trivial change, load and follow the matching skill at each phase on your own initiative — the user naming a skill is a shortcut, never a precondition. Don't ask permission to load a core-pack skill and don't make a show of it — but **do actually load it** (invoke the Skill tool) at the phase it owns, so you act on its full `SKILL.md`, not a half-remembered version. "Don't narrate" means skip the play-by-play, not skip the skill: a one-line note is fine, a paragraph of meta-commentary is not.
 
 Default flow for a code change, and the skill that owns each phase:
 
@@ -93,7 +93,7 @@ Rule of thumb: **no shape yet → `idea-refine`; want to be challenged → `deba
 
 Enforcement rules:
 
-- **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour.
+- **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour. For a multi-file change with **three or more distinct steps**, write at least a short `.ai/tasks/<slug>/plan.md` before coding, even without phase subagents; reserve subagent orchestration for genuinely multi-phase work.
 - **Specificity wins.** When two skills overlap, the more specific phase owns the rule; the conventions in this file override any skill.
 - **Spanish output** also loads `castellano-peninsular`, and for prose `anti-ai-style`.
 
@@ -102,7 +102,7 @@ Enforcement rules:
 Quality degrades well before the context window fills (around 100k tokens, regardless of a 1M window). Don't fight this by stuffing more into one session — keep the durable truth on disk and the live context lean.
 
 - **The plan lives on disk, not in context.** `planning-and-task-breakdown` writes the plan and a phase checklist to `.ai/tasks/<slug>/plan.md`. That file is the source of truth; the conversation is disposable. Mark phases done there as you go.
-- **Commit per slice.** `incremental-implementation` means each slice is a commit. Git history is durable state a fresh session can read to re-orient. `/super-git` is the lifecycle arm of this: per-slice commits can happen inside each phase subagent, while sync, push and PR are the orchestrator's single finalization step once the phases land.
+- **Commit per slice — automatic, not "on request".** `incremental-implementation` means each completed, green slice is committed **on the working branch** as you go. These per-slice checkpoints do **not** require the user to ask first: the "commit and push only when asked" rule governs **push, PR, and committing on the default branch** — not the incremental commits of an already-approved implementation on a work branch. If you're on the default branch, create a work branch first, then commit each slice. Git history is durable state a fresh session can read to re-orient. `/super-git` is the lifecycle arm of this: per-slice commits happen inside each phase subagent, while sync, push and PR are the orchestrator's single finalization step once the phases land.
 - **Watch the counter.** The statusline shows absolute tokens (`~/.claude/statusline.sh`): gold at ~90k means wrap up the current phase; rose at ~160k means stop and hand off.
 - **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return only a short summary. The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
 - **Cross real session boundaries with `handoff`.** When you stop for the day, `handoff` writes the curated state to `.ai/tasks/<slug>/handoff.md`. The next session reads it — or runs the `state` agent to orient itself — and continues.
