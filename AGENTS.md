@@ -45,7 +45,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `vscode/` | `~/Library/Application Support/Code/User/...` (macOS, vía Stow) · `~/.config/Code/User/` (Linux) · `%APPDATA%\Code\User\` (Windows), estos dos por `scripts/install.sh`/`install.ps1` | VS Code settings, keybindings (`keybindings.json` cmd+ en macOS · `keybindings.linux.json` ctrl+ en Linux/Windows), snippets, extensions list, custom themes (activo: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/` |
+| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css` (Linux, vía `make gnome-rice`) | Rice del escritorio GNOME: retint sobre Yaru a la paleta dotmesh (gtk.css + capa dconf). Ver `docs/DESIGN.md` |
 
@@ -117,7 +117,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 
 | Concern | OpenCode | Claude Code | Codex |
 |---|---|---|---|
-| Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md`; `CLAUDE.md` imports `AGENTS.md` via `@AGENTS.md` | reads `~/.codex/AGENTS.md` plus project `AGENTS.md` |
+| Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md` (project and global `~/.claude/CLAUDE.md`), each a stub importing `AGENTS.md` via `@AGENTS.md` | reads `~/.codex/AGENTS.md` plus project `AGENTS.md` |
 | Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` | shared skills referenced from `~/.agents/skills/` and surfaced through Codex skill discovery |
 | Agents | `~/.config/opencode/agents/` (10 agents) | `~/.claude/agents/` (10 agents, same names and roles) | workflow modes in `codex/.codex/AGENTS.md`, not separate agent files |
 | Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) | natural-language command equivalents in `codex/.codex/AGENTS.md` |
