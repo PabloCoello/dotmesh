@@ -4,7 +4,8 @@ Este documento es la fuente de verdad del lenguaje visual que comparten las
 herramientas de este repositorio. Nace del sistema de diseño personal `dotmesh`
 (prototipado en [claude.ai/design](https://claude.ai/design)) y aquí queda
 traducido a configuración real: tema de VS Code, tema de Warp, paleta de
-Starship y colores de delta/Git.
+Starship, colores de delta/Git, el retint del escritorio GNOME y la esfera del
+reloj (Connect IQ, repo hermano [`dotmesh-watch`](../../dotmesh-watch)).
 
 La idea es una sola voz, tranquila y coherente, desde el prompt de la shell
 hasta el editor: **monocromo primero** (en la línea del blanco y negro que está
@@ -40,6 +41,20 @@ trabajo; el cromo se aparta.
 `#9A9EA6` · `#C2C5CB` · `#DCDEE2` · `#EBECEF` · `#F5F6F7`
 
 Texto sobre Ink: primario `#E9EAEC`, secundario `#9A9DA4`, atenuado `#6A6D74`.
+
+### Chrome (powerline)
+
+Rampa de grafito puro para los segmentos tipo powerline (prompt de Starship y la
+powerline de la esfera del reloj). Cada escalón es más claro que el anterior para
+que se lean las costuras; el texto va en un gris claro fijo que mantiene contraste
+sobre todos:
+
+`#424242` (git) · `#4D4D4D` (lenguajes / batería) · `#545454` (docker / clima) ·
+texto `#EAEAEA`.
+
+El **blanco de prompt** `#F0F1F3` es el tono más brillante de la voz oscura: el
+valor vivo del prompt (p. ej. la hora en la esfera). El cromo sigue siendo
+monocromo; el color solo entra en los iconos de cada segmento.
 
 ### Syntax (los siete acentos)
 
@@ -95,6 +110,8 @@ del prompt. Cualquier ajuste de color empieza aquí.
 | Terminal | [`warp/.warp/themes/dotmesh.yaml`](../warp/.warp/themes/dotmesh.yaml) | tema de Warp (fondo Ink + ANSI de sintaxis) |
 | Prompt | [`starship/.config/starship.toml`](../starship/.config/starship.toml) | paleta `dotmesh`: segmentos grafito + iconos de sintaxis |
 | VCS | [`git/.gitconfig`](../git/.gitconfig) | colores de delta y de Git (sage/rose/gold/blue) |
+| Escritorio | [`gnome/`](../gnome/) | retint GNOME sobre Yaru: superficies Ink en apps (gtk.css), teal como acento, tipografía y tinte Ink del dock |
+| Esfera | [`../dotmesh-watch`](../../dotmesh-watch) | esfera Connect IQ (Epix Pro): hora-prompt blanca, powerline grafito, sintaxis como señal (peach = Claude) |
 
 El cromo es monocromo en todas: en VS Code los bordes duros desaparecen y los
 paneles se separan solo por tono (Ink-1 sidebar sobre Ink-0 editor); en el prompt
@@ -112,6 +129,11 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
   `palette = 'gruvbox_dark'` (la paleta antigua se conserva en el fichero).
 - **delta/Git**: el cambio de colores es directo; revertir es un `git checkout`
   de `git/.gitconfig`.
+- **Escritorio (GNOME, solo Linux)**: `make gnome-rice` enlaza los `gtk.css` y
+  aplica la capa dconf (acento, tipografía, dock). Para revertir, `stow -D -t ~
+  gnome` quita los `gtk.css` y se restaura el volcado dconf previo (detalle en
+  [`gnome/README.md`](../gnome/README.md)). Es un retint sobre Yaru, no un tema a
+  medida; el Shell se queda en Yaru-dark con el blur de `blur-my-shell`.
 
 Tras editar cualquier paquete, aplica con `make restow <paquete>` y recarga
 (`exec zsh` para el prompt; recargar ventana en VS Code).

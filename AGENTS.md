@@ -26,6 +26,7 @@ make unstow      # remove the symlinks
 make restow      # unstow + stow (run after adding/removing files in a package)
 make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
 make link-warp   # symlink Warp themes into the XDG data dir (Linux only; macOS uses Stow)
+make gnome-rice  # dotmesh retint of the GNOME desktop (Linux only)
 make clean       # wipe ~/dotfiles-backup/*
 ```
 
@@ -46,10 +47,13 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
 | `claude/` | `~/.claude/` | Claude Code `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
+| `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css` (Linux, vía `make gnome-rice`) | Rice del escritorio GNOME: retint sobre Yaru a la paleta dotmesh (gtk.css + capa dconf). Ver `docs/DESIGN.md` |
 
 `Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
 
 The `vscode/` package contains a `.stow-local-ignore` and `package.json` because the directory doubles as a publishable VS Code theme extension; only the `Library/...` subtree is intended to be stowed.
+
+The `gnome/` package is Linux-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make gnome-rice` both links its `gtk.css` (via `stow gnome`) and applies the dconf layer (`gnome/scripts/apply-rice.sh`). Its `.stow-local-ignore` keeps `scripts/` and `README.md` out of `$HOME`.
 
 ## Skills as the integration point
 
@@ -144,7 +148,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
   explicit user confirmation.
 - **Don't run destructive Stow/Git operations without being asked.** `unstow`, `restow`, `clean`, `git reset --hard`, etc. all touch live user state.
 - **README and most docs are in Spanish (peninsular).** Match the existing language when editing user-facing prose.
-- **Theme colours start from `docs/DESIGN.md`.** The dotmesh visual language (palette, type, syntax map) is the single source of truth for the VS Code theme, Warp theme, Starship palette and delta/Git colours. Change colours there first, then propagate; keep the four surfaces in sync.
+- **Theme colours start from `docs/DESIGN.md`.** The dotmesh visual language (palette, type, syntax map) is the single source of truth for the VS Code theme, Warp theme, Starship palette, delta/Git colours and the GNOME desktop retint. Change colours there first, then propagate; keep the five surfaces in sync.
 
 ## AI workspace artifacts policy
 
