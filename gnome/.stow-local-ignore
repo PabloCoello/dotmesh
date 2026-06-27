@@ -1,0 +1,4 @@
+# Solo se enlaza el subárbol .config (gtk.css). El resto del paquete es
+# maquinaria que aplica `make gnome-rice`, no debe enlazarse a $HOME.
+^/scripts
+^/README\.md

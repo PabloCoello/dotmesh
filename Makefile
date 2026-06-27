@@ -1,4 +1,4 @@
-.PHONY: help install backup stow unstow restow link-skills link-warp health clean
+.PHONY: help install backup stow unstow restow link-skills link-warp gnome-rice health clean
 
 PACKAGES := shell git starship warp vscode opencode codex claude agents
 SKILLS_SRC := $(HOME)/.agents/skills
@@ -17,6 +17,7 @@ help:
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make link-warp - Symlink temas Warp a la ruta XDG (solo Linux)"
+	@echo "  make gnome-rice - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo ""
@@ -101,6 +102,18 @@ link-warp:
 				echo "  ok  $$dst -> $$src"; \
 			fi; \
 		done; \
+	fi
+
+# Rice del escritorio GNOME (retint sobre Yaru). Enlaza gtk.css por stow y
+# aplica la capa dconf. Solo Linux; en macOS es un no-op informativo.
+gnome-rice:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "  ok  gnome-rice solo aplica en Linux/GNOME; no-op aquí"; \
+	else \
+		echo "→ stow gnome (gtk.css)"; \
+		stow -v -t ~ gnome; \
+		echo "→ aplicando rice GNOME (dconf)"; \
+		./gnome/scripts/apply-rice.sh; \
 	fi
 
 health:

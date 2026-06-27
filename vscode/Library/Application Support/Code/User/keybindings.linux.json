@@ -1,6 +1,6 @@
 // Atajos de teclado — variante Linux/Windows (modificador ctrl).
 // Espejo de keybindings.json (macOS, cmd): mantén ambos en sintonía.
-// install.sh (Linux) e install.ps1 (Windows) copian este fichero como keybindings.json.
+// install.sh (Linux) lo enlaza como keybindings.json; install.ps1 (Windows) lo copia.
 [
   {
     "key": "ctrl+k ctrl+t",

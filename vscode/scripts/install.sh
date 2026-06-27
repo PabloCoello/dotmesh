@@ -63,33 +63,42 @@ echo -e "${YELLOW}Verificando directorios...${NC}"
 mkdir -p "$VSCODE_CONFIG_DIR"
 mkdir -p "$VSCODE_DIR/extensions"
 
-# Instalar configuraciones
-echo -e "${YELLOW}Instalando configuraciones...${NC}"
+# Enlazar configuraciones (symlink: el repo es la fuente de verdad, sin deriva)
+echo -e "${YELLOW}Enlazando configuraciones...${NC}"
 
 if [ -f "$REPO_CONFIG_DIR/settings.json" ]; then
-    cp "$REPO_CONFIG_DIR/settings.json" "$VSCODE_CONFIG_DIR/"
-    echo -e "${GREEN}✓${NC} settings.json instalado"
+    ln -sfn "$REPO_CONFIG_DIR/settings.json" "$VSCODE_CONFIG_DIR/settings.json"
+    echo -e "${GREEN}✓${NC} settings.json enlazado"
 else
     echo -e "${RED}✗${NC} settings.json no encontrado"
 fi
 
 if [ -f "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" ]; then
-    cp "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" "$VSCODE_CONFIG_DIR/keybindings.json"
-    echo -e "${GREEN}✓${NC} keybindings.json instalado (desde $KEYBINDINGS_SRC)"
+    ln -sfn "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" "$VSCODE_CONFIG_DIR/keybindings.json"
+    echo -e "${GREEN}✓${NC} keybindings.json enlazado (desde $KEYBINDINGS_SRC)"
 else
     echo -e "${RED}✗${NC} $KEYBINDINGS_SRC no encontrado"
 fi
 
-# Instalar temas
-echo -e "${YELLOW}Instalando temas...${NC}"
+# Instalar el tema como extensión REGISTRADA (VSIX).
+# Una carpeta suelta en ~/.vscode/extensions NO la carga VS Code moderno: solo
+# carga lo que está en extensions.json. Por eso empaquetamos el manifiesto +
+# temas con vsce (vía npx) y lo instalamos con `code --install-extension`, que
+# es lo que registra la extensión de verdad.
+echo -e "${YELLOW}Instalando tema (VSIX)...${NC}"
 
-THEME_DEST="$VSCODE_DIR/extensions/betheme-collection"
-mkdir -p "$THEME_DEST"
-
-cp "$REPO_DIR/package.json" "$THEME_DEST/"
-cp -r "$REPO_DIR/themes" "$THEME_DEST/"
-
-echo -e "${GREEN}✓${NC} Temas instalados"
+if command -v code >/dev/null 2>&1; then
+    VSIX="$(mktemp -d)/dotmesh-themes.vsix"
+    if (cd "$REPO_DIR" && npx --yes @vscode/vsce package \
+            --allow-missing-repository --skip-license -o "$VSIX" >/dev/null 2>&1); then
+        code --install-extension "$VSIX" --force
+        echo -e "${GREEN}✓${NC} Tema instalado y registrado (dotmesh)"
+    else
+        echo -e "${RED}✗${NC} No se pudo empaquetar el VSIX (¿npx/red?); tema no instalado."
+    fi
+else
+    echo -e "${YELLOW}⚠${NC} 'code' no disponible; me salto el tema."
+fi
 
 # Instalar extensiones
 echo ""
