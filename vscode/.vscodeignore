@@ -1,0 +1,8 @@
+# La extensión publicable/instalable es solo el manifiesto + los temas.
+# El resto del directorio vscode/ es maquinaria de dotfiles (config, scripts,
+# lista de extensiones) y no debe viajar dentro del .vsix.
+Library/**
+scripts/**
+extensions/**
+.stow-local-ignore
+.vscodeignore
