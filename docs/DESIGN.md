@@ -110,7 +110,7 @@ del prompt. Cualquier ajuste de color empieza aquí.
 | Terminal | [`warp/.warp/themes/dotmesh.yaml`](../warp/.warp/themes/dotmesh.yaml) | tema de Warp (fondo Ink + ANSI de sintaxis) |
 | Prompt | [`starship/.config/starship.toml`](../starship/.config/starship.toml) | paleta `dotmesh`: segmentos grafito + iconos de sintaxis |
 | VCS | [`git/.gitconfig`](../git/.gitconfig) | colores de delta y de Git (sage/rose/gold/blue) |
-| Escritorio | [`gnome/`](../gnome/) | retint GNOME sobre Yaru: superficies Ink en apps (gtk.css), teal como acento, tipografía y tinte Ink del dock |
+| Escritorio | [`gnome/`](../gnome/) | retint GNOME sobre Yaru: superficies Ink en apps (gtk.css), fondo de malla Ink (teal · sage · rose como señales), tipografía y tinte Ink del dock |
 | Esfera | [`../dotmesh-watch`](../../dotmesh-watch) | esfera Connect IQ (Epix Pro): hora-prompt blanca, powerline grafito, sintaxis como señal (peach = Claude) |
 
 El cromo es monocromo en todas: en VS Code los bordes duros desaparecen y los
@@ -130,10 +130,11 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
 - **delta/Git**: el cambio de colores es directo; revertir es un `git checkout`
   de `git/.gitconfig`.
 - **Escritorio (GNOME, solo Linux)**: `make gnome-rice` enlaza los `gtk.css` y
-  aplica la capa dconf (acento, tipografía, dock). Para revertir, `stow -D -t ~
-  gnome` quita los `gtk.css` y se restaura el volcado dconf previo (detalle en
-  [`gnome/README.md`](../gnome/README.md)). Es un retint sobre Yaru, no un tema a
-  medida; el Shell se queda en Yaru-dark con el blur de `blur-my-shell`.
+  el fondo, y aplica la capa dconf (acento, tipografía, dock, fondo). Para
+  revertir, `stow -D -t ~ gnome` quita los `gtk.css` y el fondo, y se restaura el
+  volcado dconf previo (detalle en [`gnome/README.md`](../gnome/README.md)). Es
+  un retint sobre Yaru, no un tema a medida; el Shell se queda en Yaru-dark con
+  el blur de `blur-my-shell`.
 
 Tras editar cualquier paquete, aplica con `make restow <paquete>` y recarga
 (`exec zsh` para el prompt; recargar ventana en VS Code).
