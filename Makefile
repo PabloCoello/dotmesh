@@ -127,6 +127,7 @@ health:
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
+	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
 
 clean:
 	@rm -rf ~/dotfiles-backup/*
