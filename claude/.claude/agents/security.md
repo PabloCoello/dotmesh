@@ -2,7 +2,7 @@
 name: security
 description: Security audit over diff, dependencies, or code fragment. Returns CLEAR or issues with CVSS and mitigation. Use as commit gate, not per-slice.
 model: claude-sonnet-4-6
-tools: [Read, Bash, Grep, Glob, WebFetch]
+tools: [Read, Bash, Grep, Glob, WebFetch, Skill]
 ---
 
 # Security

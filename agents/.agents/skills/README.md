@@ -51,3 +51,15 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 | `anti-ai-style` | Para revisar o redactar textos evitando estilo genérico de IA. |
 | `castellano-peninsular` | Para textos en español peninsular formal. |
 | `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |
+
+## Interrogatorio, dominio y traspaso
+
+Adaptadas de [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). Complementan al agente `debate` (exploración divergente); no lo sustituyen.
+
+| Skill | Cuándo usarla |
+|---|---|
+| `grilling` | Para interrogar un plan o diseño hasta resolver cada rama del árbol de decisiones. |
+| `grill-me` | Disparador de cara al usuario para iniciar una sesión de interrogatorio. |
+| `grill-with-docs` | Como `grilling`, pero además construye el glosario (`CONTEXT.md`) y registra ADRs sobre la marcha. |
+| `domain-modeling` | Para fijar la terminología del dominio (lenguaje ubicuo) y mantener `CONTEXT.md`. |
+| `handoff` | Para compactar la sesión en un traspaso entre OpenCode, Claude Code y Codex, o al pausar con trabajo en curso. |

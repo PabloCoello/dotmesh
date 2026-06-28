@@ -2,7 +2,9 @@
 *.tar.gz
 *.bak
 *~
-.ai
+# dotmesh no versiona ningún artefacto de IA: ignora todo .ai/ (.ai/tasks incluido).
+# La política "cada proyecto decide sobre .ai/tasks/" aplica a repos destino vía /setup.
+.ai/
 
 # Stow may produce this when conflicts occur
 *.orig

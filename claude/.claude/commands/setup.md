@@ -15,6 +15,8 @@ Steps:
 
 3. **Confirm `AGENTS.md` covers**: project overview, common commands (build, test, lint, dev), boundaries (Always do / Ask first / Never do), and a pointer noting that shared skills live at `~/.claude/skills/` (symlinked to `~/.agents/skills/`).
 
+   - **Pin the project language.** The global `~/.claude/AGENTS.md` defaults user-facing prose to peninsular Spanish for the whole machine. Determine this project's prose language — match the existing docs; if the repo is clearly English (or has no Spanish prose), treat it as English — and write an explicit line in the local `AGENTS.md` (e.g. `Idioma del proyecto: inglés` or `Idioma del proyecto: español peninsular`). Without it, the global default leaks into a project that should be in another language.
+
 4. **Flow policy** (ask before adding it to a trivial or throwaway repo). Ask the user whether this repo should follow the engineering flow. If yes, append a **"Skill flow is the default"** section to `AGENTS.md`, taken from the canonical version in dotmesh's own `AGENTS.md` (the source of truth). It must cover: the skill flow is opt-out, not opt-in; the per-phase skill map; per-slice commits are automatic on a work branch (push and PR stay on request); and genuinely multi-phase work is orchestrated with subagents, with the plan kept in `.ai/tasks/<slug>/plan.md`. Without this section, an agent in another repo will not run the flow on its own initiative.
 
 5. **Skills source**.

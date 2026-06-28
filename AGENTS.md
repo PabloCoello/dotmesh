@@ -108,7 +108,7 @@ Quality degrades well before the context window fills (around 100k tokens, regar
 - **The plan lives on disk, not in context.** `planning-and-task-breakdown` writes the plan and a phase checklist to `.ai/tasks/<slug>/plan.md`. That file is the source of truth; the conversation is disposable. Mark phases done there as you go.
 - **Commit per slice — automatic, not "on request".** `incremental-implementation` means each completed, green slice is committed **on the working branch** as you go. These per-slice checkpoints do **not** require the user to ask first: the "commit and push only when asked" rule governs **push, PR, and committing on the default branch** — not the incremental commits of an already-approved implementation on a work branch. If you're on the default branch, create a work branch first, then commit each slice. Git history is durable state a fresh session can read to re-orient. `/super-git` is the lifecycle arm of this: per-slice commits happen inside each phase subagent, while sync, push and PR are the orchestrator's single finalization step once the phases land.
 - **Watch the counter.** The statusline shows absolute tokens (`~/.claude/statusline.sh`): gold at ~90k means wrap up the current phase; rose at ~160k means stop and hand off.
-- **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return only a short summary. The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
+- **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return a short summary plus the commit range. Because Claude Code does **not** nest subagents, a delegated `build` cannot run the `review`/`security` gates itself: it self-checks with the `code-review-and-quality` and `security-and-hardening` skills, and the **orchestrator** runs the blocking `review`/`security` subagents between phases over the commits each phase landed (`docs`/`maths` too when relevant). The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
 - **Cross real session boundaries with `handoff`.** When you stop for the day, `handoff` writes the curated state to `.ai/tasks/<slug>/handoff.md`. The next session reads it — or runs the `state` agent to orient itself — and continues.
 
 ## Three-agent parity
@@ -152,10 +152,10 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 
 ## AI workspace artifacts policy
 
-Enforced by this file and `.gitignore` (which ignores `.ai/`):
+Enforced by this file and `.gitignore`. **dotmesh deliberately ignores its entire `.ai/` tree** — it versions none of these artifacts; the per-project policy below is what `/setup` seeds into *other* repos, not a description of dotmesh itself:
 
 - Do **not** create `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` at the repo root unless the user explicitly asks.
 - Default behavior: work in conversation. Only persist artifacts when the user asks, the task is long, or context loss is a real risk.
 - Persistent planning goes in `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
 - Throwaway scratch goes in `.ai/tmp/`.
-- Projects should ignore `.ai/tmp/` by default. `.ai/tasks/` is not globally ignored — each project decides whether to version it.
+- Policy for repos initialized by `/setup`: ignore `.ai/tmp/` by default; `.ai/tasks/` is not globally ignored — each project decides whether to version it. (dotmesh itself opts out and ignores all of `.ai/`, per the note above.)

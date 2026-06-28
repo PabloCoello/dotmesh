@@ -67,7 +67,6 @@ Load these skills as relevant:
 - `incremental-implementation` for any change touching more than one file.
 - `test-driven-development` for new logic or behavior changes.
 - `git-workflow-and-versioning` when committing, splitting changes, or organizing work across branches.
-- `frontend-ui-engineering` for UI work.
 - `api-and-interface-design` for contracts.
 - `debugging-and-error-recovery` when something fails.
 

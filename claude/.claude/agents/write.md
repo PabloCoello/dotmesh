@@ -2,7 +2,7 @@
 name: write
 description: Drafts and revises research documents in markdown. Use for prose work — papers, technical reports, white papers, blog posts, thesis chapters. Outline → draft → revise → polish. Handles .md, .qmd, .tex, .bib. Bilingual EN/ES.
 model: claude-opus-4-7
-tools: [Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch, Agent]
+tools: [Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch, Agent, Skill]
 ---
 
 # Write

@@ -25,8 +25,9 @@ exec zsh                            # recarga la shell
 | VCS | Git + delta | [git/](git/) |
 | Agente IA #1 | OpenCode | [opencode/](opencode/) |
 | Agente IA #2 | Codex (CLI OpenAI) | [codex/](codex/) |
-| Agente IA #3 | Claude Code | [claude/](claude/) (settings + agentes + comandos + mcp) |
+| Agente IA #3 | Claude Code | [claude/](claude/) (CLAUDE.md/AGENTS.md globales + settings + hooks + statusline + agentes + comandos + mcp) |
 | Skills globales | Convención `.agents/skills/` | [agents/](agents/) |
+| Escritorio (Linux) | GNOME (retint dotmesh) | [gnome/](gnome/) |
 
 ## Estructura
 
@@ -39,8 +40,9 @@ dotmesh/
 ├── vscode/     Library/Application Support/Code/User/{settings,extensions,scripts,themes}
 ├── opencode/   .config/opencode/{agents,commands,opencode.json,README.md}
 ├── codex/      .codex/{config.toml,AGENTS.md}
-├── claude/     .claude/{settings.json,agents/,commands/,mcp/}
+├── claude/     .claude/{CLAUDE.md,AGENTS.md,settings.json,hooks/,statusline.sh,agents/,commands/,mcp/}
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
+├── gnome/      .config/gtk-{3,4}.0/gtk.css   (rice GNOME, Linux; fuera de PACKAGES)
 ├── scripts/    backup-current-config.sh
 ├── docs/       INSTALL.md, SECRETS.md, TROUBLESHOOTING.md
 ├── Makefile
@@ -135,7 +137,7 @@ Los agentes siguen una política global para gestionar documentos de planificaci
 - Scratch temporal va en `.ai/tmp/`.
 - Git ignore: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
 
-Esta convención está integrada en las instrucciones globales de OpenCode y Codex. Claude Code no tiene mecanismo de instrucciones globales en este repo, pero puede seguir la misma convención manualmente.
+Esta convención está integrada en las instrucciones globales de los tres agentes: OpenCode y Codex la leen de su `AGENTS.md`, y Claude Code desde `~/.claude/AGENTS.md` (que stowea el paquete `claude/`, importado por `~/.claude/CLAUDE.md` mediante `@AGENTS.md`).
 
 ## Aislamiento de sesiones de Claude
 

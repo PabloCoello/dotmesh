@@ -2,7 +2,7 @@
 name: design
 description: Turns ideas into specs and implementation plans. Markdown only. No execution. Use when starting a new feature, when requirements are ambiguous, or when a task touches multiple files.
 model: claude-sonnet-4-6
-tools: [Read, Edit, Write, Grep, Glob, WebFetch, WebSearch]
+tools: [Read, Edit, Write, Grep, Glob, WebFetch, WebSearch, Skill]
 ---
 
 # Design
