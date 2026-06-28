@@ -2,7 +2,7 @@
 name: debate
 description: Bounce ideas, explore approaches, surface trade-offs before any commitment to implementation. Read-only critical interlocutor for vague concepts and architectural decisions.
 model: claude-opus-4-7
-tools: [Read, Grep, Glob, WebFetch, WebSearch]
+tools: [Read, Grep, Glob, WebFetch, WebSearch, Skill]
 ---
 
 # Debate

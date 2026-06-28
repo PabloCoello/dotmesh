@@ -2,7 +2,7 @@
 name: docs
 description: Updates documentation after a change. Inline comments, README, or doc files. Non-blocking — does not gate implementation.
 model: claude-haiku-4-5
-tools: [Read, Edit, Write, Grep, Glob]
+tools: [Read, Edit, Write, Grep, Glob, Skill]
 ---
 
 # Docs
