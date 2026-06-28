@@ -2,7 +2,7 @@
 name: review
 description: Reviews a diff or code fragment with five-axis quality criteria. Returns OK or a list of issues with severity. Read-only — flags, does not fix.
 model: claude-haiku-4-5
-tools: [Read, Grep, Glob]
+tools: [Read, Grep, Glob, Skill]
 ---
 
 # Review
