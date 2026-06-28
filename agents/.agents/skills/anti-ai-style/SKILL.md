@@ -422,18 +422,21 @@ Nombrar los temas reales de manera directa.
 
 ---
 
-## 13. Uso excesivo de rayas largas
+## 13. Raya larga (guion largo)
 
 ### Problema
-Uso reiterado de rayas largas para introducir incisos, dramatizar frases o fragmentar artificialmente el ritmo del texto.
+La raya larga (—), también llamada guion largo, aparece de forma masiva en texto generado por IA para introducir incisos, dramatizar frases o fragmentar el ritmo. Casi siempre hay un signo más sobrio que hace el mismo trabajo.
 
 ### Evitar
+- la raya larga (—) en cualquier función: inciso, corte de efecto o sustituto de coma, dos puntos o punto
 - “las instituciones —no las personas— y aun así esto continúa—”
-- frases con múltiples incisos entre rayas
-- uso de la raya como sustituto constante de comas o puntos
+- frases con uno o varios incisos entre rayas
 
 ### Hacer en su lugar
-Usar comas o puntos cuando basten para mantener claridad y ritmo natural.
+Sustituir siempre la raya por el signo que corresponda:
+- inciso → comas o paréntesis,
+- aclaración o enumeración → dos puntos,
+- contraste o corte de ritmo → punto y seguido.
 
 ### Ejemplo
 **Antes:**  
@@ -443,8 +446,7 @@ Usar comas o puntos cuando basten para mantener claridad y ritmo natural.
 “el problema afectó a las instituciones, no a las personas. Sigue existiendo a pesar de las advertencias repetidas”
 
 ### Regla operativa
-Usar raya larga solo cuando el inciso realmente lo justifique.  
-Si la frase funciona mejor con comas o puntos, sustituirla.
+No usar la raya larga (—). Reescribir el inciso con comas o paréntesis, la aclaración con dos puntos y el corte de ritmo con un punto.
 
 ---
 
@@ -750,6 +752,34 @@ Toda conclusión debe dejar una idea concreta:
 
 ---
 
+## 25. Punto medio decorativo
+
+### Problema
+Uso del punto medio o interpunct (·) como separador ornamental en línea, frecuente en texto generado por IA para encadenar etiquetas o rasgos. En prosa casi siempre cabe una coma o una conjunción.
+
+### Evitar
+- “rápido · fiable · seguro”
+- “Diseño · Código · Documentación”
+- el punto medio como sustituto de coma, de “y” o de un salto de lista
+
+### Hacer en su lugar
+Usar coma y conjunción en prosa, o una lista real si los elementos lo piden.
+
+### Ejemplo
+**Antes:**  
+“rápido · fiable · seguro”
+
+**Después:**  
+“rápido, fiable y seguro”
+
+### Excepción
+En contextos técnicos o de marca donde el punto medio es deliberado y consistente (por ejemplo, la statusline de dotmesh: “modelo · rama · coste”), mantenerlo. La regla rige la prosa, no las interfaces ni el branding.
+
+### Regla operativa
+En prosa, no usar el punto medio (·) como separador. Sustituirlo por coma y conjunción, o por una lista.
+
+---
+
 # Reglas generales de reescritura
 
 ## 1. Sustituir abstracción por hecho
@@ -800,7 +830,8 @@ Antes de dar un texto por bueno, comprobar:
 - ¿Hay listas de tres elementos forzadas por estilo?
 - ¿Se están alternando sinónimos solo para evitar repetir una palabra clara?
 - ¿Hay construcciones del tipo “de X a Y” que no delimitan nada con precisión?
-- ¿Hay demasiadas rayas largas donde bastarían comas o puntos?
+- ¿Aparece alguna raya larga (—) que deba sustituirse por comas, paréntesis, dos puntos o punto?
+- ¿Hay punto medio (·) decorativo en prosa que debería ser coma o conjunción?
 - ¿Se están usando negritas como decoración y no como ayuda estructural?
 - ¿Hay frases tipo “Etiqueta: contenido” que deberían convertirse en prosa?
 - ¿Los encabezados siguen el uso natural del español?
