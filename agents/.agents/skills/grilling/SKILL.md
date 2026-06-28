@@ -29,4 +29,4 @@ Conversation only — this skill writes no files. For a grilling session that al
 Interview in the language the user writes in. When that is Spanish, load `castellano-peninsular`, and `anti-ai-style` for any prose you produce.
 
 ---
-Adapted from `grilling` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). The "hold more than one framing / don't close prematurely" stance is carried over from the local `debate` agent, which is kept for pure divergent exploration.
+Adapted from `grilling` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). The "hold more than one framing / don't close prematurely" stance is carried over from the former local `debate` agent, now folded into this skill, `idea-refine`, and the `maker` persona for divergent exploration.

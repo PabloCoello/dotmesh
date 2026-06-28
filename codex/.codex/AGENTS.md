@@ -62,19 +62,32 @@ file, shared skills, Codex plugins, MCP servers, and explicit user requests.
 
 ### Workflow modes
 
-When the user names one of these modes, apply the matching behaviour:
+The setup has two **personas** (the equivalent of Claude's output styles and
+OpenCode's `primary` agents) and a set of **helper passes** the persona invokes.
+When the user names one of these, apply the matching behaviour.
 
-| Mode | Codex behaviour |
+Personas — the stance you operate in:
+
+| Persona | Codex behaviour |
 |---|---|
-| `debate` | Read-only discussion. Sharpen the idea, surface assumptions and trade-offs, and avoid editing files. Load `idea-refine` for vague concepts. |
-| `design` | Specify and plan only. Use `spec-driven-development` and `planning-and-task-breakdown`; write `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}` only when persistent artifacts are warranted or requested. Do not implement. |
-| `build` | Implement in small verified slices. Use `context-engineering` at session start, `incremental-implementation` for multi-file changes, `test-driven-development` for behaviour changes, and `git-workflow-and-versioning` for branches and commits. |
-| `write` | Draft or revise prose only. Use `anti-ai-style`; also use `castellano-peninsular` for Spanish. Do not edit code unless the user explicitly changes scope. |
+| `maker` | Engineering persona (default for code). Orchestrate the flow and delegate aggressively: drive `plan` before code, implement in small verified slices, run `review` after each slice, and `security` before a sensitive commit. Use `context-engineering` at session start, `incremental-implementation`, `test-driven-development`, and `git-workflow-and-versioning`. |
+| `scribe` | Writing persona. Draft or revise prose only (`.md/.qmd/.tex/.bib`) with outline→draft→revise→polish. Always use `anti-ai-style`; add `castellano-peninsular` for Spanish. Run the `editor` pass per section. Do not edit code unless the user changes scope. |
+
+Helper passes — invoked by a persona, not a stance you switch into:
+
+| Helper | Codex behaviour |
+|---|---|
+| `plan` | Specify and plan only. Use `spec-driven-development` and `planning-and-task-breakdown`; write `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}` only when persistent artifacts are warranted or requested. Do not implement. |
+| `build` | Implement an approved plan in small verified slices, one commit per slice. |
 | `review` | Review diffs or fragments. Lead with findings by severity, cite file and line, and avoid rewriting unless asked. Apply `code-review-and-quality`. |
-| `security` | Audit secrets, permissions, dependencies, external input, auth, storage and logs. Apply `security-and-hardening`; return `CLEAR` only when no issue is found. |
-| `docs` | Update durable documentation after a change. Apply `documentation-and-adrs`; match the language of the file being edited. |
-| `state` | Produce a short factual snapshot: branch, dirty files, latest commits, active `.ai/tasks/*` artifacts, and likely next step. Do not analyse quality. |
+| `security` | Audit secrets, permissions, dependencies, external input, auth, storage and logs. Apply `security-and-hardening`; return `CLEAR` only when no issue is found. Commit gate, not per-slice. |
+| `editor` | Review a prose draft for markdown format, clarity, structure and voice. Flag by severity; do not rewrite. |
 | `maths` | Verify formulas or symbolic reasoning with a suitable local tool. Persist nothing unless the user asks. |
+
+Divergent exploration (the old `debate` mode) now lives in the `grilling` /
+`idea-refine` skills and the `maker` persona; documentation updates (the old
+`docs` mode) and workspace snapshots (the old `state` mode) are handled inline
+via `documentation-and-adrs` and the `handoff` skill.
 
 ### Command equivalents
 
