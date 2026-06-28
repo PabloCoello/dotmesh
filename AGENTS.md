@@ -152,10 +152,10 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 
 ## AI workspace artifacts policy
 
-Enforced by this file and `.gitignore` (which ignores `.ai/`):
+Enforced by this file and `.gitignore`. **dotmesh deliberately ignores its entire `.ai/` tree** — it versions none of these artifacts; the per-project policy below is what `/setup` seeds into *other* repos, not a description of dotmesh itself:
 
 - Do **not** create `SPEC.md`, `PLAN.md`, `TODO.md`, `NOTES.md`, `CHECKPOINT.md` at the repo root unless the user explicitly asks.
 - Default behavior: work in conversation. Only persist artifacts when the user asks, the task is long, or context loss is a real risk.
 - Persistent planning goes in `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}`.
 - Throwaway scratch goes in `.ai/tmp/`.
-- Projects should ignore `.ai/tmp/` by default. `.ai/tasks/` is not globally ignored — each project decides whether to version it.
+- Policy for repos initialized by `/setup`: ignore `.ai/tmp/` by default; `.ai/tasks/` is not globally ignored — each project decides whether to version it. (dotmesh itself opts out and ignores all of `.ai/`, per the note above.)
