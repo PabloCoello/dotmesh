@@ -2,7 +2,7 @@
 name: plan
 description: Turns ideas into specs and implementation plans. Markdown only, no execution. Use proactively when starting a feature, when requirements are ambiguous, or when a change spans multiple files and no spec exists yet.
 model: claude-sonnet-4-6
-tools: [Read, Edit, Write, Grep, Glob, WebFetch, WebSearch]
+tools: [Read, Edit, Write, Grep, Glob, WebFetch, WebSearch, Skill]
 ---
 
 # Plan

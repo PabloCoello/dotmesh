@@ -1,0 +1,39 @@
+/* dotmesh — retint de apps GTK4 / libadwaita sobre Yaru.
+ *
+ * Cromo Ink monocromo; el teal entra solo como señal (selección, foco,
+ * controles activos). Fuente de verdad de la paleta: docs/DESIGN.md.
+ *
+ * Mecanismo: libadwaita lee ~/.config/gtk-4.0/gtk.css al arrancar cada app y
+ * permite recolorear vía colores con nombre. Es la vía soportada y reversible:
+ * basta borrar este fichero (o `make unstow`… aquí: quitar el symlink) y
+ * reiniciar la app para volver al Yaru original.
+ */
+
+/* Superficies Ink */
+@define-color window_bg_color            #16171B;
+@define-color window_fg_color            #E9EAEC;
+@define-color view_bg_color              #16171B;
+@define-color view_fg_color              #E9EAEC;
+@define-color headerbar_bg_color         #1C1D22;
+@define-color headerbar_fg_color         #E9EAEC;
+@define-color headerbar_border_color     #16171B;
+@define-color headerbar_backdrop_color   #16171B;
+@define-color sidebar_bg_color           #1C1D22;
+@define-color sidebar_fg_color           #E9EAEC;
+@define-color sidebar_backdrop_color     #16171B;
+@define-color sidebar_border_color       #2D2F36;
+@define-color secondary_sidebar_bg_color #1C1D22;
+@define-color secondary_sidebar_fg_color #E9EAEC;
+@define-color card_bg_color              #1C1D22;
+@define-color card_fg_color              #E9EAEC;
+@define-color dialog_bg_color            #1C1D22;
+@define-color dialog_fg_color            #E9EAEC;
+@define-color popover_bg_color           #1C1D22;
+@define-color popover_fg_color           #E9EAEC;
+@define-color thumbnail_bg_color         #1C1D22;
+@define-color thumbnail_fg_color         #E9EAEC;
+
+/* Acento: teal dotmesh como señal (relleno) y un hermano más claro para texto */
+@define-color accent_bg_color            #6CB6B0;
+@define-color accent_fg_color            #16171B;
+@define-color accent_color               #82C2BC;

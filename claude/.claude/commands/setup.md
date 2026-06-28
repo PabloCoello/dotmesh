@@ -15,22 +15,26 @@ Steps:
 
 3. **Confirm `AGENTS.md` covers**: project overview, common commands (build, test, lint, dev), boundaries (Always do / Ask first / Never do), and a pointer noting that shared skills live at `~/.claude/skills/` (symlinked to `~/.agents/skills/`).
 
-4. **Skills source**.
+   - **Pin the project language.** The global `~/.claude/AGENTS.md` defaults user-facing prose to peninsular Spanish for the whole machine. Determine this project's prose language — match the existing docs; if the repo is clearly English (or has no Spanish prose), treat it as English — and write an explicit line in the local `AGENTS.md` (e.g. `Idioma del proyecto: inglés` or `Idioma del proyecto: español peninsular`). Without it, the global default leaks into a project that should be in another language.
+
+4. **Flow policy** (ask before adding it to a trivial or throwaway repo). Ask the user whether this repo should follow the engineering flow. If yes, append a **"Skill flow is the default"** section to `AGENTS.md`, taken from the canonical version in dotmesh's own `AGENTS.md` (the source of truth). It must cover: the skill flow is opt-out, not opt-in; the per-phase skill map; per-slice commits are automatic on a work branch (push and PR stay on request); and genuinely multi-phase work is orchestrated with subagents, with the plan kept in `.ai/tasks/<slug>/plan.md`. Without this section, an agent in another repo will not run the flow on its own initiative.
+
+5. **Skills source**.
    - Verify `~/.claude/skills` exists and is a symlink to `~/.agents/skills`. If not, instruct the user to run `make link-skills` from the dotmesh repo and stop.
    - Do **not** create `.claude/skills/` inside the project unless the user explicitly asks for project-specific skills and the sync story is documented.
 
-5. **Workspace artifacts policy**.
+6. **Workspace artifacts policy**.
    - Recommend adding `.ai/tmp/` to `.gitignore` if not already present.
    - Do **not** add `.ai/tasks/` to `.gitignore` automatically — each project decides whether to version task artifacts.
    - Do **not** create `.ai/tasks/` or any persistent planning files unless the user explicitly requests them.
 
-6. **Final structure check**. The workspace should end up with:
+7. **Final structure check**. The workspace should end up with:
 
    - `AGENTS.md` at root (canonical instructions).
    - `CLAUDE.md` at root containing only `@AGENTS.md`.
    - `.ai/tmp/` in `.gitignore`.
    - Shared skills referenced from `~/.claude/skills/` (no local duplicate).
 
-7. **Report**: list what was done, what was skipped, and any remaining manual step.
+8. **Report**: list what was done, what was skipped, and any remaining manual step.
 
 Do not commit. Do not push. Do not modify code outside the files listed above.
