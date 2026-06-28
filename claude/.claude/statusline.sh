@@ -39,6 +39,9 @@ model=$(printf '%s' "$input" | jq -r '.model.display_name // "claude"')
 tokens=$(printf '%s' "$input" | jq -r '.context_window.total_input_tokens // ((.context_window.current_usage.input_tokens // 0) + (.context_window.current_usage.cache_creation_input_tokens // 0) + (.context_window.current_usage.cache_read_input_tokens // 0)) // 0')
 cwd=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
 cost=$(printf '%s' "$input" | jq -r '.cost.total_cost_usd // 0')
+# Persona activa (output style). "default" no es estado: solo se pinta cuando hay
+# una persona explícita (maker/scribe), para que se vea de un vistazo cuál manda.
+style=$(printf '%s' "$input" | jq -r '.output_style.name // empty')
 
 # Saneado: entero o 0.
 tokens=${tokens%%.*}
@@ -74,7 +77,11 @@ cost_fmt=$(printf '%.2f' "$cost" 2>/dev/null || printf '0.00')
 if [ "$tokens" -ge 1000 ]; then used="$(( tokens / 1000 ))k"; else used="$tokens"; fi
 
 # --- Ensamblado ---
-out="${TXT}${model}${RESET} ${fill}${bar}${RESET} ${SEC}${used}${RESET}"
+out="${TXT}${model}${RESET}"
+if [ -n "$style" ] && [ "$style" != "default" ]; then
+  out="${out} ${DIM}◇${RESET} ${TXT}${style}${RESET}"
+fi
+out="${out} ${fill}${bar}${RESET} ${SEC}${used}${RESET}"
 [ -n "$branch" ] && out="${out}  ${SAGE}⎇${RESET} ${DIM}${branch}${RESET}"
 out="${out}  ${DIM}\$${cost_fmt}${RESET}"
 

@@ -49,8 +49,8 @@ Do not delete artifacts automatically. The user decides retention.
 ## Session start
 
 1. Read `AGENTS.md` (Claude Code reads it via the `@AGENTS.md` import in `CLAUDE.md`) for project context.
-2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `design` first.
-3. If the repo is mid-work, consider invoking the `state` subagent to summarize where the previous session left off.
+2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `plan` first.
+3. If the repo is mid-work, orient yourself from `.ai/tasks/*/plan.md`, the latest commits, and any `handoff.md` (the `handoff` skill owns this).
 
 ## During implementation
 
@@ -65,7 +65,7 @@ Load these skills as relevant:
 
 ## After each significant block
 
-Invoke the `review` subagent over the latest diff. If math is relevant, invoke `maths`. If the change is documentable, invoke `docs` (non-blocking).
+Invoke the `review` subagent over the latest diff. If math is relevant, invoke `maths`. If the change is documentable, update the docs inline (load `documentation-and-adrs`) — non-blocking, do not gate the slice on it.
 
 If `review` returns blocking issues, **stop**, present the issues to the user, and wait for a decision before continuing.
 
@@ -82,4 +82,4 @@ You have full Bash access. Treat every destructive command (`rm -rf`, `git push 
 
 ## Language
 
-Code and inline comments default to English. User-facing documentation follows the project language. When writing Spanish docs, the `docs` subagent loads `castellano-peninsular`.
+Code and inline comments default to English. User-facing documentation follows the project language. When writing Spanish docs, load `castellano-peninsular` and `anti-ai-style`.

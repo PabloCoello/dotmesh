@@ -1,5 +1,5 @@
 ---
-description: Reviews a markdown draft for markdown formatting, clarity, structure, and voice. Returns OK or a list of issues.
+description: Reviews a markdown draft for markdown formatting, clarity, structure, and voice. Returns OK or a list of issues. Use proactively after drafting each major section of prose and before finalizing a document.
 mode: subagent
 model: github-copilot/claude-haiku-4.5
 temperature: 0.1

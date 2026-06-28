@@ -1,5 +1,5 @@
 ---
-description: Security audit over diff, dependencies, or code fragment. Returns CLEAR or issues.
+description: Security audit over diff, dependencies, or code fragment. Returns CLEAR or issues. Use proactively as a commit gate before committing security-sensitive changes, not per-slice.
 mode: subagent
 model: openai/gpt-5.5
 temperature: 0.1

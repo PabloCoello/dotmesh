@@ -1,5 +1,5 @@
 ---
-description: Reviews a diff or code fragment. Returns OK or a list of issues with severity.
+description: Reviews a diff or code fragment. Returns OK or a list of issues with severity. Use proactively immediately after writing or modifying code, before moving on.
 mode: subagent
 model: github-copilot/claude-haiku-4.5
 temperature: 0.1
