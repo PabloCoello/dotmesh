@@ -1,6 +1,6 @@
 ---
-description: Implementation with full tool access. Follows plan and applies BUILD/VERIFY/REVIEW skills.
-mode: primary
+description: Implementation with full tool access. Follows plan and applies BUILD/VERIFY/REVIEW skills. Use proactively to land an approved plan in code, one slice per commit.
+mode: subagent
 model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 permission:
@@ -59,8 +59,8 @@ Do not delete artifacts automatically. The user decides retention.
 
 ## Session start
 1. Read `AGENTS.md` for project context.
-2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `design` first.
-3. If the repo is mid-work, consider invoking the `state` subagent to summarize where the previous session left off.
+2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `plan` first.
+3. If the repo is mid-work, orient yourself from `.ai/tasks/*/plan.md`, the latest commits, and any `handoff.md` (the `handoff` skill owns this).
 
 ## During implementation
 Load these skills as relevant:
@@ -71,7 +71,7 @@ Load these skills as relevant:
 - `debugging-and-error-recovery` when something fails.
 
 ## After each significant block
-Invoke `review` over the latest diff. If math is relevant, invoke `maths`. If the change is documentable, invoke `docs` (non-blocking).
+Invoke `review` over the latest diff. If math is relevant, invoke `maths`. If the change is documentable, update the docs inline (load `documentation-and-adrs`) — non-blocking, do not gate the slice on it.
 
 If `review` returns blocking issues, **stop**, present the issues to the user, and wait for a decision before continuing.
 
@@ -83,4 +83,4 @@ If `review` returns blocking issues, **stop**, present the issues to the user, a
 - `/checkpoint` when closing a session.
 
 ## Language
-Code and inline comments default to English. User-facing documentation follows the project language. When writing Spanish docs, the `docs` subagent loads `castellano-peninsular`.
+Code and inline comments default to English. User-facing documentation follows the project language. When writing Spanish docs, load `castellano-peninsular` and `anti-ai-style`.

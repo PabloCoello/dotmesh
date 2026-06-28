@@ -1,22 +1,20 @@
 # OpenCode — Configuración del sistema de agentes
 
-Configuración global para opencode con tres agentes principales, cinco subagentes, cuatro comandos y skills compartidas.
+Configuración global para opencode con dos agentes principales (personas), seis subagentes, cuatro comandos y skills compartidas.
 
 ## Estructura
 
 ```
 ~/.config/opencode/
 ├── agents/
-│   ├── debate.md         # openai/gpt-5.5 (temp 0.8), exploración de ideas, sin escritura
-│   ├── design.md         # openai/gpt-5.5, escribe SPEC.md y PLAN.md
-│   ├── build.md          # openai/gpt-5.5, implementación con acceso completo
-│   ├── write.md          # openai/gpt-5.5 (temp 0.5), redacción de docs de investigación (.md/.qmd/.tex/.bib)
-│   ├── review.md         # github-copilot/claude-haiku-4.5, revisa diffs
-│   ├── editor.md         # github-copilot/claude-haiku-4.5, revisa drafts (formato MD + claridad + voz)
-│   ├── security.md       # openai/gpt-5.5, auditoría de seguridad
-│   ├── docs.md           # github-copilot/claude-haiku-4.5, actualiza documentación
-│   ├── maths.md          # openai/gpt-5.5, verificación con SymPy
-│   └── state.md          # github-copilot/claude-haiku-4.5, snapshot del workspace
+│   ├── maker.md          # primary · github-copilot/claude-sonnet-4.5 (temp 0.2), persona de código: orquesta y delega
+│   ├── scribe.md         # primary · openai/gpt-5.5 (temp 0.5), persona de prosa/research (.md/.qmd/.tex/.bib)
+│   ├── build.md          # subagent · github-copilot/claude-sonnet-4.5, implementación con acceso completo
+│   ├── plan.md           # subagent · github-copilot/claude-sonnet-4.5, escribe spec.md y plan.md
+│   ├── review.md         # subagent · github-copilot/claude-haiku-4.5, revisa diffs
+│   ├── editor.md         # subagent · github-copilot/claude-haiku-4.5, revisa drafts (formato MD + claridad + voz)
+│   ├── security.md       # subagent · openai/gpt-5.5, auditoría de seguridad (gate de commit)
+│   └── maths.md          # subagent · openai/gpt-5.5, verificación con SymPy
 └── commands/
     ├── setup.md          # Inicializa proyecto con skills compartidas
     ├── super-git.md      # Flujo Git autónomo: rama, slices, commits, push y PR
@@ -26,6 +24,8 @@ Configuración global para opencode con tres agentes principales, cinco subagent
 # Skills (incluida castellano-peninsular) viven en ~/.agents/skills/
 # (paquete `agents/` del repo dotmesh)
 ```
+
+Las dos personas son agentes `primary`: se alternan con el selector nativo de opencode. `maker` para código, `scribe` para prosa. El resto son `subagent`: no se eligen a mano, se disparan por delegación cuando la situación encaja con su `description`.
 
 ## Instalación
 
@@ -41,7 +41,7 @@ Las skills compartidas viven en `~/.agents/skills/`. No crees una segunda fuente
 opencode agent list
 ```
 
-Debe mostrar los ocho agentes definidos.
+Debe mostrar los ocho agentes: dos principales (`maker`, `scribe`) y seis subagentes.
 
 ```bash
 # Dentro de opencode
@@ -54,19 +54,16 @@ Debe mostrar los ocho agentes definidos.
 ## Flujo de trabajo
 
 ```
-debate → design → build                       (flujo de código)
-              └── review (por slice)
-              └── docs (paralelo, no bloquea)
-              └── maths (si aplica)
-              └── state (al retomar sesión)
-                            ↓
-                    /check-last (gate de commit)
-                      ├── review
-                      └── security
+maker (persona de código)
+  ├── plan      (spec + plan, antes de escribir código)
+  ├── build     (una fase por subagente, commit por slice)
+  ├── review    (tras cada slice)
+  ├── maths     (si aplica)
+  └── /check-last → review + security   (gate de commit)
 
-debate → write                                (flujo de redacción)
-            └── editor (formato MD + claridad + voz)
-            └── state (al retomar sesión)
+scribe (persona de prosa)
+  ├── editor    (formato MD + claridad + voz, por sección)
+  └── maths     (si aplica)
 ```
 
 ## Convención de artefactos de trabajo
@@ -79,7 +76,7 @@ Los agentes siguen una política global para gestionar documentos de planificaci
 - **Scratch temporal** va en `.ai/tmp/`.
 - **Git ignore**: solo `.ai/tmp/` se ignora por defecto. Cada proyecto decide si versiona `.ai/tasks/`.
 
-Esta convención está integrada en las instrucciones de los agentes `design` y `build`, y en el comando `/setup`.
+Esta convención está integrada en las instrucciones de los agentes `plan` y `build`, y en el comando `/setup`.
 
 ## Skills compartidas
 
@@ -91,4 +88,4 @@ Si un proyecto necesita skills específicas adicionales, documenta antes dónde 
 
 - System prompts y skills técnicas: inglés (más eficiente en tokens).
 - Output dirigido al usuario (specs, planes, docs, checkpoints): idioma del proyecto.
-- Para proyectos en castellano: la skill `castellano-peninsular` (en `~/.agents/skills/`) se carga automáticamente desde `debate`, `design` y `docs`.
+- Para proyectos en castellano: la skill `castellano-peninsular` (en `~/.agents/skills/`) se carga desde las personas `maker` y `scribe` y desde `plan`.

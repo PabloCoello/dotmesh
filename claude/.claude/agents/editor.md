@@ -1,6 +1,6 @@
 ---
 name: editor
-description: Reviews a markdown draft for markdown formatting, clarity, structure, and voice. Returns OK or a list of issues. Read-only — flags, does not rewrite.
+description: Reviews a markdown draft for markdown formatting, clarity, structure, and voice. Returns OK or a list of issues. Read-only — flags, does not rewrite. Use proactively after drafting each major section of prose and before finalizing a document.
 model: claude-haiku-4-5
 tools: [Read, Grep, Glob, Skill]
 ---

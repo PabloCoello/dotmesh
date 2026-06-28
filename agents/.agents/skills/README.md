@@ -54,7 +54,7 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 
 ## Interrogatorio, dominio y traspaso
 
-Adaptadas de [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). Complementan al agente `debate` (exploración divergente); no lo sustituyen.
+Adaptadas de [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). Complementan la exploración divergente ahora integrada en `grilling`, `idea-refine` y la persona `maker` (el antiguo agente `debate`).
 
 | Skill | Cuándo usarla |
 |---|---|

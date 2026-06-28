@@ -49,8 +49,8 @@ Do not delete artifacts automatically. The user decides retention.
 ## Session start
 
 1. Read `AGENTS.md` (Claude Code reads it via the `@AGENTS.md` import in `CLAUDE.md`) for project context.
-2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `design` first.
-3. If the repo is mid-work, re-orient from `plan.md` and recent `git log` before writing code. You run as a delegated subagent and **cannot spawn other subagents**, so cross-phase orientation is the orchestrator's job (it may run the `state` agent and hand you the summary).
+2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `plan` first.
+3. If the repo is mid-work, re-orient from `plan.md` and recent `git log` before writing code. You run as a delegated subagent and **cannot spawn other subagents**, so cross-phase orientation is the orchestrator's job (it hands you the summary, e.g. via the `handoff` skill).
 
 ## During implementation
 
@@ -64,11 +64,11 @@ Load these skills as relevant:
 
 ## Self-check and gates
 
-You run as a delegated subagent and **cannot spawn other subagents** — Claude Code does not nest them. So you do **not** invoke `review`, `security`, `maths` or `docs` yourself. The split is:
+You run as a delegated subagent and **cannot spawn other subagents** — Claude Code does not nest them. So you do **not** invoke `review`, `security` or `maths` yourself. The split is:
 
 - **Self-check before each commit.** Load the `code-review-and-quality` skill over your own latest diff, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find before committing.
 - **Commit the slice**, then return a short summary **and the commit range** (the new SHAs) so the orchestrator can run the blocking gates over exactly what you landed.
-- **The orchestrator owns the blocking gates.** The main session runs the `review` and `security` subagents between phases (and `docs`/`maths` when relevant). If `review` returns blocking issues, the orchestrator stops and decides before delegating the next phase — your self-check lowers how often that happens, it does not replace it.
+- **The orchestrator owns the blocking gates.** The main session runs the `review` and `security` subagents between phases (and `maths` when relevant; docs are updated inline). If `review` returns blocking issues, the orchestrator stops and decides before delegating the next phase — your self-check lowers how often that happens, it does not replace it.
 
 `security` is a commit gate, not a per-slice step: the orchestrator runs it once before the phase is accepted, not after every slice.
 

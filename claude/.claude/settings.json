@@ -3,6 +3,7 @@
     "defaultMode": "bypassPermissions"
   },
   "model": "opus[1m]",
+  "outputStyle": "maker",
   "hooks": {
     "PreToolUse": [
       {
@@ -11,6 +12,11 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/block-dangerous-git.sh"
+          },
+          {
+            "type": "command",
+            "command": "/home/problemas/Documentos/GitHub/dotmesh-watch/bridge/approver/pretooluse-approve.sh",
+            "timeout": 300
           },
           {
             "type": "command",
