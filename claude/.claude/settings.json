@@ -15,8 +15,8 @@
           },
           {
             "type": "command",
-            "command": "/home/problemas/Documentos/GitHub/dotmesh-watch/bridge/approver/pretooluse-approve.sh",
-            "timeout": 300
+            "command": "~/.claude/bridge-approver/pretooluse-approve.sh",
+            "timeout": 310
           },
           {
             "type": "command",
@@ -30,6 +30,72 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/remind-load-skills.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/pretooluse-approve.sh",
+            "timeout": 310
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/pretooluse-ask.sh",
+            "timeout": 310
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/userpromptsubmit-watch.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/stop-reprompt.sh",
+            "timeout": 310
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/notification-notify.sh idle_prompt"
+          }
+        ]
+      },
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/notification-notify.sh permission_prompt"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bridge-approver/stopfailure-notify.sh"
           }
         ]
       }
