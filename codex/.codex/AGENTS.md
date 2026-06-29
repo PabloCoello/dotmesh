@@ -35,6 +35,10 @@ For temporary scratch work, use:
 
 Do not delete artifacts automatically. The user decides retention.
 
+## Communication
+
+When reporting information directly to me, be extremely concise—sacrifice grammar if needed to gain concision.
+
 ## Skills
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.

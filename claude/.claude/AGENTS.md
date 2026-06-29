@@ -51,6 +51,12 @@ prevalece sobre este archivo.
 - Defensivos e idempotentes: `set -e`, `mkdir -p`, comprobaciones `[ -e ]`, sin
   valores por defecto destructivos.
 
+## Comunicación
+
+- **Concisión al reportar.** Cuando me reportes información directamente, sé
+  extremadamente conciso: sacrifica la gramática si hace falta para ganar
+  concisión.
+
 ## Idioma
 
 - Prosa de cara al usuario en **español peninsular** (READMEs, documentos, fichas).
