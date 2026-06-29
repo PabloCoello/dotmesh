@@ -1,6 +1,4 @@
 {
-  "workbench.colorTheme": "dotmesh",
-  "editor.fontSize": 14,
   "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'JetBrainsMono Nerd Font Mono', Menlo, Monaco, 'Courier New', monospace",
   "editor.fontLigatures": true,
   "editor.lineHeight": 1.6,
@@ -115,4 +113,6 @@
   "atlascode.rovodev.enabled": true,
   "atlascode.jira.enabled": true,
   "atlascode.rovodev.showEntitlementNotifications": false,
+  "workbench.colorTheme": "dotmesh",
+  "editor.fontWeight": "normal",
 }

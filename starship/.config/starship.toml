@@ -36,13 +36,13 @@ palette = 'dotmesh'
 # texto va en Ink claro; los iconos llevan el acento de sintaxis (señal).
 # Para volver al tema anterior: palette = 'gruvbox_dark'.
 [palettes.dotmesh]
-color_fg0    = '#A8ADB8'   # texto sobre los segmentos (Ink claro)
-color_orange = '#2A2C33'   # segmento 1 — os / usuario
-color_yellow = '#33363D'   # segmento 2 — directorio
-color_aqua   = '#3C3F47'   # segmento 3 — git
-color_blue   = '#474B54'   # segmento 4 — lenguajes
-color_bg3    = '#4F535C'   # segmento 5 — docker / conda
-color_bg1    = '#565A63'   # segmento 6 — hora
+color_fg0    = '#eaeaea'   # texto sobre los segmentos (Ink claro)
+color_orange = '#2e2e2e'   # segmento 1 — os / usuario
+color_yellow = '#383838'   # segmento 2 — directorio
+color_aqua   = '#424242'   # segmento 3 — git
+color_blue   = '#4d4d4d'   # segmento 4 — lenguajes
+color_bg3    = '#545454'   # segmento 5 — docker / conda
+color_bg1    = '#5c5c5c'   # segmento 6 — hora
 color_green  = '#A8CBA0'   # sage  — prompt ok
 color_red    = '#E59A9A'   # rose  — prompt error
 color_purple = '#CBAACB'   # lilac — vim replace
@@ -51,7 +51,7 @@ color_ico_peach = '#FFAA7A'
 color_ico_teal  = '#6CB6B0'
 color_ico_sage  = '#A8CBA0'
 color_ico_blue  = '#8FB4E3'
-color_ico_muted = '#9A9DA4'
+color_ico_muted = '#9e9e9e'
 
 [palettes.gruvbox_dark]
 color_bg1= '#D1D3D4'

@@ -43,7 +43,7 @@
 	# Line numbers
 	line-numbers-minus-style = "#E59A9A"
 	line-numbers-plus-style = "#A8CBA0"
-	line-numbers-zero-style = "#6A6D74"
+	line-numbers-zero-style = "#6e6e6e"
 
 [merge]
 	conflictstyle = diff3
@@ -118,5 +118,5 @@
 
 [color "branch"]
 	current = "#8FB4E3"
-	local = "#C2C5CB"
+	local = "#c6c6c6"
 	remote = "#A8CBA0"

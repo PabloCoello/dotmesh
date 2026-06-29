@@ -14,9 +14,9 @@ import random
 from PIL import Image, ImageDraw
 
 W, H = 3840, 2160
-INK_TOP = (0x16, 0x17, 0x1B)   # ink-0
-INK_BOT = (0x13, 0x14, 0x19)   # un pelín más oscuro abajo
-MESH = (0x9A, 0x9E, 0xA6)      # grafito claro, se usa con alpha bajo
+INK_TOP = (0x12, 0x12, 0x12)   # ink-0 (gris neutro, sin tinte azul)
+INK_BOT = (0x0F, 0x0F, 0x0F)   # un pelín más oscuro abajo
+MESH = (0x9E, 0x9E, 0x9E)      # grafito claro, se usa con alpha bajo
 TEAL = (0x6C, 0xB6, 0xB0)      # señal
 SAGE = (0xA8, 0xCB, 0xA0)      # señal
 ROSE = (0xE5, 0x9A, 0x9A)      # señal

@@ -39,10 +39,10 @@ say "tipografía (Inter UI · JetBrainsMono Nerd Font · hinting slight)"
 DTD='org.gnome.shell.extensions.dash-to-dock'
 if gsettings list-schemas 2>/dev/null | grep -qx "$DTD"; then
     gsettings set "$DTD" custom-background-color true
-    gsettings set "$DTD" background-color '#16171B'
+    gsettings set "$DTD" background-color '#121212'
     gsettings set "$DTD" transparency-mode 'FIXED'
     gsettings set "$DTD" background-opacity 0.6
-    say "dock con tinte Ink (#16171B)"
+    say "dock con tinte Ink (#121212)"
 else
     echo "  --  dash-to-dock no instalado; me salto el dock."
 fi

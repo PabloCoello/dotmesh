@@ -16,7 +16,9 @@ trabajo; el cromo se aparta.
 ## Los tres registros
 
 - **Paper** — superficies claras (blanco y casi blanco). Para contextos de luz.
-- **Ink** — lienzo casi negro (`#16171B`) para terminal y editor.
+- **Ink** — lienzo casi negro (`#121212`) para terminal y editor. Gris neutro,
+  sin tinte azul, y un paso más profundo que la primera versión para una lectura
+  más larga sin que el texto claro «brille» contra el fondo.
 - **Graphite** — rampa de grises neutros que hace todo el trabajo estructural:
   texto, bordes, segmentos del prompt, cromo. El cromo se mantiene monocromo a
   propósito.
@@ -30,17 +32,21 @@ trabajo; el cromo se aparta.
 
 | Token | Hex | Uso |
 |---|---|---|
-| `ink-0` | `#16171B` | lienzo base (fondo de editor y terminal) |
-| `ink-1` | `#1C1D22` | panel elevado (sidebar, barra de título) |
-| `ink-2` | `#24252B` | overlay / hover |
-| `ink-3` | `#2D2F36` | línea sobre oscuro |
+| `ink-0` | `#121212` | lienzo base (fondo de editor y terminal) |
+| `ink-1` | `#181818` | panel elevado (sidebar, barra de título) |
+| `ink-2` | `#202020` | overlay / hover |
+| `ink-3` | `#2a2a2a` | línea sobre oscuro |
 
 ### Graphite (rampa neutra)
 
-`#16181D` · `#1F2127` · `#2A2C33` · `#3C3F47` · `#565A63` · `#71757E` ·
-`#9A9EA6` · `#C2C5CB` · `#DCDEE2` · `#EBECEF` · `#F5F6F7`
+`#181818` · `#212121` · `#2e2e2e` · `#424242` · `#5c5c5c` · `#767676` ·
+`#9e9e9e` · `#c6c6c6` · `#dedede` · `#ececec` · `#f6f6f6`
 
-Texto sobre Ink: primario `#E9EAEC`, secundario `#9A9DA4`, atenuado `#6A6D74`.
+Texto sobre Ink: primario `#cecece`, secundario `#9e9e9e`, atenuado `#6e6e6e`.
+El primario baja desde `#e9eaec`: sobre el lienzo más profundo un casi-blanco
+rondaba ~15:1 y cansaba la vista; aquí queda en ~11:1, tranquilo pero muy por
+encima de AA. Para los segmentos del prompt de Starship el texto sube a
+`#eaeaea` (mantiene AA en cada segmento del degradado grafito).
 
 ### Chrome (powerline)
 
@@ -88,15 +94,15 @@ del prompt. Cualquier ajuste de color empieza aquí.
 
 | Categoría | Color |
 |---|---|
-| comentarios | `#6A6D74` (cursiva) |
-| texto / variables | `#E9EAEC` |
+| comentarios | `#6e6e6e` (cursiva) |
+| texto / variables | `#cecece` |
 | palabras clave, control, `storage` | lilac `#CBAACB` |
 | funciones, métodos | blue `#8FB4E3` |
 | cadenas | sage `#A8CBA0` |
 | números, booleanos | peach `#FFAA7A` |
 | tipos, clases | gold `#E3C58A` |
 | especial, `self`, regex, escape | teal `#6CB6B0` |
-| operadores, puntuación | `#9A9DA4` |
+| operadores, puntuación | `#9e9e9e` |
 | etiquetas HTML/XML | rose `#E59A9A` |
 | atributos | gold `#E3C58A` |
 | inválido / error | rose `#E59A9A` (subrayado) |
