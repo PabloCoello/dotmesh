@@ -15,7 +15,7 @@ Dos capas:
 | Capa | Cómo se aplica | Qué hace |
 |---|---|---|
 | Colores de apps | `gtk.css` enlazado por stow | Recolorea superficies GTK3/GTK4 (libadwaita) a tonos Ink, con teal `#6CB6B0` como acento. |
-| Fondo | PNG enlazado por stow (`scripts/gen-wallpaper.py` lo genera) | Malla dotmesh sobre Ink `#16171B` con tres nodos-señal: teal, sage y rose. Determinista y reproducible. |
+| Fondo | PNG enlazado por stow (`scripts/gen-wallpaper.py` lo genera) | Malla dotmesh sobre Ink `#121212` con tres nodos-señal: teal, sage y rose. Determinista y reproducible. |
 | Sistema | `scripts/apply-rice.sh` (dconf) | Base oscura + acento viridian, tipografía (Inter UI · JetBrainsMono Nerd Font), tinte Ink del dock (dash-to-dock) y fija el fondo. Iconos y cursor se quedan en Yaru a propósito. |
 
 - `.config/gtk-3.0/gtk.css` → `~/.config/gtk-3.0/gtk.css`

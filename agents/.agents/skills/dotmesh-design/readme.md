@@ -39,7 +39,7 @@ The tools that define the surfaces:
 
 - **Paper** — true white and near‑white surfaces for light contexts (settings,
   docs, the OS).
-- **Ink** — a near‑black canvas (`#16171b`) for the terminal and editor.
+- **Ink** — a near‑black canvas (`#121212`) for the terminal and editor.
 - **Graphite** — a neutral grey ramp doing all the structural work: text, borders,
   prompt segments, chrome. Chrome stays monochrome on purpose.
 - **Syntax** — seven muted accents. Three were chosen by hand
@@ -94,16 +94,16 @@ Avoid: `Let's get started! 🚀`, `Awesome — your theme is ready!!`.
   - **Ink chrome ramp (`--chrome-1…6`, `--chrome-text`).** The Starship powerline
     needs six interpolated graphite steps (gray‑800 → gray‑600), not the coarse
     800/700/600 jumps — otherwise light text rides unevenly across the gradient.
-    Primary ink‑light (`--chrome-text`, `#e9eaec`) holds on every segment; only the
+    Primary ink‑light (`--chrome-text`, `#eaeaea`) holds on every segment; only the
     segment icons take a syntax accent.
   - **Faint text tier (`--text-faint`).** A dim‑but‑legible step below muted
-    (`#43464d` on ink, `--gray-300` on paper) for line numbers, disabled labels and
+    (`#474747` on ink, `--gray-300` on paper) for line numbers, disabled labels and
     whitespace guides — so secondary text didn't have to be pushed down to carry
     them.
   - **Deep canvas + calm body (the ratio, not the value).** The ink ramp was
-    deepened (`--ink-0` `#16171b → #101116`, the whole scale moving together so
+    deepened (`--ink-0` `#16171b → #121212`, the whole scale moving together so
     elevation stays proportional) and the dark primary text dimmed
-    (`#e9eaec → #cbced4`). Long-reading fatigue on ink came from *too much*
+    (`#e9eaec → #cecece`). Long-reading fatigue on ink came from *too much*
     contrast — a near-white body on near-black rides ~15:1. Dimming the text (not
     the background) drops it to ~11:1: calm but still well above AA. The neutral
     gray is always kept just off pure black (never `#000`) so light text doesn't
@@ -114,7 +114,7 @@ Avoid: `Let's get started! 🚀`, `Awesome — your theme is ready!!`.
   (15px / 1.55). Few weights, lots of air.
 - **Spacing:** 4px base grid. Layouts breathe — generous padding inside cards,
   clear section rhythm with mono overlines.
-- **Backgrounds:** flat. Paper is white or `--gray-50`; ink is `#16171b`. The only
+- **Backgrounds:** flat. Paper is white or `--gray-50`; ink is `#121212`. The only
   gradients allowed are the faint radial vignettes behind the device windows in
   the device windows of the surface templates — never on content. No textures, no patterns, no illustrations.
 - **Borders:** hairline‑first. 1px `--border` (grey‑200 on paper, ink‑3 on dark)
