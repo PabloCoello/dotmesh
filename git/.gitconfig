@@ -120,3 +120,5 @@
 	current = "#8FB4E3"
 	local = "#c6c6c6"
 	remote = "#A8CBA0"
+[credential]
+	helper = cache --timeout=3600
