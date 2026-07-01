@@ -128,7 +128,11 @@ los segmentos forman un degradado grafito y solo los iconos llevan color.
 Los temas se añaden **junto a los anteriores**, no los reemplazan:
 
 - **VS Code**: ya queda activo vía `settings.json` (`workbench.colorTheme:
-  "dotmesh"`). Para volver atrás, elige otro tema en la paleta de comandos.
+  "dotmesh"`). Para volver atrás, elige otro tema en la paleta de comandos. El
+  tema se instala como extensión empaquetada, o sea una copia: editar su JSON en
+  el repo no llega a VS Code con solo recargar la ventana. Vuelve a ejecutar
+  `vscode/scripts/install.sh` (refresca la copia instalada sin depender de la
+  red) y recarga la ventana.
 - **Warp**: selecciona el tema `dotmesh` en los ajustes de Warp. Ajusta también
   la fuente a JetBrains Mono allí (Warp no toma la fuente de este repo).
 - **Starship**: activo vía `palette = 'dotmesh'`. Para revertir, cámbialo a
@@ -143,7 +147,9 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
   el blur de `blur-my-shell`.
 
 Tras editar cualquier paquete, aplica con `make restow <paquete>` y recarga
-(`exec zsh` para el prompt; recargar ventana en VS Code).
+(`exec zsh` para el prompt; recargar ventana en VS Code). El tema de VS Code es
+la excepción: como es una extensión empaquetada, recargar no basta; hay que
+volver a ejecutar `vscode/scripts/install.sh` (ver «Activar y revertir»).
 
 ## Iconografía
 

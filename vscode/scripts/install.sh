@@ -19,6 +19,7 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_CONFIG_DIR="$REPO_DIR/Library/Application Support/Code/User"
 VSCODE_DIR="$HOME/.vscode"
 VSCODE_CONFIG_DIR="$HOME/Library/Application Support/Code/User"
+EXT_ID="pablocoello.vscode-personal-conf"   # publisher.name del manifiesto (package.json)
 
 # Detectar plataforma: ruta de config y variante de keybindings
 KEYBINDINGS_SRC="keybindings.json"            # macOS usa cmd+
@@ -99,6 +100,26 @@ if command -v code >/dev/null 2>&1; then
 else
     echo -e "${YELLOW}⚠${NC} 'code' no disponible; me salto el tema."
 fi
+
+# Refrescar los temas en las extensiones ya instaladas (idempotente, sin red).
+# La extensión se instala como copia empaquetada, así que editar un JSON de tema
+# en el repo no llega a VS Code hasta refrescar esa copia. Este paso lo hace
+# aunque se haya saltado el reempaquetado del VSIX (sin 'code' ni npx). Con
+# nullglob, los globs sin coincidencias se expanden a nada en vez de al literal.
+shopt -s nullglob
+THEME_FILES=("$REPO_DIR/themes/"*.json)
+if [ ${#THEME_FILES[@]} -gt 0 ]; then
+    for _ext_dir in "$VSCODE_DIR/extensions/$EXT_ID-"*/; do
+        _ext_dir="${_ext_dir%/}"
+        # Salta symlinks: no escribas a través de un enlace hacia una ruta ajena.
+        if [ -L "$_ext_dir" ] || [ ! -d "$_ext_dir/themes" ]; then
+            continue
+        fi
+        cp -f "${THEME_FILES[@]}" "$_ext_dir/themes/"
+        echo -e "${GREEN}✓${NC} Temas sincronizados en $(basename "$_ext_dir")"
+    done
+fi
+shopt -u nullglob
 
 # Instalar extensiones
 echo ""
