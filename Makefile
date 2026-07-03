@@ -1,4 +1,4 @@
-.PHONY: help install backup stow unstow restow link-skills link-warp gnome-rice health clean
+.PHONY: help install backup stow unstow restow link-skills link-warp gnome-rice gnome-unrice health clean
 
 PACKAGES := shell git starship warp vscode opencode codex claude agents
 SKILLS_SRC := $(HOME)/.agents/skills
@@ -17,7 +17,8 @@ help:
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make link-warp - Symlink temas Warp a la ruta XDG (solo Linux)"
-	@echo "  make gnome-rice - Retint dotmesh del escritorio GNOME (solo Linux)"
+	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
+	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo ""
@@ -114,6 +115,19 @@ gnome-rice:
 		stow --no-folding -v -t ~ gnome || exit 1; \
 		echo "→ aplicando rice GNOME (dconf)"; \
 		./gnome/scripts/apply-rice.sh; \
+	fi
+
+# Deshace el stow de gnome (gtk.css y fondo). Solo Linux.
+# La capa dconf no se revierte automáticamente: hazlo manualmente con
+# dconf reset -f /org/gnome/ o cargando el backup de tu sesión anterior.
+gnome-unrice:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "  ok  gnome-unrice solo aplica en Linux/GNOME; no-op aquí"; \
+	else \
+		echo "← unstow gnome (gtk.css)"; \
+		stow -v -D -t ~ gnome || exit 1; \
+		echo "  ok  symlinks de GNOME eliminados"; \
+		echo "  !!  dconf no se revierte automáticamente; hazlo manualmente si es necesario"; \
 	fi
 
 health:
