@@ -33,19 +33,19 @@ backup:
 stow:
 	@for pkg in $(PACKAGES); do \
 		echo "→ stow $$pkg"; \
-		stow -v -t ~ $$pkg; \
+		stow --no-folding -v -t ~ $$pkg || exit 1; \
 	done
 
 unstow:
 	@for pkg in $(PACKAGES); do \
 		echo "← unstow $$pkg"; \
-		stow -v -D -t ~ $$pkg; \
+		stow -v -D -t ~ $$pkg || exit 1; \
 	done
 
 restow:
 	@for pkg in $(PACKAGES); do \
 		echo "↻ restow $$pkg"; \
-		stow -v -R -t ~ $$pkg; \
+		stow --no-folding -v -R -t ~ $$pkg || exit 1; \
 	done
 
 link-skills:
@@ -111,7 +111,7 @@ gnome-rice:
 		echo "  ok  gnome-rice solo aplica en Linux/GNOME; no-op aquí"; \
 	else \
 		echo "→ stow gnome (gtk.css)"; \
-		stow -v -t ~ gnome; \
+		stow --no-folding -v -t ~ gnome || exit 1; \
 		echo "→ aplicando rice GNOME (dconf)"; \
 		./gnome/scripts/apply-rice.sh; \
 	fi
