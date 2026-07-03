@@ -39,14 +39,41 @@ backup_file "$VSCODE_DIR/settings.json"    "vscode/settings.json"
 backup_file "$VSCODE_DIR/keybindings.json" "vscode/keybindings.json"
 backup_file "$VSCODE_DIR/snippets"         "vscode/snippets"
 
-# Agentes IA
-backup_file "$HOME/.config/opencode/agents"   "config/opencode/agents"
-backup_file "$HOME/.config/opencode/commands" "config/opencode/commands"
-backup_file "$HOME/.config/opencode/skills"   "config/opencode/skills"
-backup_file "$HOME/.codex/config.toml"        "codex/config.toml"
-backup_file "$HOME/.codex/AGENTS.md"          "codex/AGENTS.md"
+# Claude Code
 backup_file "$HOME/.claude/settings.json"     "claude/settings.json"
-backup_file "$HOME/.agents/skills"            "agents/skills"
+backup_file "$HOME/.claude/CLAUDE.md"         "claude/CLAUDE.md"
+backup_file "$HOME/.claude/AGENTS.md"         "claude/AGENTS.md"
+backup_file "$HOME/.claude/statusline.sh"     "claude/statusline.sh"
+backup_file "$HOME/.claude/hooks"             "claude/hooks"
+backup_file "$HOME/.claude/agents"            "claude/agents"
+backup_file "$HOME/.claude/commands"          "claude/commands"
+backup_file "$HOME/.claude/output-styles"     "claude/output-styles"
+backup_file "$HOME/.claude/mcp"               "claude/mcp"
+
+# OpenCode
+backup_file "$HOME/.config/opencode/opencode.json" "config/opencode/opencode.json"
+backup_file "$HOME/.config/opencode/agents"        "config/opencode/agents"
+backup_file "$HOME/.config/opencode/commands"      "config/opencode/commands"
+
+# Codex
+backup_file "$HOME/.codex/config.toml" "codex/config.toml"
+backup_file "$HOME/.codex/AGENTS.md"   "codex/AGENTS.md"
+
+# Skills
+backup_file "$HOME/.agents/skills" "agents/skills"
+
+# Warp
+if [ "$(uname)" = "Darwin" ]; then
+    backup_file "$HOME/.warp/themes" "warp/themes"
+else
+    backup_file "$HOME/.local/share/warp-terminal/themes" "warp/themes"
+fi
+
+# GNOME (Linux)
+if [ "$(uname)" = "Linux" ]; then
+    backup_file "$HOME/.config/gtk-3.0/gtk.css" "config/gtk-3.0/gtk.css"
+    backup_file "$HOME/.config/gtk-4.0/gtk.css" "config/gtk-4.0/gtk.css"
+fi
 
 echo ""
 echo "Backup completado en: $BACKUP_DIR"
