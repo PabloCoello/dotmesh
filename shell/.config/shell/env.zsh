@@ -17,12 +17,6 @@ export SAVEHIST=10000
 export HISTFILE=~/.zsh_history
 
 # ─────────────────────────────────────────────
-# ➤ SSH CONFIGURATION
-# ─────────────────────────────────────────────
-export SSH_PRIVATE_KEY="$(cat ~/.ssh/id_ed25519 2>/dev/null)"
-export SSH_KNOWN_HOSTS="$(ssh-keyscan github.com 2>/dev/null)"
-
-# ─────────────────────────────────────────────
 # ➤ LANGUAGE & LOCALE
 # ─────────────────────────────────────────────
 export LANG="en_US.UTF-8"
