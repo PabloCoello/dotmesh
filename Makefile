@@ -141,7 +141,17 @@ health:
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
+	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
+	@command -v nvim     >/dev/null && echo "  ok  nvim"     || echo "  --  nvim"
+	@command -v npx      >/dev/null && echo "  ok  npx"      || echo "  --  npx"
+	@[ "$$(uname -s)" = "Linux" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
+	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
+	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
+	@[ -L "$$HOME/.config/starship.toml" ] && [ -e "$$HOME/.config/starship.toml" ] && echo "  ok  symlink ~/.config/starship.toml" || echo "  --  ~/.config/starship.toml no es symlink al repo (corre 'make stow')"
+	@if [ "$$(uname -s)" = "Linux" ]; then \
+		[ -d "$(WARP_THEMES_DST)" ] && echo "  ok  temas Warp XDG ($(WARP_THEMES_DST))" || echo "  --  temas Warp XDG ausentes (corre 'make link-warp')"; \
+	fi
 
 clean:
 	@rm -rf ~/dotfiles-backup/*
