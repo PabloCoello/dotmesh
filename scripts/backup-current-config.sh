@@ -9,6 +9,7 @@ BACKUP_DIR="$HOME/dotfiles-backup/$TIMESTAMP"
 
 echo "Creando backup en $BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 
 backup_file() {
     local src="$1"
