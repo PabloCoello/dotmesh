@@ -6,6 +6,10 @@
 	editor = nvim
 	pager = delta
 	autocrlf = input
+	excludesFile = ~/.gitignore_global
+
+[commit]
+	template = ~/.gitmessage
 
 [init]
 	defaultBranch = main
@@ -84,7 +88,7 @@
 	who = shortlog -sn --
 	
 	# Stash
-	ss = stash save
+	ss = stash push
 	sp = stash pop
 	sl = stash list
 	
@@ -100,7 +104,7 @@
 	f = fetch
 	
 	# Clean
-	clean-branches = !git branch --merged | egrep -v '(^\\*|main|master|develop)' | xargs git branch -d
+	clean-branches = !git branch --merged | grep -Ev '^\\*|^[[:space:]]*(main|master|develop)$' | xargs -r git branch -d
 
 [color]
 	ui = true
