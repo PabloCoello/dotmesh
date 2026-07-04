@@ -21,7 +21,12 @@
 set -euo pipefail
 
 # Without jq we cannot parse the tool input; fail open rather than break Bash.
-command -v jq >/dev/null 2>&1 || exit 0
+# Warn once per day so a fresh install notices the guardrail is sleeping.
+if ! command -v jq >/dev/null 2>&1; then
+  _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
+  [ -f "$_jqw" ] || { printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2; : > "$_jqw" 2>/dev/null || true; }
+  exit 0
+fi
 
 input=$(cat)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
