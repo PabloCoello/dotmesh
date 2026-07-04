@@ -62,7 +62,13 @@ function qrender() {
         echo "Usage: qrender <file.qmd>"
         return 1
     fi
-    quarto render "$1" && open "${1%.qmd}.html"
+    quarto render "$1" || return
+    local html="${1%.qmd}.html"
+    if command -v xdg-open &>/dev/null; then
+        xdg-open "$html"
+    elif command -v open &>/dev/null; then
+        open "$html"
+    fi
 }
 
 function qnew() {
@@ -70,8 +76,8 @@ function qnew() {
     local template="${1:-default}"
     local filename="${2:-document.qmd}"
     
-    if [[ -f "$HOME/Documents/GitHub/dotfiles/templates/quarto/${template}.qmd" ]]; then
-        cp "$HOME/Documents/GitHub/dotfiles/templates/quarto/${template}.qmd" "$filename"
+    if [[ -f "$HOME/Documentos/GitHub/dotmesh/templates/quarto/${template}.qmd" ]]; then
+        cp "$HOME/Documentos/GitHub/dotmesh/templates/quarto/${template}.qmd" "$filename"
         echo "✅ Documento Quarto creado: $filename"
         nvim "$filename"
     else
@@ -171,29 +177,7 @@ function port_kill() {
         echo "Usage: port_kill <port_number>"
         return 1
     fi
-    lsof -ti:$1 | xargs kill -9
+    lsof -ti:$1 | xargs -r kill -9
     echo "✅ Proceso en puerto $1 terminado"
-}
-
-# ─────────────────────────────────────────────
-# ➤ AI/CODING ASSISTANT UTILITIES
-# ─────────────────────────────────────────────
-function ask_ai() {
-    # Quick AI question via OpenCode or Copilot CLI
-    if command -v github-copilot-cli &> /dev/null; then
-        github-copilot-cli what-the-shell "$*"
-    else
-        echo "❌ GitHub Copilot CLI not installed"
-        echo "Install with: npm install -g @githubnext/github-copilot-cli"
-    fi
-}
-
-function explain_cmd() {
-    # Explain a command using AI
-    if command -v github-copilot-cli &> /dev/null; then
-        github-copilot-cli git-assist "$*"
-    else
-        echo "❌ GitHub Copilot CLI not installed"
-    fi
 }
 
