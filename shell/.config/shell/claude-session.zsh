@@ -61,6 +61,74 @@ function __claude_lockdir() {
     echo "${XDG_RUNTIME_DIR:-$HOME/.cache}/dotmesh/sessions"
 }
 
+# Ruta del almacén de hashes aprobados para init-scripts.
+# Formato de cada línea: sha256<TAB>ruta_absoluta_del_script
+function __claude_isolate_store() {
+    echo "${XDG_STATE_HOME:-$HOME/.local/state}/dotmesh/claude-isolate-approved"
+}
+
+# Comprueba si un init-script está aprobado (gating tipo direnv).
+# Retorna:  0 → aprobado (ejecutar)
+#           2 → rechazado o sin TTY (saltar, no abortar)
+#           1 → error de hash (saltar)
+function __claude_isolate_check_trust() {
+    local script=$1 hash saved_hash store store_dir tmp
+
+    # sha256sum (Linux) o shasum (macOS)
+    if command -v sha256sum > /dev/null 2>&1; then
+        hash=$(sha256sum "$script" 2>/dev/null | awk '{print $1}')
+    elif command -v shasum > /dev/null 2>&1; then
+        hash=$(shasum -a 256 "$script" 2>/dev/null | awk '{print $1}')
+    else
+        echo "⚠️  sin sha256sum/shasum; .claude-session-init.sh no ejecutado" >&2
+        return 2
+    fi
+    [[ -z "$hash" ]] && return 1
+
+    store=$(__claude_isolate_store)
+    store_dir=$(dirname "$store")
+
+    # Comprobar si el hash ya está aprobado para esta ruta exacta
+    if [[ -f "$store" ]]; then
+        saved_hash=$(awk -F'\t' -v p="$script" '$2==p{print $1;exit}' "$store")
+        [[ "$saved_hash" == "$hash" ]] && return 0
+    fi
+
+    # Sin TTY: fail-safe, no ejecutar
+    if [[ ! -t 0 ]] || [[ ! -t 1 ]]; then
+        echo "⚠️  .claude-session-init.sh en ${script} no ejecutado (sin TTY; fail-safe)" >&2
+        return 2
+    fi
+
+    # Con TTY: mostrar contexto y pedir confirmación explícita
+    if [[ -n "$saved_hash" ]]; then
+        echo "⚠️  El script de inicialización ha cambiado (hash distinto al aprobado):" >&2
+    else
+        echo "⚠️  Script de inicialización no aprobado:" >&2
+    fi
+    echo "   ${script}" >&2
+    echo "─── preview (primeras 20 líneas) ─────────" >&2
+    head -20 "$script" >&2
+    echo "──────────────────────────────────────────" >&2
+    printf "¿Ejecutar este script? [y/N] " >&2
+    local answer
+    read -r answer
+
+    if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+        # Guardar aprobación de forma atómica: tmp → rename
+        mkdir -p "$store_dir" && chmod 700 "$store_dir"
+        tmp=$(mktemp "${store_dir}/.approved.XXXXXX")
+        [[ -f "$store" ]] && awk -F'\t' -v p="$script" '$2!=p' "$store" > "$tmp"
+        printf '%s\t%s\n' "$hash" "$script" >> "$tmp"
+        mv "$tmp" "$store"
+        chmod 600 "$store"
+        return 0
+    else
+        echo "⚠️  .claude-session-init.sh no ejecutado (rechazado)" >&2
+        return 2
+    fi
+}
+
 function claude() {
     # type -P es bashismo; en zsh se usa whence -p
     local _claude_bin
@@ -125,6 +193,7 @@ START_TIME=${shell_start}
 WORKTREE=${worktree_path}
 BRANCH=${branch}
 SESSION_ID=${session_id}
+BASE_SHA=${base_sha}
 LOCKEOF
     # Red de seguridad: si la shell recibe TERM/HUP/INT antes de llegar al
     # bloque de cleanup, al menos el lockfile no queda colgando.
@@ -142,8 +211,10 @@ LOCKEOF
         init_hook="${repo_root}/.claude-session-init.sh"
     fi
     if [[ -n "$init_hook" ]]; then
-        ( cd "$worktree_path" && "$init_hook" ) || \
-            echo "⚠️  .claude-session-init.sh devolvió error; continúo" >&2
+        if __claude_isolate_check_trust "$init_hook"; then
+            ( cd "$worktree_path" && "$init_hook" ) || \
+                echo "⚠️  .claude-session-init.sh devolvió error; continúo" >&2
+        fi
     fi
 
     ( cd "$worktree_path" && command claude "${args[@]}" )
@@ -211,7 +282,7 @@ function claude-session-cleanup() {
         echo "Usage: claude-session-cleanup [--force] <session-id>"
         return 1
     fi
-    local repo_root worktree_path branch lockdir lockfile guests pid_v wt_v
+    local repo_root worktree_path branch lockdir lockfile guests pid_v wt_v base_sha_lock dirty unmerged mb
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
         echo "❌ No estás en un repo git" >&2
         return 1
@@ -238,6 +309,26 @@ function claude-session-cleanup() {
             echo "❌ Procesos con ficheros abiertos en ${worktree_path}:" >&2
             echo "$guests" | sed 's/^/   /' >&2
             echo "   Usa --force si vas a matarlos manualmente." >&2
+            return 1
+        fi
+
+        # Comprobar trabajo sin guardar antes de borrar
+        dirty=$(git -C "$worktree_path" status --porcelain 2>/dev/null)
+        base_sha_lock=""
+        [[ -f "$lockfile" ]] && base_sha_lock=$(awk -F= '/^BASE_SHA=/ {print $2; exit}' "$lockfile")
+        if [[ -n "$base_sha_lock" ]]; then
+            unmerged=$(git -C "$repo_root" log --oneline "${base_sha_lock}..${branch}" 2>/dev/null | head -5)
+        else
+            mb=$(git -C "$repo_root" merge-base HEAD "$branch" 2>/dev/null)
+            [[ -n "$mb" ]] && unmerged=$(git -C "$repo_root" log --oneline "${mb}..${branch}" 2>/dev/null | head -5)
+        fi
+        if [[ -n "$dirty" || -n "$unmerged" ]]; then
+            echo "❌ Sesión ${id} tiene trabajo sin guardar:" >&2
+            [[ -n "$dirty" ]] && echo "   Cambios sin commitear:" >&2 && \
+                echo "$dirty" | head -5 | sed 's/^/     /' >&2
+            [[ -n "$unmerged" ]] && echo "   Commits no fusionados en ${branch}:" >&2 && \
+                echo "$unmerged" | sed 's/^/     /' >&2
+            echo "   Usa --force para borrar igualmente." >&2
             return 1
         fi
     fi
