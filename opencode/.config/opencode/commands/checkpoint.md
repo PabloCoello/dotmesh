@@ -3,14 +3,26 @@ description: Snapshot estructurado del estado de trabajo.
 agent: build
 ---
 
-Generate or update `CHECKPOINT.md` at the project root with:
+Escribe o actualiza un checkpoint bajo el directorio de tarea activo:
 
-- **Date and branch**.
-- **Done in this session**: concrete list of changes.
-- **Pending**: what remains and where each piece is.
-- **Decisions made**: with brief justification.
-- **Next steps**: what to do on resume.
+```
+.ai/tasks/YYYY-MM-DD-<slug>/checkpoint.md
+```
 
-If `CHECKPOINT.md` already exists, archive the previous one to `.opencode/checkpoints/<date>.md` before writing the new one.
+Si no hay tarea activa, usa `.ai/tasks/session-<fecha>/checkpoint.md`.
+**No crees nunca `CHECKPOINT.md` en la raíz del proyecto** — va contra la política
+de artefactos del repo.
 
-When writing in Spanish, apply `anti-ai-style` and `castellano-peninsular`. No filler.
+El checkpoint debe incluir:
+
+- **Fecha y rama**.
+- **Hecho en esta sesión**: lista concreta de cambios.
+- **Pendiente**: qué queda y dónde está cada pieza.
+- **Decisiones tomadas**: con justificación breve.
+- **Próximos pasos**: qué hacer al retomar.
+
+Alternativamente, si la sesión va a continuar en otro agente, delega en la skill
+`handoff` en lugar de escribir el checkpoint manualmente.
+
+Cuando escribas en español, aplica `anti-ai-style` y `castellano-peninsular`. Sin
+relleno.
