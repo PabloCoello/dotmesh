@@ -2,63 +2,62 @@
 # ➤ PATH MANAGEMENT
 # ═══════════════════════════════════════════════
 # Order matters: most specific paths first
+# typeset -U path deduplica automáticamente (zsh).
+
+typeset -U path
 
 # ─────────────────────────────────────────────
-# ➤ HOMEBREW
+# ➤ HOMEBREW (macOS)
 # ─────────────────────────────────────────────
-export PATH="/opt/homebrew/bin:$PATH"
-export PATH="/opt/homebrew/sbin:$PATH"
+[ -d '/opt/homebrew/bin' ]  && path=('/opt/homebrew/bin'  $path)
+[ -d '/opt/homebrew/sbin' ] && path=('/opt/homebrew/sbin' $path)
 
 # ─────────────────────────────────────────────
 # ➤ LOCAL BINARIES
 # ─────────────────────────────────────────────
-export PATH="$HOME/.local/bin:$PATH"
-
-# ─────────────────────────────────────────────
-# ➤ PYTHON TOOLS
-# ─────────────────────────────────────────────
-# pipx, poetry, etc.
-export PATH="$HOME/.local/bin:$PATH"
+[ -d "$HOME/.local/bin" ] && path=("$HOME/.local/bin" $path)
 
 # ─────────────────────────────────────────────
 # ➤ PYENV
 # ─────────────────────────────────────────────
 export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
+[ -d "$PYENV_ROOT/bin" ] && path=("$PYENV_ROOT/bin" $path)
 
 # ─────────────────────────────────────────────
 # ➤ NODE.JS / NPM
 # ─────────────────────────────────────────────
-export PATH="$HOME/.npm-global/bin:$PATH"
+[ -d "$HOME/.npm-global/bin" ] && path=("$HOME/.npm-global/bin" $path)
 
 # ─────────────────────────────────────────────
 # ➤ CARGO / RUST
 # ─────────────────────────────────────────────
-export PATH="$HOME/.cargo/bin:$PATH"
+[ -d "$HOME/.cargo/bin" ] && path=("$HOME/.cargo/bin" $path)
 
 # ─────────────────────────────────────────────
 # ➤ GO
 # ─────────────────────────────────────────────
 export GOPATH="$HOME/go"
-export PATH="$GOPATH/bin:$PATH"
+[ -d "$GOPATH/bin" ] && path=("$GOPATH/bin" $path)
 
 # ─────────────────────────────────────────────
-# ➤ VISUAL STUDIO CODE
+# ➤ VISUAL STUDIO CODE (macOS)
 # ─────────────────────────────────────────────
-export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
+_vscode_bin='/Applications/Visual Studio Code.app/Contents/Resources/app/bin'
+[ -d "$_vscode_bin" ] && path=("$_vscode_bin" $path)
+unset _vscode_bin
 
 # ─────────────────────────────────────────────
-# ➤ POSTGRESQL (Homebrew)
+# ➤ POSTGRESQL (Homebrew, macOS)
 # ─────────────────────────────────────────────
-export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+[ -d '/opt/homebrew/opt/libpq/bin' ] && path=('/opt/homebrew/opt/libpq/bin' $path)
 
 # ─────────────────────────────────────────────
-# ➤ ANTIGRAVITY
+# ➤ ANTIGRAVITY (macOS)
 # ─────────────────────────────────────────────
-export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
+[ -d "$HOME/.antigravity/antigravity/bin" ] && \
+  path=("$HOME/.antigravity/antigravity/bin" $path)
 
 # ─────────────────────────────────────────────
-# ➤ QUARTO
+# ➤ QUARTO (macOS)
 # ─────────────────────────────────────────────
-export PATH="/Applications/quarto/bin:$PATH"
-
+[ -d '/Applications/quarto/bin' ] && path=('/Applications/quarto/bin' $path)
