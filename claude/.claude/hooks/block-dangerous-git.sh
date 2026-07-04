@@ -87,9 +87,12 @@ dangerous_patterns=(
   'push.*[[:space:]]-f([[:space:]]|$)'
   'push.*[[:space:]]\+[^[:space:]]'
   'reset.*--hard'
-  'clean.*-[A-Za-z]*f'
+  # Anchor 'clean' as a standalone subcommand token (space after it) to avoid
+  # false positives like "git checkout cleanup-fix" matching 'clean.*-f'.
+  '(^|[[:space:]])clean[[:space:]].*-[A-Za-z]*f'
   'branch.*-D'
-  '(checkout|restore)([[:space:]]+--)?[[:space:]]+\.([[:space:]]|$)'
+  # checkout/restore generalized: handled below as an explicit check so we can
+  # also exclude --staged. Pattern removed from this array.
 )
 
 while IFS= read -r seg; do
@@ -117,6 +120,20 @@ while IFS= read -r seg; do
   if printf '%s' "$seg" | grep -qE '(^|[[:space:]])clean([[:space:]]|$)' \
      && printf '%s' "$seg" | grep -qE '[[:space:]](-[A-Za-z]*n|--dry-run)'; then
     continue
+  fi
+  # git commit is already scanned by family 3 (LLM attribution). Skipping it
+  # here avoids false positives when a commit MESSAGE body (e.g. in a heredoc)
+  # mentions "git reset --hard" or similar while documenting this very hook.
+  if printf '%s' "$seg" | grep -qE '[[:space:]]commit([[:space:]]|$)'; then
+    continue
+  fi
+  # checkout/restore that resets the working tree: block regardless of what ref
+  # or flags precede the final path argument, UNLESS --staged is present (which
+  # only unstages, it does not touch the working tree).
+  if printf '%s' "$seg" | grep -qE '[[:space:]](checkout|restore)([[:space:]]|$)' \
+     && printf '%s' "$seg" | grep -qE '[[:space:]]\.([[:space:]]|$)' \
+     && ! printf '%s' "$seg" | grep -qE '[[:space:]]--staged([[:space:]]|$)'; then
+    block "checkout/restore sobre el árbol de trabajo: \"$seg\""
   fi
   for pattern in "${dangerous_patterns[@]}"; do
     if printf '%s' "$seg" | grep -qE "$pattern"; then
