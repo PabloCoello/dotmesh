@@ -29,7 +29,13 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the guardrail is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  [ -f "$_jqw" ] || { printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2; : > "$_jqw" 2>/dev/null || true; }
+  # Honour the marker only if it belongs to the current UID (prevents a
+  # world-writable /tmp pre-creation from silently suppressing the warning).
+  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
+    exit 0
+  fi
+  printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
+  : > "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
@@ -51,6 +57,12 @@ block() {  # $1 = reason
 scan=$(printf '%s' "$cmd" \
   | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" \
   | tr ';|&(){}' '\n')
+# KNOWN LIMIT — shell indirection (sh -c '…', bash -c '…', eval '…'): the
+# dangerous payload sits inside a quoted string that the stripping above removes,
+# making it invisible to all pattern families. Blocking every sh/bash -c or eval
+# call would generate mass false positives (e.g. git commit -m '…' heredocs,
+# CI wrappers). These forms are accepted as a deliberate limit and are left to
+# explicit user approval or the external approver hook.
 
 # --- 2) Minimal net of catastrophic non-git commands (on the stripped scan) ---
 # Conservative and anchored to the command: only the inequivocally system-
@@ -124,6 +136,14 @@ dangerous_patterns=(
   'push.*--mirror'
   # push origin :branch deletes the remote branch (empty src refspec).
   'push.*[[:space:]]:[^[:space:]]'
+  # filter-branch rewrites history destructively and can lose commits permanently.
+  '[[:space:]]filter-branch([[:space:]]|$)'
+  # worktree remove --force discards an unclean worktree without confirmation.
+  'worktree[[:space:]]+remove.*--force'
+  # reflog expire/delete destroys recovery points for unreachable commits.
+  'reflog[[:space:]]+(expire|delete)'
+  # gc --prune=now; combined with reflog expire, permanently destroys unreachable commits.
+  'gc[[:space:]].*--prune=now'
   # checkout/restore generalized: handled below as an explicit check so we can
   # also exclude --staged. Pattern removed from this array.
 )
@@ -132,19 +152,19 @@ while IFS= read -r seg; do
   # Trim leading whitespace.
   seg=$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//')
   # Only inspect segments that actually invoke git.
-  # Handles: plain git, sudo/env/command/nice/timeout/nohup/xargs wrappers,
+  # Handles: plain git, sudo/env/command/exec/nice/timeout/nohup/xargs wrappers,
   # VAR=x environment prefixes, and path-prefixed git (/usr/bin/git, etc.).
   # Note: timeout with a numeric arg (timeout 30 git) is not caught here — the
   # numeric arg sits between the wrapper keyword and git, which the regex below
   # cannot distinguish from a non-git command without false positives.
   printf '%s' "$seg" | grep -qE \
-    '^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*((/[^[:space:]]*/)?git)([[:space:]]|$)' \
+    '^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*((/[^[:space:]]*/)?git)([[:space:]]|$)' \
     || continue
   # Normalise destructive aliases from git/.gitconfig to their canonical form so
   # the patterns below reach them: co->checkout, discard->checkout --, ps/psu->push.
   # These mirror git/.gitconfig; if you change those aliases, update this mapping.
   # The prefix pattern mirrors the anchor regex above to strip wrappers and paths.
-  _GIT_PRE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*(/[^[:space:]]*/)?git[[:space:]]+'
+  _GIT_PRE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*(/[^[:space:]]*/)?git[[:space:]]+'
   seg=$(printf '%s' "$seg" | sed -E \
     -e "s#^${_GIT_PRE}discard([[:space:]]|$)#git checkout -- #" \
     -e "s#^${_GIT_PRE}co([[:space:]]|$)#git checkout #" \
@@ -154,10 +174,20 @@ while IFS= read -r seg; do
      && printf '%s' "$seg" | grep -qE '[[:space:]](-[A-Za-z]*n|--dry-run)'; then
     continue
   fi
-  # git commit is already scanned by family 3 (LLM attribution). Skipping it
-  # here avoids false positives when a commit MESSAGE body (e.g. in a heredoc)
-  # mentions "git reset --hard" or similar while documenting this very hook.
-  if printf '%s' "$seg" | grep -qE '[[:space:]]commit([[:space:]]|$)'; then
+  # Skip only when commit IS the git subcommand (git [-flags] commit …).
+  # Requires every token between the git invocation and 'commit' to start with
+  # '-' (a global flag such as --no-pager or -p). This correctly skips
+  # `git commit` while NOT skipping `git push --force origin commit`,
+  # `git reset --hard commit`, `git branch -D commit`, `git stash drop commit`
+  # or `git checkout . commit` — where 'commit' is an argument, not the
+  # subcommand, and the dangerous patterns in this loop must fire.
+  # The previous broad skip (`[[:space:]]commit([[:space:]]|$)`) was a regression:
+  # it silenced ALL patterns whenever the word 'commit' appeared anywhere in
+  # the argument list, regardless of role.
+  # Edge case: `git -c key=val commit` — the value token does not start with '-'
+  # so this skip does not fire; acceptable, since the quote-stripped message body
+  # cannot produce a dangerous-pattern match in practice.
+  if printf '%s' "$seg" | grep -qE '(^|[[:space:]])(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+)*((/[^[:space:]]*/)?git)([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit([[:space:]]|$)'; then
     continue
   fi
   # checkout/restore that resets the working tree: block regardless of what ref

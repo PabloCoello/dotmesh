@@ -24,7 +24,13 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the guardrail is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  [ -f "$_jqw" ] || { printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2; : > "$_jqw" 2>/dev/null || true; }
+  # Honour the marker only if it belongs to the current UID (prevents a
+  # world-writable /tmp pre-creation from silently suppressing the warning).
+  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
+    exit 0
+  fi
+  printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
+  : > "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
