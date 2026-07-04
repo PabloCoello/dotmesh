@@ -30,7 +30,7 @@
 # Remember to:
 # - Use the imperative mood in the subject line ("Add feature" not "Added")
 # - Don't end the subject line with a period
-# - Capitalize the subject line and each paragraph
+# - Use lowercase with scope: type(scope): subject
 # - Separate subject from body with a blank line
 # - Use the body to explain what and why vs. how
 # - Can use multiple lines with "-" for bullet points in body
