@@ -19,8 +19,14 @@ export HISTFILE=~/.zsh_history
 # ─────────────────────────────────────────────
 # ➤ LANGUAGE & LOCALE
 # ─────────────────────────────────────────────
-export LANG="en_US.UTF-8"
-export LC_ALL="en_US.UTF-8"
+# Condicionar al locale generado en el sistema; evita "cannot set locale" en Ubuntu.
+if locale -a 2>/dev/null | grep -qiF 'en_US.UTF-8'; then
+  export LANG="en_US.UTF-8"
+  export LC_ALL="en_US.UTF-8"
+elif locale -a 2>/dev/null | grep -qiF 'en_US.utf8'; then
+  export LANG="en_US.utf8"
+  export LC_ALL="en_US.utf8"
+fi
 
 # ─────────────────────────────────────────────
 # ➤ PAGER CONFIGURATION
@@ -43,7 +49,11 @@ export PYTHONDONTWRITEBYTECODE=1
 # ─────────────────────────────────────────────
 # ➤ R CONFIGURATION
 # ─────────────────────────────────────────────
-export R_LIBS_USER="$HOME/Library/R/$(R --version | grep -oE '[0-9]+\\.[0-9]+' | head -1)/library"
+# ~/Library/R es ruta macOS; solo aplica si R existe y estamos en macOS.
+# Regex corregida: \\ en single-quote pasaba literal \\ a grep (nunca casaba).
+if [[ "$OSTYPE" == darwin* ]] && command -v R &>/dev/null; then
+  export R_LIBS_USER="$HOME/Library/R/$(R --version | grep -oE '[0-9]+\.[0-9]+' | head -1)/library"
+fi
 
 # ─────────────────────────────────────────────
 # ➤ QUARTO CONFIGURATION
@@ -51,9 +61,10 @@ export R_LIBS_USER="$HOME/Library/R/$(R --version | grep -oE '[0-9]+\\.[0-9]+' |
 export QUARTO_PYTHON="python3"
 
 # ─────────────────────────────────────────────
-# ➤ HOMEBREW CONFIGURATION
+# ➤ HOMEBREW CONFIGURATION (macOS)
 # ─────────────────────────────────────────────
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# Verifica la existencia del binario (ARM/Intel macOS; no aplica en Linux).
+[ -x '/opt/homebrew/bin/brew' ] && eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # ─────────────────────────────────────────────
 # ➤ PYENV CONFIGURATION
