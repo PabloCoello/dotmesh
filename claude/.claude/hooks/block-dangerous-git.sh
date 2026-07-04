@@ -90,7 +90,16 @@ dangerous_patterns=(
   # Anchor 'clean' as a standalone subcommand token (space after it) to avoid
   # false positives like "git checkout cleanup-fix" matching 'clean.*-f'.
   '(^|[[:space:]])clean[[:space:]].*-[A-Za-z]*f'
-  'branch.*-D'
+  # branch -D (short) and --delete --force (long form) are equivalent.
+  'branch.*(-D|--delete[[:space:]].*--force|--force[[:space:]].*--delete)'
+  # stash drop/clear permanently discard stashed work.
+  'stash[[:space:]]+(drop|clear)([[:space:]]|$)'
+  # update-ref -d deletes a ref directly, bypassing branch protection.
+  'update-ref.*[[:space:]]-d([[:space:]]|$)'
+  # push --mirror overwrites every ref on the remote (can delete branches).
+  'push.*--mirror'
+  # push origin :branch deletes the remote branch (empty src refspec).
+  'push.*[[:space:]]:[^[:space:]]'
   # checkout/restore generalized: handled below as an explicit check so we can
   # also exclude --staged. Pattern removed from this array.
 )
