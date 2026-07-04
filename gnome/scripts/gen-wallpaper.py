@@ -5,6 +5,11 @@ Determinista (semilla fija) y reproducible. La paleta sale de docs/DESIGN.md:
 cromo monocromo, el color solo como señal (un único nodo teal). Por defecto
 escribe el asset versionado del paquete gnome/.
 
+Dependencia externa:
+  pip install Pillow       # o: apt install python3-pil
+  (la imagen ya está versionada en gnome/.local/share/backgrounds/;
+   solo necesitas regenerarla si cambias la paleta)
+
 Uso:
   gen-wallpaper.py [salida.png] [spacing] [jitter] [line_alpha] [dot_alpha] [teal0|1]
 """
