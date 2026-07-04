@@ -70,8 +70,9 @@ if [ -n "$cwd" ] && git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&
   branch=$(git -C "$cwd" branch --show-current 2>/dev/null || true)
 fi
 
-# Coste a 2 decimales.
-cost_fmt=$(printf '%.2f' "$cost" 2>/dev/null || printf '0.00')
+# Coste a 2 decimales. LC_ALL=C garantiza separador punto independiente del locale.
+# La asignación fuera de $() hace que el || sustituya en vez de concatenar.
+cost_fmt=$(LC_ALL=C printf '%.2f' "$cost" 2>/dev/null) || cost_fmt='0.00'
 
 # Tokens legibles: "118k" a partir de 1000, si no el valor crudo.
 if [ "$tokens" -ge 1000 ]; then used="$(( tokens / 1000 ))k"; else used="$tokens"; fi
