@@ -67,7 +67,7 @@ rmdir ~/.config/opencode/agents 2>/dev/null    # solo si está vacío
 make restow                                    # vuelve a enlazar
 ```
 
-### `opencode agent list` no muestra los 8 agentes
+### `opencode agent list` no muestra todos los agentes
 
 ```bash
 ls -la ~/.config/opencode/agents/              # comprueba symlinks
@@ -76,16 +76,6 @@ opencode --version
 
 Si falta alguno: revisa que los `.md` tengan el frontmatter correcto (ver
 ejemplos en [opencode/.config/opencode/agents/](../opencode/.config/opencode/agents/)).
-
-### Symlink a `mcp.json` roto
-
-dotmesh no versiona `mcp.json` (lo gestiona el usuario fuera del repo). Si
-encuentras un symlink roto:
-
-```bash
-ls -la ~/.config/opencode/mcp.json
-rm ~/.config/opencode/mcp.json                 # si apunta a una ruta inexistente
-```
 
 ## Codex
 
