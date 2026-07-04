@@ -4,7 +4,7 @@ This file is the single source of truth for agent instructions in this repositor
 
 ## Project overview
 
-This repository manages personal macOS dotfiles with **GNU Stow**. Editing files here changes the user's local environment once `make stow` (or `make install`) is run. Treat changes as having a real, machine-wide blast radius.
+This repository manages personal dotfiles (macOS and Linux) with **GNU Stow**. Editing files here changes the user's local environment once `make stow` (or `make install`) is run. Treat changes as having a real, machine-wide blast radius.
 
 ## Stack
 
@@ -41,13 +41,13 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `shell/` | `~/.zshrc`, `~/.config/shell/` | Zsh + Oh-My-Zsh entrypoint and modular `env/path/functions/aliases/ai.zsh` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` | Git config + delta pager |
 | `starship/` | `~/.config/starship.toml` | Prompt |
-| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` (macOS, vía Stow) · `~/.local/share/warp-terminal/themes/` (Linux, vía `make link-warp`) | Temas del terminal Warp: **Carbon** (reciclado del Carbon de Terax) y **dotmesh** (Ink + sintaxis; ver `docs/DESIGN.md`) |
-| `vscode/` | `~/Library/Application Support/Code/User/...` (macOS, vía Stow) · `~/.config/Code/User/` (Linux) · `%APPDATA%\Code\User\` (Windows), estos dos por `scripts/install.sh`/`install.ps1` | VS Code settings, keybindings (`keybindings.json` cmd+ en macOS · `keybindings.linux.json` ctrl+ en Linux/Windows), snippets, extensions list, custom themes (activo: **dotmesh**) |
+| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` (macOS, via Stow) · `~/.local/share/warp-terminal/themes/` (Linux, via `make link-warp`) | Warp terminal themes: **Carbon** (adapted from Terax Carbon) and **dotmesh** (Ink + syntax; see `docs/DESIGN.md`) |
+| `vscode/` | `~/Library/Application Support/Code/User/` (macOS, via Stow) · `~/.config/Code/User/` (Linux, via `make vscode-install`) | VS Code settings, keybindings (`keybindings.json` cmd+ on macOS · `keybindings.linux.json` ctrl+ on Linux), extensions list, custom themes (active: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/` |
+| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
-| `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css` (Linux, vía `make gnome-rice`) | Rice del escritorio GNOME: retint sobre Yaru a la paleta dotmesh (gtk.css + capa dconf). Ver `docs/DESIGN.md` |
+| `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 
 `Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
 
@@ -65,7 +65,7 @@ The `gnome/` package is Linux-only and intentionally **not** in `PACKAGES`: `mak
 
 Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream marketplace plugin) without updating the sync story here and in the README.
 
-The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement the divergent-exploration stance now folded into `grilling`, `idea-refine` and the `maker` persona (the former `debate` agent). `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`.
+The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement the divergent-exploration stance now folded into `grilling`, `idea-refine` and the `maker` persona (the former `debate` agent). `watch-summary` generates an automatic summary of session history. `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`.
 
 ## Skill flow is the default, not a request
 
