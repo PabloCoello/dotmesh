@@ -6,8 +6,9 @@
 # tipografía dotmesh y tinte Ink del dock. La capa de colores de apps (gtk.css)
 # va por stow, no por aquí.
 #
-# Idempotente y reversible: solo escribe claves gsettings; para revertir, carga
-# el backup que deja `make backup` o usa `dconf load` con tu volcado previo.
+# Idempotente y reversible: solo escribe claves gsettings; para revertir, usa
+# el volcado dconf guardado en ~/.local/share/dotmesh/dconf-pre-rice.ini
+# (la primera ejecución lo crea; mantén ese fichero fuera de make backup).
 # Solo Linux/GNOME.
 
 set -euo pipefail
@@ -17,7 +18,25 @@ if ! command -v gsettings >/dev/null 2>&1; then
     exit 0
 fi
 
+# Guarda de esquema: necesitamos org.gnome.desktop.interface (GNOME Desktop).
+GDI='org.gnome.desktop.interface'
+if ! gsettings list-schemas 2>/dev/null | grep -qx "$GDI"; then
+    echo "  --  esquema GNOME Desktop no encontrado; nada que hacer (¿no es GNOME?)."
+    exit 0
+fi
+
 say() { printf '  ok  %s\n' "$1"; }
+
+# --- Volcado previo de dconf (idempotente: no sobreescribe si ya existe) ---
+DCONF_DIR="$HOME/.local/share/dotmesh"
+DCONF_BACKUP="$DCONF_DIR/dconf-pre-rice.ini"
+mkdir -p "$DCONF_DIR"
+if [ ! -f "$DCONF_BACKUP" ]; then
+    dconf dump / > "$DCONF_BACKUP"
+    say "estado dconf guardado en $DCONF_BACKUP"
+else
+    say "volcado previo ya existe en $DCONF_BACKUP (no se sobrescribe)"
+fi
 
 # --- Base: oscuro + acento viridian (la variante Yaru más cercana al teal) ---
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
