@@ -7,11 +7,16 @@ permission:
   edit: allow
   write: allow
   bash:
+    "*": allow
     "rm -rf /*": deny
     "rm -rf ~*": deny
     "git push --force*": ask
     "git push -f*": ask
-    "*": allow
+    "git reset --hard*": ask
+    "git clean -f*": ask
+    "git branch -D*": ask
+    "git checkout .*": ask
+    "git restore .*": ask
   webfetch: allow
   read: allow
   task:
