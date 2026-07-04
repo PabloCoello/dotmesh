@@ -9,6 +9,10 @@
  * Paleta: docs/DESIGN.md.
  */
 
+/* theme_bg_color = #181818 (ink-1) es intencionado: GTK3 usa este token para
+ * superficies elevadas (toolbars, sidebars, diálogos); ink-1 da el escalón de
+ * elevación correcto. El lienzo de contenido (theme_base_color) sí va en ink-0.
+ * Ver docs/DESIGN.md § Tokens adicionales por superficie → GTK. */
 @define-color theme_bg_color         #181818;
 @define-color theme_base_color       #121212;
 @define-color theme_fg_color         #cecece;
@@ -22,6 +26,6 @@
 @define-color borders                #2a2a2a;
 
 /* Yaru/Adwaita modernos también consultan estos */
-@define-color accent_color           #82C2BC;
+@define-color accent_color           #84C4BF;
 @define-color accent_bg_color        #6CB6B0;
 @define-color accent_fg_color        #121212;

@@ -33,7 +33,10 @@
 @define-color thumbnail_bg_color         #181818;
 @define-color thumbnail_fg_color         #cecece;
 
-/* Acento: teal dotmesh como señal (relleno) y un hermano más claro para texto */
+/* Acento: teal dotmesh como señal (relleno) y variante más clara para texto.
+ * accent_bg_color = #6CB6B0 (teal canónico, relleno de botones/selección).
+ * accent_color    = #84C4BF (variante más clara, para texto/icono sobre fondo oscuro).
+ * Fuente de verdad: docs/DESIGN.md § Tokens adicionales por superficie → GTK. */
 @define-color accent_bg_color            #6CB6B0;
 @define-color accent_fg_color            #121212;
-@define-color accent_color               #82C2BC;
+@define-color accent_color               #84C4BF;
