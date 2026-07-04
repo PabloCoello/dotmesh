@@ -54,7 +54,10 @@ done <<< "$scan"
 tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 [ -z "$tp" ] && exit 0
 [ -f "$tp" ] || exit 0
-if grep -qEm 1 '("subagent_type"[[:space:]]*:[[:space:]]*"review")|code-review-and-quality' "$tp" 2>/dev/null; then
+# The bare string "code-review-and-quality" appears in the session from the
+# start (skill list, AGENTS.md). Only a real Skill tool invocation or a review
+# subagent proves the gate ran. Match the JSON key emitted by the Skill tool.
+if grep -qEm 1 '("subagent_type"[[:space:]]*:[[:space:]]*"review")|("skill"[[:space:]]*:[[:space:]]*"code-review-and-quality")' "$tp" 2>/dev/null; then
   exit 0
 fi
 
