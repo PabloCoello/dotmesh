@@ -55,8 +55,12 @@ powerline de la esfera del reloj). Cada escalón es más claro que el anterior p
 que se lean las costuras; el texto va en un gris claro fijo que mantiene contraste
 sobre todos:
 
-`#424242` (git) · `#4D4D4D` (lenguajes / batería) · `#545454` (docker / clima) ·
+`#2e2e2e` (os / usuario) · `#383838` (directorio) · `#424242` (git) ·
+`#4D4D4D` (lenguajes / batería) · `#545454` (docker / conda) · `#5c5c5c` (hora) ·
 texto `#EAEAEA`.
+
+VS Code usa `#474747` para los números de línea (valor propio del tema, fuera de
+la rampa powerline).
 
 El **blanco de prompt** `#F0F1F3` es el tono más brillante de la voz oscura: el
 valor vivo del prompt (p. ej. la hora en la esfera). El cromo sigue siendo
@@ -136,7 +140,8 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
 - **Warp**: selecciona el tema `dotmesh` en los ajustes de Warp. Ajusta también
   la fuente a JetBrains Mono allí (Warp no toma la fuente de este repo).
 - **Starship**: activo vía `palette = 'dotmesh'`. Para revertir, cámbialo a
-  `palette = 'gruvbox_dark'` (la paleta antigua se conserva en el fichero).
+  `palette = 'legacy'` (paleta heredada; conserva los colores del esquema
+  anterior y ya incluye todas las claves de icono que los módulos necesitan).
 - **delta/Git**: el cambio de colores es directo; revertir es un `git checkout`
   de `git/.gitconfig`.
 - **Escritorio (GNOME, solo Linux)**: `make gnome-rice` enlaza los `gtk.css` y
@@ -159,13 +164,32 @@ el árbol de VS Code. Esos glifos se conservan tal cual; el tema solo cambia su
 color. No se usan emoji: el estado se expresa con glifos del propio tipo
 (`✓ ✗ ●`) y con los iconos de línea ya presentes.
 
+## Tokens adicionales por superficie
+
+### GTK (libadwaita / GTK4)
+
+Libadwaita distingue dos roles del acento:
+
+| Token | Hex | Rol |
+|---|---|---|
+| `accent_bg_color` | `#6CB6B0` | relleno de botones y selecciones (teal canónico) |
+| `accent_fg_color` | `#121212` | texto sobre relleno teal |
+| `accent_color`    | `#84C4BF` | acento como texto / icono sobre fondo oscuro (variante más clara de teal) |
+
+GTK3 usa los mismos tres tokens. `theme_bg_color` se fija en `#181818` (ink-1) en
+lugar de `#121212` (ink-0) de forma intencionada: en GTK3 ese color rige las
+superficies elevadas (toolbars, sidebars, diálogos), donde el escalón de elevación
+ink-1 es semánticamente correcto; el lienzo de contenido (`theme_base_color`) sí
+va en ink-0.
+
 ## Limitaciones conocidas
 
 - **Fuente de Warp**: no se versiona en este repo; hay que fijar JetBrains Mono
   (Nerd Font) en los ajustes de Warp a mano.
-- **`syntax-theme` de delta**: se mantiene `Pandora` para no romper el resaltado
-  de bat dentro de los diffs; lo que se ajusta a dotmesh son las decoraciones de
-  `+/-`, cabeceras de hunk y números de línea.
+- **`syntax-theme` de delta**: se usa `ansi`, que delega en la paleta ANSI del
+  terminal (Warp dotmesh la define alineada con la sintaxis). Las decoraciones de
+  `+/-`, cabeceras de hunk y números de línea van siempre en colores foreground
+  dotmesh explícitos, independientes del tema de bat.
 - El sistema de diseño completo (tokens, componentes, kits de UI) vive fuera de
   este repo, en el proyecto de Claude Design. Aquí solo se integra la capa de
   configuración real.
