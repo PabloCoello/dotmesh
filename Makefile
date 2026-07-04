@@ -1,10 +1,12 @@
-.PHONY: help install backup stow unstow restow link-skills link-warp gnome-rice gnome-unrice health clean
+.PHONY: help install backup stow unstow restow link-skills link-warp seed-claude-settings gnome-rice gnome-unrice health clean
 
 PACKAGES := shell git starship warp vscode opencode codex claude agents
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 WARP_THEMES_SRC := $(abspath warp/.warp/themes)
 WARP_THEMES_DST := $(HOME)/.local/share/warp-terminal/themes
+CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
+CLAUDE_SETTINGS_DST := $(HOME)/.claude/settings.json
 
 help:
 	@echo "dotmesh — gestión de dotfiles"
@@ -17,6 +19,7 @@ help:
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make link-warp - Symlink temas Warp a la ruta XDG (solo Linux)"
+	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
@@ -24,7 +27,7 @@ help:
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
-install: backup stow link-skills link-warp
+install: backup stow seed-claude-settings link-skills link-warp
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -103,6 +106,22 @@ link-warp:
 				echo "  ok  $$dst -> $$src"; \
 			fi; \
 		done; \
+	fi
+
+# settings.json es plantilla base y NO se enlaza con Stow (ver claude/.stow-local-ignore).
+# Se copia una vez a un ~/.claude/settings.json REAL y nunca se sobreescribe, para que
+# los ajustes por-máquina queden fuera del repo. Idempotente.
+seed-claude-settings:
+	@mkdir -p "$(HOME)/.claude"
+	@if [ -L "$(CLAUDE_SETTINGS_DST)" ]; then \
+		echo "  !!  $(CLAUDE_SETTINGS_DST) es un symlink de una instalación antigua."; \
+		echo "      Conviértelo a fichero real una vez (conserva tu config actual):"; \
+		echo "        cp --remove-destination \"\$$(readlink -f $(CLAUDE_SETTINGS_DST))\" $(CLAUDE_SETTINGS_DST)"; \
+	elif [ -e "$(CLAUDE_SETTINGS_DST)" ]; then \
+		echo "  ok  $(CLAUDE_SETTINGS_DST) ya es fichero local; no se toca"; \
+	else \
+		cp "$(CLAUDE_SETTINGS_SRC)" "$(CLAUDE_SETTINGS_DST)"; \
+		echo "  ok  sembrado $(CLAUDE_SETTINGS_DST) desde la plantilla base"; \
 	fi
 
 # Rice del escritorio GNOME (retint sobre Yaru). Enlaza gtk.css por stow y
