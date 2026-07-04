@@ -42,6 +42,9 @@ plugins=(
 # AI/Ollama configurations
 [[ -f ~/.config/shell/ai.zsh ]] && source ~/.config/shell/ai.zsh
 
+# Claude Code session isolation (claude --isolate, claude-sessions, claude-session-cleanup)
+[[ -f ~/.config/shell/claude-session.zsh ]] && source ~/.config/shell/claude-session.zsh
+
 # ─────────────────────────────────────────────
 # ➤ STARSHIP PROMPT
 # ─────────────────────────────────────────────

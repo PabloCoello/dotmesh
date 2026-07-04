@@ -18,15 +18,20 @@
 # `claude-session-cleanup` distinguir sesiones vivas de huérfanas y evitar
 # borrar worktrees en uso por otras sesiones concurrentes.
 
-# Devuelve el campo 22 (starttime, jiffies desde boot) de /proc/$1/stat.
-# Maneja comm con espacios/paréntesis stripeando hasta el último ") ".
+# Devuelve un token opaco de tiempo de inicio del proceso $1.
+# Linux: campo 22 de /proc/$pid/stat (jiffies desde boot).
+# macOS/otros sin /proc: lstart de ps (cadena de fecha normalizada).
 function __claude_proc_start_time() {
     local pid=$1 rest
-    [[ -r "/proc/$pid/stat" ]] || return 1
-    rest=$(< "/proc/$pid/stat")
-    rest=${rest##*\) }
-    # Tras el strip, el campo 22 original es el 20 (-2 por pid y comm).
-    echo "$rest" | awk '{print $20}'
+    if [[ -r "/proc/$pid/stat" ]]; then
+        rest=$(< "/proc/$pid/stat")
+        rest=${rest##*\) }
+        # Tras el strip, el campo 22 original es el 20 (-2 por pid y comm).
+        echo "$rest" | awk '{print $20}'
+    else
+        # Fallback para macOS y sistemas sin /proc; tr -s normaliza espacios
+        ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' '
+    fi
 }
 
 # True si el lockfile referencia un proceso vivo cuyo START_TIME coincide
@@ -57,7 +62,14 @@ function __claude_lockdir() {
 }
 
 function claude() {
-    if ! type -P claude > /dev/null 2>&1; then
+    # type -P es bashismo; en zsh se usa whence -p
+    local _claude_bin
+    if [[ -n "$ZSH_VERSION" ]]; then
+        _claude_bin=$(whence -p claude 2>/dev/null)
+    else
+        _claude_bin=$(type -P claude 2>/dev/null)
+    fi
+    if [[ -z "$_claude_bin" ]]; then
         echo "❌ claude binary not found in PATH" >&2
         return 127
     fi
