@@ -48,10 +48,8 @@ color_red    = '#E59A9A'   # rose  — prompt error
 color_purple = '#CBAACB'   # lilac — vim replace
 # iconos: señal de sintaxis sobre el cromo grafito
 color_ico_peach = '#FFAA7A'
-color_ico_teal  = '#6CB6B0'
 color_ico_sage  = '#A8CBA0'
 color_ico_blue  = '#8FB4E3'
-color_ico_muted = '#9e9e9e'
 
 [palettes.gruvbox_dark]
 color_bg1= '#D1D3D4'
