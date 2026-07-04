@@ -177,7 +177,7 @@ function port_kill() {
         echo "Usage: port_kill <port_number>"
         return 1
     fi
-    lsof -ti:$1 | xargs -r kill -9
+    lsof -ti:"$1" | while read -r pid; do kill -9 "$pid"; done
     echo "✅ Proceso en puerto $1 terminado"
 }
 
