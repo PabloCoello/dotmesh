@@ -1,5 +1,6 @@
 ---
 description: Autonomously manage the Git lifecycle from sync and branch setup through atomic commits, push, and PR.
+disable-model-invocation: true
 ---
 
 Manage the current worktree through the full Git lifecycle: synchronize with the remote, create or reuse a correctly named branch, work in semantic slices, create each commit while the intent is still fresh, push, and open a pull request with a useful description.
