@@ -2,9 +2,6 @@ model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 
-[notice.model_migrations]
-"gpt-5.2" = "gpt-5.2-codex"
-
 [features]
 multi_agent = true
 
