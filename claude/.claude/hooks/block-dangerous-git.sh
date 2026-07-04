@@ -80,6 +80,20 @@ if printf '%s' "$cmd" | grep -qE '\bgit[[:space:]]+([^[:space:]]+[[:space:]]+)*c
   block "el mensaje de commit incluye atribución de LLM (política no-LLM de AGENTS.md): quítala y reintenta"
 fi
 
+# --- 1a) Alias injection that would persist or inline a dangerous op ----------
+# Checked on the RAW cmd (before quote-stripping) because the dangerous value
+# lives inside the quoted alias definition. Both -c (session-scoped) and
+# config (persistent) forms are covered.
+_dangerous_op_re='(push[[:space:]].*(--force|-f([[:space:]]|$)|--mirror)|reset[[:space:]]+--hard|(^|[[:space:]])clean[[:space:]].*-[A-Za-z]*f|branch[[:space:]]+(-D|--delete)|update-ref.*-d|stash[[:space:]]+(drop|clear))'
+if printf '%s' "$cmd" | grep -qE 'git[[:space:]].*-c[[:space:]]+alias\.' \
+   && printf '%s' "$cmd" | grep -qiE "$_dangerous_op_re"; then
+  block "git -c alias.X=<op-peligrosa> evade el guardarraíl"
+fi
+if printf '%s' "$cmd" | grep -qE 'git[[:space:]]+config[[:space:]].*(--[^[:space:]]+[[:space:]]+)*alias\.' \
+   && printf '%s' "$cmd" | grep -qiE "$_dangerous_op_re"; then
+  block "git config alias.X=<op-peligrosa> persistiría una evasión del guardarraíl"
+fi
+
 # --- 1) Destructive git ops (on the stripped, split scan) --------------------
 # Checked only against a segment already known to be a git invocation.
 dangerous_patterns=(
