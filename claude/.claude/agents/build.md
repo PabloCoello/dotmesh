@@ -50,7 +50,7 @@ Do not delete artifacts automatically. The user decides retention.
 
 1. Read `AGENTS.md` (Claude Code reads it via the `@AGENTS.md` import in `CLAUDE.md`) for project context.
 2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `plan` first.
-3. If the repo is mid-work, re-orient from `plan.md` and recent `git log` before writing code. You run as a delegated subagent and **cannot spawn other subagents**, so cross-phase orientation is the orchestrator's job (it hands you the summary, e.g. via the `handoff` skill).
+3. If the repo is mid-work, re-orient from `plan.md` and recent `git log` before writing code. You run as a delegated subagent. The `Agent` tool is not in this agent's allowlist, so you cannot delegate to other subagents — cross-phase orientation is the orchestrator's job (it hands you the summary, e.g. via the `handoff` skill).
 
 ## During implementation
 
@@ -64,7 +64,7 @@ Load these skills as relevant:
 
 ## Self-check and gates
 
-You run as a delegated subagent and **cannot spawn other subagents** — Claude Code does not nest them. So you do **not** invoke `review`, `security` or `maths` yourself. The split is:
+You run as a delegated subagent. The `Agent` tool is not in this agent's allowlist, so you do **not** invoke `review`, `security` or `maths` yourself. The split is:
 
 - **Self-check before each commit.** Load the `code-review-and-quality` skill over your own latest diff, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find before committing.
 - **Commit the slice**, then return a short summary **and the commit range** (the new SHAs) so the orchestrator can run the blocking gates over exactly what you landed.
@@ -75,7 +75,7 @@ You run as a delegated subagent and **cannot spawn other subagents** — Claude 
 ## Related commands
 
 - `/super-git` for semantic commits with hunk-level review.
-- Native `/security-review` and `/review` are available for commit-time checks.
+- Native `/security-review` and `/code-review` are available for commit-time checks.
 
 ## Bash safety
 
