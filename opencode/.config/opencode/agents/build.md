@@ -17,6 +17,18 @@ permission:
     "git branch -D*": ask
     "git checkout .*": ask
     "git restore .*": ask
+    "git checkout -- .*": ask
+    "git push --mirror*": ask
+    "git push * :*": ask
+    "git stash drop*": ask
+    "git stash clear*": ask
+    "git filter-branch*": ask
+    "git reflog expire*": ask
+    "git reflog delete*": ask
+    "git update-ref*-d*": ask
+    "git gc*--prune*": ask
+    "git worktree remove*--force*": ask
+    "git branch*--delete*--force*": ask
   webfetch: allow
   read: allow
   task:
