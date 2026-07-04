@@ -71,6 +71,16 @@ fi
 if printf '%s' "$scan" | grep -qE '>[[:space:]]*/dev/(sd|nvme|vd|hd|mmcblk|disk)'; then
   block "redirección a un dispositivo de bloque"
 fi
+# curl/wget piped directly to a shell — remote code execution without review.
+# Checked on the raw cmd (before split) because the pipe is the intent signal.
+if printf '%s' "$cmd" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh|ash|fish|python[0-9.]?|perl|ruby)([[:space:]]|$)'; then
+  block "curl/wget canalizado a un intérprete de shell (ejecución remota de código)"
+fi
+# rm -rf over sensitive user subtrees that the root-anchored pattern above
+# does not cover (those only match /, ~, $HOME as top-level targets).
+if printf '%s' "$scan" | grep -qE 'rm[[:space:]].*-[A-Za-z]*([rR][fF]?|[fF][rR]?)[A-Za-z]*[[:space:]]+(~/\.(ssh|gnupg|config|local)|~/Documentos/GitHub|~/Documents/GitHub)([[:space:]]|$)'; then
+  block "rm -rf sobre subdirectorio sensible del usuario (~/.ssh, ~/.gnupg, ~/.config, ~/Documentos/GitHub)"
+fi
 
 # --- 3) LLM attribution trailers in git commit (on the raw cmd) --------------
 # Scanned raw because the trailer lives inside the quoted -m body; gated on the
