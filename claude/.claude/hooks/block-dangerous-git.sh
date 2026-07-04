@@ -43,11 +43,14 @@ block() {  # $1 = reason
 }
 
 # Drop quoted substrings (single then double) so mentions inside strings don't
-# trip the scanners, then normalise command separators (; && || | & ( ) { }) to
-# newlines so each line is one command and patterns can't span two commands.
+# trip the scanners, then normalise command separators to newlines so each line
+# is one command and patterns can't span two commands.
+# tr replaces each separator character with a newline; || and && each produce
+# two newlines (an empty segment between) which the loop skips harmlessly.
+# This is portable across GNU sed and BSD sed (macOS), unlike \n in sed -E.
 scan=$(printf '%s' "$cmd" \
   | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" \
-  | sed -E 's/(\|\||&&|[;|&(){}])/\n/g')
+  | tr ';|&(){}' '\n')
 
 # --- 2) Minimal net of catastrophic non-git commands (on the stripped scan) ---
 # Conservative and anchored to the command: only the inequivocally system-

@@ -34,9 +34,10 @@ cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 
 # Strip quoted substrings, then split on command separators so each line is one
 # command. Mirrors block-dangerous-git.sh.
+# tr instead of sed \n: portable across GNU and BSD sed (macOS).
 scan=$(printf '%s' "$cmd" \
   | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" \
-  | sed -E 's/(\|\||&&|[;|&(){}])/\n/g')
+  | tr ';|&(){}' '\n')
 
 is_commit=0
 while IFS= read -r seg; do
