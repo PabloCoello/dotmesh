@@ -9,7 +9,7 @@
     },
     "github": {
       "type": "local",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "command": ["docker", "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
       "environment": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:DOTMESH_GITHUB_PAT}"
       },
