@@ -1,6 +1,6 @@
 ---
 name: maths
-description: Verifies mathematical work with SymPy via Python one-liners. Returns formal verification result. Isolated from project filesystem.
+description: Verifies mathematical work with SymPy via Python one-liners. Returns formal verification result. Use proactively when the task involves mathematical derivations, formulas in decision models, or mechanism properties.
 model: claude-sonnet-4-6
 tools: [Read, Bash]
 ---
