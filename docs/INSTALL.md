@@ -102,7 +102,7 @@ aplicarlos manualmente, usa la CLI de Claude:
 ```bash
 # Por servidor:
 claude mcp add notion   npx -- -y @notionhq/notion-mcp-server
-claude mcp add github   npx -- -y @modelcontextprotocol/server-github
+claude mcp add github   docker -- run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 claude mcp add tavily   npx -- -y tavily-mcp
 claude mcp add openalex npx -- -y openalex-research-mcp
 claude mcp add zotero   uvx -- zotero-mcp --env ZOTERO_LOCAL=true
@@ -118,7 +118,7 @@ deben estar exportados en el entorno antes de lanzar `claude` — ver
 > entorno. El bloque `env` del MCP en
 > [`claude/.claude/mcp/servers.reference.json`](../claude/.claude/mcp/servers.reference.json)
 > mapea explícitamente `DOTMESH_GITHUB_PAT` → `GITHUB_PERSONAL_ACCESS_TOKEN`
-> para el `@modelcontextprotocol/server-github`.
+> para el proceso `docker`, que lo pasa al contenedor con `-e`.
 
 ## Personalización
 
