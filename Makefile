@@ -1,6 +1,11 @@
-.PHONY: help install backup stow unstow restow link-skills link-warp seed-claude-settings gnome-rice gnome-unrice health clean
+.PHONY: help install backup stow unstow restow link-skills link-warp vscode-install seed-claude-settings gnome-rice gnome-unrice health clean
 
-PACKAGES := shell git starship warp vscode opencode codex claude agents
+# vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
+# que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
+PACKAGES := shell git starship warp opencode codex claude agents
+ifeq ($(shell uname -s),Darwin)
+PACKAGES += vscode
+endif
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 WARP_THEMES_SRC := $(abspath warp/.warp/themes)
@@ -17,6 +22,7 @@ help:
 	@echo "  make stow      - Aplica symlinks con GNU Stow"
 	@echo "  make unstow    - Elimina symlinks"
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
+	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; macOS: no-op, va por stow)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make link-warp - Symlink temas Warp a la ruta XDG (solo Linux)"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
@@ -27,7 +33,7 @@ help:
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
-install: backup stow seed-claude-settings link-skills link-warp
+install: backup stow vscode-install seed-claude-settings link-skills link-warp
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -106,6 +112,16 @@ link-warp:
 				echo "  ok  $$dst -> $$src"; \
 			fi; \
 		done; \
+	fi
+
+# En Linux, VS Code ignora ~/Library y lee ~/.config/Code/User; install.sh crea los symlinks
+# correctos y empaqueta el tema. En macOS el subárbol Library/... ya va por stow: no-op.
+vscode-install:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "  ok  VS Code configurado vía stow en macOS; vscode-install es no-op aquí"; \
+	else \
+		echo "→ configurando VS Code (Linux: install.sh)"; \
+		bash "$(abspath vscode/scripts/install.sh)"; \
 	fi
 
 # settings.json es plantilla base y NO se enlaza con Stow (ver claude/.stow-local-ignore).
