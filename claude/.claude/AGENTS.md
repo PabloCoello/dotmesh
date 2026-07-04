@@ -1,10 +1,14 @@
 # Convenciones globales de agente
 
 Instrucciones de comportamiento para cualquier agente de IA en esta máquina.
-Alineadas con la política de [dotmesh](~/Documentos/GitHub/dotmesh) (`AGENTS.md`),
-que es la fuente de verdad de las convenciones compartidas entre Claude Code,
-OpenCode y Codex. Los proyectos pueden tener su propio `AGENTS.md`/`CLAUDE.md` que
-prevalece sobre este archivo.
+
+> **Fuente de verdad:** `~/Documentos/GitHub/dotmesh/AGENTS.md`. Este fichero
+> es un resumen de las convenciones más comunes; cuando hay conflicto entre
+> ambos, prevalece el `AGENTS.md` del repo. Si editas convenciones globales,
+> hazlo en el repo y actualiza este fichero para mantener la sincronía.
+
+Los proyectos pueden tener su propio `AGENTS.md`/`CLAUDE.md` que prevalece
+sobre este archivo.
 
 ## Git
 
