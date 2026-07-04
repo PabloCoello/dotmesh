@@ -2,6 +2,17 @@ model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 
+# "untrusted": solo auto-aprueba comandos de solo lectura conocidos como seguros;
+# el resto (rm -rf, git clean -f, etc.) requiere aprobación explícita del usuario.
+# Valores válidos: "untrusted" | "on-request" | "never"
+# Fuente: codex-rs/protocol/src/protocol.rs (AskForApproval)
+approval_policy = "untrusted"
+
+# "workspace-write": el agente puede escribir en el workspace pero no fuera de él.
+# Valores válidos: "read-only" | "workspace-write" | "danger-full-access"
+# Fuente: codex-rs/protocol/src/config_types.rs (SandboxMode)
+sandbox_mode = "workspace-write"
+
 [features]
 multi_agent = true
 
