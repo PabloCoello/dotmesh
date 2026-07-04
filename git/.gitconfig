@@ -6,6 +6,10 @@
 	editor = nvim
 	pager = delta
 	autocrlf = input
+	excludesFile = ~/.gitignore_global
+
+[commit]
+	template = ~/.gitmessage
 
 [init]
 	defaultBranch = main
@@ -31,14 +35,16 @@
 	light = false
 	side-by-side = true
 	line-numbers = true
-	syntax-theme = Pandora
-	
-	# dotmesh — Paper · Ink · Syntax (sage = adición, rose = eliminación)
-	minus-style = "syntax #E59A9A"
-	minus-emph-style = "syntax #EAA9A9"
-	plus-style = "syntax #A8CBA0"
-	plus-emph-style = "syntax #B9D6B2"
-	hunk-header-style = "file line-number syntax #8FB4E3"
+	syntax-theme = ansi
+
+	# dotmesh — Paper · Ink · Syntax (sage = adición, rose = eliminación).
+	# Los acentos van como FOREGROUND (señal), sin fondo de línea; igual que
+	# [color "diff"]. ansi delega en la paleta ANSI del terminal (Warp dotmesh).
+	minus-style = "#E59A9A"
+	minus-emph-style = "#E59A9A bold"
+	plus-style = "#A8CBA0"
+	plus-emph-style = "#A8CBA0 bold"
+	hunk-header-style = "file line-number #8FB4E3"
 
 	# Line numbers
 	line-numbers-minus-style = "#E59A9A"
@@ -84,7 +90,7 @@
 	who = shortlog -sn --
 	
 	# Stash
-	ss = stash save
+	ss = stash push
 	sp = stash pop
 	sl = stash list
 	
@@ -100,7 +106,7 @@
 	f = fetch
 	
 	# Clean
-	clean-branches = !git branch --merged | egrep -v '(^\\*|main|master|develop)' | xargs git branch -d
+	clean-branches = !git branch --merged | grep -Ev '^\\*|^[[:space:]]*(main|master|develop)$' | xargs -r git branch -d
 
 [color]
 	ui = true

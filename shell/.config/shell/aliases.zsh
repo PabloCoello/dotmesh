@@ -63,8 +63,10 @@ alias activate='source venv/bin/activate'
 # ─────────────────────────────────────────────
 # ➤ R ALIASES
 # ─────────────────────────────────────────────
-alias r='radian'
-alias R='radian'
+if command -v radian &> /dev/null; then
+  alias r='radian'
+  alias R='radian'
+fi
 
 # ─────────────────────────────────────────────
 # ➤ NEOVIM ALIASES
@@ -89,21 +91,23 @@ alias ....='cd ../../..'
 alias .....='cd ../../../..'
 
 # Quick access to important directories
-alias dotfiles='cd ~/Documents/GitHub/dotfiles'
-alias projects='cd ~/Documents/GitHub'
-alias pandora='cd ~/Documents/Pandora'
+alias dotfiles='cd ~/Documentos/GitHub/dotmesh'
+alias projects='cd ~/Documentos/GitHub'
+alias pandora='cd ~/Documentos/Pandora'
 
 # ─────────────────────────────────────────────
 # ➤ NETWORKING
 # ─────────────────────────────────────────────
 alias myip='curl ifconfig.me'
-alias localip='ipconfig getifaddr en0'
 alias ports='lsof -iTCP -sTCP:LISTEN -n -P'
+case "$(uname -s)" in
+  Darwin) alias localip='ipconfig getifaddr en0' ;;
+  Linux)  alias localip='hostname -I | awk '"'"'{print $1}'"'"'' ;;
+esac
 
 # ─────────────────────────────────────────────
 # ➤ QUARTO ALIASES
 # ─────────────────────────────────────────────
-alias qr='quarto render'
 alias qp='quarto preview'
 alias qq='quarto'
 
@@ -111,6 +115,14 @@ alias qq='quarto'
 # ➤ SYSTEM INFORMATION
 # ─────────────────────────────────────────────
 alias diskusage='du -sh * | sort -hr'
-alias meminfo='top -l 1 -s 0 | grep PhysMem'
-alias cpuinfo='sysctl -n machdep.cpu.brand_string'
+case "$(uname -s)" in
+  Darwin)
+    alias meminfo='top -l 1 -s 0 | grep PhysMem'
+    alias cpuinfo='sysctl -n machdep.cpu.brand_string'
+    ;;
+  Linux)
+    alias meminfo='free -h'
+    alias cpuinfo='lscpu'
+    ;;
+esac
 

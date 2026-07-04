@@ -20,7 +20,7 @@ plugins=(
   zsh-syntax-highlighting
 )
 
-source $ZSH/oh-my-zsh.sh
+[[ -f "$ZSH/oh-my-zsh.sh" ]] && source "$ZSH/oh-my-zsh.sh"
 
 # ─────────────────────────────────────────────
 # ➤ LOAD MODULAR CONFIGURATIONS
@@ -42,10 +42,13 @@ source $ZSH/oh-my-zsh.sh
 # AI/Ollama configurations
 [[ -f ~/.config/shell/ai.zsh ]] && source ~/.config/shell/ai.zsh
 
+# Claude Code session isolation (claude --isolate, claude-sessions, claude-session-cleanup)
+[[ -f ~/.config/shell/claude-session.zsh ]] && source ~/.config/shell/claude-session.zsh
+
 # ─────────────────────────────────────────────
 # ➤ STARSHIP PROMPT
 # ─────────────────────────────────────────────
-eval "$(starship init zsh)"
+command -v starship &>/dev/null && eval "$(starship init zsh)"
 
 # ─────────────────────────────────────────────
 # ➤ ZSH OPTIONS
@@ -65,8 +68,7 @@ setopt HIST_VERIFY
 setopt SHARE_HISTORY
 setopt INC_APPEND_HISTORY
 
-# Autocompletion
-autoload -Uz compinit && compinit
+# Autocompletion: omz ya llama compinit; no repetir para evitar doble auditoría.
 
 # ─────────────────────────────────────────────
 # ➤ ZSH-AUTOSUGGESTIONS CONFIGURATION
@@ -124,11 +126,20 @@ export LSCOLORS="ExFxBxDxCxegedabagacad"
 export LS_COLORS="di=1;34:ln=1;36:so=32:pi=33:ex=1;32:bd=34;46:cd=34;43:su=30;41:sg=30;46:tw=30;42:ow=30;43"
 
 # ─────────────────────────────────────────────
-# ➤ AWS CLI COMPLETION
+# ➤ AWS CLI COMPLETION (macOS/Homebrew)
 # ─────────────────────────────────────────────
-complete -C '/opt/homebrew/bin/aws_completer' aws
+# complete -C es bashismo; necesita bashcompinit en zsh.
+# Solo aplica si el completador existe (macOS + Homebrew).
+if [[ "$OSTYPE" == darwin* ]] && [ -f '/opt/homebrew/bin/aws_completer' ]; then
+  autoload bashcompinit && bashcompinit
+  complete -C '/opt/homebrew/bin/aws_completer' aws
+fi
 
-# Added by Antigravity
-export PATH="/Users/pablocoello/.antigravity/antigravity/bin:$PATH"
-export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
-export JAVA_HOME="/opt/homebrew/opt/openjdk@17"
+# Antigravity y JAVA_HOME de Homebrew (macOS)
+if [[ "$OSTYPE" == darwin* ]]; then
+  [ -d "$HOME/.antigravity/antigravity/bin" ] && \
+    export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
+  [ -d '/opt/homebrew/opt/openjdk@17/bin' ] && \
+    export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH" && \
+    export JAVA_HOME="/opt/homebrew/opt/openjdk@17"
+fi

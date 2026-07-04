@@ -21,7 +21,18 @@
 set -euo pipefail
 
 # Without jq we cannot parse the tool input; fail open rather than break Bash.
-command -v jq >/dev/null 2>&1 || exit 0
+# Warn once per day so a fresh install notices the guardrail is sleeping.
+if ! command -v jq >/dev/null 2>&1; then
+  _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
+  # Honour the marker only if it belongs to the current UID (prevents a
+  # world-writable /tmp pre-creation from silently suppressing the warning).
+  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
+    exit 0
+  fi
+  printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
+  : > "$_jqw" 2>/dev/null || true
+  exit 0
+fi
 
 input=$(cat)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
@@ -29,9 +40,10 @@ cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 
 # Strip quoted substrings, then split on command separators so each line is one
 # command. Mirrors block-dangerous-git.sh.
+# tr instead of sed \n: portable across GNU and BSD sed (macOS).
 scan=$(printf '%s' "$cmd" \
   | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" \
-  | sed -E 's/(\|\||&&|[;|&(){}])/\n/g')
+  | tr ';|&(){}' '\n')
 
 is_commit=0
 while IFS= read -r seg; do
@@ -48,7 +60,10 @@ done <<< "$scan"
 tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 [ -z "$tp" ] && exit 0
 [ -f "$tp" ] || exit 0
-if grep -qEm 1 '("subagent_type"[[:space:]]*:[[:space:]]*"review")|code-review-and-quality' "$tp" 2>/dev/null; then
+# The bare string "code-review-and-quality" appears in the session from the
+# start (skill list, AGENTS.md). Only a real Skill tool invocation or a review
+# subagent proves the gate ran. Match the JSON key emitted by the Skill tool.
+if grep -qEm 1 '("subagent_type"[[:space:]]*:[[:space:]]*"review")|("skill"[[:space:]]*:[[:space:]]*"code-review-and-quality")' "$tp" 2>/dev/null; then
   exit 0
 fi
 

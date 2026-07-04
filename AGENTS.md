@@ -4,7 +4,7 @@ This file is the single source of truth for agent instructions in this repositor
 
 ## Project overview
 
-This repository manages personal macOS dotfiles with **GNU Stow**. Editing files here changes the user's local environment once `make stow` (or `make install`) is run. Treat changes as having a real, machine-wide blast radius.
+This repository manages personal dotfiles (macOS and Linux) with **GNU Stow**. Editing files here changes the user's local environment once `make stow` (or `make install`) is run. Treat changes as having a real, machine-wide blast radius.
 
 ## Stack
 
@@ -41,13 +41,13 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `shell/` | `~/.zshrc`, `~/.config/shell/` | Zsh + Oh-My-Zsh entrypoint and modular `env/path/functions/aliases/ai.zsh` |
 | `git/` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` | Git config + delta pager |
 | `starship/` | `~/.config/starship.toml` | Prompt |
-| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` (macOS, vía Stow) · `~/.local/share/warp-terminal/themes/` (Linux, vía `make link-warp`) | Temas del terminal Warp: **Carbon** (reciclado del Carbon de Terax) y **dotmesh** (Ink + sintaxis; ver `docs/DESIGN.md`) |
-| `vscode/` | `~/Library/Application Support/Code/User/...` (macOS, vía Stow) · `~/.config/Code/User/` (Linux) · `%APPDATA%\Code\User\` (Windows), estos dos por `scripts/install.sh`/`install.ps1` | VS Code settings, keybindings (`keybindings.json` cmd+ en macOS · `keybindings.linux.json` ctrl+ en Linux/Windows), snippets, extensions list, custom themes (activo: **dotmesh**) |
+| `warp/` | `~/.warp/themes/{carbon,dotmesh}.yaml` (macOS, via Stow) · `~/.local/share/warp-terminal/themes/` (Linux, via `make link-warp`) | Warp terminal themes: **Carbon** (adapted from Terax Carbon) and **dotmesh** (Ink + syntax; see `docs/DESIGN.md`) |
+| `vscode/` | `~/Library/Application Support/Code/User/` (macOS, via Stow) · `~/.config/Code/User/` (Linux, via `make vscode-install`) | VS Code settings, keybindings (`keybindings.json` cmd+ on macOS · `keybindings.linux.json` ctrl+ on Linux), extensions list, custom themes (active: **dotmesh**) |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/` |
+| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
-| `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css` (Linux, vía `make gnome-rice`) | Rice del escritorio GNOME: retint sobre Yaru a la paleta dotmesh (gtk.css + capa dconf). Ver `docs/DESIGN.md` |
+| `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 
 `Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
 
@@ -65,7 +65,7 @@ The `gnome/` package is Linux-only and intentionally **not** in `PACKAGES`: `mak
 
 Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream marketplace plugin) without updating the sync story here and in the README.
 
-The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement the divergent-exploration stance now folded into `grilling`, `idea-refine` and the `maker` persona (the former `debate` agent). `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`.
+The daily core pack lives in `agents/.agents/skills/README.md`. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement the divergent-exploration stance now folded into `grilling`, `idea-refine` and the `maker` persona (the former `debate` agent). `watch-summary` generates an automatic summary of session history. `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`.
 
 ## Skill flow is the default, not a request
 
@@ -81,7 +81,7 @@ Default flow for a code change, and the skill that owns each phase:
 6. Tests, build or runtime failing → `debugging-and-error-recovery`.
 7. Before merge → `code-review-and-quality`; security-sensitive surface → `security-and-hardening`.
 8. Working code heavier than needed → `code-simplification`.
-9. Commits, branches, PR → `git-workflow-and-versioning` (full lifecycle via `/super-git`).
+9. Commits, branches, PR → `git-workflow-and-versioning` (full lifecycle via `/super-git`, which requires explicit user invocation).
 10. Durable decision or interface change → `documentation-and-adrs`; new or sharpened domain terminology → `domain-modeling` (maintains `CONTEXT.md`).
 11. Switching agents mid-task, or pausing with work in flight → `handoff`.
 
@@ -109,7 +109,7 @@ Quality degrades well before the context window fills (around 100k tokens, regar
 - **The plan lives on disk, not in context.** `planning-and-task-breakdown` writes the plan and a phase checklist to `.ai/tasks/<slug>/plan.md`. That file is the source of truth; the conversation is disposable. Mark phases done there as you go.
 - **Commit per slice — automatic, not "on request".** `incremental-implementation` means each completed, green slice is committed **on the working branch** as you go. These per-slice checkpoints do **not** require the user to ask first: the "commit and push only when asked" rule governs **push, PR, and committing on the default branch** — not the incremental commits of an already-approved implementation on a work branch. If you're on the default branch, create a work branch first, then commit each slice. Git history is durable state a fresh session can read to re-orient. `/super-git` is the lifecycle arm of this: per-slice commits happen inside each phase subagent, while sync, push and PR are the orchestrator's single finalization step once the phases land.
 - **Watch the counter.** The statusline shows absolute tokens (`~/.claude/statusline.sh`): gold at ~90k means wrap up the current phase; rose at ~160k means stop and hand off.
-- **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return a short summary plus the commit range. Because Claude Code does **not** nest subagents, a delegated `build` cannot run the `review`/`security` gates itself: it self-checks with the `code-review-and-quality` and `security-and-hardening` skills, and the **orchestrator** runs the blocking `review`/`security` subagents between phases over the commits each phase landed (`maths` too when relevant). The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
+- **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return a short summary plus the commit range. Because the `build` agent does not have `Agent` in its tool allowlist, a delegated `build` cannot run the `review`/`security` gates itself: it self-checks with the `code-review-and-quality` and `security-and-hardening` skills, and the **orchestrator** runs the blocking `review`/`security` subagents between phases over the commits each phase landed (`maths` too when relevant). The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
 - **Cross real session boundaries with `handoff`.** When you stop for the day, `handoff` writes the curated state to `.ai/tasks/<slug>/handoff.md`. The next session reads it — or orients itself from git history and `.ai/tasks/` — and continues.
 
 ## Personas and subagents
@@ -119,7 +119,7 @@ The agent system has two layers, identical in concept across the three tools.
 - **Two personas** — the stance you operate in: `maker` (engineering: spec → plan
   → build → review → security, delegating aggressively) and `scribe`
   (prose/research: outline → draft → editor). They are output styles in Claude
-  Code (`~/.claude/output-styles/`, switched with `/output-style`, default
+  Code (`~/.claude/output-styles/`, configured via `outputStyle` in `settings.json`, default
   `maker`), `mode: primary` agents in OpenCode (native selector), and workflow
   modes in Codex. The active persona is meant to be visible — the Claude
   statusline prints it.
@@ -143,12 +143,12 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 |---|---|---|---|
 | Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md` (project and global `~/.claude/CLAUDE.md`), each a stub importing `AGENTS.md` via `@AGENTS.md` | reads `~/.codex/AGENTS.md` plus project `AGENTS.md` |
 | Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` | shared skills referenced from `~/.agents/skills/` and surfaced through Codex skill discovery |
-| Personas (primary) | `maker`, `scribe` as `mode: primary` agents, switched with the native selector | `maker`, `scribe` as output styles in `~/.claude/output-styles/`, switched with `/output-style` (default `maker`) | `maker`, `scribe` workflow modes in `codex/.codex/AGENTS.md` |
+| Personas (primary) | `maker`, `scribe` as `mode: primary` agents, switched with the native selector | `maker`, `scribe` as output styles in `~/.claude/output-styles/`, configured via `outputStyle` in `settings.json` (default `maker`) | `maker`, `scribe` workflow modes in `codex/.codex/AGENTS.md` |
 | Subagents | `~/.config/opencode/agents/` (6 `subagent`: build, plan, review, security, editor, maths) | `~/.claude/agents/` (6, same names and roles) | helper passes in `codex/.codex/AGENTS.md`, not separate agent files |
 | Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) | natural-language command equivalents in `codex/.codex/AGENTS.md` |
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
-| Per-agent bash granularity | yes (e.g. `npm audit*`) | only tool whitelist — bash is on/off per agent | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
+| Per-agent bash granularity | yes (e.g. `npm audit*`) | tools on/off per agent; within agents with Bash, sub-restrictions are by judgment (agent instructions), not enforced by the permission system | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
 | Destructive-git guardrail | per-agent bash permission frontmatter | `PreToolUse` hook → `~/.claude/hooks/block-dangerous-git.sh` (blocks `reset --hard`, `clean -f`, `branch -D`, `checkout/restore .`, force-push; allows normal push) | sandbox + approval prompts gate destructive commands |
 | Context counter | built-in context indicator in the TUI | custom `statusLine` → `~/.claude/statusline.sh` (modelo · persona activa · barra de contexto · rama · coste, paleta dotmesh) | built-in token/context indicator in the TUI |
 

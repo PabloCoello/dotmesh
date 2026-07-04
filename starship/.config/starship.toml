@@ -34,7 +34,7 @@ palette = 'dotmesh'
 # dotmesh — Paper · Ink · Syntax.
 # Cromo monocromo: los segmentos del powerline usan la rampa Graphite y el
 # texto va en Ink claro; los iconos llevan el acento de sintaxis (señal).
-# Para volver al tema anterior: palette = 'gruvbox_dark'.
+# Para volver al tema anterior: palette = 'legacy'.
 [palettes.dotmesh]
 color_fg0    = '#eaeaea'   # texto sobre los segmentos (Ink claro)
 color_orange = '#2e2e2e'   # segmento 1 — os / usuario
@@ -48,22 +48,29 @@ color_red    = '#E59A9A'   # rose  — prompt error
 color_purple = '#CBAACB'   # lilac — vim replace
 # iconos: señal de sintaxis sobre el cromo grafito
 color_ico_peach = '#FFAA7A'
-color_ico_teal  = '#6CB6B0'
 color_ico_sage  = '#A8CBA0'
 color_ico_blue  = '#8FB4E3'
-color_ico_muted = '#9e9e9e'
 
-[palettes.gruvbox_dark]
-color_bg1= '#D1D3D4'
-color_fg0= '#1A191E'
-color_bg3 = '#665c54'
-color_blue = '#4F80DD'
-color_aqua = '#58B69D'
-color_green = '#58B69D'
+# Paleta de reserva (esquema anterior al rice dotmesh). Renombrada de
+# 'gruvbox_dark' a 'legacy': los colores eran Carbon/grises, no gruvbox.
+# Se añaden color_ico_* requeridos por los módulos [os], [git_branch],
+# [git_status] y los de lenguajes; sin ellas starship descarta el estilo
+# y rompe el powerline.
+[palettes.legacy]
+color_bg1    = '#D1D3D4'
+color_fg0    = '#1A191E'
+color_bg3    = '#665c54'
+color_blue   = '#4F80DD'
+color_aqua   = '#58B69D'
+color_green  = '#58B69D'
 color_orange = '#E27056'
 color_purple = '#CBAACB'
-color_red = '#E27056'
+color_red    = '#E27056'
 color_yellow = '#E5B15D'
+# iconos: mapeados a los equivalentes más próximos de la paleta heredada
+color_ico_peach = '#E27056'
+color_ico_sage  = '#58B69D'
+color_ico_blue  = '#4F80DD'
 
 [os]
 disabled = false

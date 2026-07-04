@@ -21,4 +21,4 @@ Apply the `security-and-hardening` skill. Look for:
 
 ## Bash scope
 
-Use Bash only for audit-style commands: `npm audit`, `pip-audit`, `pip list`, `git diff`, `git log`, and equivalents. Do not run installs, builds, or anything that mutates the working tree.
+Restricted by judgment, not by permission system: use Bash only for audit-style commands: `npm audit`, `pip-audit`, `pip list`, `git diff`, `git log`, and equivalents. Do not run installs, builds, or anything that mutates the working tree.

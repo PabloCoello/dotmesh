@@ -2,23 +2,42 @@
 
 ## Requisitos
 
-- macOS (Apple Silicon o Intel).
-- Homebrew, Git y GNU Stow.
-- Las herramientas que vayas a usar instaladas: Warp, VS Code, OpenCode, Codex, Claude Code.
+Las herramientas que vayas a usar instaladas: Warp, VS Code, OpenCode, Codex, Claude Code.
+
+**macOS (Apple Silicon o Intel)**
+
+Homebrew es el gestor de dependencias:
 
 ```bash
 brew install stow git-delta starship
 brew install --cask warp visual-studio-code
 ```
 
+**Linux (Ubuntu/Debian)**
+
+```bash
+sudo apt install stow git git-delta
+```
+
+Starship no está en los repositorios de apt; instálalo con su script oficial:
+
+```bash
+curl -sS https://starship.rs/install.sh | sh
+```
+
+Warp y VS Code se instalan desde sus sitios oficiales o vía sus paquetes `.deb`.
+
+---
+
 OpenCode, Codex y Claude Code se instalan según las instrucciones de cada
-proveedor (no van por Homebrew). Después del primer arranque de cada uno se
-crean sus directorios de config (`~/.config/opencode/`, `~/.codex/`,
-`~/.claude/`); a partir de ahí dotmesh los reemplaza con symlinks.
+proveedor. Después del primer arranque de cada uno se crean sus directorios de
+config (`~/.config/opencode/`, `~/.codex/`, `~/.claude/`); a partir de ahí
+dotmesh los reemplaza con symlinks.
 
 ## Instalación inicial
 
 ```bash
+# Ajusta la ruta según tu sistema (~/Documents en macOS, ~/Documentos en Linux con locale es_ES)
 git clone https://github.com/pablocoello/dotmesh.git ~/Documents/GitHub/dotmesh
 cd ~/Documents/GitHub/dotmesh
 
@@ -35,6 +54,15 @@ exec zsh
 3. `make link-skills` → crea `~/.claude/skills` como symlink a
    `~/.agents/skills` para que Claude Code consuma la misma fuente de
    skills que OpenCode y Codex.
+4. `make link-warp` → enlaza los temas de Warp en `~/.local/share/warp-terminal/themes/`
+   (solo Linux; en macOS lo hace Stow directamente en `~/.warp/themes/`).
+
+**Solo en Linux**, tras el install inicial:
+
+```bash
+make gnome-rice     # retint del escritorio GNOME (opcional; solo si usas GNOME)
+make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa Stow para esto)
+```
 
 ## Qué se instala
 
@@ -43,10 +71,11 @@ exec zsh
 | `shell` | `~/.zshrc` y `~/.config/shell/*.zsh` |
 | `git` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` |
 | `starship` | `~/.config/starship.toml` |
-| `vscode` | `~/Library/Application Support/Code/User/...` |
-| `opencode` | `~/.config/opencode/{agents,commands,README.md}` |
-| `codex` | `~/.codex/{config.toml, AGENTS.md}` |
-| `claude` | `~/.claude/{settings.json,agents/,commands/,mcp/}` |
+| `warp` | `~/.warp/themes/` (macOS, vía Stow) · `~/.local/share/warp-terminal/themes/` (Linux, vía `make link-warp`) |
+| `vscode` | `~/Library/Application Support/Code/User/` (macOS, vía Stow) · `~/.config/Code/User/` (Linux, vía `make vscode-install`) |
+| `opencode` | `~/.config/opencode/{agents/,commands/,opencode.json,README.md}` |
+| `codex` | `~/.codex/{config.toml,AGENTS.md}` |
+| `claude` | `~/.claude/{settings.json,agents/,commands/,hooks/,mcp/,output-styles/,statusline.sh}` |
 | `agents` | `~/.agents/skills/<skill>/` |
 
 ## Tras la instalación
@@ -55,10 +84,10 @@ exec zsh
 exec zsh                                    # recarga la shell
 starship --version                          # debe imprimir versión
 git diff                                    # debe usar delta
-opencode agent list                         # debe listar los 10 agentes
+opencode agent list                         # debe listar maker, scribe + 6 subagentes
 codex mcp list                              # debe listar notion/github/tavily/openalex/zotero
 ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
-ls ~/.claude/agents/                        # debe listar los 10 agentes Claude Code
+ls ~/.claude/agents/                        # debe listar 6 subagentes de Claude Code
 ```
 
 Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
@@ -102,10 +131,10 @@ aplicarlos manualmente, usa la CLI de Claude:
 ```bash
 # Por servidor:
 claude mcp add notion   npx -- -y @notionhq/notion-mcp-server
-claude mcp add github   npx -- -y @modelcontextprotocol/server-github
+claude mcp add github   docker -- run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 claude mcp add tavily   npx -- -y tavily-mcp
 claude mcp add openalex npx -- -y openalex-research-mcp
-claude mcp add zotero   uvx -- zotero-mcp --env ZOTERO_LOCAL=true
+claude mcp add zotero   -e ZOTERO_LOCAL=true -- uvx zotero-mcp
 ```
 
 Los tokens (`NOTION_TOKEN`, `DOTMESH_GITHUB_PAT`, `TAVILY_API_KEY`, etc.)
@@ -118,7 +147,7 @@ deben estar exportados en el entorno antes de lanzar `claude` — ver
 > entorno. El bloque `env` del MCP en
 > [`claude/.claude/mcp/servers.reference.json`](../claude/.claude/mcp/servers.reference.json)
 > mapea explícitamente `DOTMESH_GITHUB_PAT` → `GITHUB_PERSONAL_ACCESS_TOKEN`
-> para el `@modelcontextprotocol/server-github`.
+> para el proceso `docker`, que lo pasa al contenedor con `-e`.
 
 ## Personalización
 
@@ -130,7 +159,20 @@ deben estar exportados en el entorno antes de lanzar `claude` — ver
 | Variables de entorno | `shell/.config/shell/env.zsh` |
 | Endpoints IA / Ollama | `shell/.config/shell/ai.zsh` |
 | Prompt | `starship/.config/starship.toml` |
-| Skill nueva | `agents/.agents/skills/<nombre>/SKILL.md` + `make restow agents` |
+| Skill nueva | `agents/.agents/skills/<nombre>/SKILL.md` + `make restow` |
+
+## Nota sobre `.gitignore_global` y ficheros de base de datos
+
+`~/.gitignore_global` no ignora `*.sql`, `*.sqlite3` ni `*.db` para no ocultar
+migraciones y fixtures versionadas. Si un proyecto de desarrollo tiene una base
+de datos local con datos sensibles, añade esos patrones en el `.gitignore` del
+propio proyecto:
+
+```
+*.sqlite3
+*.db
+*.sql  # solo si las migraciones no se versionan
+```
 
 ## Desinstalación
 

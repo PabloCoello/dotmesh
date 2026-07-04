@@ -1,28 +1,26 @@
 # Convenciones globales de agente
 
-Instrucciones de comportamiento para cualquier agente de IA en esta máquina.
-
-> **Fuente de verdad:** `~/Documentos/GitHub/dotmesh/AGENTS.md`. Este fichero
-> es un resumen de las convenciones más comunes; cuando hay conflicto entre
-> ambos, prevalece el `AGENTS.md` del repo. Si editas convenciones globales,
-> hazlo en el repo y actualiza este fichero para mantener la sincronía.
-
-Los proyectos pueden tener su propio `AGENTS.md`/`CLAUDE.md` que prevalece
+Instrucciones de comportamiento para OpenCode en esta máquina.
+Alineadas con la política de [dotmesh](~/Documentos/GitHub/dotmesh) (`AGENTS.md`),
+que es la fuente de verdad de las convenciones compartidas entre Claude Code,
+OpenCode y Codex. Los proyectos pueden tener su propio `AGENTS.md` que prevalece
 sobre este archivo.
+
+> OpenCode no expande `@import`, así que este fichero contiene el texto íntegro
+> en lugar de un stub con referencia.
 
 ## Git
 
 - **Sin autoría de LLM en metadatos de Git.** Mensajes de commit, nombres de rama
   y trailers describen la intención humana y el cambio en el repositorio, no la
   herramienta de IA que ayudó. No añadas `Co-authored-by`, `Author`,
-  `Signed-off-by`, `Generated-by`, slugs de rama ni atribución similar para Claude,
-  Codex, OpenCode, Copilot, ChatGPT u otro LLM/agente, salvo que el usuario lo pida
-  explícitamente con esa atribución exacta.
+  `Signed-off-by`, `Generated-by`, slugs de rama ni atribución similar para
+  OpenCode, Claude, Codex, Copilot, ChatGPT u otro LLM/agente, salvo que el
+  usuario lo pida explícitamente con esa atribución exacta.
 - **Push y PR solo a petición.** Los commits locales en una rama de trabajo son
-  parte normal del flujo (los commits por slice de `incremental-implementation`) y
-  no requieren que el usuario los pida. No hagas push ni abras PR sin que el usuario
-  lo pida, y no commitees directamente en la rama por defecto: si estás en ella,
-  crea una rama antes.
+  parte normal del flujo y no requieren que el usuario los pida. No hagas push ni
+  abras PR sin que el usuario lo pida. No commitees directamente en la rama por
+  defecto: si estás en ella, crea una rama antes.
 - **Flujo Git autónomo (`/super-git`).** Gestiona el ciclo no destructivo de
   principio a fin: fetch, fast-forward cuando sea seguro, nombre de rama, commits
   semánticos incrementales, verificación, push y creación de PR. Prefiere trabajo
@@ -57,7 +55,7 @@ sobre este archivo.
 
 ## Comunicación
 
-- **Concisión al reportar.** Cuando me reportes información directamente, sé
+- **Concisión al reportar.** Cuando reportes información directamente, sé
   extremadamente conciso: sacrifica la gramática si hace falta para ganar
   concisión.
 
@@ -68,6 +66,5 @@ sobre este archivo.
 
 ## Skills compartidas
 
-- Las skills viven en `~/.claude/skills/` (symlink a `~/.agents/skills/`, fuente
-  canónica en `dotmesh/agents/.agents/skills/`). No las dupliques dentro de un
-  proyecto.
+- Las skills viven en `~/.agents/skills/` (fuente canónica en
+  `dotmesh/agents/.agents/skills/`). No las dupliques dentro de un proyecto.

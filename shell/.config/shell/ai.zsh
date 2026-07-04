@@ -15,24 +15,11 @@ export OLLAMA_MODEL_FAST="${OLLAMA_MODEL_FAST:-gpt-oss:20b}"
 export OLLAMA_MODEL="${OLLAMA_MODEL:-$OLLAMA_MODEL_MAIN}"
 
 # ─────────────────────────────────────────────
-# ➤ GITHUB COPILOT
-# ─────────────────────────────────────────────
-# GitHub Copilot CLI configuration
-if command -v github-copilot-cli &> /dev/null; then
-  eval "$(github-copilot-cli alias -- "$0")"
-fi
-
-# ─────────────────────────────────────────────
 # ➤ OPENCODE CONFIGURATION
 # ─────────────────────────────────────────────
 # OpenCode context paths
-export OPENCODE_CONTEXT_DOCS="$HOME/Documents/Pandora"
-export OPENCODE_CONTEXT_PROJECTS="$HOME/Documents/GitHub"
-# OpenCode API (placeholders, no secrets committed)
-export OPENCODE_BASE_URL="${OPENCODE_BASE_URL:-https://api.openai.com/v1}"
-export OPENCODE_MODEL="${OPENCODE_MODEL:-gpt-4o-mini}"
-# API key placeholder (sobrescribe en tu entorno seguro: 1Password, keychain, etc.)
-export OPENCODE_API_KEY="${OPENCODE_API_KEY:-changeme_opencode_api_key}"
+export OPENCODE_CONTEXT_DOCS="$HOME/Documentos/Pandora"
+export OPENCODE_CONTEXT_PROJECTS="$HOME/Documentos/GitHub"
 
 # ─────────────────────────────────────────────
 # ➤ OPENAI / CODEX CONFIGURATION
@@ -68,8 +55,13 @@ function ollama_chat() {
         return 1
     fi
 
+    local body
+    body=$(jq -n --arg model "$model" --arg prompt "$prompt" \
+        '{"model": $model, "prompt": $prompt, "stream": false}')
+
     curl -s "$OLLAMA_HOST/api/generate" \
-        -d "{\"model\": \"$model\", \"prompt\": \"$prompt\"}" \
+        -H 'Content-Type: application/json' \
+        -d "$body" \
         | jq -r '.response'
 }
 

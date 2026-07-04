@@ -1,0 +1,9 @@
+# settings.json NO se enlaza con Stow: es una plantilla base versionada.
+# `make install` (target seed-claude-settings) la copia UNA vez a un
+# ~/.claude/settings.json REAL y nunca la sobreescribe, para que los ajustes
+# por-máquina (modelo, effortLevel, tema…) queden fuera del repo y no aparezcan
+# como cambios sin commitear. Ver el Makefile y docs/INSTALL.md.
+#
+# Al declarar este fichero, Stow deja de usar su lista de ignorados por defecto;
+# el paquete claude no tiene nada más que excluir (todo lo demás debe enlazarse).
+settings\.json

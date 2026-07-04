@@ -7,7 +7,6 @@ permission:
   edit: deny
   write: deny
   bash:
-    "python*sympy*": allow
     "python -c *": allow
     "python3 -c *": allow
     "*": deny
