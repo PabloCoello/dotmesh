@@ -43,20 +43,32 @@ When reporting information directly to me, be extremely concise—sacrifice gram
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.
 
-## Git attribution
+## Git
 
-Do not add Codex, ChatGPT, OpenAI, Claude, OpenCode, Copilot or any other
-LLM/agent as an author, co-author, signer, generator, branch owner, or metadata
-attribution in Git history.
-
-- Commit messages must not include `Co-authored-by`, `Author`, `Signed-off-by`,
+- **No LLM authorship in Git metadata.** Do not add Codex, ChatGPT, OpenAI,
+  Claude, OpenCode, Copilot or any other LLM/agent as an author, co-author,
+  signer, generator, branch owner, or metadata attribution in Git history.
+  Commit messages must not include `Co-authored-by`, `Author`, `Signed-off-by`,
   `Generated-by`, "generated with", "authored by AI", or similar LLM/agent
   attribution unless the user explicitly asks for that exact trailer or text.
-- Branch names must describe the task or change, not the AI tool. Do not include
+  Branch names must describe the task or change, not the AI tool. Do not include
   model, agent, assistant, or vendor names in the branch slug unless the user
-  explicitly requests them.
-- Use the configured Git identity as-is. Do not change `git config user.name` or
-  `git config user.email` to an AI identity.
+  explicitly requests them. Use the configured Git identity as-is. Do not change
+  `git config user.name` or `git config user.email` to an AI identity.
+- **Push and PR only on request.** Local commits on a work branch are part of
+  the normal flow and do not require the user to ask. Do not push or open a PR
+  without an explicit user request. Do not commit directly to the default branch:
+  if you are on it, create a work branch first.
+- **No destructive operations without permission.** No force-push, `reset
+  --hard`, destructive `clean`, discarding work, staging secrets, pushing to the
+  default branch, or changing Git identity without explicit user confirmation.
+
+## Language
+
+User-facing prose (READMEs, documents, tickets) defaults to **peninsular Spanish**.
+Keep the existing language when editing a file. When writing Spanish prose, apply
+`castellano-peninsular` and `anti-ai-style`. Code and inline comments default to
+English.
 
 ## OpenCode parity
 
