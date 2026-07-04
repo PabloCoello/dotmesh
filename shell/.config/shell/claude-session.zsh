@@ -88,10 +88,19 @@ function __claude_isolate_check_trust() {
     store=$(__claude_isolate_store)
     store_dir=$(dirname "$store")
 
-    # Comprobar si el hash ya está aprobado para esta ruta exacta
-    if [[ -f "$store" ]]; then
-        saved_hash=$(awk -F'\t' -v p="$script" '$2==p{print $1;exit}' "$store")
-        [[ "$saved_hash" == "$hash" ]] && return 0
+    # Comprobar si el hash ya está aprobado para esta ruta exacta.
+    # Solo confiar en el store si es un fichero regular (no symlink) con permisos
+    # 600; así un store pre-plantado (symlink a fichero ajeno o world-writable) no
+    # salta el prompt de confirmación.
+    if [[ -f "$store" && ! -L "$store" ]]; then
+        local store_perms
+        store_perms=$(stat -c %a "$store" 2>/dev/null || stat -f %Lp "$store" 2>/dev/null)
+        if [[ "$store_perms" == "600" ]]; then
+            saved_hash=$(awk -F'\t' -v p="$script" '$2==p{print $1;exit}' "$store")
+            [[ "$saved_hash" == "$hash" ]] && return 0
+        else
+            echo "⚠️  store de aprobaciones con permisos inseguros (${store_perms}); ignorando" >&2
+        fi
     fi
 
     # Sin TTY: fail-safe, no ejecutar
@@ -299,7 +308,7 @@ function claude-session-cleanup() {
     if [[ $force -eq 0 ]]; then
         if [[ -e "$lockfile" ]] && __claude_lock_alive "$lockfile"; then
             pid_v=$(awk -F= '/^PID=/ {print $2; exit}' "$lockfile")
-            wt_v=$(awk -F= '/^WORKTREE=/ {print $2; exit}' "$lockfile")
+            wt_v=$(sed -n 's/^WORKTREE=//p' "$lockfile" | head -1)
             echo "❌ Sesión ${id} en uso por PID ${pid_v} (${wt_v})" >&2
             echo "   Usa --force si estás seguro de que quieres tirarla." >&2
             return 1
@@ -312,7 +321,10 @@ function claude-session-cleanup() {
             return 1
         fi
 
-        # Comprobar trabajo sin guardar antes de borrar
+        # Comprobar trabajo sin guardar antes de borrar. Nota: --porcelain respeta
+        # .gitignore, así que ficheros ignorados (logs, artefactos, config local) NO
+        # bloquean el borrado; el worktree es efímero por diseño. Usa --force para
+        # saltar estas comprobaciones.
         dirty=$(git -C "$worktree_path" status --porcelain 2>/dev/null)
         base_sha_lock=""
         [[ -f "$lockfile" ]] && base_sha_lock=$(awk -F= '/^BASE_SHA=/ {print $2; exit}' "$lockfile")
