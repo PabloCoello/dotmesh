@@ -95,15 +95,24 @@ dangerous_patterns=(
 while IFS= read -r seg; do
   # Trim leading whitespace.
   seg=$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//')
-  # Only inspect segments that actually invoke git (allow sudo/env-style wrappers).
-  printf '%s' "$seg" | grep -qE '^((sudo|env|command|nice)[[:space:]]+)*git([[:space:]]|$)' || continue
+  # Only inspect segments that actually invoke git.
+  # Handles: plain git, sudo/env/command/nice/timeout/nohup/xargs wrappers,
+  # VAR=x environment prefixes, and path-prefixed git (/usr/bin/git, etc.).
+  # Note: timeout with a numeric arg (timeout 30 git) is not caught here — the
+  # numeric arg sits between the wrapper keyword and git, which the regex below
+  # cannot distinguish from a non-git command without false positives.
+  printf '%s' "$seg" | grep -qE \
+    '^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*((/[^[:space:]]*/)?git)([[:space:]]|$)' \
+    || continue
   # Normalise destructive aliases from git/.gitconfig to their canonical form so
   # the patterns below reach them: co->checkout, discard->checkout --, ps/psu->push.
   # These mirror git/.gitconfig; if you change those aliases, update this mapping.
+  # The prefix pattern mirrors the anchor regex above to strip wrappers and paths.
+  _GIT_PRE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*(/[^[:space:]]*/)?git[[:space:]]+'
   seg=$(printf '%s' "$seg" | sed -E \
-    -e 's/^((sudo|env|command|nice)[[:space:]]+)*git[[:space:]]+discard([[:space:]]|$)/git checkout -- /' \
-    -e 's/^((sudo|env|command|nice)[[:space:]]+)*git[[:space:]]+co([[:space:]]|$)/git checkout /' \
-    -e 's/^((sudo|env|command|nice)[[:space:]]+)*git[[:space:]]+psu?([[:space:]]|$)/git push /')
+    -e "s#^${_GIT_PRE}discard([[:space:]]|$)#git checkout -- #" \
+    -e "s#^${_GIT_PRE}co([[:space:]]|$)#git checkout #" \
+    -e "s#^${_GIT_PRE}psu?([[:space:]]|$)#git push #")
   # `git clean` in dry-run mode (-n / --dry-run) deletes nothing: allow it even with -f.
   if printf '%s' "$seg" | grep -qE '(^|[[:space:]])clean([[:space:]]|$)' \
      && printf '%s' "$seg" | grep -qE '[[:space:]](-[A-Za-z]*n|--dry-run)'; then
