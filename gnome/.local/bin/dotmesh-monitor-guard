@@ -20,7 +20,9 @@ BUS = "org.gnome.Mutter.DisplayConfig"
 PATH = "/org/gnome/Mutter/DisplayConfig"
 
 SETTLE_MS = 2000    # deja asentar la reconfiguración antes del eco
-SUPPRESS_S = 4.0    # ventana para ignorar la señal que provoca el propio eco
+SUPPRESS_S = 4.0    # el propio apply emite MonitorsChanged casi al instante;
+                    # esta ventana ignora ese rebote (evita el bucle eco→señal
+                    # →eco) sin tragarse un hotplug real, que llega después
 
 suppress_until = 0.0
 pending = None      # timeout pendiente: señales en ráfaga -> un solo eco
@@ -36,6 +38,8 @@ def echo_apply(bus):
                           None, None, Gio.DBusCallFlags.NONE, -1, None)
     serial, monitors, logical, _props = state.unpack()
 
+    # Formas fijadas por la firma D-Bus de GetCurrentState:
+    # monitor = ((ssss) a(siiddada{sv}) a{sv}); mode[0] = id, mode[6] = props.
     current_mode = {}
     for spec, modes, _mprops in monitors:
         for mode in modes:
@@ -69,6 +73,10 @@ def do_echo(bus):
         # Config cambiada a mitad (serial obsoleto…): esa misma transición
         # emite otra MonitorsChanged que programará un nuevo eco.
         log(f"eco fallido ({err.message}); espero a la siguiente señal")
+    except Exception as err:
+        # El guardián debe sobrevivir a cualquier eco fallido (p. ej. una
+        # forma de variant inesperada de otra versión de mutter).
+        log(f"eco fallido inesperado ({err!r}); espero a la siguiente señal")
     return GLib.SOURCE_REMOVE
 
 
