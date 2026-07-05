@@ -1,0 +1,16 @@
+[Unit]
+Description=dotmesh — eco DisplayConfig tras hotplug (fondo negro en NVIDIA/X11)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/dotmesh-monitor-guard
+Restart=on-failure
+RestartSec=3
+# Sin sandbox de namespaces (ProtectSystem, PrivateTmp…): el AppArmor de
+# Ubuntu 24.04 restringe los user namespaces y puede impedir el arranque.
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=graphical-session.target
