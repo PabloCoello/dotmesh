@@ -20,6 +20,8 @@ BUS = "org.gnome.Mutter.DisplayConfig"
 PATH = "/org/gnome/Mutter/DisplayConfig"
 
 SETTLE_MS = 2000    # deja asentar la reconfiguración antes del eco
+TIMEOUT_MS = 5000   # tope de las llamadas D-Bus: un mutter colgado no debe
+                    # congelar el daemon (el GLib.Error cae en el handler)
 SUPPRESS_S = 4.0    # el propio apply emite MonitorsChanged casi al instante;
                     # esta ventana ignora ese rebote (evita el bucle eco→señal
                     # →eco) sin tragarse un hotplug real, que llega después
@@ -35,7 +37,7 @@ def log(msg):
 def echo_apply(bus):
     """Reaplica la configuración actual. Devuelve True si aplicó algo."""
     state = bus.call_sync(BUS, PATH, BUS, "GetCurrentState",
-                          None, None, Gio.DBusCallFlags.NONE, -1, None)
+                          None, None, Gio.DBusCallFlags.NONE, TIMEOUT_MS, None)
     serial, monitors, logical, _props = state.unpack()
 
     # Formas fijadas por la firma D-Bus de GetCurrentState:
@@ -58,7 +60,7 @@ def echo_apply(bus):
     params = GLib.Variant("(uua(iiduba(ssa{sv}))a{sv})",
                           (serial, 1, configs, {}))
     bus.call_sync(BUS, PATH, BUS, "ApplyMonitorsConfig",
-                  params, None, Gio.DBusCallFlags.NONE, -1, None)
+                  params, None, Gio.DBusCallFlags.NONE, TIMEOUT_MS, None)
     return True
 
 
