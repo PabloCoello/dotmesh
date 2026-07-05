@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""dotmesh — guardián de monitores: eco DisplayConfig tras hotplug.
+
+En X11 + NVIDIA, al reencender un monitor DisplayPort (el conector desaparece
+y reaparece), mutter restaura el layout pero la vista del monitor reañadido
+se queda sin pintar el fondo (negro puro). Ni re-fijar el fondo por gsettings
+ni tocar extensiones lo curan; re-aplicar la configuración vigente vía D-Bus
+sí reconstruye las vistas. Verificado en GNOME 46 / Ubuntu 24.04 / NVIDIA 570.
+
+Escucha MonitorsChanged en el bus de sesión y responde con un
+ApplyMonitorsConfig temporal (misma geometría; no escribe monitors.xml).
+Sin dependencias fuera de python3-gi, presente en cualquier Ubuntu GNOME.
+"""
+
+import time
+
+from gi.repository import Gio, GLib
+
+BUS = "org.gnome.Mutter.DisplayConfig"
+PATH = "/org/gnome/Mutter/DisplayConfig"
+
+SETTLE_MS = 2000    # deja asentar la reconfiguración antes del eco
+SUPPRESS_S = 4.0    # ventana para ignorar la señal que provoca el propio eco
+
+suppress_until = 0.0
+pending = None      # timeout pendiente: señales en ráfaga -> un solo eco
+
+
+def log(msg):
+    print(msg, flush=True)
+
+
+def echo_apply(bus):
+    """Reaplica la configuración actual. Devuelve True si aplicó algo."""
+    state = bus.call_sync(BUS, PATH, BUS, "GetCurrentState",
+                          None, None, Gio.DBusCallFlags.NONE, -1, None)
+    serial, monitors, logical, _props = state.unpack()
+
+    current_mode = {}
+    for spec, modes, _mprops in monitors:
+        for mode in modes:
+            if mode[6].get("is-current"):
+                current_mode[spec[0]] = mode[0]
+
+    configs = []
+    for x, y, scale, transform, primary, specs, _lprops in logical:
+        heads = [(s[0], current_mode[s[0]], {})
+                 for s in specs if s[0] in current_mode]
+        if heads:
+            configs.append((x, y, scale, transform, primary, heads))
+    if not configs:
+        return False
+
+    params = GLib.Variant("(uua(iiduba(ssa{sv}))a{sv})",
+                          (serial, 1, configs, {}))
+    bus.call_sync(BUS, PATH, BUS, "ApplyMonitorsConfig",
+                  params, None, Gio.DBusCallFlags.NONE, -1, None)
+    return True
+
+
+def do_echo(bus):
+    global pending, suppress_until
+    pending = None
+    try:
+        if echo_apply(bus):
+            suppress_until = time.monotonic() + SUPPRESS_S
+            log("eco aplicado: vistas de monitor reconstruidas")
+    except GLib.Error as err:
+        # Config cambiada a mitad (serial obsoleto…): esa misma transición
+        # emite otra MonitorsChanged que programará un nuevo eco.
+        log(f"eco fallido ({err.message}); espero a la siguiente señal")
+    return GLib.SOURCE_REMOVE
+
+
+def on_monitors_changed(bus):
+    global pending
+    if time.monotonic() < suppress_until:
+        return
+    if pending is not None:
+        GLib.source_remove(pending)
+    pending = GLib.timeout_add(SETTLE_MS, do_echo, bus)
+
+
+def main():
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    bus.signal_subscribe(BUS, BUS, "MonitorsChanged", PATH, None,
+                         Gio.DBusSignalFlags.NONE,
+                         lambda *_args: on_monitors_changed(bus))
+    log("escuchando MonitorsChanged (eco DisplayConfig ante hotplug)")
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    main()

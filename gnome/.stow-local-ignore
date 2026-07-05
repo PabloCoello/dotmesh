@@ -2,3 +2,4 @@
 # maquinaria que aplica `make gnome-rice`, no debe enlazarse a $HOME.
 ^/scripts
 ^/README\.md
+^/\.local/bin/__pycache__
