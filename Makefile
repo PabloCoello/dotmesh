@@ -159,6 +159,7 @@ gnome-unrice:
 	@if [ "$$(uname -s)" != "Linux" ]; then \
 		echo "  ok  gnome-unrice solo aplica en Linux/GNOME; no-op aquí"; \
 	else \
+		systemctl --user disable --now dotmesh-monitor-guard.service 2>/dev/null || true; \
 		echo "← unstow gnome (gtk.css)"; \
 		stow -v -D -t ~ gnome || exit 1; \
 		echo "  ok  symlinks de GNOME eliminados"; \
@@ -180,6 +181,7 @@ health:
 	@command -v nvim     >/dev/null && echo "  ok  nvim"     || echo "  --  nvim"
 	@command -v npx      >/dev/null && echo "  ok  npx"      || echo "  --  npx"
 	@[ "$$(uname -s)" = "Linux" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
+	@[ "$$(uname -s)" = "Linux" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"

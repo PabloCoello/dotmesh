@@ -77,5 +77,18 @@ else
     echo "  --  fondo no encontrado ($WALL); ¿falta 'stow gnome'?"
 fi
 
+# --- Guardián de monitores: eco DisplayConfig tras hotplug (X11/NVIDIA) ---
+GUARD="dotmesh-monitor-guard.service"
+if [ -f "$HOME/.config/systemd/user/$GUARD" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload
+    if systemctl --user enable --now "$GUARD" >/dev/null 2>&1; then
+        say "guardián de monitores activo ($GUARD)"
+    else
+        echo "  --  no pude activar $GUARD (¿sesión sin systemd --user?)."
+    fi
+else
+    echo "  --  $GUARD sin enlazar; ejecuta 'make gnome-rice' (hace stow gnome) y reintenta."
+fi
+
 echo "Rice dotmesh aplicado. Reinicia las apps GTK (o cierra sesión) para ver el"
 echo "retint de gtk.css; el resto se aplica al momento."
