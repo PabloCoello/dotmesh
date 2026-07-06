@@ -2,15 +2,15 @@
 
 ## Requisitos
 
-Las herramientas que vayas a usar instaladas: Warp, VS Code, OpenCode, Codex, Claude Code.
+Las herramientas que vayas a usar instaladas: Warp o Ghostty, VS Code, OpenCode, Codex, Claude Code. herdr es opcional (multiplexor de agentes que corre dentro de Ghostty).
 
 **macOS (Apple Silicon o Intel)**
 
 Homebrew es el gestor de dependencias:
 
 ```bash
-brew install stow git-delta starship
-brew install --cask warp visual-studio-code
+brew install stow git-delta starship herdr
+brew install --cask warp ghostty visual-studio-code font-jetbrains-mono-nerd-font
 ```
 
 **Linux (Ubuntu/Debian)**
@@ -72,9 +72,11 @@ make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa St
 | `git` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` |
 | `starship` | `~/.config/starship.toml` |
 | `warp` | `~/.warp/themes/` (macOS, vía Stow) · `~/.local/share/warp-terminal/themes/` (Linux, vía `make link-warp`) |
+| `ghostty` | `~/.config/ghostty/{config,themes/dotmesh}` |
+| `herdr` | `~/.config/herdr/config.toml` |
 | `vscode` | `~/Library/Application Support/Code/User/` (macOS, vía Stow) · `~/.config/Code/User/` (Linux, vía `make vscode-install`) |
-| `opencode` | `~/.config/opencode/{agents/,commands/,opencode.json,README.md}` |
-| `codex` | `~/.codex/{config.toml,AGENTS.md}` |
+| `opencode` | `~/.config/opencode/{agents/,commands/,opencode.json,README.md,plugins/herdr-agent-state.js}` |
+| `codex` | `~/.codex/{config.toml,AGENTS.md,hooks.json,herdr-agent-state.sh}` |
 | `claude` | `~/.claude/{settings.json,agents/,commands/,hooks/,mcp/,output-styles/,statusline.sh}` |
 | `agents` | `~/.agents/skills/<skill>/` |
 
@@ -94,6 +96,25 @@ Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
 sesión OpenCode en cualquier proyecto (ver
 [opencode/.config/opencode/README.md](../opencode/.config/opencode/README.md)).
 En Claude Code el equivalente es `/setup` (custom) o el `/init` nativo.
+
+## herdr y las integraciones de agente
+
+herdr corre dentro de Ghostty y detecta el estado de los agentes (trabajando,
+bloqueado, inactivo) mediante hooks que dotmesh versiona en los paquetes de cada
+agente:
+
+- claude: `~/.claude/hooks/herdr-agent-state.sh` + un hook `SessionStart` en
+  `settings.json`.
+- codex: `~/.codex/{herdr-agent-state.sh,hooks.json}` + `hooks = true` en
+  `config.toml`.
+- opencode: `~/.config/opencode/plugins/herdr-agent-state.js`.
+
+`make stow` los enlaza en una máquina nueva; no hace falta correr `herdr
+integration install` (que reescribiría esos ficheros de forma destructiva).
+Arranca el servidor con `brew services start herdr` y ábrelo con `herdr`.
+Comprueba el estado con `herdr integration status`; tras actualizar herdr,
+re-vendoriza cualquier hook que salga desfasado (ver
+[docs/DESIGN.md](DESIGN.md), «Limitaciones conocidas»).
 
 ## MCP en Codex
 

@@ -1,6 +1,6 @@
 # dotmesh
 
-Dotfiles personales para macOS y Linux. Gestiona la configuración del terminal (Warp), shell, Git, Starship, VS Code, OpenCode, Codex, Claude y skills globales de agentes.
+Dotfiles personales para macOS y Linux. Gestiona la configuración del terminal (Warp o Ghostty), el multiplexor de agentes herdr, shell, Git, Starship, VS Code, OpenCode, Codex, Claude y skills globales de agentes.
 
 ## Quick start
 
@@ -30,6 +30,8 @@ make gnome-rice                     # opcional; solo si usas GNOME
 |---|---|---|
 | Shell | Zsh + Oh-My-Zsh | [shell/](shell/) |
 | Terminal | Warp | [warp/](warp/) |
+| Terminal (alt.) | Ghostty | [ghostty/](ghostty/) |
+| Multiplexor de agentes | herdr | [herdr/](herdr/) |
 | Prompt | Starship | [starship/](starship/) |
 | Editor | VS Code | [vscode/](vscode/) |
 | VCS | Git + delta | [git/](git/) |
@@ -47,6 +49,8 @@ dotmesh/
 ├── git/        .gitconfig, .gitignore_global, .gitmessage
 ├── starship/   .config/starship.toml
 ├── warp/       .warp/themes/{carbon,dotmesh}.yaml   (temas del terminal)
+├── ghostty/    .config/ghostty/{config,themes/dotmesh}   (terminal alternativo)
+├── herdr/      .config/herdr/config.toml   (multiplexor de agentes)
 ├── vscode/     Library/.../Code/User/{settings.json,keybindings*.json} · themes/ · extensions/ · scripts/
 ├── opencode/   .config/opencode/{agents,commands,opencode.json,README.md}
 ├── codex/      .codex/{config.toml,AGENTS.md}
@@ -70,6 +74,7 @@ voz de código. Se aplica como:
 
 - **VS Code** — tema `dotmesh` ([`vscode/themes/dotmesh-color-theme.json`](vscode/themes/dotmesh-color-theme.json)), activo en `settings.json`.
 - **Warp** — tema [`warp/.warp/themes/dotmesh.yaml`](warp/.warp/themes/dotmesh.yaml) (seleccionable en los ajustes de Warp). En macOS lo enlaza `make stow` en `~/.warp/themes/`; en Linux, `make link-warp` lo enlaza en `~/.local/share/warp-terminal/themes/`, que es donde Warp/Linux busca los temas de usuario.
+- **Ghostty** — tema [`ghostty/.config/ghostty/themes/dotmesh`](ghostty/.config/ghostty/themes/dotmesh), activo vía `theme = dotmesh` en [`ghostty/.config/ghostty/config`](ghostty/.config/ghostty/config). herdr hereda esta paleta con `[theme] name = "terminal"`.
 - **Starship** — paleta `dotmesh` en [`starship/.config/starship.toml`](starship/.config/starship.toml): segmentos grafito con iconos de sintaxis.
 - **delta/Git** — colores de diff y estado alineados con la paleta.
 
