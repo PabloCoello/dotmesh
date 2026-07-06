@@ -1,0 +1,16 @@
+# herdr — config de dotmesh.
+# Multiplexor de terminal consciente del estado de los agentes (claude, codex,
+# opencode). Corre dentro de Ghostty; hereda su paleta.
+#
+# El esquema completo por defecto: `herdr --default-config`.
+
+[theme]
+# `terminal` hace que herdr use la paleta ANSI del terminal anfitrión: con Ghostty
+# en el tema `dotmesh`, el cromo de herdr queda alineado con el resto del sistema.
+name = "terminal"
+
+[theme.custom]
+# Acento teal canónico para bordes, resaltados y navegación (docs/DESIGN.md).
+accent = "#6CB6B0"
+# Panel transparente: hereda el fondo Ink de Ghostty en vez de pintar el suyo.
+panel_bg = "reset"
