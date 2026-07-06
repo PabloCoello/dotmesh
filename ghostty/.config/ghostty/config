@@ -1,0 +1,19 @@
+# Ghostty — config de dotmesh.
+# Terminal alternativo a Warp; anfitrión de herdr (multiplexor de agentes).
+# Paleta y tipografía siguen docs/DESIGN.md (Paper · Ink · Syntax).
+
+# Voz visual dotmesh (fondo Ink + ANSI de sintaxis). Ver themes/dotmesh.
+theme = dotmesh
+
+# JetBrains Mono con glifos Nerd Font (powerline de Starship, iconos de sintaxis).
+# Ghostty cae a la mono del sistema si la Nerd Font no está instalada.
+font-family = "JetBrainsMono Nerd Font"
+font-size = 13.5
+
+# El aire alrededor del contenido: cromo que se aparta, como el resto del sistema.
+window-padding-x = 8
+window-padding-y = 8
+window-padding-balance = true
+
+cursor-style = block
+mouse-hide-while-typing = true
