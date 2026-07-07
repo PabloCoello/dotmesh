@@ -52,6 +52,7 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 | `castellano-peninsular` | Para textos en español peninsular formal. |
 | `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |
 | `watch-summary` | Para cerrar el turno con una línea ultracorta que cabe en el reloj Garmin (bridge dotmesh-watch). Dirigida por hook; no se auto-aplica (`disable-model-invocation`). |
+| `herdr` | Para controlar herdr desde dentro de un pane: workspaces, tabs, splits, lectura de panes vecinos y esperas (`herdr wait`). Solo actúa dentro de herdr (`HERDR_ENV=1`). Snapshot vendorizado de [ogulcancelik/herdr](https://github.com/ogulcancelik/herdr) (commit `6cbdba434fd1`, 2026-05-19); se actualiza a mano desde el upstream, no con `npx skills add`. |
 
 ## Interrogatorio, dominio y traspaso
 
