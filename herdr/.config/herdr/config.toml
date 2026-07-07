@@ -14,3 +14,9 @@ name = "terminal"
 accent = "#6CB6B0"
 # Panel transparente: hereda el fondo Ink de Ghostty en vez de pintar el suyo.
 panel_bg = "reset"
+
+[ui.sound]
+enabled = true
+
+[ui]
+show_agent_labels_on_pane_borders = true
