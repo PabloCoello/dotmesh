@@ -16,8 +16,10 @@ import {
   buildLabelText,
   typeColor,
   formatTimestamp,
+  escapeHtml,
   buildHoverMessage,
   TYPE_COLORS,
+  FALLBACK_COLOR,
 } from './decorations-utils.ts';
 
 // ---------------------------------------------------------------------------
@@ -288,4 +290,98 @@ test('buildHoverMessage agente aparece en la cabecera, antes del separador y del
   const separIdx   = msg.indexOf('─'.repeat(40));
   assert.ok(tipoIdx < agenteIdx,  'El agente debe aparecer después del tipo');
   assert.ok(agenteIdx < separIdx, 'El agente debe aparecer antes del separador');
+});
+
+// ---------------------------------------------------------------------------
+// escapeHtml
+// ---------------------------------------------------------------------------
+
+test('escapeHtml escapa < y > a &lt; y &gt;', () => {
+  assert.strictEqual(escapeHtml('<script>'), '&lt;script&gt;');
+});
+
+test('escapeHtml escapa & a &amp;', () => {
+  assert.strictEqual(escapeHtml('a & b'), 'a &amp; b');
+});
+
+test('escapeHtml escapa & antes de < para evitar doble escape', () => {
+  // Si se escapara < primero, «a&b» → «a&b» luego «a&amp;b» ✓;
+  // pero «<» → «&lt;» luego «&amp;lt;» ✗ — el orden correcto evita eso.
+  const result = escapeHtml('a&b<c>');
+  assert.strictEqual(result, 'a&amp;b&lt;c&gt;');
+});
+
+test('escapeHtml no modifica texto sin caracteres especiales', () => {
+  const plain = 'texto normal sin especiales';
+  assert.strictEqual(escapeHtml(plain), plain);
+});
+
+// ---------------------------------------------------------------------------
+// buildHoverMessage — escape de contenido de usuario
+// ---------------------------------------------------------------------------
+
+test('buildHoverMessage body con <script>: no contiene la etiqueta cruda', () => {
+  const msg = buildHoverMessage({
+    type: 'nota',
+    body: '<script>alert(1)</script>',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(!msg.includes('<script>'), `No debe contener <script> crudo, obtenido:\n${msg}`);
+  assert.ok(msg.includes('&lt;script&gt;'), `Debe contener &lt;script&gt; escapado, obtenido:\n${msg}`);
+});
+
+test('buildHoverMessage body «el tipo <T> no compila» conserva el texto escapado', () => {
+  const msg = buildHoverMessage({
+    type: 'pregunta',
+    body: 'el tipo <T> no compila',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(msg.includes('&lt;T&gt;'), `El cuerpo debe contener &lt;T&gt;, obtenido:\n${msg}`);
+  assert.ok(!msg.includes('<T>'), `No debe contener <T> crudo, obtenido:\n${msg}`);
+});
+
+test('buildHoverMessage agent con ángulos se escapa correctamente', () => {
+  const msg = buildHoverMessage({
+    type: 'verifica',
+    agent: '<bot>',
+    body: 'texto normal',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(msg.includes('&lt;bot&gt;'), `El agente debe aparecer escapado, obtenido:\n${msg}`);
+  assert.ok(!msg.includes('<bot>'), `No debe contener <bot> crudo, obtenido:\n${msg}`);
+});
+
+test('buildHoverMessage body con & se escapa a &amp; sin doble escape', () => {
+  const msg = buildHoverMessage({
+    type: 'nota',
+    body: 'a & b',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(msg.includes('a &amp; b'), `Debe contener a &amp; b, obtenido:\n${msg}`);
+  assert.ok(!msg.includes('&amp;amp;'), `No debe doble-escapar, obtenido:\n${msg}`);
+});
+
+// ---------------------------------------------------------------------------
+// Defensivos — paleta y formato de spans
+// ---------------------------------------------------------------------------
+
+test('FALLBACK_COLOR cumple /^#[0-9a-fA-F]{6}$/ (requerimiento del sanitizador VS Code)', () => {
+  assert.match(FALLBACK_COLOR, /^#[0-9a-fA-F]{6}$/);
+});
+
+test('todos los <span style="color:...;"> del hover terminan el color con punto y coma', () => {
+  // Genera un hover para cada tipo y verifica que todos los spans de color
+  // tienen el ; obligatorio que exige el sanitizador de VS Code.
+  const tipos = ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota'] as const;
+  const spanStyleRe = /style="color:([^"]+)"/g;
+  for (const tipo of tipos) {
+    const msg = buildHoverMessage({ type: tipo, body: 'x', created_at: '2026-07-09T10:00:00Z' });
+    for (const match of msg.matchAll(spanStyleRe)) {
+      const value = match[1];
+      assert.ok(
+        value.endsWith(';'),
+        `Span del tipo ${tipo} debe terminar en ;, obtenido: style="color:${value}"`
+      );
+    }
+  }
 });

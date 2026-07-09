@@ -95,13 +95,28 @@ export function formatTimestamp(
 }
 
 /**
+ * Escapa los caracteres HTML especiales de una cadena de texto de usuario.
+ * Se aplica antes de interpolar contenido libre (body, agent) en el markdown
+ * del hover para evitar que el saneador de VS Code elimine texto legítimo
+ * (ej. «el tipo <T> no compila» → «el tipo &lt;T&gt; no compila»).
+ *
+ * Orden obligatorio: & primero para no doble-escapar después.
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
  * Construye el mensaje de hover para MarkdownString con HTML saneado por VS Code.
  *
  * Estructura emitida (párrafos separados por línea en blanco):
  *   1. Cabecera: «● tipo» coloreado con el color del tipo + negrita del nombre
- *                y, si hay agente, « · agente» en texto plano.
+ *                y, si hay agente, « · agente» en texto plano (escapado HTML).
  *   2. Separador: línea de 40 «─» en el color del tipo.
- *   3. Body: el texto del comentario.
+ *   3. Body: el texto del comentario (escapado HTML).
  *   4. Pie: fecha legible en gris atenuado (#9e9e9e).
  *
  * El HTML se restringe a `<span style="color:#rrggbb;">` — única sintaxis
@@ -127,10 +142,10 @@ export function buildHoverMessage(
   const bullet    = `<span style="color:${color};">●</span>`;
   const separator = `<span style="color:${color};">${'─'.repeat(40)}</span>`;
 
-  const agentSuffix = comment.agent ? ` · ${comment.agent}` : '';
+  const agentSuffix = comment.agent ? ` · ${escapeHtml(comment.agent)}` : '';
   const header = `${bullet} **${comment.type}**${agentSuffix}`;
 
   const footer = `<span style="color:#9e9e9e;">Creado: ${formatTimestamp(comment.created_at, locale, timeZone)}</span>`;
 
-  return [header, separator, comment.body, footer].join('\n\n');
+  return [header, separator, escapeHtml(comment.body), footer].join('\n\n');
 }
