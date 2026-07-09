@@ -1,0 +1,55 @@
+{
+  "name": "mesh-review",
+  "displayName": "mesh-review",
+  "description": "Comentarios de revisión anclados en VS Code con sidecar JSON",
+  "version": "0.1.0",
+  "publisher": "pablocoello",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PabloCoello/dotmesh"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mesh-review.addComment",
+        "title": "Mesh Review: Add Comment"
+      },
+      {
+        "command": "mesh-review.editComment",
+        "title": "Mesh Review: Edit Comment"
+      },
+      {
+        "command": "mesh-review.deleteComment",
+        "title": "Mesh Review: Delete Comment"
+      },
+      {
+        "command": "mesh-review.resolveComment",
+        "title": "Mesh Review: Resolve Comment"
+      },
+      {
+        "command": "mesh-review.listComments",
+        "title": "Mesh Review: List Comments"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node build.js",
+    "package": "vsce package --no-dependencies",
+    "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
+    "test": "node --experimental-strip-types --test src/sidecar.test.ts src/anchor.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}
