@@ -95,24 +95,42 @@ export function formatTimestamp(
 }
 
 /**
- * Construye el texto del mensaje de hover en Markdown: tipo, agente (si
- * existe), body completo y created_at.
+ * Construye el mensaje de hover para MarkdownString con HTML saneado por VS Code.
  *
- * Devuelve una cadena cruda; decorations.ts la envuelve en MarkdownString.
+ * Estructura emitida (párrafos separados por línea en blanco):
+ *   1. Cabecera: «● tipo» coloreado con el color del tipo + negrita del nombre
+ *                y, si hay agente, « · agente» en texto plano.
+ *   2. Separador: línea de 40 «─» en el color del tipo.
+ *   3. Body: el texto del comentario.
+ *   4. Pie: fecha legible en gris atenuado (#9e9e9e).
+ *
+ * El HTML se restringe a `<span style="color:#rrggbb;">` — única sintaxis
+ * permitida por el sanitizador de VS Code para MarkdownString con
+ * supportHtml = true (fuente: src/vs/base/browser/markdownRenderer.ts).
+ * Los valores hex de TYPE_COLORS ya incluyen la mayúscula requerida por la
+ * regex del sanitizador: #[0-9a-fA-F]+.
+ *
+ * El separador (;) tras el valor de color es obligatorio para pasar la
+ * regex: /^(color\:(#[0-9a-fA-F]+|var\(...\));)?...$/
+ *
+ * Parámetros:
+ *   comment  — datos del comentario (type, agent, body, created_at)
+ *   locale   — locale BCP 47 para la fecha legible (por defecto 'es-ES')
+ *   timeZone — zona horaria IANA para la fecha (por defecto: sistema)
  */
 export function buildHoverMessage(
-  comment: Pick<Comment, 'type' | 'agent' | 'body' | 'created_at'>
+  comment: Pick<Comment, 'type' | 'agent' | 'body' | 'created_at'>,
+  locale = 'es-ES',
+  timeZone?: string
 ): string {
-  const lines = [
-    `**Tipo:** ${comment.type}  `,
-  ];
-  if (comment.agent) {
-    lines.push(`**Agente:** ${comment.agent}  `);
-  }
-  lines.push(
-    `**Creado:** ${comment.created_at}  `,
-    '',
-    comment.body,
-  );
-  return lines.join('\n');
+  const color = typeColor(comment.type);
+  const bullet    = `<span style="color:${color};">●</span>`;
+  const separator = `<span style="color:${color};">${'─'.repeat(40)}</span>`;
+
+  const agentSuffix = comment.agent ? ` · ${comment.agent}` : '';
+  const header = `${bullet} **${comment.type}**${agentSuffix}`;
+
+  const footer = `<span style="color:#9e9e9e;">Creado: ${formatTimestamp(comment.created_at, locale, timeZone)}</span>`;
+
+  return [header, separator, comment.body, footer].join('\n\n');
 }

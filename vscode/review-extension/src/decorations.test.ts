@@ -154,8 +154,47 @@ test('formatTimestamp usa la zona horaria indicada para ajustar la hora', () => 
 });
 
 // ---------------------------------------------------------------------------
-// buildHoverMessage — sin agente
+// buildHoverMessage — estructura de cabecera y separador
 // ---------------------------------------------------------------------------
+
+test('buildHoverMessage contiene span con el color del tipo en la cabecera', () => {
+  const msg = buildHoverMessage({
+    type: 'edita',
+    body: 'texto',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  // El span debe usar el color de 'edita' (rose #E59A9A) con ; obligatorio
+  assert.ok(
+    msg.includes('<span style="color:#E59A9A;">'),
+    `Debe contener span con color de edita, obtenido:\n${msg}`
+  );
+});
+
+test('buildHoverMessage contiene span con el color correcto para cada tipo', () => {
+  const pares: Array<[string, string]> = [
+    ['edita',      '#E59A9A'],
+    ['sugerencia', '#E3C58A'],
+    ['pregunta',   '#8FB4E3'],
+    ['verifica',   '#FFAA7A'],
+    ['nota',       '#6CB6B0'],
+  ];
+  for (const [tipo, color] of pares) {
+    const msg = buildHoverMessage({ type: tipo as any, body: 'x', created_at: '2026-07-09T10:00:00Z' });
+    assert.ok(
+      msg.includes(`<span style="color:${color};">`),
+      `Tipo ${tipo}: debe contener span con ${color}, obtenido:\n${msg}`
+    );
+  }
+});
+
+test('buildHoverMessage contiene el separador de 40 caracteres ─', () => {
+  const msg = buildHoverMessage({
+    type: 'sugerencia',
+    body: 'texto',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(msg.includes('─'.repeat(40)), `Debe contener 40 guiones ─, obtenido:\n${msg}`);
+});
 
 test('buildHoverMessage incluye el tipo en la salida', () => {
   const msg = buildHoverMessage({
@@ -185,14 +224,12 @@ test('buildHoverMessage incluye el body completo', () => {
   assert.ok(msg.includes(body), `El hover debe incluir el body, obtenido:\n${msg}`);
 });
 
-test('buildHoverMessage incluye el timestamp created_at', () => {
-  const ts = '2026-07-09T14:30:00Z';
-  const msg = buildHoverMessage({
-    type: 'nota',
-    body: 'Nota breve',
-    created_at: ts,
-  });
-  assert.ok(msg.includes(ts), `El hover debe incluir el timestamp, obtenido:\n${msg}`);
+test('buildHoverMessage muestra la fecha en formato legible sin ISO cruda', () => {
+  const iso = '2026-07-09T14:30:00Z';
+  const msg = buildHoverMessage({ type: 'nota', body: 'Nota breve', created_at: iso }, 'es-ES', 'UTC');
+  const formatted = formatTimestamp(iso, 'es-ES', 'UTC');
+  assert.ok(msg.includes(formatted), `El hover debe contener la fecha formateada «${formatted}», obtenido:\n${msg}`);
+  assert.ok(!msg.includes(iso), `El hover no debe contener la ISO cruda, obtenido:\n${msg}`);
 });
 
 test('buildHoverMessage devuelve una cadena no vacía', () => {
@@ -220,37 +257,35 @@ test('buildHoverMessage body aparece después del encabezado de metadatos', () =
 // buildHoverMessage — con agente
 // ---------------------------------------------------------------------------
 
-test('buildHoverMessage incluye la fila Agente cuando agent existe', () => {
+test('buildHoverMessage incluye el nombre del agente en la cabecera', () => {
   const msg = buildHoverMessage({
     type: 'verifica',
     agent: 'review',
     body: 'Comprueba la cifra',
     created_at: '2026-07-09T10:00:00Z',
   });
-  assert.ok(msg.includes('Agente'), `Debe incluir la fila Agente, obtenido:\n${msg}`);
   assert.ok(msg.includes('review'), `Debe incluir el nombre del agente, obtenido:\n${msg}`);
+  assert.ok(msg.includes('·'), `Debe usar · como separador tipo-agente, obtenido:\n${msg}`);
 });
 
-test('buildHoverMessage no incluye la fila Agente cuando agent es undefined', () => {
+test('buildHoverMessage no contiene separador · cuando agent es undefined', () => {
   const msg = buildHoverMessage({
     type: 'sugerencia',
     agent: undefined,
     body: 'Una sugerencia',
     created_at: '2026-07-09T10:00:00Z',
   });
-  assert.ok(!msg.includes('Agente'), `No debe incluir la fila Agente, obtenido:\n${msg}`);
+  // El único · que podría aparecer es el del separador tipo-agente
+  // El separador ─ no contiene ·, así que este check es válido
+  assert.ok(!msg.includes(' · '), `No debe contener « · » sin agente, obtenido:\n${msg}`);
 });
 
-test('buildHoverMessage agente aparece entre tipo y created_at', () => {
-  const msg = buildHoverMessage({
-    type: 'verifica',
-    agent: 'security',
-    body: 'texto',
-    created_at: '2026-07-09T10:00:00Z',
-  });
-  const tipoIdx  = msg.indexOf('verifica');
-  const agenteIdx = msg.indexOf('security');
-  const fechaIdx  = msg.indexOf('2026-07-09');
-  assert.ok(tipoIdx < agenteIdx, 'El agente debe aparecer después del tipo');
-  assert.ok(agenteIdx < fechaIdx, 'El agente debe aparecer antes de la fecha');
+test('buildHoverMessage agente aparece en la cabecera, antes del separador y del body', () => {
+  const iso = '2026-07-09T10:00:00Z';
+  const msg = buildHoverMessage({ type: 'verifica', agent: 'security', body: 'texto', created_at: iso }, 'es-ES', 'UTC');
+  const tipoIdx    = msg.indexOf('verifica');
+  const agenteIdx  = msg.indexOf('security');
+  const separIdx   = msg.indexOf('─'.repeat(40));
+  assert.ok(tipoIdx < agenteIdx,  'El agente debe aparecer después del tipo');
+  assert.ok(agenteIdx < separIdx, 'El agente debe aparecer antes del separador');
 });
