@@ -120,8 +120,7 @@ test('writeSidecar y readSidecar hacen round-trip íntegro', async () => {
         {
           id: '550e8400-e29b-41d4-a716-446655440000',
           anchor: { quote: 'texto de prueba', line_hint: 3, char_offset: 42 },
-          type: 'comentario',
-          priority: 'media',
+          type: 'nota',
           body: 'Este es un comentario de prueba',
           status: 'open',
           created_at: '2026-07-09T10:00:00Z',
@@ -133,6 +132,65 @@ test('writeSidecar y readSidecar hacen round-trip íntegro', async () => {
     await writeSidecar(filePath, data);
     const read = await readSidecar(filePath);
     assert.deepEqual(read, data);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('writeSidecar y readSidecar preservan el campo agent opcional', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-test-'));
+  try {
+    const filePath = join(dir, 'agent-test.json');
+    const data: Sidecar = {
+      version: 1,
+      file: 'docs/test.md',
+      comments: [
+        {
+          id: '550e8400-e29b-41d4-a716-446655440001',
+          anchor: { quote: 'fragmento', line_hint: 0, char_offset: 0 },
+          type: 'verifica',
+          agent: 'review',
+          body: 'Comprueba la afirmación contra la fuente',
+          status: 'open',
+          created_at: '2026-07-09T10:00:00Z',
+          updated_at: '2026-07-09T10:00:00Z',
+        },
+      ],
+    };
+
+    await writeSidecar(filePath, data);
+    const read = await readSidecar(filePath);
+    assert.deepEqual(read, data);
+    assert.strictEqual(read?.comments[0].agent, 'review');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('writeSidecar y readSidecar preservan comentario sin campo agent', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-test-'));
+  try {
+    const filePath = join(dir, 'no-agent-test.json');
+    const data: Sidecar = {
+      version: 1,
+      file: 'docs/test.md',
+      comments: [
+        {
+          id: '550e8400-e29b-41d4-a716-446655440002',
+          anchor: { quote: 'otro fragmento', line_hint: 1, char_offset: 10 },
+          type: 'sugerencia',
+          body: 'Sugerencia sin agente asignado',
+          status: 'open',
+          created_at: '2026-07-09T10:00:00Z',
+          updated_at: '2026-07-09T10:00:00Z',
+        },
+      ],
+    };
+
+    await writeSidecar(filePath, data);
+    const read = await readSidecar(filePath);
+    assert.deepEqual(read, data);
+    assert.strictEqual(read?.comments[0].agent, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

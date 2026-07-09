@@ -47,7 +47,7 @@
     },
     "comment": {
       "type": "object",
-      "required": ["id", "anchor", "type", "priority", "body", "status", "created_at", "updated_at"],
+      "required": ["id", "anchor", "type", "body", "status", "created_at", "updated_at"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -60,13 +60,13 @@
         },
         "type": {
           "type": "string",
-          "enum": ["pregunta", "sugerencia", "edita", "comentario"],
+          "enum": ["edita", "sugerencia", "pregunta", "verifica", "nota"],
           "description": "Semantic type of the comment."
         },
-        "priority": {
+        "agent": {
           "type": "string",
-          "enum": ["alta", "media", "baja"],
-          "description": "Attention priority: alta (high), media (medium), baja (low)."
+          "minLength": 1,
+          "description": "Optional routing hint: name of the agent or subagent that should handle this comment in an orchestrated run. A standalone agent treats it as context."
         },
         "body": {
           "type": "string",

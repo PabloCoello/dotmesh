@@ -24,15 +24,14 @@ export interface Anchor {
   char_offset: number;
 }
 
-export type CommentType = 'pregunta' | 'sugerencia' | 'edita' | 'comentario';
-export type Priority = 'alta' | 'media' | 'baja';
+export type CommentType = 'edita' | 'sugerencia' | 'pregunta' | 'verifica' | 'nota';
 export type Status = 'open' | 'resolved';
 
 export interface Comment {
   id: string;
   anchor: Anchor;
   type: CommentType;
-  priority: Priority;
+  agent?: string;
   body: string;
   status: Status;
   created_at: string;
