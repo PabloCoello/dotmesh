@@ -51,10 +51,12 @@ exec zsh
 1. `scripts/backup-current-config.sh` → copia tus configs actuales a
    `~/dotfiles-backup/<timestamp>/`.
 2. `stow -t ~ <paquete>` para cada paquete del repo.
-3. `make link-skills` → crea `~/.claude/skills` como symlink a
+3. `make review-install` → compila e instala la extensión `mesh-review` en VS Code
+   (requiere `node` ≥22.6 y el CLI `code` en el PATH; falla con aviso si no están disponibles).
+4. `make link-skills` → crea `~/.claude/skills` como symlink a
    `~/.agents/skills` para que Claude Code consuma la misma fuente de
    skills que OpenCode y Codex.
-4. `make link-warp` → enlaza los temas de Warp en `~/.local/share/warp-terminal/themes/`
+5. `make link-warp` → enlaza los temas de Warp en `~/.local/share/warp-terminal/themes/`
    (solo Linux; en macOS lo hace Stow directamente en `~/.warp/themes/`).
 
 **Solo en Linux**, tras el install inicial:
@@ -94,6 +96,55 @@ Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
 sesión OpenCode en cualquier proyecto (ver
 [opencode/.config/opencode/README.md](../opencode/.config/opencode/README.md)).
 En Claude Code el equivalente es `/setup` (custom) o el `/init` nativo.
+
+## Extensión mesh-review
+
+`mesh-review` es una extensión de VS Code que permite dejar comentarios de revisión
+anclados a fragmentos de texto en documentos Markdown. Los comentarios se guardan en
+un sidecar JSON fuera del fichero fuente y nunca entran en el control de versiones.
+
+### Prerrequisitos
+
+- **Node.js ≥22.6** — comprueba con `node --version`.
+- **VS Code con el CLI `code`** en el PATH — en macOS, instálalo desde la paleta de
+  comandos con «Shell Command: Install 'code' command in PATH».
+
+### Instalación
+
+`make review-install` ya está incluido en `make install`, así que en una instalación
+inicial no hace falta ejecutarlo por separado. Para reinstalar la extensión sin
+repetir todo el proceso:
+
+```bash
+make review-install
+```
+
+Si `code` o `node` no están disponibles, el target falla con un aviso informativo y
+no bloquea el resto de `make install`. Instala las herramientas necesarias y vuelve a
+ejecutar `make review-install`.
+
+### Verificación
+
+```bash
+make health | grep mesh-review
+# ok  mesh-review   ← extensión instalada
+# --  mesh-review   ← no instalada (ejecuta 'make review-install')
+```
+
+### Flujo de trabajo
+
+1. Selecciona texto en un `.md` abierto en VS Code.
+2. Ejecuta `Mesh Review: Add Comment` desde la paleta de comandos.
+3. Elige el tipo (`edita`, `sugerencia`, `pregunta`, `verifica`, `nota`), opcionalmente
+   un agente de enrutado (pista para ejecución orquestada; `(ninguno)` si no aplica),
+   e introduce el texto del comentario.
+4. La extensión crea un sidecar JSON en `.ai/review/<ruta-relativa>.json` (relativo
+   al git root) y muestra la decoración en el editor.
+5. Cuando quieras que un agente resuelva los comentarios, carga la skill `doc-review`
+   y pide al agente que actúe sobre el documento: localizará el sidecar, resolverá
+   cada comentario abierto y marcará `status: "resolved"` al terminar.
+
+---
 
 ## MCP en Codex
 
