@@ -268,12 +268,22 @@ async function editCommentImpl(
   const { sidecarPath } = await resolveSidecarPath(editor.document.uri.fsPath);
   const sidecar = await readSidecar(sidecarPath);
 
+  // Guarda de sidecar antes de abrir el InputBox para evitar mostrar
+  // un formulario que no puede persistirse (sidecar borrado externamente).
+  if (!sidecar && itemArg instanceof CommentItem) {
+    vscode.window.showErrorMessage(
+      'mesh-review: El sidecar ya no existe en disco; no se puede editar.'
+    );
+    return;
+  }
+
   const comment =
     itemArg instanceof CommentItem
       ? itemArg.comment
       : await pickCommentByCursor(editor, sidecar);
 
   if (!comment) return;
+  if (!sidecar) return;
 
   const newBody = await vscode.window.showInputBox({
     title: 'Editar comentario',
@@ -284,8 +294,6 @@ async function editCommentImpl(
       v.trim() === '' ? 'El comentario no puede estar vacío' : undefined,
   });
   if (newBody === undefined || newBody.trim() === comment.body.trim()) return;
-
-  if (!sidecar) return;
 
   const idx = sidecar.comments.findIndex(c => c.id === comment.id);
   if (idx === -1) return;
