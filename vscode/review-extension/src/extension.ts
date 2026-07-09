@@ -21,7 +21,7 @@ import {
 import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ReviewTreeDataProvider, CommentItem } from './treeview';
-import { findCommentAtOffset } from './treeview-utils';
+import { findCommentAtOffset, mutateCommentById } from './treeview-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -266,11 +266,11 @@ async function editCommentImpl(
   provider: ReviewTreeDataProvider
 ): Promise<void> {
   const { sidecarPath } = await resolveSidecarPath(editor.document.uri.fsPath);
-  const sidecar = await readSidecar(sidecarPath);
+  const sidecarPreModal = await readSidecar(sidecarPath);
 
   // Guarda de sidecar antes de abrir el InputBox para evitar mostrar
   // un formulario que no puede persistirse (sidecar borrado externamente).
-  if (!sidecar && itemArg instanceof CommentItem) {
+  if (!sidecarPreModal && itemArg instanceof CommentItem) {
     vscode.window.showErrorMessage(
       'mesh-review: El sidecar ya no existe en disco; no se puede editar.'
     );
@@ -280,10 +280,10 @@ async function editCommentImpl(
   const comment =
     itemArg instanceof CommentItem
       ? itemArg.comment
-      : await pickCommentByCursor(editor, sidecar);
+      : await pickCommentByCursor(editor, sidecarPreModal);
 
   if (!comment) return;
-  if (!sidecar) return;
+  if (!sidecarPreModal) return;
 
   const newBody = await vscode.window.showInputBox({
     title: 'Editar comentario',
@@ -293,20 +293,39 @@ async function editCommentImpl(
     validateInput: (v) =>
       v.trim() === '' ? 'El comentario no puede estar vacío' : undefined,
   });
-  if (newBody === undefined || newBody.trim() === comment.body.trim()) return;
+  if (newBody === undefined) return;
 
-  const idx = sidecar.comments.findIndex(c => c.id === comment.id);
-  if (idx === -1) return;
+  // Sin cambios: feedback explícito en lugar de retorno mudo
+  if (newBody.trim() === comment.body.trim()) {
+    vscode.window.showInformationMessage('mesh-review: Sin cambios.');
+    return;
+  }
 
-  sidecar.comments[idx] = {
-    ...sidecar.comments[idx],
-    body: newBody.trim(),
-    updated_at: utcTimestamp(),
-  };
+  // Relectura tras el modal: evita sobreescribir cambios externos
+  const freshSidecar = await readSidecar(sidecarPath);
+  if (!freshSidecar) {
+    vscode.window.showInformationMessage(
+      'mesh-review: el comentario ya no existe (¿resuelto o eliminado externamente?)'
+    );
+    return;
+  }
 
-  await writeSidecar(sidecarPath, sidecar);
-  applyDecorations(editor, sidecar.comments);
-  provider.update(sidecar.comments, editor.document.uri);
+  const { sidecar: updatedSidecar, found } = mutateCommentById(
+    freshSidecar,
+    comment.id,
+    (c) => ({ ...c, body: newBody.trim(), updated_at: utcTimestamp() })
+  );
+
+  if (!found) {
+    vscode.window.showInformationMessage(
+      'mesh-review: el comentario ya no existe (¿resuelto o eliminado externamente?)'
+    );
+    return;
+  }
+
+  await writeSidecar(sidecarPath, updatedSidecar);
+  applyDecorations(editor, updatedSidecar.comments);
+  provider.update(updatedSidecar.comments, editor.document.uri);
   vscode.window.showInformationMessage('mesh-review: comentario actualizado.');
 }
 
@@ -316,28 +335,42 @@ async function resolveCommentImpl(
   provider: ReviewTreeDataProvider
 ): Promise<void> {
   const { sidecarPath } = await resolveSidecarPath(editor.document.uri.fsPath);
-  const sidecar = await readSidecar(sidecarPath);
+  const sidecarPreModal = await readSidecar(sidecarPath);
 
   const comment =
     itemArg instanceof CommentItem
       ? itemArg.comment
-      : await pickCommentByCursor(editor, sidecar);
+      : await pickCommentByCursor(editor, sidecarPreModal);
 
   if (!comment) return;
-  if (!sidecar) return;
+  if (!sidecarPreModal) return;
 
-  const idx = sidecar.comments.findIndex(c => c.id === comment.id);
-  if (idx === -1) return;
+  // Relectura tras la selección (QuickPick o TreeView): evita sobreescribir
+  // cambios externos realizados mientras el modal estaba abierto.
+  const freshSidecar = await readSidecar(sidecarPath);
+  if (!freshSidecar) {
+    vscode.window.showInformationMessage(
+      'mesh-review: el comentario ya no existe (¿resuelto o eliminado externamente?)'
+    );
+    return;
+  }
 
-  sidecar.comments[idx] = {
-    ...sidecar.comments[idx],
-    status: 'resolved',
-    updated_at: utcTimestamp(),
-  };
+  const { sidecar: updatedSidecar, found } = mutateCommentById(
+    freshSidecar,
+    comment.id,
+    (c) => ({ ...c, status: 'resolved', updated_at: utcTimestamp() })
+  );
 
-  await writeSidecar(sidecarPath, sidecar);
-  applyDecorations(editor, sidecar.comments);
-  provider.update(sidecar.comments, editor.document.uri);
+  if (!found) {
+    vscode.window.showInformationMessage(
+      'mesh-review: el comentario ya no existe (¿resuelto o eliminado externamente?)'
+    );
+    return;
+  }
+
+  await writeSidecar(sidecarPath, updatedSidecar);
+  applyDecorations(editor, updatedSidecar.comments);
+  provider.update(updatedSidecar.comments, editor.document.uri);
   vscode.window.showInformationMessage('mesh-review: comentario marcado como resuelto.');
 }
 
@@ -347,33 +380,54 @@ async function deleteCommentImpl(
   provider: ReviewTreeDataProvider
 ): Promise<void> {
   const { sidecarPath } = await resolveSidecarPath(editor.document.uri.fsPath);
-  const sidecar = await readSidecar(sidecarPath);
+  const sidecarPreModal = await readSidecar(sidecarPath);
 
-  // Para eliminar también se admiten resueltos (desde el TreeView)
+  // Para eliminar también se admiten resueltos (desde el TreeView y desde paleta)
   let comment: Comment | null = null;
 
   if (itemArg instanceof CommentItem) {
     comment = itemArg.comment;
   } else {
-    if (!sidecar) {
+    if (!sidecarPreModal) {
       vscode.window.showInformationMessage(
         'mesh-review: Este documento no tiene comentarios de revisión.'
       );
       return;
     }
-    const open = sidecar.comments.filter(c => c.status === 'open');
-    if (open.length === 0) {
+
+    const all = sidecarPreModal.comments;
+    if (all.length === 0) {
       vscode.window.showInformationMessage(
-        'mesh-review: No hay comentarios abiertos en este documento.'
+        'mesh-review: Este documento no tiene comentarios de revisión.'
       );
       return;
     }
-    const picked = await pickCommentByCursor(editor, sidecar);
-    comment = picked;
+
+    // Intenta localizar por posición del cursor (solo abiertos, que son los
+    // que tienen decoración). Si no hay coincidencia, ofrece un QuickPick
+    // completo que incluye también los resueltos (marcados).
+    const docText = editor.document.getText();
+    const cursorOffset = editor.document.offsetAt(editor.selection.active);
+    const atCursor = findCommentAtOffset(all, cursorOffset, docText);
+
+    if (atCursor) {
+      comment = atCursor;
+    } else {
+      const picked = await vscode.window.showQuickPick(
+        all.map(c => ({
+          label: `L${c.anchor.line_hint + 1}  ${c.type}·${c.priority}`,
+          description:
+            (c.status === 'resolved' ? '(resuelta) ' : '') +
+            (c.body.length > 60 ? c.body.slice(0, 60) + '…' : c.body),
+          comment: c,
+        })),
+        { title: 'Selecciona el comentario a eliminar', placeHolder: 'Elige un comentario' }
+      );
+      comment = picked?.comment ?? null;
+    }
   }
 
   if (!comment) return;
-  if (!sidecar) return;
 
   const confirm = await vscode.window.showWarningMessage(
     `mesh-review: ¿Eliminar el comentario "${comment.body.slice(0, 60)}${comment.body.length > 60 ? '…' : ''}"?`,
@@ -382,11 +436,31 @@ async function deleteCommentImpl(
   );
   if (confirm !== 'Eliminar') return;
 
-  sidecar.comments = sidecar.comments.filter(c => c.id !== comment!.id);
+  // Relectura tras el diálogo de confirmación: evita sobreescribir cambios externos
+  const freshSidecar = await readSidecar(sidecarPath);
+  if (!freshSidecar) {
+    vscode.window.showInformationMessage(
+      'mesh-review: el comentario ya no existe (¿resuelto o eliminado externamente?)'
+    );
+    return;
+  }
 
-  await writeSidecar(sidecarPath, sidecar);
-  applyDecorations(editor, sidecar.comments);
-  provider.update(sidecar.comments, editor.document.uri);
+  const { sidecar: updatedSidecar, found } = mutateCommentById(
+    freshSidecar,
+    comment.id,
+    () => null
+  );
+
+  if (!found) {
+    vscode.window.showInformationMessage(
+      'mesh-review: el comentario ya no existe (¿resuelto o eliminado externamente?)'
+    );
+    return;
+  }
+
+  await writeSidecar(sidecarPath, updatedSidecar);
+  applyDecorations(editor, updatedSidecar.comments);
+  provider.update(updatedSidecar.comments, editor.document.uri);
   vscode.window.showInformationMessage('mesh-review: comentario eliminado.');
 }
 
