@@ -70,6 +70,31 @@ export function typeColor(type: string): string {
 }
 
 /**
+ * Formatea un timestamp ISO 8601 a una cadena legible usando Intl.DateTimeFormat.
+ * Parámetros:
+ *   iso       — cadena ISO UTC (ej. '2026-07-09T10:00:00Z')
+ *   locale    — locale BCP 47 para el formato (por defecto 'es-ES')
+ *   timeZone  — zona horaria IANA (ej. 'UTC', 'Europe/Madrid'); si se omite,
+ *               se usa la zona horaria local del sistema.
+ * Si la fecha no puede parsearse, devuelve la cadena original tal cual.
+ *
+ * Ejemplo (es-ES, UTC): '9 jul 2026, 10:00'
+ */
+export function formatTimestamp(
+  iso: string,
+  locale = 'es-ES',
+  timeZone?: string
+): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    ...(timeZone !== undefined ? { timeZone } : {}),
+  }).format(date);
+}
+
+/**
  * Construye el texto del mensaje de hover en Markdown: tipo, agente (si
  * existe), body completo y created_at.
  *

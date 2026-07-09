@@ -6,7 +6,8 @@
  * manual en el walkthrough final. Aquí se cubre la lógica pura:
  *   - buildLabelText:    formato de la etiqueta «● tipo» o «● tipo·agente»
  *   - typeColor:         mapeo tipo → hex dotmesh
- *   - buildHoverMessage: estructura del mensaje de hover
+ *   - formatTimestamp:   formato de fecha legible con Intl.DateTimeFormat
+ *   - buildHoverMessage: estructura del mensaje de hover con HTML saneado
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
   buildLabelText,
   typeColor,
+  formatTimestamp,
   buildHoverMessage,
   TYPE_COLORS,
 } from './decorations-utils.ts';
@@ -110,6 +112,45 @@ test('typeColor no devuelve cadena vacía para ningún tipo conocido', () => {
   for (const tipo of ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota']) {
     assert.ok(typeColor(tipo).length > 0, `Cadena vacía para tipo: ${tipo}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// formatTimestamp
+// ---------------------------------------------------------------------------
+
+test('formatTimestamp produce formato legible en es-ES con timeZone UTC', () => {
+  // '2026-07-09T10:00:00Z' en es-ES con UTC → '9 jul 2026, 10:00'
+  const result = formatTimestamp('2026-07-09T10:00:00Z', 'es-ES', 'UTC');
+  // Verifica que contiene el año y fragmento de la hora sin ISO cruda
+  assert.ok(result.includes('2026'), `Debe incluir el año, obtenido: ${result}`);
+  assert.ok(result.includes('10:00'), `Debe incluir la hora, obtenido: ${result}`);
+  assert.ok(!result.includes('T'), `No debe contener la T de ISO, obtenido: ${result}`);
+  assert.ok(!result.includes('Z'), `No debe contener la Z de ISO, obtenido: ${result}`);
+});
+
+test('formatTimestamp es determinista con la misma zona horaria', () => {
+  const a = formatTimestamp('2026-07-09T10:00:00Z', 'es-ES', 'UTC');
+  const b = formatTimestamp('2026-07-09T10:00:00Z', 'es-ES', 'UTC');
+  assert.strictEqual(a, b);
+});
+
+test('formatTimestamp devuelve la cadena original para fecha inválida', () => {
+  const invalid = 'no-es-una-fecha';
+  assert.strictEqual(formatTimestamp(invalid), invalid);
+});
+
+test('formatTimestamp devuelve cadena diferente para fechas distintas', () => {
+  const a = formatTimestamp('2026-07-09T10:00:00Z', 'es-ES', 'UTC');
+  const b = formatTimestamp('2025-01-15T08:30:00Z', 'es-ES', 'UTC');
+  assert.notStrictEqual(a, b);
+});
+
+test('formatTimestamp usa la zona horaria indicada para ajustar la hora', () => {
+  // 2026-07-09T22:00:00Z en UTC es 00:00 del 2026-07-10 en Europe/Madrid (+2 en verano)
+  const utc  = formatTimestamp('2026-07-09T22:00:00Z', 'es-ES', 'UTC');
+  const mad  = formatTimestamp('2026-07-09T22:00:00Z', 'es-ES', 'Europe/Madrid');
+  // El resultado debe diferir (una muestra el 9 jul 22:00, la otra el 10 jul 00:00)
+  assert.notStrictEqual(utc, mad, 'Las zonas horarias distintas deben dar fechas diferentes');
 });
 
 // ---------------------------------------------------------------------------
