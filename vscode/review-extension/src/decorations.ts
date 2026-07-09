@@ -111,8 +111,9 @@ export function applyDecorations(
     const end = doc.positionAt(resolved.endOffset);
     const range = new vscode.Range(start, end);
 
-    const hover = new vscode.MarkdownString(buildHoverMessage(comment));
-    hover.isTrusted = false;
+    const hover = new vscode.MarkdownString(buildHoverMessage(comment, vscode.env.language));
+    hover.isTrusted = false;   // no hay command links; no se necesita isTrusted
+    hover.supportHtml = true;  // habilita <span style="color:#rrggbb;"> del sanitizador
 
     rangeOpts.push({ range, hoverMessage: hover });
 
