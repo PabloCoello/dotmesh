@@ -6,9 +6,11 @@
  *
  * Colores de la paleta dotmesh — fuente de verdad: docs/DESIGN.md
  * -----------------------------------------------------------------------
- *   teal   #6CB6B0   fondo del rango (con alpha) y prioridad baja
- *   rose   #E59A9A   prioridad alta
- *   gold   #E3C58A   prioridad media
+ *   rose   #E59A9A   edita
+ *   gold   #E3C58A   sugerencia
+ *   blue   #8FB4E3   pregunta
+ *   peach  #FFAA7A   verifica
+ *   teal   #6CB6B0   nota
  *   grey   #6e6e6e   texto atenuado (Graphite, «atenuado»)
  *
  * El fondo del rango es teal con alpha 0.18: el gris ink-2 sobre Ink
@@ -26,14 +28,16 @@ import type { Comment } from './sidecar';
 /** Fondo del rango anclado: teal con alpha, legible sobre Ink y Paper. */
 export const RANGE_BG_COLOR = 'rgba(108, 182, 176, 0.18)';
 
-/** Mapa prioridad → color dotmesh (DESIGN.md). */
-export const PRIORITY_COLORS: Readonly<Record<string, string>> = {
-  alta: '#E59A9A',  // rose  — DESIGN.md
-  media: '#E3C58A', // gold  — DESIGN.md
-  baja: '#6CB6B0',  // teal  — DESIGN.md
+/** Mapa tipo → color dotmesh (DESIGN.md). */
+export const TYPE_COLORS: Readonly<Record<string, string>> = {
+  edita:      '#E59A9A', // rose  — DESIGN.md
+  sugerencia: '#E3C58A', // gold  — DESIGN.md
+  pregunta:   '#8FB4E3', // blue  — DESIGN.md
+  verifica:   '#FFAA7A', // peach — DESIGN.md
+  nota:       '#6CB6B0', // teal  — DESIGN.md
 };
 
-/** Color de fallback si la prioridad no está reconocida. */
+/** Color de fallback si el tipo no está reconocido. */
 export const FALLBACK_COLOR = '#9e9e9e'; // Graphite secundario
 
 // ---------------------------------------------------------------------------
@@ -41,42 +45,49 @@ export const FALLBACK_COLOR = '#9e9e9e'; // Graphite secundario
 // ---------------------------------------------------------------------------
 
 /**
- * Construye el texto de la etiqueta after: «● tipo·prioridad».
+ * Construye el texto de la etiqueta after: «● tipo» o «● tipo·agente».
  *
- * Nota: la especificación pide «●» en el color de prioridad y el texto
+ * Nota: la especificación pide «●» en el color de tipo y el texto
  * restante en gris #6e6e6e. La Decorations API de VS Code solo permite un
  * color por contentText; con exactamente dos TextEditorDecorationType (según
- * el plan) toda la etiqueta toma el color de prioridad. El resultado sigue
+ * el plan) toda la etiqueta toma el color de tipo. El resultado sigue
  * siendo informativo y coherente con la paleta dotmesh.
  */
 export function buildLabelText(
-  comment: Pick<Comment, 'type' | 'priority'>
+  comment: Pick<Comment, 'type' | 'agent'>
 ): string {
-  return `● ${comment.type}·${comment.priority}`;
+  return comment.agent
+    ? `● ${comment.type}·${comment.agent}`
+    : `● ${comment.type}`;
 }
 
 /**
- * Devuelve el color dotmesh correspondiente a la prioridad.
- * Devuelve el gris secundario si la prioridad no está reconocida.
+ * Devuelve el color dotmesh correspondiente al tipo.
+ * Devuelve el gris secundario si el tipo no está reconocido.
  */
-export function priorityColor(priority: string): string {
-  return PRIORITY_COLORS[priority] ?? FALLBACK_COLOR;
+export function typeColor(type: string): string {
+  return TYPE_COLORS[type] ?? FALLBACK_COLOR;
 }
 
 /**
- * Construye el texto del mensaje de hover en Markdown: tipo, prioridad,
- * body completo y created_at.
+ * Construye el texto del mensaje de hover en Markdown: tipo, agente (si
+ * existe), body completo y created_at.
  *
  * Devuelve una cadena cruda; decorations.ts la envuelve en MarkdownString.
  */
 export function buildHoverMessage(
-  comment: Pick<Comment, 'type' | 'priority' | 'body' | 'created_at'>
+  comment: Pick<Comment, 'type' | 'agent' | 'body' | 'created_at'>
 ): string {
-  return [
+  const lines = [
     `**Tipo:** ${comment.type}  `,
-    `**Prioridad:** ${comment.priority}  `,
+  ];
+  if (comment.agent) {
+    lines.push(`**Agente:** ${comment.agent}  `);
+  }
+  lines.push(
     `**Creado:** ${comment.created_at}  `,
     '',
     comment.body,
-  ].join('\n');
+  );
+  return lines.join('\n');
 }

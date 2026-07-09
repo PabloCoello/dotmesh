@@ -10,7 +10,7 @@
  * cada llamada a applyDecorations(); se liberan llamando a disposeDecorationTypes()
  * (registrado como suscripción en context.subscriptions desde activate).
  *
- * Las funciones puras de formato (buildLabelText, priorityColor,
+ * Las funciones puras de formato (buildLabelText, typeColor,
  * buildHoverMessage) viven en decorations-utils.ts para poder testearse
  * directamente con node:test sin necesidad del entorno de VS Code.
  */
@@ -21,11 +21,11 @@ import type { Comment } from './sidecar';
 import {
   RANGE_BG_COLOR,
   buildLabelText,
-  priorityColor,
+  typeColor,
   buildHoverMessage,
 } from './decorations-utils';
 
-export { buildLabelText, priorityColor, buildHoverMessage } from './decorations-utils';
+export { buildLabelText, typeColor, buildHoverMessage } from './decorations-utils';
 
 // ---------------------------------------------------------------------------
 // Singleton de tipos de decoración
@@ -118,14 +118,14 @@ export function applyDecorations(
 
     // La etiqueta se ancla a un rango vacío al final de la línea donde
     // termina el ancla: si el rango comentado no llega al final de línea,
-    // renderOptions.after insertaría «● tipo·prioridad» en mitad del texto.
+    // renderOptions.after insertaría «● tipo» en mitad del texto.
     const lineEnd = doc.lineAt(end.line).range.end;
     labelOpts.push({
       range: new vscode.Range(lineEnd, lineEnd),
       renderOptions: {
         after: {
           contentText: buildLabelText(comment),
-          color: priorityColor(comment.priority),
+          color: typeColor(comment.type),
           margin: '0 0 0 1ch',
           fontStyle: 'italic',
         },

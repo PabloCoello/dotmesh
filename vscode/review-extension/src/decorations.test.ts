@@ -4,8 +4,8 @@
  * Las funciones con API de VS Code (applyDecorations, getDecorationTypes,
  * disposeDecorationTypes) viven en decorations.ts y se verifican de forma
  * manual en el walkthrough final. Aquí se cubre la lógica pura:
- *   - buildLabelText:    formato de la etiqueta «● tipo·prioridad»
- *   - priorityColor:     mapeo prioridad → hex dotmesh
+ *   - buildLabelText:    formato de la etiqueta «● tipo» o «● tipo·agente»
+ *   - typeColor:         mapeo tipo → hex dotmesh
  *   - buildHoverMessage: estructura del mensaje de hover
  */
 import { test } from 'node:test';
@@ -13,116 +13,131 @@ import assert from 'node:assert/strict';
 
 import {
   buildLabelText,
-  priorityColor,
+  typeColor,
   buildHoverMessage,
-  PRIORITY_COLORS,
+  TYPE_COLORS,
 } from './decorations-utils.ts';
 
 // ---------------------------------------------------------------------------
-// buildLabelText
+// buildLabelText — sin agente
 // ---------------------------------------------------------------------------
 
-test('buildLabelText produce «● tipo·prioridad» para pregunta alta', () => {
+test('buildLabelText produce «● tipo» cuando no hay agente', () => {
   assert.strictEqual(
-    buildLabelText({ type: 'pregunta', priority: 'alta' }),
-    '● pregunta·alta'
+    buildLabelText({ type: 'pregunta' }),
+    '● pregunta'
   );
 });
 
-test('buildLabelText produce «● tipo·prioridad» para sugerencia media', () => {
-  assert.strictEqual(
-    buildLabelText({ type: 'sugerencia', priority: 'media' }),
-    '● sugerencia·media'
-  );
-});
-
-test('buildLabelText produce «● tipo·prioridad» para edita baja', () => {
-  assert.strictEqual(
-    buildLabelText({ type: 'edita', priority: 'baja' }),
-    '● edita·baja'
-  );
-});
-
-test('buildLabelText funciona con tipo comentario', () => {
-  assert.strictEqual(
-    buildLabelText({ type: 'comentario', priority: 'media' }),
-    '● comentario·media'
-  );
-});
-
-test('buildLabelText empieza siempre con el bullet ●', () => {
-  const label = buildLabelText({ type: 'pregunta', priority: 'alta' });
-  assert.ok(label.startsWith('●'), `Debe empezar con ●, obtenido: ${label}`);
-});
-
-test('buildLabelText usa «·» como separador entre tipo y prioridad', () => {
-  const label = buildLabelText({ type: 'edita', priority: 'media' });
-  assert.ok(label.includes('·'), `Debe contener ·, obtenido: ${label}`);
-});
-
-// ---------------------------------------------------------------------------
-// priorityColor
-// ---------------------------------------------------------------------------
-
-test('priorityColor devuelve rose #E59A9A para alta', () => {
-  assert.strictEqual(priorityColor('alta'), '#E59A9A');
-});
-
-test('priorityColor devuelve gold #E3C58A para media', () => {
-  assert.strictEqual(priorityColor('media'), '#E3C58A');
-});
-
-test('priorityColor devuelve teal #6CB6B0 para baja', () => {
-  assert.strictEqual(priorityColor('baja'), '#6CB6B0');
-});
-
-test('priorityColor coincide con la constante PRIORITY_COLORS para cada valor', () => {
-  for (const [k, v] of Object.entries(PRIORITY_COLORS)) {
-    assert.strictEqual(priorityColor(k), v, `Fallo para prioridad: ${k}`);
+test('buildLabelText produce «● tipo» para cada tipo reconocido sin agente', () => {
+  const tipos = ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota'] as const;
+  for (const tipo of tipos) {
+    const label = buildLabelText({ type: tipo });
+    assert.strictEqual(label, `● ${tipo}`, `Fallo para tipo: ${tipo}`);
   }
 });
 
-test('priorityColor devuelve un hex de fallback para prioridad desconocida', () => {
-  const color = priorityColor('desconocida');
+test('buildLabelText empieza siempre con el bullet ●', () => {
+  const label = buildLabelText({ type: 'edita' });
+  assert.ok(label.startsWith('●'), `Debe empezar con ●, obtenido: ${label}`);
+});
+
+// ---------------------------------------------------------------------------
+// buildLabelText — con agente
+// ---------------------------------------------------------------------------
+
+test('buildLabelText produce «● tipo·agente» cuando agent existe', () => {
+  assert.strictEqual(
+    buildLabelText({ type: 'verifica', agent: 'review' }),
+    '● verifica·review'
+  );
+});
+
+test('buildLabelText usa «·» como separador entre tipo y agente', () => {
+  const label = buildLabelText({ type: 'edita', agent: 'build' });
+  assert.ok(label.includes('·'), `Debe contener ·, obtenido: ${label}`);
+});
+
+test('buildLabelText incluye el nombre del agente exactamente', () => {
+  const label = buildLabelText({ type: 'sugerencia', agent: 'maths' });
+  assert.ok(label.includes('maths'), `Debe incluir el agente, obtenido: ${label}`);
+});
+
+test('buildLabelText con agent undefined equivale a sin agente', () => {
+  assert.strictEqual(
+    buildLabelText({ type: 'nota', agent: undefined }),
+    '● nota'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// typeColor
+// ---------------------------------------------------------------------------
+
+test('typeColor devuelve rose #E59A9A para edita', () => {
+  assert.strictEqual(typeColor('edita'), '#E59A9A');
+});
+
+test('typeColor devuelve gold #E3C58A para sugerencia', () => {
+  assert.strictEqual(typeColor('sugerencia'), '#E3C58A');
+});
+
+test('typeColor devuelve blue #8FB4E3 para pregunta', () => {
+  assert.strictEqual(typeColor('pregunta'), '#8FB4E3');
+});
+
+test('typeColor devuelve peach #FFAA7A para verifica', () => {
+  assert.strictEqual(typeColor('verifica'), '#FFAA7A');
+});
+
+test('typeColor devuelve teal #6CB6B0 para nota', () => {
+  assert.strictEqual(typeColor('nota'), '#6CB6B0');
+});
+
+test('typeColor coincide con la constante TYPE_COLORS para cada valor', () => {
+  for (const [k, v] of Object.entries(TYPE_COLORS)) {
+    assert.strictEqual(typeColor(k), v, `Fallo para tipo: ${k}`);
+  }
+});
+
+test('typeColor devuelve un hex de fallback para tipo desconocido', () => {
+  const color = typeColor('desconocido');
   assert.ok(color.startsWith('#'), `Debe ser un hex, obtenido: ${color}`);
   assert.ok(color.length >= 4, `Hex demasiado corto: ${color}`);
 });
 
-test('priorityColor no devuelve cadena vacía para ninguna prioridad conocida', () => {
-  assert.ok(priorityColor('alta').length > 0);
-  assert.ok(priorityColor('media').length > 0);
-  assert.ok(priorityColor('baja').length > 0);
+test('typeColor no devuelve cadena vacía para ningún tipo conocido', () => {
+  for (const tipo of ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota']) {
+    assert.ok(typeColor(tipo).length > 0, `Cadena vacía para tipo: ${tipo}`);
+  }
 });
 
 // ---------------------------------------------------------------------------
-// buildHoverMessage
+// buildHoverMessage — sin agente
 // ---------------------------------------------------------------------------
 
 test('buildHoverMessage incluye el tipo en la salida', () => {
   const msg = buildHoverMessage({
     type: 'pregunta',
-    priority: 'alta',
     body: 'Cuerpo del comentario',
     created_at: '2026-07-09T10:00:00Z',
   });
   assert.ok(msg.includes('pregunta'), `El hover debe incluir el tipo, obtenido:\n${msg}`);
 });
 
-test('buildHoverMessage incluye la prioridad en la salida', () => {
+test('buildHoverMessage no incluye la prioridad', () => {
   const msg = buildHoverMessage({
     type: 'sugerencia',
-    priority: 'media',
     body: 'Texto',
     created_at: '2026-07-09T10:00:00Z',
   });
-  assert.ok(msg.includes('media'), `El hover debe incluir la prioridad, obtenido:\n${msg}`);
+  assert.ok(!msg.includes('Prioridad'), `El hover no debe incluir Prioridad, obtenido:\n${msg}`);
 });
 
 test('buildHoverMessage incluye el body completo', () => {
   const body = '¿Este teorema requiere que el espacio sea compacto?';
   const msg = buildHoverMessage({
     type: 'pregunta',
-    priority: 'alta',
     body,
     created_at: '2026-07-09T10:00:00Z',
   });
@@ -132,8 +147,7 @@ test('buildHoverMessage incluye el body completo', () => {
 test('buildHoverMessage incluye el timestamp created_at', () => {
   const ts = '2026-07-09T14:30:00Z';
   const msg = buildHoverMessage({
-    type: 'comentario',
-    priority: 'baja',
+    type: 'nota',
     body: 'Nota breve',
     created_at: ts,
   });
@@ -143,7 +157,6 @@ test('buildHoverMessage incluye el timestamp created_at', () => {
 test('buildHoverMessage devuelve una cadena no vacía', () => {
   const msg = buildHoverMessage({
     type: 'edita',
-    priority: 'media',
     body: 'Corrección de redacción.',
     created_at: '2026-07-09T10:00:00Z',
   });
@@ -153,12 +166,50 @@ test('buildHoverMessage devuelve una cadena no vacía', () => {
 test('buildHoverMessage body aparece después del encabezado de metadatos', () => {
   const body = 'contenido único de prueba';
   const msg = buildHoverMessage({
-    type: 'comentario',
-    priority: 'alta',
+    type: 'nota',
     body,
     created_at: '2026-07-09T10:00:00Z',
   });
   const bodyIndex = msg.indexOf(body);
-  const tipoIndex = msg.indexOf('comentario');
+  const tipoIndex = msg.indexOf('nota');
   assert.ok(bodyIndex > tipoIndex, 'El body debe aparecer tras los metadatos de tipo');
+});
+
+// ---------------------------------------------------------------------------
+// buildHoverMessage — con agente
+// ---------------------------------------------------------------------------
+
+test('buildHoverMessage incluye la fila Agente cuando agent existe', () => {
+  const msg = buildHoverMessage({
+    type: 'verifica',
+    agent: 'review',
+    body: 'Comprueba la cifra',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(msg.includes('Agente'), `Debe incluir la fila Agente, obtenido:\n${msg}`);
+  assert.ok(msg.includes('review'), `Debe incluir el nombre del agente, obtenido:\n${msg}`);
+});
+
+test('buildHoverMessage no incluye la fila Agente cuando agent es undefined', () => {
+  const msg = buildHoverMessage({
+    type: 'sugerencia',
+    agent: undefined,
+    body: 'Una sugerencia',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  assert.ok(!msg.includes('Agente'), `No debe incluir la fila Agente, obtenido:\n${msg}`);
+});
+
+test('buildHoverMessage agente aparece entre tipo y created_at', () => {
+  const msg = buildHoverMessage({
+    type: 'verifica',
+    agent: 'security',
+    body: 'texto',
+    created_at: '2026-07-09T10:00:00Z',
+  });
+  const tipoIdx  = msg.indexOf('verifica');
+  const agenteIdx = msg.indexOf('security');
+  const fechaIdx  = msg.indexOf('2026-07-09');
+  assert.ok(tipoIdx < agenteIdx, 'El agente debe aparecer después del tipo');
+  assert.ok(agenteIdx < fechaIdx, 'El agente debe aparecer antes de la fecha');
 });
