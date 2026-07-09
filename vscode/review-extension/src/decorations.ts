@@ -116,8 +116,12 @@ export function applyDecorations(
 
     rangeOpts.push({ range, hoverMessage: hover });
 
+    // La etiqueta se ancla a un rango vacío al final de la línea donde
+    // termina el ancla: si el rango comentado no llega al final de línea,
+    // renderOptions.after insertaría «● tipo·prioridad» en mitad del texto.
+    const lineEnd = doc.lineAt(end.line).range.end;
     labelOpts.push({
-      range,
+      range: new vscode.Range(lineEnd, lineEnd),
       renderOptions: {
         after: {
           contentText: buildLabelText(comment),
