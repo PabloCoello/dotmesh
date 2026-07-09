@@ -183,6 +183,15 @@ async function addCommentImpl(
     return;
   }
 
+  // Ancla capturada con el texto que el usuario ve al seleccionar; si el
+  // documento cambia mientras los modales están abiertos, se reancla después.
+  const preModalText = editor.document.getText();
+  const preModalAnchor = createAnchor(
+    preModalText,
+    editor.document.offsetAt(selection.start),
+    editor.document.offsetAt(selection.end)
+  );
+
   const type = await vscode.window.showQuickPick<vscode.QuickPickItem>(
     [
       { label: 'pregunta', description: 'Pregunta sobre el contenido' },
@@ -216,9 +225,17 @@ async function addCommentImpl(
   const docFsPath = editor.document.uri.fsPath;
   const docText = editor.document.getText();
 
-  const startOffset = editor.document.offsetAt(selection.start);
-  const endOffset = editor.document.offsetAt(selection.end);
-  const anchor = createAnchor(docText, startOffset, endOffset);
+  let anchor = preModalAnchor;
+  if (docText !== preModalText) {
+    const relocated = resolveAnchor(docText, preModalAnchor);
+    if (!relocated) {
+      vscode.window.showErrorMessage(
+        'mesh-review: El documento cambió mientras escribías y el texto seleccionado ya no existe. Vuelve a seleccionar y repite.'
+      );
+      return;
+    }
+    anchor = createAnchor(docText, relocated.startOffset, relocated.endOffset);
+  }
 
   const { sidecarPath, gitRoot, relativeFile } = await resolveSidecarPath(docFsPath);
 
