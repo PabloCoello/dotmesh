@@ -19,6 +19,7 @@ import {
 } from './sidecar';
 
 import { createAnchor } from './anchor';
+import { applyDecorations, disposeDecorationTypes } from './decorations';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -80,6 +81,34 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
   } else {
     // Rechaza o cierra el aviso: suprime para el resto de la sesión
     suppressedWorkspaces.add(gitRoot);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Refresco de decoraciones
+// ---------------------------------------------------------------------------
+
+/**
+ * Lee el sidecar del documento activo y aplica sus decoraciones.
+ *
+ * No lanza: los errores se capturan silenciosamente para no interrumpir
+ * el flujo del usuario.
+ *
+ * Nota sobre sidecars en el fallback global (~/.local/state/mesh-review/):
+ * el FileSystemWatcher del workspace no alcanza esa ruta (fuera del
+ * workspace). Las decoraciones para esos documentos se recargan aquí —
+ * al activar el editor y tras cada mutación propia — pero no se recargan
+ * automáticamente si el sidecar cambia desde fuera de VS Code.
+ */
+async function refreshDecorationsForEditor(
+  editor: vscode.TextEditor
+): Promise<void> {
+  try {
+    const { sidecarPath } = await resolveSidecarPath(editor.document.uri.fsPath);
+    const sidecar = await readSidecar(sidecarPath);
+    applyDecorations(editor, sidecar?.comments ?? []);
+  } catch {
+    // Fallo silencioso: las decoraciones simplemente no se aplican.
   }
 }
 
@@ -166,6 +195,10 @@ async function addCommentImpl(output: vscode.OutputChannel): Promise<void> {
 
   await writeSidecar(sidecarPath, sidecar);
 
+  // Refresca decoraciones inmediatamente tras escribir el sidecar, sin
+  // esperar al FileSystemWatcher (que podría no cubrir el fallback global).
+  applyDecorations(editor, sidecar.comments);
+
   output.appendLine(
     `mesh-review: comentario añadido — ${newComment.id} (${type.label}, ${priority.label})`
   );
@@ -182,8 +215,42 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('mesh-review');
   output.appendLine('mesh-review: activado');
 
+  // Aplica decoraciones al editor activo al arranque (recarga entre sesiones).
+  const initialEditor = vscode.window.activeTextEditor;
+  if (initialEditor) {
+    refreshDecorationsForEditor(initialEditor).catch(() => {});
+  }
+
+  // Refresca decoraciones cuando el usuario cambia de editor.
+  const onEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
+    if (editor) {
+      refreshDecorationsForEditor(editor).catch(() => {});
+    }
+  });
+
+  // FileSystemWatcher sobre los sidecars del workspace.
+  // El glob **/.ai/review/**/*.json cubre sidecars en directorios anidados
+  // (ruta espejo: docs/informe.md → .ai/review/docs/informe.md.json).
+  // Nota: los sidecars en el fallback global (~/.local/state/mesh-review/)
+  // quedan fuera del workspace; no se recargan vía watcher. Ver el comentario
+  // en refreshDecorationsForEditor.
+  const watcher = vscode.workspace.createFileSystemWatcher('**/.ai/review/**/*.json');
+  const onSidecarChange = () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      refreshDecorationsForEditor(editor).catch(() => {});
+    }
+  };
+  watcher.onDidChange(onSidecarChange);
+  watcher.onDidCreate(onSidecarChange);
+  watcher.onDidDelete(onSidecarChange);
+
   context.subscriptions.push(
     output,
+    onEditorChange,
+    watcher,
+    { dispose: disposeDecorationTypes },
+
     vscode.commands.registerCommand('mesh-review.addComment', async () => {
       try {
         await addCommentImpl(output);
@@ -208,4 +275,6 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+  // disposeDecorationTypes se llama vía context.subscriptions en activate().
+}
