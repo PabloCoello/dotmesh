@@ -65,6 +65,14 @@
         "icon": "$(arrow-right)"
       }
     ],
+    "keybindings": [
+      {
+        "command": "mesh-review.addComment",
+        "key": "ctrl+alt+z",
+        "mac": "alt+cmd+z",
+        "when": "editorTextFocus"
+      }
+    ],
     "menus": {
       "view/item/context": [
         {
