@@ -14,7 +14,6 @@ import {
   utcTimestamp,
   type Comment,
   type CommentType,
-  type Priority,
   type Sidecar,
 } from './sidecar';
 
@@ -151,7 +150,7 @@ async function pickCommentByCursor(
 
   const picked = await vscode.window.showQuickPick(
     open.map(c => ({
-      label: `L${c.anchor.line_hint + 1}  ${c.type}·${c.priority}`,
+      label: `L${c.anchor.line_hint + 1}  ${c.type}${c.agent ? '·' + c.agent : ''}`,
       description: c.body.length > 60 ? c.body.slice(0, 60) + '…' : c.body,
       comment: c,
     })),
@@ -194,24 +193,48 @@ async function addCommentImpl(
 
   const type = await vscode.window.showQuickPick<vscode.QuickPickItem>(
     [
-      { label: 'pregunta', description: 'Pregunta sobre el contenido' },
+      { label: 'edita',      description: 'Edición concreta a aplicar' },
       { label: 'sugerencia', description: 'Propuesta de mejora' },
-      { label: 'edita', description: 'Edición concreta a aplicar' },
-      { label: 'comentario', description: 'Nota general' },
+      { label: 'pregunta',   description: 'Pregunta sobre el contenido' },
+      { label: 'verifica',   description: 'Comprueba un dato o afirmación contra la fuente' },
+      { label: 'nota',       description: 'Anotación informativa sin acción requerida' },
     ],
     { title: 'Tipo de comentario', placeHolder: 'Selecciona el tipo' }
   );
   if (!type) return;
 
-  const priority = await vscode.window.showQuickPick<vscode.QuickPickItem>(
+  // Paso opcional de agente (pista de enrutado para ejecución orquestada)
+  const AGENT_NONE = '(ninguno)';
+  const AGENT_OTHER = 'otro…';
+  const agentPick = await vscode.window.showQuickPick<vscode.QuickPickItem>(
     [
-      { label: 'alta', description: 'Atención urgente' },
-      { label: 'media', description: 'Atención normal' },
-      { label: 'baja', description: 'Puede esperar' },
+      { label: AGENT_NONE,  description: 'Sin asignar' },
+      { label: 'build' },
+      { label: 'plan' },
+      { label: 'review' },
+      { label: 'security' },
+      { label: 'editor' },
+      { label: 'maths' },
+      { label: AGENT_OTHER, description: 'Escribe un nombre de agente personalizado' },
     ],
-    { title: 'Prioridad', placeHolder: 'Selecciona la prioridad' }
+    { title: 'Agente (opcional)', placeHolder: 'Selecciona o escribe el agente' }
   );
-  if (!priority) return;
+  if (!agentPick) return;
+
+  let agent: string | undefined;
+  if (agentPick.label === AGENT_OTHER) {
+    const custom = await vscode.window.showInputBox({
+      title: 'Nombre del agente',
+      prompt: 'Escribe el nombre del agente (Enter para confirmar)',
+      ignoreFocusOut: true,
+      validateInput: (v) =>
+        v.trim() === '' ? 'El nombre no puede estar vacío' : undefined,
+    });
+    if (custom === undefined) return;
+    agent = custom.trim();
+  } else if (agentPick.label !== AGENT_NONE) {
+    agent = agentPick.label;
+  }
 
   const body = await vscode.window.showInputBox({
     title: 'Comentario',
@@ -248,7 +271,7 @@ async function addCommentImpl(
     id: randomUUID(),
     anchor,
     type: type.label as CommentType,
-    priority: priority.label as Priority,
+    ...(agent !== undefined ? { agent } : {}),
     body: body.trim(),
     status: 'open',
     created_at: now,
@@ -269,11 +292,12 @@ async function addCommentImpl(
   applyDecorations(editor, sidecar.comments);
   provider.update(sidecar.comments, editor.document.uri);
 
+  const agentSuffix = newComment.agent ? ` · ${newComment.agent}` : '';
   output.appendLine(
-    `mesh-review: comentario añadido — ${newComment.id} (${type.label}, ${priority.label})`
+    `mesh-review: comentario añadido — ${newComment.id} (${type.label}${agentSuffix})`
   );
   vscode.window.showInformationMessage(
-    `mesh-review: comentario añadido (${type.label} · ${priority.label})`
+    `mesh-review: comentario añadido (${type.label}${agentSuffix})`
   );
 }
 
@@ -432,7 +456,7 @@ async function deleteCommentImpl(
     } else {
       const picked = await vscode.window.showQuickPick(
         all.map(c => ({
-          label: `L${c.anchor.line_hint + 1}  ${c.type}·${c.priority}`,
+          label: `L${c.anchor.line_hint + 1}  ${c.type}${c.agent ? '·' + c.agent : ''}`,
           description:
             (c.status === 'resolved' ? '(resuelta) ' : '') +
             (c.body.length > 60 ? c.body.slice(0, 60) + '…' : c.body),
