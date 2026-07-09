@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, appendFile, chmod } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
@@ -60,6 +60,9 @@ export function sha256hex(input: string): string {
  */
 export function sidecarPathForDoc(docAbsPath: string, gitRoot: string): string {
   const relative = path.relative(gitRoot, docAbsPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`mesh-review: document path escapes git root — ${docAbsPath}`);
+  }
   return path.join(gitRoot, '.ai', 'review', relative + '.json');
 }
 
@@ -123,6 +126,8 @@ export async function isAiReviewIgnored(gitRoot: string): Promise<boolean> {
  */
 export async function addToGitExclude(gitRoot: string): Promise<void> {
   const excludePath = path.join(gitRoot, '.git', 'info', 'exclude');
+  const existing = await readFile(excludePath, 'utf8').catch(() => '');
+  if (existing.includes('.ai/review/')) return;
   const entry = '\n# mesh-review: comentarios de revisión (no versionar)\n.ai/review/\n';
   await appendFile(excludePath, entry, 'utf8');
 }
@@ -138,7 +143,9 @@ export async function addToGitExclude(gitRoot: string): Promise<void> {
 export async function readSidecar(filePath: string): Promise<Sidecar | null> {
   try {
     const content = await readFile(filePath, 'utf8');
-    return JSON.parse(content) as Sidecar;
+    const parsed = JSON.parse(content);
+    if (parsed?.version !== 1 || !Array.isArray(parsed?.comments)) return null;
+    return parsed as Sidecar;
   } catch {
     return null;
   }
@@ -158,7 +165,9 @@ export async function writeSidecar(filePath: string, data: Sidecar): Promise<voi
  * Crea `~/.local/state/mesh-review/` con permisos 0o700 (solo usuario).
  * Idempotente.
  */
-export async function ensureFallbackDir(): Promise<void> {
-  const dir = path.join(os.homedir(), '.local', 'state', 'mesh-review');
+export async function ensureFallbackDir(
+  dir: string = path.join(os.homedir(), '.local', 'state', 'mesh-review')
+): Promise<void> {
   await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
 }

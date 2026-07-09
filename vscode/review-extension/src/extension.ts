@@ -36,11 +36,17 @@ async function resolveSidecarPath(
 ): Promise<{ sidecarPath: string; gitRoot: string | null; relativeFile: string }> {
   const gitRoot = await getGitRoot(path.dirname(docFsPath));
   if (gitRoot) {
-    return {
-      sidecarPath: sidecarPathForDoc(docFsPath, gitRoot),
-      gitRoot,
-      relativeFile: path.relative(gitRoot, docFsPath),
-    };
+    try {
+      return {
+        sidecarPath: sidecarPathForDoc(docFsPath, gitRoot),
+        gitRoot,
+        relativeFile: path.relative(gitRoot, docFsPath),
+      };
+    } catch {
+      // El documento queda fuera del git root (caso real: VS Code abre el proyecto
+      // vía symlink y fsPath conserva la ruta del symlink mientras git devuelve la
+      // ruta real). Caemos al fallback silenciosamente.
+    }
   }
   await ensureFallbackDir();
   return {
