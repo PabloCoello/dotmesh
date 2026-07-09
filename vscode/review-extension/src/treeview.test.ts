@@ -9,11 +9,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  groupCommentsByPriority,
+  groupCommentsByType,
   findCommentAtOffset,
   mutateCommentById,
-  PRIORITY_ORDER,
-  PRIORITY_LABELS,
+  TYPE_ORDER,
+  TYPE_LABELS,
 } from './treeview-utils.ts';
 import type { Comment, Sidecar } from './sidecar';
 
@@ -25,8 +25,8 @@ function makeComment(overrides: { id: string } & Partial<Comment>): Comment {
   return {
     id: overrides.id,
     anchor: overrides.anchor ?? { quote: 'texto de prueba', line_hint: 0, char_offset: 0 },
-    type: overrides.type ?? 'comentario',
-    priority: overrides.priority ?? 'media',
+    type: overrides.type ?? 'nota',
+    agent: overrides.agent,
     body: overrides.body ?? 'Cuerpo del comentario',
     status: overrides.status ?? 'open',
     created_at: overrides.created_at ?? '2026-07-09T10:00:00Z',
@@ -35,134 +35,166 @@ function makeComment(overrides: { id: string } & Partial<Comment>): Comment {
 }
 
 // ---------------------------------------------------------------------------
-// groupCommentsByPriority — estructura y orden de grupos
+// groupCommentsByType — estructura y orden de grupos
 // ---------------------------------------------------------------------------
 
-test('groupCommentsByPriority con lista vacía devuelve array vacío', () => {
-  assert.deepStrictEqual(groupCommentsByPriority([]), []);
+test('groupCommentsByType con lista vacía devuelve array vacío', () => {
+  assert.deepStrictEqual(groupCommentsByType([]), []);
 });
 
-test('groupCommentsByPriority ordena grupos: alta → media → baja', () => {
+test('groupCommentsByType ordena grupos: edita → sugerencia → pregunta → verifica → nota', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'baja' }),
-    makeComment({ id: '2', priority: 'alta' }),
-    makeComment({ id: '3', priority: 'media' }),
+    makeComment({ id: '1', type: 'nota' }),
+    makeComment({ id: '2', type: 'edita' }),
+    makeComment({ id: '3', type: 'pregunta' }),
+    makeComment({ id: '4', type: 'sugerencia' }),
+    makeComment({ id: '5', type: 'verifica' }),
   ];
-  const groups = groupCommentsByPriority(comments);
-  const priorities = groups.map(g => g.priority);
-  assert.deepStrictEqual(priorities, ['alta', 'media', 'baja']);
+  const groups = groupCommentsByType(comments);
+  const types = groups.map(g => g.type);
+  assert.deepStrictEqual(types, ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota']);
 });
 
-test('groupCommentsByPriority omite grupos con cero comentarios', () => {
+test('groupCommentsByType omite grupos con cero comentarios', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'alta' }),
+    makeComment({ id: '1', type: 'edita' }),
   ];
-  const groups = groupCommentsByPriority(comments);
+  const groups = groupCommentsByType(comments);
   assert.strictEqual(groups.length, 1);
-  assert.strictEqual(groups[0].priority, 'alta');
+  assert.strictEqual(groups[0].type, 'edita');
 });
 
-test('groupCommentsByPriority devuelve las etiquetas correctas para cada prioridad', () => {
+test('groupCommentsByType devuelve las etiquetas correctas para cada tipo', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'alta' }),
-    makeComment({ id: '2', priority: 'media' }),
-    makeComment({ id: '3', priority: 'baja' }),
+    makeComment({ id: '1', type: 'edita' }),
+    makeComment({ id: '2', type: 'sugerencia' }),
+    makeComment({ id: '3', type: 'pregunta' }),
+    makeComment({ id: '4', type: 'verifica' }),
+    makeComment({ id: '5', type: 'nota' }),
   ];
-  const groups = groupCommentsByPriority(comments);
-  assert.strictEqual(groups[0].label, 'Alta prioridad');
-  assert.strictEqual(groups[1].label, 'Media prioridad');
-  assert.strictEqual(groups[2].label, 'Baja prioridad');
+  const groups = groupCommentsByType(comments);
+  assert.strictEqual(groups[0].label, 'Ediciones');
+  assert.strictEqual(groups[1].label, 'Sugerencias');
+  assert.strictEqual(groups[2].label, 'Preguntas');
+  assert.strictEqual(groups[3].label, 'Verificaciones');
+  assert.strictEqual(groups[4].label, 'Notas');
 });
 
-test('groupCommentsByPriority incluye todos los comentarios abiertos en los grupos', () => {
+test('groupCommentsByType incluye todos los comentarios abiertos en los grupos', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'alta' }),
-    makeComment({ id: '2', priority: 'alta' }),
-    makeComment({ id: '3', priority: 'media' }),
+    makeComment({ id: '1', type: 'edita' }),
+    makeComment({ id: '2', type: 'edita' }),
+    makeComment({ id: '3', type: 'sugerencia' }),
   ];
-  const groups = groupCommentsByPriority(comments);
+  const groups = groupCommentsByType(comments);
   const total = groups.reduce((acc, g) => acc + g.comments.length, 0);
   assert.strictEqual(total, 3);
 });
 
 // ---------------------------------------------------------------------------
-// groupCommentsByPriority — orden por line_hint dentro de cada grupo
+// groupCommentsByType — orden por line_hint dentro de cada grupo
 // ---------------------------------------------------------------------------
 
-test('groupCommentsByPriority ordena por line_hint ascendente dentro del grupo', () => {
+test('groupCommentsByType ordena por line_hint ascendente dentro del grupo', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'alta', anchor: { quote: 'a', line_hint: 10, char_offset: 0 } }),
-    makeComment({ id: '2', priority: 'alta', anchor: { quote: 'b', line_hint: 3, char_offset: 0 } }),
-    makeComment({ id: '3', priority: 'alta', anchor: { quote: 'c', line_hint: 7, char_offset: 0 } }),
+    makeComment({ id: '1', type: 'verifica', anchor: { quote: 'a', line_hint: 10, char_offset: 0 } }),
+    makeComment({ id: '2', type: 'verifica', anchor: { quote: 'b', line_hint: 3, char_offset: 0 } }),
+    makeComment({ id: '3', type: 'verifica', anchor: { quote: 'c', line_hint: 7, char_offset: 0 } }),
   ];
-  const groups = groupCommentsByPriority(comments);
+  const groups = groupCommentsByType(comments);
   assert.strictEqual(groups.length, 1);
   const lineHints = groups[0].comments.map(c => c.anchor.line_hint);
   assert.deepStrictEqual(lineHints, [3, 7, 10]);
 });
 
-test('groupCommentsByPriority ordena correctamente con line_hint=0 presente', () => {
+test('groupCommentsByType ordena correctamente con line_hint=0 presente', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'media', anchor: { quote: 'z', line_hint: 5, char_offset: 0 } }),
-    makeComment({ id: '2', priority: 'media', anchor: { quote: 'a', line_hint: 0, char_offset: 0 } }),
+    makeComment({ id: '1', type: 'pregunta', anchor: { quote: 'z', line_hint: 5, char_offset: 0 } }),
+    makeComment({ id: '2', type: 'pregunta', anchor: { quote: 'a', line_hint: 0, char_offset: 0 } }),
   ];
-  const groups = groupCommentsByPriority(comments);
+  const groups = groupCommentsByType(comments);
   assert.strictEqual(groups[0].comments[0].id, '2'); // line_hint 0 primero
   assert.strictEqual(groups[0].comments[1].id, '1');
 });
 
 // ---------------------------------------------------------------------------
-// groupCommentsByPriority — resueltos
+// groupCommentsByType — resueltos
 // ---------------------------------------------------------------------------
 
-test('groupCommentsByPriority coloca los resueltos al final como grupo propio', () => {
+test('groupCommentsByType coloca los resueltos al final como grupo propio', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'alta', status: 'open' }),
-    makeComment({ id: '2', priority: 'baja', status: 'resolved' }),
-    makeComment({ id: '3', priority: 'media', status: 'open' }),
+    makeComment({ id: '1', type: 'edita', status: 'open' }),
+    makeComment({ id: '2', type: 'nota', status: 'resolved' }),
+    makeComment({ id: '3', type: 'sugerencia', status: 'open' }),
   ];
-  const groups = groupCommentsByPriority(comments);
+  const groups = groupCommentsByType(comments);
   const lastGroup = groups[groups.length - 1];
-  assert.strictEqual(lastGroup.priority, 'resolved');
+  assert.strictEqual(lastGroup.type, 'resolved');
   assert.strictEqual(lastGroup.label, 'Resueltos');
   assert.strictEqual(lastGroup.comments.length, 1);
   assert.strictEqual(lastGroup.comments[0].id, '2');
 });
 
-test('groupCommentsByPriority con solo resueltos devuelve un único grupo "resolved"', () => {
+test('groupCommentsByType con solo resueltos devuelve un único grupo "resolved"', () => {
   const comments: Comment[] = [
     makeComment({ id: '1', status: 'resolved' }),
     makeComment({ id: '2', status: 'resolved' }),
   ];
-  const groups = groupCommentsByPriority(comments);
+  const groups = groupCommentsByType(comments);
   assert.strictEqual(groups.length, 1);
-  assert.strictEqual(groups[0].priority, 'resolved');
+  assert.strictEqual(groups[0].type, 'resolved');
   assert.strictEqual(groups[0].comments.length, 2);
 });
 
-test('groupCommentsByPriority no incluye resueltos en los grupos de prioridad', () => {
+test('groupCommentsByType no incluye resueltos en los grupos de tipo', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'alta', status: 'resolved' }),
-    makeComment({ id: '2', priority: 'alta', status: 'open' }),
+    makeComment({ id: '1', type: 'edita', status: 'resolved' }),
+    makeComment({ id: '2', type: 'edita', status: 'open' }),
   ];
-  const groups = groupCommentsByPriority(comments);
-  const altaGroup = groups.find(g => g.priority === 'alta');
-  assert.ok(altaGroup, 'debe existir el grupo alta');
-  assert.strictEqual(altaGroup.comments.length, 1);
-  assert.strictEqual(altaGroup.comments[0].id, '2');
+  const groups = groupCommentsByType(comments);
+  const editaGroup = groups.find(g => g.type === 'edita');
+  assert.ok(editaGroup, 'debe existir el grupo edita');
+  assert.strictEqual(editaGroup.comments.length, 1);
+  assert.strictEqual(editaGroup.comments[0].id, '2');
 });
 
 // ---------------------------------------------------------------------------
-// groupCommentsByPriority — inmutabilidad
+// groupCommentsByType — tipos nuevos (verifica, nota)
 // ---------------------------------------------------------------------------
 
-test('groupCommentsByPriority no muta el array de entrada', () => {
+test('groupCommentsByType agrupa correctamente comentarios de tipo verifica', () => {
   const comments: Comment[] = [
-    makeComment({ id: '1', priority: 'baja', anchor: { quote: 'x', line_hint: 5, char_offset: 0 } }),
-    makeComment({ id: '2', priority: 'alta', anchor: { quote: 'y', line_hint: 1, char_offset: 0 } }),
+    makeComment({ id: '1', type: 'verifica' }),
+    makeComment({ id: '2', type: 'verifica' }),
+  ];
+  const groups = groupCommentsByType(comments);
+  assert.strictEqual(groups.length, 1);
+  assert.strictEqual(groups[0].type, 'verifica');
+  assert.strictEqual(groups[0].label, 'Verificaciones');
+  assert.strictEqual(groups[0].comments.length, 2);
+});
+
+test('groupCommentsByType agrupa correctamente comentarios de tipo nota', () => {
+  const comments: Comment[] = [
+    makeComment({ id: '1', type: 'nota' }),
+  ];
+  const groups = groupCommentsByType(comments);
+  assert.strictEqual(groups.length, 1);
+  assert.strictEqual(groups[0].type, 'nota');
+  assert.strictEqual(groups[0].label, 'Notas');
+});
+
+// ---------------------------------------------------------------------------
+// groupCommentsByType — inmutabilidad
+// ---------------------------------------------------------------------------
+
+test('groupCommentsByType no muta el array de entrada', () => {
+  const comments: Comment[] = [
+    makeComment({ id: '1', type: 'nota',  anchor: { quote: 'x', line_hint: 5, char_offset: 0 } }),
+    makeComment({ id: '2', type: 'edita', anchor: { quote: 'y', line_hint: 1, char_offset: 0 } }),
   ];
   const originalOrder = comments.map(c => c.id);
-  groupCommentsByPriority(comments);
+  groupCommentsByType(comments);
   assert.deepStrictEqual(comments.map(c => c.id), originalOrder);
 });
 
@@ -170,14 +202,14 @@ test('groupCommentsByPriority no muta el array de entrada', () => {
 // Constantes
 // ---------------------------------------------------------------------------
 
-test('PRIORITY_ORDER mantiene el orden alta → media → baja', () => {
-  assert.deepStrictEqual([...PRIORITY_ORDER], ['alta', 'media', 'baja']);
+test('TYPE_ORDER mantiene el orden edita → sugerencia → pregunta → verifica → nota', () => {
+  assert.deepStrictEqual([...TYPE_ORDER], ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota']);
 });
 
-test('PRIORITY_LABELS tiene etiqueta para cada prioridad en PRIORITY_ORDER', () => {
-  for (const p of PRIORITY_ORDER) {
-    assert.ok(typeof PRIORITY_LABELS[p] === 'string' && PRIORITY_LABELS[p].length > 0,
-      `PRIORITY_LABELS[${p}] debe ser una cadena no vacía`);
+test('TYPE_LABELS tiene etiqueta para cada tipo en TYPE_ORDER', () => {
+  for (const t of TYPE_ORDER) {
+    assert.ok(typeof TYPE_LABELS[t] === 'string' && TYPE_LABELS[t].length > 0,
+      `TYPE_LABELS[${t}] debe ser una cadena no vacía`);
   }
 });
 

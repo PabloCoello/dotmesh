@@ -4,23 +4,31 @@
  * Sin importaciones de VS Code. Testeable directamente con node:test.
  *
  * Exporta:
- *   - groupCommentsByPriority: agrupa y ordena comentarios para el TreeView
- *   - findCommentAtOffset:     localiza el comentario bajo el cursor del editor
+ *   - groupCommentsByType: agrupa y ordena comentarios para el TreeView
+ *   - findCommentAtOffset: localiza el comentario bajo el cursor del editor
  */
 
-import type { Comment, Priority, Sidecar } from './sidecar';
+import type { Comment, CommentType, Sidecar } from './sidecar';
 import { resolveAnchor } from './anchor.ts';
 
 // ---------------------------------------------------------------------------
 // Constantes
 // ---------------------------------------------------------------------------
 
-export const PRIORITY_ORDER: readonly Priority[] = ['alta', 'media', 'baja'];
+export const TYPE_ORDER: readonly CommentType[] = [
+  'edita',
+  'sugerencia',
+  'pregunta',
+  'verifica',
+  'nota',
+];
 
-export const PRIORITY_LABELS: Readonly<Record<Priority, string>> = {
-  alta: 'Alta prioridad',
-  media: 'Media prioridad',
-  baja: 'Baja prioridad',
+export const TYPE_LABELS: Readonly<Record<CommentType, string>> = {
+  edita:      'Ediciones',
+  sugerencia: 'Sugerencias',
+  pregunta:   'Preguntas',
+  verifica:   'Verificaciones',
+  nota:       'Notas',
 };
 
 // ---------------------------------------------------------------------------
@@ -28,7 +36,7 @@ export const PRIORITY_LABELS: Readonly<Record<Priority, string>> = {
 // ---------------------------------------------------------------------------
 
 export interface CommentGroup {
-  priority: Priority | 'resolved';
+  type: CommentType | 'resolved';
   label: string;
   comments: Comment[];
 }
@@ -38,32 +46,32 @@ export interface CommentGroup {
 // ---------------------------------------------------------------------------
 
 /**
- * Agrupa los comentarios por prioridad (alta → media → baja) y añade los
- * resueltos al final como grupo propio.
+ * Agrupa los comentarios por tipo (edita → sugerencia → pregunta → verifica →
+ * nota) y añade los resueltos al final como grupo propio.
  *
  * Dentro de cada grupo, los comentarios se ordenan ascendentemente por
  * `anchor.line_hint`. Los grupos sin comentarios se omiten.
  * No muta el array de entrada.
  */
-export function groupCommentsByPriority(comments: Comment[]): CommentGroup[] {
+export function groupCommentsByType(comments: Comment[]): CommentGroup[] {
   const open = comments.filter(c => c.status === 'open');
   const resolved = comments.filter(c => c.status !== 'open');
 
   const groups: CommentGroup[] = [];
 
-  for (const priority of PRIORITY_ORDER) {
-    const group = open.filter(c => c.priority === priority);
+  for (const type of TYPE_ORDER) {
+    const group = open.filter(c => c.type === type);
     if (group.length === 0) continue;
     groups.push({
-      priority,
-      label: PRIORITY_LABELS[priority],
+      type,
+      label: TYPE_LABELS[type],
       comments: sortByLineHint(group),
     });
   }
 
   if (resolved.length > 0) {
     groups.push({
-      priority: 'resolved',
+      type: 'resolved',
       label: 'Resueltos',
       comments: sortByLineHint(resolved),
     });

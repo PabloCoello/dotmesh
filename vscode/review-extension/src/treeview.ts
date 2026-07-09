@@ -3,7 +3,7 @@
  *
  * Implementa ReviewTreeDataProvider (vscode.TreeDataProvider) con dos
  * niveles de árbol:
- *   - GroupItem:   nodo colapsable con la etiqueta de prioridad
+ *   - GroupItem:   nodo colapsable con la etiqueta de tipo
  *   - CommentItem: hoja con el comentario; dispara jumpToComment al hacer clic
  *
  * La lógica pura de agrupación y ordenación vive en treeview-utils.ts para
@@ -12,7 +12,7 @@
 
 import * as vscode from 'vscode';
 import type { Comment } from './sidecar';
-import { groupCommentsByPriority, type CommentGroup } from './treeview-utils';
+import { groupCommentsByType, type CommentGroup } from './treeview-utils';
 
 // ---------------------------------------------------------------------------
 // Tipos del árbol
@@ -20,7 +20,7 @@ import { groupCommentsByPriority, type CommentGroup } from './treeview-utils';
 
 export type ReviewTreeItem = GroupItem | CommentItem;
 
-/** Nodo de grupo (prioridad alta / media / baja / resueltos). */
+/** Nodo de grupo (edita / sugerencia / pregunta / verifica / nota / resueltos). */
 export class GroupItem extends vscode.TreeItem {
   readonly kind = 'group' as const;
 
@@ -28,7 +28,7 @@ export class GroupItem extends vscode.TreeItem {
     super(group.label, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'group';
     this.description = `(${group.comments.length})`;
-    if (group.priority === 'resolved') {
+    if (group.type === 'resolved') {
       this.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
     }
   }
@@ -114,7 +114,7 @@ export class ReviewTreeDataProvider
   getChildren(element?: ReviewTreeItem): ReviewTreeItem[] {
     if (!element) {
       // Raíz: devuelve los nodos de grupo
-      const groups = groupCommentsByPriority(this._comments);
+      const groups = groupCommentsByType(this._comments);
       return groups.map(g => new GroupItem(g));
     }
 
