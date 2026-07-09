@@ -8,7 +8,7 @@
  *   - findCommentAtOffset:     localiza el comentario bajo el cursor del editor
  */
 
-import type { Comment, Priority } from './sidecar';
+import type { Comment, Priority, Sidecar } from './sidecar';
 import { resolveAnchor } from './anchor.ts';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,40 @@ export function groupCommentsByPriority(comments: Comment[]): CommentGroup[] {
 /** Ordena comentarios por line_hint ascendente sin mutar el array. */
 function sortByLineHint(comments: Comment[]): Comment[] {
   return [...comments].sort((a, b) => a.anchor.line_hint - b.anchor.line_hint);
+}
+
+/**
+ * Muta un comentario del sidecar por id operando sobre una copia fresca.
+ *
+ * El mutador recibe el comentario encontrado y devuelve:
+ *   - el comentario modificado (editar, resolver), o
+ *   - null para eliminarlo (borrar).
+ *
+ * No modifica el objeto `sidecar` recibido.
+ *
+ * @returns `{ sidecar: copia modificada, found: true }` si el id existe.
+ *          `{ sidecar: original sin copiar, found: false }` si no existe.
+ */
+export function mutateCommentById(
+  sidecar: Sidecar,
+  id: string,
+  mutator: (comment: Comment) => Comment | null
+): { sidecar: Sidecar; found: boolean } {
+  const idx = sidecar.comments.findIndex(c => c.id === id);
+  if (idx === -1) {
+    return { sidecar, found: false };
+  }
+
+  const result = mutator(sidecar.comments[idx]);
+  const comments = [...sidecar.comments];
+
+  if (result === null) {
+    comments.splice(idx, 1);
+  } else {
+    comments[idx] = result;
+  }
+
+  return { sidecar: { ...sidecar, comments }, found: true };
 }
 
 /**

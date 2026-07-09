@@ -11,10 +11,11 @@ import assert from 'node:assert/strict';
 import {
   groupCommentsByPriority,
   findCommentAtOffset,
+  mutateCommentById,
   PRIORITY_ORDER,
   PRIORITY_LABELS,
 } from './treeview-utils.ts';
-import type { Comment } from './sidecar';
+import type { Comment, Sidecar } from './sidecar';
 
 // ---------------------------------------------------------------------------
 // Fixture
@@ -236,4 +237,79 @@ test('findCommentAtOffset con solapamiento devuelve el de menor startOffset', ()
   // Ambos empiezan en 0; el orden en el array no cambia el resultado
   // Solo importa que devuelva uno de los que coinciden (startOffset=0)
   assert.ok(result.id === 'largo' || result.id === 'corto');
+});
+
+// ---------------------------------------------------------------------------
+// mutateCommentById
+// ---------------------------------------------------------------------------
+
+function makeSidecar(comments: Comment[]): Sidecar {
+  return { version: 1, file: 'docs/test.md', comments };
+}
+
+test('mutateCommentById con id existente aplica el mutador y devuelve found: true', () => {
+  const c = makeComment({ id: 'abc', body: 'original' });
+  const sidecar = makeSidecar([c]);
+  const { sidecar: result, found } = mutateCommentById(sidecar, 'abc', (comment) => ({
+    ...comment,
+    body: 'modificado',
+  }));
+  assert.strictEqual(found, true);
+  assert.strictEqual(result.comments[0].body, 'modificado');
+});
+
+test('mutateCommentById con id ausente devuelve found: false sin modificar nada', () => {
+  const c = makeComment({ id: 'abc', body: 'original' });
+  const sidecar = makeSidecar([c]);
+  const { sidecar: result, found } = mutateCommentById(sidecar, 'no-existe', (comment) => ({
+    ...comment,
+    body: 'nunca',
+  }));
+  assert.strictEqual(found, false);
+  assert.strictEqual(result.comments[0].body, 'original');
+});
+
+test('mutateCommentById con mutador que devuelve null elimina exactamente un comentario', () => {
+  const c1 = makeComment({ id: 'a' });
+  const c2 = makeComment({ id: 'b' });
+  const sidecar = makeSidecar([c1, c2]);
+  const { sidecar: result, found } = mutateCommentById(sidecar, 'a', () => null);
+  assert.strictEqual(found, true);
+  assert.strictEqual(result.comments.length, 1);
+  assert.strictEqual(result.comments[0].id, 'b');
+});
+
+test('mutateCommentById no elimina el comentario incorrecto', () => {
+  const c1 = makeComment({ id: 'a' });
+  const c2 = makeComment({ id: 'b' });
+  const c3 = makeComment({ id: 'c' });
+  const sidecar = makeSidecar([c1, c2, c3]);
+  const { sidecar: result } = mutateCommentById(sidecar, 'b', () => null);
+  assert.deepStrictEqual(result.comments.map(c => c.id), ['a', 'c']);
+});
+
+test('mutateCommentById updated_at resultante sigue el formato del schema (YYYY-MM-DDTHH:MM:SSZ)', () => {
+  const c = makeComment({ id: 'x', updated_at: '2026-01-01T00:00:00Z' });
+  const sidecar = makeSidecar([c]);
+  const { sidecar: result } = mutateCommentById(sidecar, 'x', (comment) => ({
+    ...comment,
+    updated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+  }));
+  assert.match(result.comments[0].updated_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+});
+
+test('mutateCommentById no muta el sidecar original', () => {
+  const c = makeComment({ id: 'z', body: 'intacto' });
+  const sidecar = makeSidecar([c]);
+  mutateCommentById(sidecar, 'z', (comment) => ({ ...comment, body: 'cambiado' }));
+  assert.strictEqual(sidecar.comments[0].body, 'intacto');
+});
+
+test('mutateCommentById con id ausente preserva la referencia original del sidecar', () => {
+  const c = makeComment({ id: 'q' });
+  const sidecar = makeSidecar([c]);
+  const { sidecar: result, found } = mutateCommentById(sidecar, 'no-existe', () => null);
+  assert.strictEqual(found, false);
+  // Sin id encontrado el sidecar devuelto es el mismo objeto (optimización)
+  assert.strictEqual(result, sidecar);
 });
