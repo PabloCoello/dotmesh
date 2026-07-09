@@ -17,6 +17,23 @@
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mesh-review",
+          "title": "mesh-review",
+          "icon": "media/mesh-review.svg"
+        }
+      ]
+    },
+    "views": {
+      "mesh-review": [
+        {
+          "id": "meshReviewComments",
+          "name": "Comentarios"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "mesh-review.addComment",
@@ -24,21 +41,49 @@
       },
       {
         "command": "mesh-review.editComment",
-        "title": "Mesh Review: Edit Comment"
+        "title": "Mesh Review: Edit Comment",
+        "icon": "$(edit)"
       },
       {
         "command": "mesh-review.deleteComment",
-        "title": "Mesh Review: Delete Comment"
+        "title": "Mesh Review: Delete Comment",
+        "icon": "$(trash)"
       },
       {
         "command": "mesh-review.resolveComment",
-        "title": "Mesh Review: Resolve Comment"
+        "title": "Mesh Review: Resolve Comment",
+        "icon": "$(check)"
       },
       {
         "command": "mesh-review.listComments",
-        "title": "Mesh Review: List Comments"
+        "title": "Mesh Review: List Comments",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "mesh-review.jumpToComment",
+        "title": "Ir al comentario",
+        "icon": "$(arrow-right)"
       }
-    ]
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "mesh-review.editComment",
+          "when": "view == meshReviewComments && viewItem == openComment",
+          "group": "inline@1"
+        },
+        {
+          "command": "mesh-review.resolveComment",
+          "when": "view == meshReviewComments && viewItem == openComment",
+          "group": "inline@2"
+        },
+        {
+          "command": "mesh-review.deleteComment",
+          "when": "view == meshReviewComments && (viewItem == openComment || viewItem == resolvedComment)",
+          "group": "inline@3"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "node build.js",

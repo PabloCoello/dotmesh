@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="none">
+  <!-- Burbuja de comentario con trazo simple — icono monocromo para la barra de actividad -->
+  <path
+    d="M4 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9.5L4 23V6z"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Tres líneas que sugieren texto de revisión -->
+  <line x1="9" y1="9"  x2="19" y2="9"  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="9" y1="13" x2="16" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
