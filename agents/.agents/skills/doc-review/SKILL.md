@@ -1,6 +1,6 @@
 ---
 name: doc-review
-description: Reads mesh-review sidecar files and acts on a document's open review comments. Use when the user wants an AI agent to process inline review comments anchored to a markdown document, when you find a sidecar at `.ai/review/`, or when asked to resolve, address, or work through review comments on a document.
+description: Reads mesh-review sidecar files and acts on a document's open review comments. Use when the user wants an AI agent to process review comments anchored to a markdown document, when you find a sidecar at `.ai/review/`, or when asked to resolve, address, or work through review comments on a document.
 ---
 
 # doc-review
@@ -28,6 +28,9 @@ Examples:
 | `docs/informe.md` | `.ai/review/docs/informe.md.json` |
 | `README.md` | `.ai/review/README.md.json` |
 | `notes/chapter-2.md` | `.ai/review/notes/chapter-2.md.json` |
+| `.ai/tmp/scratch.md` | `.ai/review/.ai/tmp/scratch.md.json` |
+
+The mirroring is literal: hidden directories and unusual paths nest as-is under `.ai/review/`.
 
 To find the git root from any path:
 
@@ -116,7 +119,7 @@ Apply changes to the **original document file** (not a copy) based on `type`:
 |---|---|
 | `edita` | Apply the edit described in `body` at or around the anchor position. |
 | `sugerencia` | Evaluate the suggestion. Apply it if appropriate; if not, explain your reasoning in the report without modifying the document for that comment. |
-| `pregunta` | Answer the question in your report. If the answer implies a document change, apply it. |
+| `pregunta` | Answer the question in your report. If the question reveals an ambiguity or gap in the text itself, add the minimal clarification to the document; if the answer needs no document change, answer only in the report. |
 | `comentario` | Read and acknowledge. Apply any clearly implied document change; otherwise note it as informational. |
 
 Make the minimum change that satisfies the comment. Do not refactor unrelated text.
@@ -128,7 +131,7 @@ After acting on a comment:
 1. Read the sidecar JSON.
 2. Find the comment by `id`.
 3. Set `status` to `"resolved"`.
-4. Set `updated_at` to the current UTC timestamp (format: `YYYY-MM-DDTHH:MM:SSZ`).
+4. Set `updated_at` to the current UTC timestamp. Obtain it with `date -u +"%Y-%m-%dT%H:%M:%SZ"` — never estimate or invent the time.
 5. Write the updated JSON back to the same sidecar path. Preserve all other fields exactly.
 
 ```bash
@@ -163,5 +166,6 @@ This skill uses only standard file and shell operations:
 - Read and write files (sidecar JSON and the document).
 - Run `git rev-parse --show-toplevel` to find the git root.
 - Compute a SHA-256 hash of a path string for the fallback location (e.g. `printf '%s' '/abs/path' | sha256sum`).
+- Run `date -u` for timestamps.
 
 No VS Code extension, no agent-specific API, and no network access are required. The skill works identically in OpenCode, Claude Code, Codex, or any other agent with file access.
