@@ -66,8 +66,8 @@ Each comment object:
 | `anchor.quote` | `string` | Exact text fragment selected when the comment was created |
 | `anchor.line_hint` | `integer ≥ 0` | Approximate line number at creation time (informational) |
 | `anchor.char_offset` | `integer ≥ 0` | Approximate char offset from file start at creation time (informational) |
-| `type` | `string` | `"pregunta"` · `"sugerencia"` · `"edita"` · `"comentario"` |
-| `priority` | `string` | `"alta"` · `"media"` · `"baja"` |
+| `type` | `string` | `"edita"` · `"sugerencia"` · `"pregunta"` · `"verifica"` · `"nota"` |
+| `agent` | `string` (optional) | Routing hint: name of the agent or subagent that should handle the comment in an orchestrated run. Standalone agents treat it as informational context. |
 | `body` | `string` | Full text of the comment |
 | `status` | `string` | `"open"` · `"resolved"` |
 | `created_at` | ISO 8601 UTC string | Creation timestamp |
@@ -92,14 +92,14 @@ An anchor ties a comment to a text fragment in the document. The document may ha
 
 ---
 
-## Prioritized work plan
+## Work plan
 
 Before acting on any comment, scan the full `comments` array and build a work plan:
 
 1. Filter to comments where `status == "open"`.
-2. Sort by priority: `alta` first, then `media`, then `baja`.
-3. Within the same priority, sort by `anchor.line_hint` ascending (document order).
-4. Present the plan briefly before starting (e.g. "2 open comments: 1 alta, 1 media").
+2. Sort by position in the document: `anchor.char_offset` ascending (use `anchor.line_hint` as tie-breaker when offsets are equal).
+3. If a comment has an `agent` field, treat it as a routing hint in an orchestrated multi-agent run (e.g. delegate a `verifica` comment with `agent: "security"` to the security subagent). Standalone agents treat it as informational context.
+4. Present the plan briefly before starting (e.g. "3 open comments").
 
 ---
 
@@ -120,7 +120,8 @@ Apply changes to the **original document file** (not a copy) based on `type`:
 | `edita` | Apply the edit described in `body` at or around the anchor position. |
 | `sugerencia` | Evaluate the suggestion. Apply it if appropriate; if not, explain your reasoning in the report without modifying the document for that comment. |
 | `pregunta` | Answer the question in your report. If the question reveals an ambiguity or gap in the text itself, add the minimal clarification to the document; if the answer needs no document change, answer only in the report. |
-| `comentario` | Read and acknowledge. Apply any clearly implied document change; otherwise note it as informational. |
+| `verifica` | Check the claim, figure, or assertion in `body` against the source. Provide evidence in the report. Correct the document only if the text is factually wrong; otherwise leave it unchanged. |
+| `nota` | Read and acknowledge. Apply any clearly implied document change; otherwise note it as informational. |
 
 Make the minimum change that satisfies the comment. Do not refactor unrelated text.
 
@@ -143,8 +144,8 @@ cat .ai/review/docs/informe.md.json
 
 After processing each comment, emit one short sentence describing what you did. Example:
 
-> `[f47ac10b]` edita·alta — Added transition sentence before the proof. Resolved.
-> `[6ba7b810]` pregunta·media — Answered: the definition applies to real series; added a note to the document. Resolved.
+> `[f47ac10b]` edita — Added transition sentence before the proof. Resolved.
+> `[6ba7b810]` pregunta — Answered: the definition applies to real series; added a note to the document. Resolved.
 
 ---
 

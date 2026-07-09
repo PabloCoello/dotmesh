@@ -135,8 +135,9 @@ make health | grep mesh-review
 
 1. Selecciona texto en un `.md` abierto en VS Code.
 2. Ejecuta `Mesh Review: Add Comment` desde la paleta de comandos.
-3. Elige el tipo (`pregunta`, `sugerencia`, `edita`, `comentario`) y la prioridad
-   (`alta`, `media`, `baja`), e introduce el texto del comentario.
+3. Elige el tipo (`edita`, `sugerencia`, `pregunta`, `verifica`, `nota`), opcionalmente
+   un agente de enrutado (pista para ejecución orquestada; `(ninguno)` si no aplica),
+   e introduce el texto del comentario.
 4. La extensión crea un sidecar JSON en `.ai/review/<ruta-relativa>.json` (relativo
    al git root) y muestra la decoración en el editor.
 5. Cuando quieras que un agente resuelva los comentarios, carga la skill `doc-review`
