@@ -6,16 +6,15 @@
  *
  * Colores de la paleta dotmesh — fuente de verdad: docs/DESIGN.md
  * -----------------------------------------------------------------------
- *   ink-2  #202020   fondo del rango (Ink register, tema oscuro)
+ *   teal   #6CB6B0   fondo del rango (con alpha) y prioridad baja
  *   rose   #E59A9A   prioridad alta
  *   gold   #E3C58A   prioridad media
- *   teal   #6CB6B0   prioridad baja
  *   grey   #6e6e6e   texto atenuado (Graphite, «atenuado»)
  *
- * Tema claro: DESIGN.md no define tokens Paper equivalentes para decoraciones.
- * Se usa rgba(32,32,32,0.3) como fondo (alpha reducida) para que funcione
- * sobre Paper (blanco) y sobre Ink (#121212). En tema oscuro dotmesh el
- * efecto es prácticamente idéntico al ink-2 opaco.
+ * El fondo del rango es teal con alpha 0.18: el gris ink-2 sobre Ink
+ * (#121212) quedaba por debajo del umbral de visibilidad. El teal es el
+ * color de nota en todo dotmesh (hunk, VS Code accent) y con alpha funciona
+ * sobre Paper (blanco) y sobre Ink.
  */
 
 import type { Comment } from './sidecar';
@@ -24,8 +23,8 @@ import type { Comment } from './sidecar';
 // Constantes de paleta (DESIGN.md)
 // ---------------------------------------------------------------------------
 
-/** Fondo del rango anclado. rgba para compatibilidad con tema claro. */
-export const RANGE_BG_COLOR = 'rgba(32, 32, 32, 0.3)';
+/** Fondo del rango anclado: teal con alpha, legible sobre Ink y Paper. */
+export const RANGE_BG_COLOR = 'rgba(108, 182, 176, 0.18)';
 
 /** Mapa prioridad → color dotmesh (DESIGN.md). */
 export const PRIORITY_COLORS: Readonly<Record<string, string>> = {
