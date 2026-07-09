@@ -4,7 +4,7 @@
  *
  * Dos TextEditorDecorationType:
  *   (a) rangeDecorationType  — fondo del rango anclado + hover
- *   (b) labelDecorationType  — etiqueta «● tipo·prioridad» al final de línea
+ *   (b) labelDecorationType  — etiqueta «● tipo» o «● tipo·agente» al final de línea
  *
  * Los tipos se crean una vez en getDecorationTypes() y se reutilizan en
  * cada llamada a applyDecorations(); se liberan llamando a disposeDecorationTypes()
