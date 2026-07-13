@@ -11,3 +11,4 @@ keybindings\.linux\.json
 ^/README\.md
 ^/USAGE\.md
 ^/Makefile
+^/review-extension

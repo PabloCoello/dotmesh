@@ -117,6 +117,7 @@ del prompt. Cualquier ajuste de color empieza aquí.
 |---|---|---|
 | Editor | [`vscode/themes/dotmesh-color-theme.json`](../vscode/themes/dotmesh-color-theme.json) | tema `dotmesh` (cromo Ink monocromo + sintaxis) |
 | Editor | [`vscode/Library/Application Support/Code/User/settings.json`](../vscode/Library/Application%20Support/Code/User/settings.json) | activa el tema `dotmesh` y la fuente JetBrains Mono |
+| Revisión | [`vscode/review-extension/`](../vscode/review-extension/) | fondo `rgba(108,182,176,0.18)` (teal con alpha, compatible con tema claro) en el rango anclado; etiqueta de tipo al final de línea (rose `#E59A9A` edita · gold `#E3C58A` sugerencia · blue `#8FB4E3` pregunta · peach `#FFAA7A` verifica · teal `#6CB6B0` nota); `#6e6e6e` en comentarios resueltos |
 | Terminal | [`warp/.warp/themes/dotmesh.yaml`](../warp/.warp/themes/dotmesh.yaml) | tema de Warp (fondo Ink + ANSI de sintaxis) |
 | Terminal | [`ghostty/.config/ghostty/themes/dotmesh`](../ghostty/.config/ghostty/themes/dotmesh) | tema de Ghostty (mismo fondo Ink + ANSI); herdr lo hereda con `[theme] name = "terminal"` |
 | Prompt | [`starship/.config/starship.toml`](../starship/.config/starship.toml) | paleta `dotmesh`: segmentos grafito + iconos de sintaxis |
