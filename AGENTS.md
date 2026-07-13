@@ -49,7 +49,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 
-`Makefile:3` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
+`Makefile:5` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
 
 The `vscode/` package contains a `.stow-local-ignore` and `package.json` because the directory doubles as a publishable VS Code theme extension; only the `Library/...` subtree is intended to be stowed.
 
