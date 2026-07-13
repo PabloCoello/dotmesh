@@ -2,7 +2,7 @@
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
-PACKAGES := shell git starship warp opencode codex claude agents
+PACKAGES := shell git starship warp ghostty herdr opencode codex claude agents
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
@@ -191,6 +191,9 @@ health:
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
+	@command -v ghostty  >/dev/null && echo "  ok  ghostty"  || echo "  --  ghostty (brew install --cask ghostty)"
+	@command -v herdr    >/dev/null && echo "  ok  herdr"    || echo "  --  herdr    (brew install herdr)"
+	@command -v herdr >/dev/null && herdr integration status 2>/dev/null | grep -qE '^claude: current' && echo "  ok  integraciones herdr (claude·codex·opencode)" || echo "  --  integraciones herdr (ver docs/INSTALL.md)"
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
 	@command -v nvim     >/dev/null && echo "  ok  nvim"     || echo "  --  nvim"
 	@command -v npx      >/dev/null && echo "  ok  npx"      || echo "  --  npx"

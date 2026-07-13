@@ -99,6 +99,23 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/herdr-agent-state.sh session",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/remind-herdr-skill.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "enableWorkflows": true,

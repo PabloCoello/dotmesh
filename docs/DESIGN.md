@@ -3,9 +3,9 @@
 Este documento es la fuente de verdad del lenguaje visual que comparten las
 herramientas de este repositorio. Nace del sistema de diseño personal `dotmesh`
 (prototipado en [claude.ai/design](https://claude.ai/design)) y aquí queda
-traducido a configuración real: tema de VS Code, tema de Warp, paleta de
-Starship, colores de delta/Git, el retint del escritorio GNOME y la esfera del
-reloj (Connect IQ, repo hermano [`dotmesh-watch`](../../dotmesh-watch)).
+traducido a configuración real: tema de VS Code, tema de Warp, tema de Ghostty,
+paleta de Starship, colores de delta/Git, el retint del escritorio GNOME y la
+esfera del reloj (Connect IQ, repo hermano [`dotmesh-watch`](../../dotmesh-watch)).
 
 La idea es una sola voz, tranquila y coherente, desde el prompt de la shell
 hasta el editor: **monocromo primero** (en la línea del blanco y negro que está
@@ -119,6 +119,7 @@ del prompt. Cualquier ajuste de color empieza aquí.
 | Editor | [`vscode/Library/Application Support/Code/User/settings.json`](../vscode/Library/Application%20Support/Code/User/settings.json) | activa el tema `dotmesh` y la fuente JetBrains Mono |
 | Revisión | [`vscode/review-extension/`](../vscode/review-extension/) | fondo `rgba(108,182,176,0.18)` (teal con alpha, compatible con tema claro) en el rango anclado; etiqueta de tipo al final de línea (rose `#E59A9A` edita · gold `#E3C58A` sugerencia · blue `#8FB4E3` pregunta · peach `#FFAA7A` verifica · teal `#6CB6B0` nota); `#6e6e6e` en comentarios resueltos |
 | Terminal | [`warp/.warp/themes/dotmesh.yaml`](../warp/.warp/themes/dotmesh.yaml) | tema de Warp (fondo Ink + ANSI de sintaxis) |
+| Terminal | [`ghostty/.config/ghostty/themes/dotmesh`](../ghostty/.config/ghostty/themes/dotmesh) | tema de Ghostty (mismo fondo Ink + ANSI); herdr lo hereda con `[theme] name = "terminal"` |
 | Prompt | [`starship/.config/starship.toml`](../starship/.config/starship.toml) | paleta `dotmesh`: segmentos grafito + iconos de sintaxis |
 | VCS | [`git/.gitconfig`](../git/.gitconfig) | colores de delta y de Git (sage/rose/gold/blue) |
 | Escritorio | [`gnome/`](../gnome/) | retint GNOME sobre Yaru: superficies Ink en apps (gtk.css), fondo de malla Ink (teal · sage · rose como señales), tipografía y tinte Ink del dock |
@@ -187,6 +188,15 @@ va en ink-0.
 
 - **Fuente de Warp**: no se versiona en este repo; hay que fijar JetBrains Mono
   (Nerd Font) en los ajustes de Warp a mano.
+- **Fuente de Ghostty**: la config pide `JetBrainsMono Nerd Font`. Si no está
+  instalada, Ghostty cae a la mono del sistema y los glifos powerline de Starship
+  no se ven. Instálala con `brew install --cask font-jetbrains-mono-nerd-font`.
+- **Integraciones de herdr**: los hooks de estado de agente (`herdr-agent-state.*`
+  en los paquetes `claude/`, `codex/`, `opencode/`) llevan un número de versión de
+  herdr. `herdr integration install` los reescribiría destructivamente (a claude le
+  reordena entero `settings.json`), así que dotmesh los mantiene versionados a mano.
+  Tras actualizar herdr, comprueba con `herdr integration status` si quedan
+  desfasados y, si es así, re-vendoriza el artefacto afectado.
 - **`syntax-theme` de delta**: se usa `ansi`, que delega en la paleta ANSI del
   terminal (Warp dotmesh la define alineada con la sintaxis). Las decoraciones de
   `+/-`, cabeceras de hunk y números de línea van siempre en colores foreground

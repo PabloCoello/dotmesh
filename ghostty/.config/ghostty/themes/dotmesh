@@ -1,0 +1,37 @@
+# dotmesh — Paper · Ink · Syntax.
+# Tema de Ghostty: fondo Ink (#121212) con los dieciséis colores ANSI mapeados a
+# la rampa Graphite (cromo monocromo) y los siete acentos de sintaxis muteados.
+# El cursor toma el teal canónico (accent). Espejo del tema Warp `dotmesh` y del
+# tema VS Code `dotmesh`; la fuente de verdad de la paleta es docs/DESIGN.md.
+#
+# Un fichero de tema es un fichero de config de Ghostty normal: mismas claves.
+# Actívalo con `theme = dotmesh` en config.
+
+background = #121212
+foreground = #cecece
+
+cursor-color = #6CB6B0
+cursor-text = #121212
+
+selection-background = #2e2e2e
+selection-foreground = #cecece
+
+# Normales (0-7): negro grafito · rojo/verde/amarillo/azul/magenta/cian de sintaxis · blanco grafito
+palette = 0=#2a2a2a
+palette = 1=#E59A9A
+palette = 2=#A8CBA0
+palette = 3=#E3C58A
+palette = 4=#8FB4E3
+palette = 5=#CBAACB
+palette = 6=#6CB6B0
+palette = 7=#c6c6c6
+
+# Brillantes (8-15): mismos roles, un paso más claros
+palette = 8=#5c5c5c
+palette = 9=#EAA9A9
+palette = 10=#B9D6B2
+palette = 11=#ECD2A3
+palette = 12=#A8C6EA
+palette = 13=#D8BFD8
+palette = 14=#84C4BF
+palette = 15=#F0F1F3
