@@ -8,7 +8,7 @@
  *   - findCommentAtOffset: localiza el comentario bajo el cursor del editor
  */
 
-import type { Comment, CommentType, Sidecar } from './sidecar';
+import type { Comment, CommentType, Sidecar, ThreadProjection } from './sidecar';
 import { resolveAnchor } from './anchor.ts';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +47,25 @@ export interface CommentGroup {
   type: CommentType | 'resolved';
   label: string;
   comments: Comment[];
+}
+
+// ---------------------------------------------------------------------------
+// Thread view — tipos V2
+// ---------------------------------------------------------------------------
+
+/**
+ * Orden de los 7 tipos para la vista por hilos: accionables primero,
+ * anotaciones después. Distinto de TYPE_ORDER (5 tipos, ruta legacy).
+ */
+export const THREAD_TYPE_ORDER: readonly CommentType[] = [
+  'edita', 'sugerencia', 'pregunta', 'verifica',  // accionables
+  'nota', 'referencia', 'supuesto',                // anotaciones
+];
+
+export interface ThreadGroup {
+  key: CommentType | 'resolved' | 'detached';
+  label: string;
+  threads: ThreadProjection[];
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +110,54 @@ export function groupCommentsByType(comments: Comment[]): CommentGroup[] {
 /** Ordena comentarios por line_hint ascendente sin mutar el array. */
 function sortByLineHint(comments: Comment[]): Comment[] {
   return [...comments].sort((a, b) => a.anchor.line_hint - b.anchor.line_hint);
+}
+
+/** Extrae el line_hint de un ancla de hilo, o MAX_SAFE_INTEGER si está desanclado. */
+function threadLineHint(t: ThreadProjection): number {
+  return 'line_hint' in t.anchor ? t.anchor.line_hint : Number.MAX_SAFE_INTEGER;
+}
+
+/** Ordena hilos por line_hint ascendente sin mutar el array. */
+function sortThreadsByLineHint(threads: ThreadProjection[]): ThreadProjection[] {
+  return [...threads].sort((a, b) => threadLineHint(a) - threadLineHint(b));
+}
+
+/**
+ * Agrupa hilos V2 por tipo (THREAD_TYPE_ORDER) y añade grupos especiales para
+ * resueltos y desanclados al final. No muta el array de entrada.
+ *
+ * Reglas:
+ *   1. Entrada vacía → [].
+ *   2. Partición por status: 'open', 'resolved', 'detached'.
+ *   3. Hilos abiertos: itera THREAD_TYPE_ORDER; omite tipos sin hilos.
+ *      Dentro de cada grupo ordena por line_hint ascendente.
+ *   4. Si hay resueltos: añade { key: 'resolved', label: 'Resueltos', … } al final.
+ *   5. Si hay desanclados: añade { key: 'detached', label: 'Archivados', … } al final.
+ */
+export function groupByThread(projections: ThreadProjection[]): ThreadGroup[] {
+  if (projections.length === 0) return [];
+
+  const open     = projections.filter(t => t.status === 'open');
+  const resolved = projections.filter(t => t.status === 'resolved');
+  const detached = projections.filter(t => t.status === 'detached');
+
+  const groups: ThreadGroup[] = [];
+
+  for (const type of THREAD_TYPE_ORDER) {
+    const subset = open.filter(t => t.commentType === type);
+    if (subset.length === 0) continue;
+    groups.push({ key: type, label: TYPE_LABELS[type], threads: sortThreadsByLineHint(subset) });
+  }
+
+  if (resolved.length > 0) {
+    groups.push({ key: 'resolved', label: 'Resueltos', threads: sortThreadsByLineHint(resolved) });
+  }
+
+  if (detached.length > 0) {
+    groups.push({ key: 'detached', label: 'Archivados', threads: sortThreadsByLineHint(detached) });
+  }
+
+  return groups;
 }
 
 /**

@@ -11,6 +11,8 @@
  *   blue   #8FB4E3   pregunta
  *   peach  #FFAA7A   verifica
  *   teal   #6CB6B0   nota
+ *   sage   #A8CBA0   referencia
+ *   lilac  #CBAACB   supuesto
  *   grey   #6e6e6e   texto atenuado (Graphite, «atenuado»)
  *
  * El fondo del rango es teal con alpha 0.18: el gris ink-2 sobre Ink
@@ -35,6 +37,8 @@ export const TYPE_COLORS: Readonly<Record<string, string>> = {
   pregunta:   '#8FB4E3', // blue  — DESIGN.md
   verifica:   '#FFAA7A', // peach — DESIGN.md
   nota:       '#6CB6B0', // teal  — DESIGN.md
+  referencia: '#A8CBA0', // sage  — DESIGN.md (formalizado en F5)
+  supuesto:   '#CBAACB', // lilac — DESIGN.md (formalizado en F5)
 };
 
 /** Color de fallback si el tipo no está reconocido. */

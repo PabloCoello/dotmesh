@@ -385,3 +385,19 @@ test('todos los <span style="color:...;"> del hover terminan el color con punto 
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// TYPE_COLORS — tipos V2 añadidos en F3a
+// ---------------------------------------------------------------------------
+
+test('typeColor devuelve sage #A8CBA0 para referencia', () => {
+  assert.strictEqual(typeColor('referencia'), '#A8CBA0');
+});
+
+test('typeColor devuelve lilac #CBAACB para supuesto', () => {
+  assert.strictEqual(typeColor('supuesto'), '#CBAACB');
+});
+
+test('TYPE_COLORS tiene exactamente 7 entradas', () => {
+  assert.strictEqual(Object.keys(TYPE_COLORS).length, 7);
+});

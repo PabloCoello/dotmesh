@@ -14,8 +14,11 @@ import {
   mutateCommentById,
   TYPE_ORDER,
   TYPE_LABELS,
+  THREAD_TYPE_ORDER,
+  groupByThread,
 } from './treeview-utils.ts';
-import type { Comment, Sidecar } from './sidecar';
+import type { ThreadGroup } from './treeview-utils.ts';
+import type { Comment, Sidecar, ThreadProjection } from './sidecar';
 
 // ---------------------------------------------------------------------------
 // Fixture
@@ -344,4 +347,126 @@ test('mutateCommentById con id ausente preserva la referencia original del sidec
   assert.strictEqual(found, false);
   // Sin id encontrado el sidecar devuelto es el mismo objeto (optimización)
   assert.strictEqual(result, sidecar);
+});
+
+// ---------------------------------------------------------------------------
+// THREAD_TYPE_ORDER
+// ---------------------------------------------------------------------------
+
+test('THREAD_TYPE_ORDER tiene exactamente 7 tipos en el orden correcto', () => {
+  assert.deepStrictEqual(
+    [...THREAD_TYPE_ORDER],
+    ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota', 'referencia', 'supuesto']
+  );
+});
+
+// ---------------------------------------------------------------------------
+// groupByThread — fixtures
+// ---------------------------------------------------------------------------
+
+function makeThread(
+  overrides: Pick<ThreadProjection, 'thread_id' | 'commentType' | 'status'> &
+    Partial<ThreadProjection>
+): ThreadProjection {
+  return {
+    thread_id: overrides.thread_id,
+    commentType: overrides.commentType,
+    anchor: overrides.anchor ?? { quote: 'texto', line_hint: 0, char_offset: 0 },
+    status: overrides.status,
+    messages: overrides.messages ?? [],
+    openedAt: overrides.openedAt ?? '2026-07-13T10:00:00Z',
+    openedBy: overrides.openedBy ?? { kind: 'human' },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// groupByThread — estructura básica
+// ---------------------------------------------------------------------------
+
+test('groupByThread con lista vacía devuelve array vacío', () => {
+  assert.deepStrictEqual(groupByThread([]), []);
+});
+
+test('groupByThread agrupa hilos abiertos siguiendo el orden de THREAD_TYPE_ORDER', () => {
+  const threads: ThreadProjection[] = [
+    makeThread({ thread_id: 't1', commentType: 'supuesto',   status: 'open' }),
+    makeThread({ thread_id: 't2', commentType: 'edita',      status: 'open' }),
+    makeThread({ thread_id: 't3', commentType: 'referencia', status: 'open' }),
+    makeThread({ thread_id: 't4', commentType: 'pregunta',   status: 'open' }),
+  ];
+  const groups = groupByThread(threads);
+  const keys = groups.map(g => g.key);
+  assert.deepStrictEqual(keys, ['edita', 'pregunta', 'referencia', 'supuesto']);
+});
+
+test('groupByThread ordena hilos dentro de un grupo por line_hint ascendente', () => {
+  const threads: ThreadProjection[] = [
+    makeThread({ thread_id: 'a', commentType: 'nota', status: 'open',
+      anchor: { quote: 'z', line_hint: 20, char_offset: 0 } }),
+    makeThread({ thread_id: 'b', commentType: 'nota', status: 'open',
+      anchor: { quote: 'x', line_hint: 5,  char_offset: 0 } }),
+    makeThread({ thread_id: 'c', commentType: 'nota', status: 'open',
+      anchor: { quote: 'y', line_hint: 12, char_offset: 0 } }),
+  ];
+  const groups = groupByThread(threads);
+  assert.strictEqual(groups.length, 1);
+  assert.strictEqual(groups[0].key, 'nota');
+  assert.deepStrictEqual(groups[0].threads.map(t => t.thread_id), ['b', 'c', 'a']);
+});
+
+test('groupByThread coloca resueltos en un grupo {key:"resolved"} después de los de tipo', () => {
+  const threads: ThreadProjection[] = [
+    makeThread({ thread_id: 'r1', commentType: 'nota',  status: 'resolved' }),
+    makeThread({ thread_id: 'o1', commentType: 'edita', status: 'open' }),
+  ];
+  const groups = groupByThread(threads);
+  const lastGroup = groups[groups.length - 1];
+  assert.strictEqual(lastGroup.key, 'resolved');
+  assert.strictEqual(lastGroup.label, 'Resueltos');
+  assert.strictEqual(lastGroup.threads.length, 1);
+  assert.strictEqual(lastGroup.threads[0].thread_id, 'r1');
+  // El grupo de tipo debe preceder al de resueltos
+  assert.strictEqual(groups[0].key, 'edita');
+});
+
+test('groupByThread coloca desanclados en un grupo {key:"detached"} el último', () => {
+  const threads: ThreadProjection[] = [
+    makeThread({ thread_id: 'd1', commentType: 'pregunta', status: 'detached',
+      anchor: { detached: true } }),
+    makeThread({ thread_id: 'o1', commentType: 'edita',    status: 'open' }),
+    makeThread({ thread_id: 'r1', commentType: 'nota',     status: 'resolved' }),
+  ];
+  const groups = groupByThread(threads);
+  const lastGroup = groups[groups.length - 1];
+  assert.strictEqual(lastGroup.key, 'detached');
+  assert.strictEqual(lastGroup.label, 'Archivados');
+  assert.strictEqual(lastGroup.threads[0].thread_id, 'd1');
+});
+
+// Con 2+ desanclados el comparador sí se ejecuta (Array.sort lo omite en
+// longitud 1), ejercitando la rama MAX_SAFE_INTEGER de threadLineHint: dos
+// anclas `{detached:true}` comparan igual y el orden de entrada se preserva.
+test('groupByThread ordena de forma estable varios hilos desanclados', () => {
+  const threads: ThreadProjection[] = [
+    makeThread({ thread_id: 'd1', commentType: 'nota',     status: 'detached',
+      anchor: { detached: true } }),
+    makeThread({ thread_id: 'd2', commentType: 'pregunta', status: 'detached',
+      anchor: { detached: true } }),
+    makeThread({ thread_id: 'd3', commentType: 'supuesto', status: 'detached',
+      anchor: { detached: true } }),
+  ];
+  const groups = groupByThread(threads);
+  assert.strictEqual(groups.length, 1);
+  assert.strictEqual(groups[0].key, 'detached');
+  assert.deepStrictEqual(groups[0].threads.map(t => t.thread_id), ['d1', 'd2', 'd3']);
+});
+
+test('groupByThread no muta el array de entrada', () => {
+  const threads: ThreadProjection[] = [
+    makeThread({ thread_id: 'x1', commentType: 'supuesto', status: 'open' }),
+    makeThread({ thread_id: 'x2', commentType: 'edita',    status: 'open' }),
+  ];
+  const originalIds = threads.map(t => t.thread_id);
+  groupByThread(threads);
+  assert.deepStrictEqual(threads.map(t => t.thread_id), originalIds);
 });
