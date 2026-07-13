@@ -1,7 +1,7 @@
 # gnome — rice del escritorio (retint sobre Yaru)
 
 Lleva el lenguaje visual de [`docs/DESIGN.md`](../docs/DESIGN.md) (Paper · Ink ·
-Syntax) al escritorio GNOME como una superficie más, junto a VS Code, Warp,
+Syntax) al escritorio GNOME como una superficie más, junto a VS Code, Ghostty,
 Starship y delta. La intención es la misma: **cromo monocromo Ink y el color
 solo como señal**. Es un *retint sobre Yaru*, no un tema a medida: se mantiene la
 base nativa y se ajustan colores, acento y tipografía.

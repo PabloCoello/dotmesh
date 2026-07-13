@@ -39,7 +39,7 @@
 
 	# dotmesh — Paper · Ink · Syntax (sage = adición, rose = eliminación).
 	# Los acentos van como FOREGROUND (señal), sin fondo de línea; igual que
-	# [color "diff"]. ansi delega en la paleta ANSI del terminal (Warp dotmesh).
+	# [color "diff"]. ansi delega en la paleta ANSI del terminal (Ghostty dotmesh).
 	minus-style = "#E59A9A"
 	minus-emph-style = "#E59A9A bold"
 	plus-style = "#A8CBA0"
