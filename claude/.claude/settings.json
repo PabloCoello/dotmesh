@@ -125,20 +125,13 @@
     "padding": 1
   },
   "enabledPlugins": {
-    "miro@claude-plugins-official": true,
-    "warp@claude-code-warp": true
+    "miro@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "miro-ai": {
       "source": {
         "source": "github",
         "repo": "miroapp/miro-ai"
-      }
-    },
-    "claude-code-warp": {
-      "source": {
-        "source": "github",
-        "repo": "warpdotdev/claude-code-warp"
       }
     }
   },
