@@ -5,7 +5,7 @@
 // [label, lucide glyph, tint] — tint null = monochrome graphite
 const APPS = [
   ["Finder", "folder", "blue"],
-  ["Warp", "square-terminal", null],
+  ["Ghostty", "square-terminal", null],
   ["VS Code", "code-xml", null],
   ["Safari", "compass", null],
   ["Mail", "mail", null],

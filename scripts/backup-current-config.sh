@@ -63,13 +63,6 @@ backup_file "$HOME/.codex/AGENTS.md"   "codex/AGENTS.md"
 # Skills
 backup_file "$HOME/.agents/skills" "agents/skills"
 
-# Warp
-if [ "$(uname)" = "Darwin" ]; then
-    backup_file "$HOME/.warp/themes" "warp/themes"
-else
-    backup_file "$HOME/.local/share/warp-terminal/themes" "warp/themes"
-fi
-
 # GNOME (Linux)
 if [ "$(uname)" = "Linux" ]; then
     backup_file "$HOME/.config/gtk-3.0/gtk.css" "config/gtk-3.0/gtk.css"

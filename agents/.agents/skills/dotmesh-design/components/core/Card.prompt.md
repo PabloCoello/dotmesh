@@ -2,7 +2,7 @@ Container surface for grouped content — settings rows, panels, list items. Bor
 
 ```jsx
 <Card padding="md">
-  <h3>Warp · Carbon</h3>
+  <h3>Ghostty · dotmesh</h3>
   <p>Terminal theme synced.</p>
 </Card>
 <Card interactive elevation="sm">…</Card>

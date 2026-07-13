@@ -24,7 +24,7 @@
   const PANELS = {
     shell: [["~/.zshrc", "312 lines"], ["~/.config/starship.toml", "48 lines"], ["~/.aliases", "26 lines"]],
     git: [["tokens/colors.css", "modified"], ["styles.css", "modified"], ["SKILL.md", "staged"]],
-    warp: [["themes/carbon.yaml", "active"], ["keybindings.yaml", "synced"]],
+    ghostty: [["themes/dotmesh", "active"], ["config", "synced"]],
     vscode: [["settings.json", "synced"], ["keybindings.json", "synced"], ["extensions.json", "12 ext"]],
   };
   function Demo() {
@@ -37,7 +37,7 @@
           items={[
             { value: "shell", label: "Shell" },
             { value: "git", label: "Git", count: 3 },
-            { value: "warp", label: "Warp" },
+            { value: "ghostty", label: "Ghostty" },
             { value: "vscode", label: "VS Code" },
           ]}
         />

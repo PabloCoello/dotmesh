@@ -2,7 +2,7 @@
 
 ## Requisitos
 
-Las herramientas que vayas a usar instaladas: Warp o Ghostty, VS Code, OpenCode, Codex, Claude Code. herdr es opcional (multiplexor de agentes que corre dentro de Ghostty).
+Las herramientas que vayas a usar instaladas: Ghostty, VS Code, OpenCode, Codex, Claude Code. herdr es opcional (multiplexor de agentes que corre dentro de Ghostty).
 
 **macOS (Apple Silicon o Intel)**
 
@@ -10,7 +10,7 @@ Homebrew es el gestor de dependencias:
 
 ```bash
 brew install stow git-delta starship herdr
-brew install --cask warp ghostty visual-studio-code font-jetbrains-mono-nerd-font
+brew install --cask ghostty visual-studio-code font-jetbrains-mono-nerd-font
 ```
 
 **Linux (Ubuntu/Debian)**
@@ -25,7 +25,7 @@ Starship no está en los repositorios de apt; instálalo con su script oficial:
 curl -sS https://starship.rs/install.sh | sh
 ```
 
-Warp y VS Code se instalan desde sus sitios oficiales o vía sus paquetes `.deb`.
+VS Code se instala desde su sitio oficial o vía su paquete `.deb`.
 
 ---
 
@@ -56,8 +56,6 @@ exec zsh
 4. `make link-skills` → crea `~/.claude/skills` como symlink a
    `~/.agents/skills` para que Claude Code consuma la misma fuente de
    skills que OpenCode y Codex.
-5. `make link-warp` → enlaza los temas de Warp en `~/.local/share/warp-terminal/themes/`
-   (solo Linux; en macOS lo hace Stow directamente en `~/.warp/themes/`).
 
 **Solo en Linux**, tras el install inicial:
 
@@ -73,7 +71,6 @@ make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa St
 | `shell` | `~/.zshrc` y `~/.config/shell/*.zsh` |
 | `git` | `~/.gitconfig`, `~/.gitignore_global`, `~/.gitmessage` |
 | `starship` | `~/.config/starship.toml` |
-| `warp` | `~/.warp/themes/` (macOS, vía Stow) · `~/.local/share/warp-terminal/themes/` (Linux, vía `make link-warp`) |
 | `ghostty` | `~/.config/ghostty/{config,themes/dotmesh}` |
 | `herdr` | `~/.config/herdr/config.toml` |
 | `vscode` | `~/Library/Application Support/Code/User/` (macOS, vía Stow) · `~/.config/Code/User/` (Linux, vía `make vscode-install`) |
