@@ -8,7 +8,7 @@ const [tab, setTab] = React.useState("shell");
   items={[
     { value: "shell", label: "Shell" },
     { value: "git", label: "Git", count: 3 },
-    "Warp",
+    "Ghostty",
   ]}
 />
 ```
