@@ -1,15 +1,13 @@
-.PHONY: help install backup stow unstow restow link-skills link-warp vscode-install review-build review-install seed-claude-settings gnome-rice gnome-unrice health clean
+.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install seed-claude-settings gnome-rice gnome-unrice health clean
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
-PACKAGES := shell git starship warp ghostty herdr opencode codex claude agents
+PACKAGES := shell git starship ghostty herdr opencode codex claude agents
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
-WARP_THEMES_SRC := $(abspath warp/.warp/themes)
-WARP_THEMES_DST := $(HOME)/.local/share/warp-terminal/themes
 CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
 CLAUDE_SETTINGS_DST := $(HOME)/.claude/settings.json
 
@@ -17,7 +15,7 @@ help:
 	@echo "dotmesh — gestión de dotfiles"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make install   - backup + stow + review-install + link-skills + link-warp"
+	@echo "  make install   - backup + stow + review-install + link-skills"
 	@echo "  make backup    - Respalda configs actuales en ~/dotfiles-backup"
 	@echo "  make stow      - Aplica symlinks con GNU Stow"
 	@echo "  make unstow    - Elimina symlinks"
@@ -26,7 +24,6 @@ help:
 	@echo "  make review-build   - Compila la extensión mesh-review"
 	@echo "  make review-install - Instala mesh-review en VS Code (requiere node y code)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
-	@echo "  make link-warp - Symlink temas Warp a la ruta XDG (solo Linux)"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
@@ -35,7 +32,7 @@ help:
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
-install: backup stow vscode-install review-install seed-claude-settings link-skills link-warp
+install: backup stow vscode-install review-install seed-claude-settings link-skills
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -83,37 +80,6 @@ link-skills:
 	else \
 		ln -s "$(SKILLS_SRC)" "$(SKILLS_DST)"; \
 		echo "  ok  $(SKILLS_DST) -> $(SKILLS_SRC)"; \
-	fi
-
-# macOS lee ~/.warp/themes (vía stow); Linux lee la ruta XDG. Solo Linux
-# necesita este enlace; en macOS es un no-op informativo.
-link-warp:
-	@if [ "$$(uname -s)" != "Linux" ]; then \
-		echo "  ok  temas Warp vía stow (~/.warp/themes); link-warp solo aplica en Linux"; \
-	else \
-		mkdir -p "$(WARP_THEMES_DST)"; \
-		for src in "$(WARP_THEMES_SRC)"/*.yaml; do \
-			name=$$(basename "$$src"); \
-			dst="$(WARP_THEMES_DST)/$$name"; \
-			if [ -L "$$dst" ]; then \
-				current=$$(readlink "$$dst"); \
-				if [ "$$current" = "$$src" ]; then \
-					echo "  ok  $$dst -> $$src"; \
-				else \
-					echo "  ↻  reapuntando $$dst ($$current -> $$src)"; \
-					rm "$$dst"; \
-					ln -s "$$src" "$$dst"; \
-					echo "  ok  $$dst -> $$src"; \
-				fi; \
-			elif [ -e "$$dst" ]; then \
-				echo "  !!  $$dst existe y NO es symlink. Aborto para no perder contenido."; \
-				echo "      Mueve o elimina $$dst manualmente y reintenta."; \
-				exit 1; \
-			else \
-				ln -s "$$src" "$$dst"; \
-				echo "  ok  $$dst -> $$src"; \
-			fi; \
-		done; \
 	fi
 
 # En Linux, VS Code ignora ~/Library y lee ~/.config/Code/User; install.sh crea los symlinks
@@ -206,9 +172,6 @@ health:
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.config/starship.toml" ] && [ -e "$$HOME/.config/starship.toml" ] && echo "  ok  symlink ~/.config/starship.toml" || echo "  --  ~/.config/starship.toml no es symlink al repo (corre 'make stow')"
-	@if [ "$$(uname -s)" = "Linux" ]; then \
-		[ -d "$(WARP_THEMES_DST)" ] && echo "  ok  temas Warp XDG ($(WARP_THEMES_DST))" || echo "  --  temas Warp XDG ausentes (corre 'make link-warp')"; \
-	fi
 
 clean:
 	@rm -rf ~/dotfiles-backup/*
