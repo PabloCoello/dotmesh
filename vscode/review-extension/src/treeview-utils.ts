@@ -15,6 +15,12 @@ import { resolveAnchor } from './anchor.ts';
 // Constantes
 // ---------------------------------------------------------------------------
 
+// TYPE_ORDER conserva los 5 tipos V1: es el orden del path legacy
+// `groupCommentsByType` (agrupación por tipo del sidecar plano). Las anotaciones
+// V2 (`referencia`, `supuesto`) NO se añaden aquí a propósito: se exponen por la
+// vista por hilos (`groupByThread`, F3a→F4), no por este path. TYPE_LABELS sí las
+// incluye porque `Record<CommentType, string>` exige las 7 claves tras ampliar
+// CommentType; la asimetría es deliberada y `treeview.test.ts` fija TYPE_ORDER a 5.
 export const TYPE_ORDER: readonly CommentType[] = [
   'edita',
   'sugerencia',
@@ -29,6 +35,8 @@ export const TYPE_LABELS: Readonly<Record<CommentType, string>> = {
   pregunta:   'Preguntas',
   verifica:   'Verificaciones',
   nota:       'Notas',
+  referencia: 'Referencias',
+  supuesto:   'Supuestos',
 };
 
 // ---------------------------------------------------------------------------

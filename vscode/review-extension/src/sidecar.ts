@@ -3,6 +3,12 @@
  *
  * Lógica pura separada de la capa VS Code: ninguna importación de 'vscode'.
  * Exporta funciones de rutas, hash, IO y comprobación de gitignore.
+ *
+ * Conviven dos formatos:
+ *   V1 — sidecar plano (Sidecar, Comment, CommentType, Status originales).
+ *        Los tests existentes cubren este formato; no se rompe.
+ *   V2 — modelo event-sourced (EventEnvelope, Author, ThreadProjection, …).
+ *        Los nuevos tipos se añaden de forma aditiva a continuación.
  */
 
 import { createHash } from 'node:crypto';
@@ -15,7 +21,7 @@ import * as os from 'node:os';
 const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
-// Tipos (schema V1, coinciden con agents/.agents/skills/doc-review/schema.json)
+// Tipos V1 (schema V1, coinciden con agents/.agents/skills/doc-review/schema.json)
 // ---------------------------------------------------------------------------
 
 export interface Anchor {
@@ -24,8 +30,13 @@ export interface Anchor {
   char_offset: number;
 }
 
-export type CommentType = 'edita' | 'sugerencia' | 'pregunta' | 'verifica' | 'nota';
-export type Status = 'open' | 'resolved';
+/** V1 tenía 5 tipos; V2 añade 'referencia' y 'supuesto' como anotaciones durables. */
+export type CommentType =
+  | 'edita' | 'sugerencia' | 'pregunta' | 'verifica' | 'nota'
+  | 'referencia' | 'supuesto';
+
+/** V1 tenía 'open' | 'resolved'; V2 añade 'detached' para anclas rotas. */
+export type Status = 'open' | 'resolved' | 'detached';
 
 export interface Comment {
   id: string;
@@ -42,6 +53,63 @@ export interface Sidecar {
   version: 1;
   file: string;
   comments: Comment[];
+}
+
+// ---------------------------------------------------------------------------
+// Tipos V2 — modelo event-sourced
+// (coinciden con $defs de agents/.agents/skills/doc-review/schema.json)
+// ---------------------------------------------------------------------------
+
+export type EventType =
+  | 'thread.opened'
+  | 'message.posted'
+  | 'message.revised'
+  | 'message.retracted'
+  | 'thread.status-changed'
+  | 'thread.reanchored'
+  | 'thread.assigned';
+
+export type Author =
+  | { kind: 'human'; name?: string }
+  | { kind: 'ai'; model: string; effort?: string; subagent?: string };
+
+/**
+ * Sobre común a todos los eventos V2.
+ * Los campos opcionales de cada tipo de evento (anchor, body, to, …) se
+ * acceden a través del índice de cadena; la lógica de proyección los
+ * extrae con comprobación en tiempo de ejecución.
+ */
+export interface EventEnvelope {
+  id: string;
+  version: 2;
+  type: EventType;
+  thread_id: string;
+  author: Author;
+  created_at: string;
+  commit: string | null;
+  dirty: boolean;
+  [key: string]: unknown;
+}
+
+export interface MessageProjection {
+  id: string;
+  body: string;
+  author: Author;
+  created_at: string;
+  retracted: boolean;
+}
+
+export interface ThreadProjection {
+  thread_id: string;
+  commentType: CommentType;
+  anchor: Anchor | { detached: true };
+  status: 'open' | 'resolved' | 'detached';
+  assignee?: string;
+  confidence?: 'alta' | 'media' | 'baja';
+  refs?: Array<{ title: string; url?: string; note?: string }>;
+  messages: MessageProjection[];
+  openedAt: string;
+  openedBy: Author;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,92 +1,251 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "mesh-review sidecar",
-  "description": "Sidecar JSON that stores review comments anchored to a document. Stored at <git-root>/.ai/review/<relative-doc-path>.json (mirrors the document path). Fallback for documents outside a git repo: ~/.local/state/mesh-review/<sha256-of-absolute-path>.json.",
-  "type": "object",
-  "required": ["version", "file", "comments"],
-  "additionalProperties": false,
-  "properties": {
-    "version": {
-      "type": "integer",
-      "const": 1,
-      "description": "Schema version. Currently 1."
+  "title": "mesh-review V2 event",
+  "description": "A single event in the mesh-review event-sourced review system (V2). One JSON file per event, stored at <git-root>/.ai/review/<doc-path>/<event_id>.json. Validates exactly one event object. The root uses oneOf with eight branches — each branch declares ALL envelope properties inline to make additionalProperties:false work without allOf inheritance. Use $defs/v1Sidecar as a non-normative reference for the legacy V1 flat-file format.",
+  "oneOf": [
+    {
+      "description": "thread.opened — opens a new review thread anchored to a text selection",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","anchor","commentType","body"],
+      "properties": {
+        "id":          { "$ref": "#/$defs/uuid" },
+        "version":     { "type": "integer", "const": 2 },
+        "type":        { "type": "string",  "const": "thread.opened" },
+        "thread_id":   { "$ref": "#/$defs/uuid" },
+        "author":      { "$ref": "#/$defs/author" },
+        "created_at":  { "$ref": "#/$defs/isoTs" },
+        "commit":      { "type": ["string","null"] },
+        "dirty":       { "type": "boolean" },
+        "anchor":      { "$ref": "#/$defs/anchor" },
+        "commentType": { "$ref": "#/$defs/commentType" },
+        "body":        { "type": "string", "minLength": 1 },
+        "assignee":    { "type": "string" },
+        "confidence":  { "$ref": "#/$defs/confidence" },
+        "rationale":   { "type": "string" },
+        "refs":        { "$ref": "#/$defs/refs" }
+      }
     },
-    "file": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Relative path from the git root to the reviewed document (e.g. 'docs/informe.md')."
+    {
+      "description": "message.posted — adds a message to an existing thread",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","body"],
+      "properties": {
+        "id":         { "$ref": "#/$defs/uuid" },
+        "version":    { "type": "integer", "const": 2 },
+        "type":       { "type": "string",  "const": "message.posted" },
+        "thread_id":  { "$ref": "#/$defs/uuid" },
+        "author":     { "$ref": "#/$defs/author" },
+        "created_at": { "$ref": "#/$defs/isoTs" },
+        "commit":     { "type": ["string","null"] },
+        "dirty":      { "type": "boolean" },
+        "body":       { "type": "string", "minLength": 1 },
+        "parent_id":  { "$ref": "#/$defs/uuid" }
+      }
     },
-    "comments": {
-      "type": "array",
-      "items": { "$ref": "#/definitions/comment" },
-      "description": "Ordered list of review comments."
+    {
+      "description": "message.revised — replaces the body of a previous message",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","target_message_id","body"],
+      "properties": {
+        "id":                { "$ref": "#/$defs/uuid" },
+        "version":           { "type": "integer", "const": 2 },
+        "type":              { "type": "string",  "const": "message.revised" },
+        "thread_id":         { "$ref": "#/$defs/uuid" },
+        "author":            { "$ref": "#/$defs/author" },
+        "created_at":        { "$ref": "#/$defs/isoTs" },
+        "commit":            { "type": ["string","null"] },
+        "dirty":             { "type": "boolean" },
+        "target_message_id": { "$ref": "#/$defs/uuid" },
+        "body":              { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "description": "message.retracted — marks a previous message as retracted",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","target_message_id"],
+      "properties": {
+        "id":                { "$ref": "#/$defs/uuid" },
+        "version":           { "type": "integer", "const": 2 },
+        "type":              { "type": "string",  "const": "message.retracted" },
+        "thread_id":         { "$ref": "#/$defs/uuid" },
+        "author":            { "$ref": "#/$defs/author" },
+        "created_at":        { "$ref": "#/$defs/isoTs" },
+        "commit":            { "type": ["string","null"] },
+        "dirty":             { "type": "boolean" },
+        "target_message_id": { "$ref": "#/$defs/uuid" },
+        "reason":            { "type": "string" }
+      }
+    },
+    {
+      "description": "thread.status-changed — changes the status of a thread (open / resolved)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","to"],
+      "properties": {
+        "id":         { "$ref": "#/$defs/uuid" },
+        "version":    { "type": "integer", "const": 2 },
+        "type":       { "type": "string",  "const": "thread.status-changed" },
+        "thread_id":  { "$ref": "#/$defs/uuid" },
+        "author":     { "$ref": "#/$defs/author" },
+        "created_at": { "$ref": "#/$defs/isoTs" },
+        "commit":     { "type": ["string","null"] },
+        "dirty":      { "type": "boolean" },
+        "to":         { "type": "string", "enum": ["open","resolved"] }
+      }
+    },
+    {
+      "description": "thread.reanchored (re-anchor) — moves a thread's anchor to a new text selection. Discriminated from the detached variant by presence of 'anchor' and absence of 'detached'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","anchor"],
+      "properties": {
+        "id":         { "$ref": "#/$defs/uuid" },
+        "version":    { "type": "integer", "const": 2 },
+        "type":       { "type": "string",  "const": "thread.reanchored" },
+        "thread_id":  { "$ref": "#/$defs/uuid" },
+        "author":     { "$ref": "#/$defs/author" },
+        "created_at": { "$ref": "#/$defs/isoTs" },
+        "commit":     { "type": ["string","null"] },
+        "dirty":      { "type": "boolean" },
+        "anchor":     { "$ref": "#/$defs/anchor" }
+      }
+    },
+    {
+      "description": "thread.reanchored (detached) — marks a thread's anchor as detached because the quoted text no longer exists. Discriminated from the re-anchor variant by presence of 'detached' and absence of 'anchor'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","detached"],
+      "properties": {
+        "id":         { "$ref": "#/$defs/uuid" },
+        "version":    { "type": "integer", "const": 2 },
+        "type":       { "type": "string",  "const": "thread.reanchored" },
+        "thread_id":  { "$ref": "#/$defs/uuid" },
+        "author":     { "$ref": "#/$defs/author" },
+        "created_at": { "$ref": "#/$defs/isoTs" },
+        "commit":     { "type": ["string","null"] },
+        "dirty":      { "type": "boolean" },
+        "detached":   { "const": true }
+      }
+    },
+    {
+      "description": "thread.assigned — assigns a thread to a specific agent",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","version","type","thread_id","author","created_at","commit","dirty","agent"],
+      "properties": {
+        "id":         { "$ref": "#/$defs/uuid" },
+        "version":    { "type": "integer", "const": 2 },
+        "type":       { "type": "string",  "const": "thread.assigned" },
+        "thread_id":  { "$ref": "#/$defs/uuid" },
+        "author":     { "$ref": "#/$defs/author" },
+        "created_at": { "$ref": "#/$defs/isoTs" },
+        "commit":     { "type": ["string","null"] },
+        "dirty":      { "type": "boolean" },
+        "agent":      { "type": "string", "minLength": 1 }
+      }
     }
-  },
-  "definitions": {
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "UUID v4 in lowercase hex."
+    },
+    "isoTs": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+      "description": "ISO 8601 UTC timestamp, with or without sub-second precision (e.g. '2026-07-13T10:00:00.123Z'). V2 events include milliseconds; V1 timestamps may omit them."
+    },
+    "author": {
+      "description": "Author of an event: a human user or an AI agent.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "type": "string", "const": "human" },
+            "name": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind","model"],
+          "properties": {
+            "kind":     { "type": "string", "const": "ai" },
+            "model":    { "type": "string", "minLength": 1 },
+            "effort":   { "type": "string" },
+            "subagent": { "type": "string" }
+          }
+        }
+      ]
+    },
     "anchor": {
       "type": "object",
-      "required": ["quote", "line_hint", "char_offset"],
       "additionalProperties": false,
+      "required": ["quote","line_hint","char_offset"],
+      "description": "Text anchor — the exact quote and its approximate position in the document at the time the thread was opened.",
       "properties": {
-        "quote": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Exact text selected at the time the comment was created. Used to re-anchor the comment if the document is edited."
-        },
-        "line_hint": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Line number at the time of creation (informational; used as disambiguation when quote appears multiple times)."
-        },
-        "char_offset": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Character offset from the start of the file at the time of creation (informational; preferred disambiguation over line_hint)."
+        "quote":       { "type": "string",  "minLength": 1, "description": "Exact text selected at the time the comment was created. Used to re-anchor if the document is edited." },
+        "line_hint":   { "type": "integer", "minimum": 0,   "description": "Line number at the time of creation (informational; used as disambiguation when quote appears multiple times)." },
+        "char_offset": { "type": "integer", "minimum": 0,   "description": "Character offset from start of file at the time of creation (preferred disambiguation over line_hint)." }
+      }
+    },
+    "commentType": {
+      "type": "string",
+      "enum": ["edita","sugerencia","pregunta","verifica","nota","referencia","supuesto"],
+      "description": "Semantic type of the review comment. Accionables (lifecycle open→resolved): edita, sugerencia, pregunta, verifica. Anotaciones (durable while anchor exists): nota, referencia, supuesto."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["alta","media","baja"],
+      "description": "Confidence level for a verifica or supuesto comment."
+    },
+    "refs": {
+      "type": "array",
+      "description": "Structured references attached to a referencia comment.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "url":   { "type": "string" },
+          "note":  { "type": "string" }
         }
       }
     },
-    "comment": {
+    "v1Sidecar": {
+      "description": "Legacy V1 sidecar format — NON-NORMATIVE REFERENCE ONLY, not part of the oneOf. A single JSON file per document at <git-root>/.ai/review/<doc-path>.json, containing a flat array of comments. Discriminated from V2 events by version:1. Comments are migrated to thread.opened events (one per comment) during lazy V2 migration.",
       "type": "object",
-      "required": ["id", "anchor", "type", "body", "status", "created_at", "updated_at"],
+      "required": ["version","file","comments"],
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-          "description": "UUID v4 unique identifier for this comment."
-        },
-        "anchor": {
-          "$ref": "#/definitions/anchor"
-        },
-        "type": {
-          "type": "string",
-          "enum": ["edita", "sugerencia", "pregunta", "verifica", "nota"],
-          "description": "Semantic type of the comment."
-        },
-        "agent": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Optional routing hint: name of the agent or subagent that should handle this comment in an orchestrated run. A standalone agent treats it as context."
-        },
-        "body": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Full text of the comment."
-        },
-        "status": {
-          "type": "string",
-          "enum": ["open", "resolved"],
-          "description": "Resolution status. 'open' means the comment still requires action."
-        },
-        "created_at": {
-          "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
-          "description": "Creation timestamp in ISO 8601 UTC (e.g. '2026-07-09T10:00:00Z')."
-        },
-        "updated_at": {
-          "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
-          "description": "Last-modified timestamp in ISO 8601 UTC."
+        "version":  { "type": "integer", "const": 1 },
+        "file":     { "type": "string",  "minLength": 1, "description": "Relative path from the git root to the reviewed document." },
+        "comments": {
+          "type": "array",
+          "description": "Ordered list of review comments.",
+          "items": {
+            "type": "object",
+            "required": ["id","anchor","type","body","status","created_at","updated_at"],
+            "additionalProperties": false,
+            "properties": {
+              "id":         { "$ref": "#/$defs/uuid" },
+              "anchor":     { "$ref": "#/$defs/anchor" },
+              "type":       { "type": "string", "enum": ["edita","sugerencia","pregunta","verifica","nota"] },
+              "agent":      { "type": "string", "minLength": 1 },
+              "body":       { "type": "string", "minLength": 1 },
+              "status":     { "type": "string", "enum": ["open","resolved"] },
+              "created_at": { "$ref": "#/$defs/isoTs" },
+              "updated_at": { "$ref": "#/$defs/isoTs" }
+            }
+          }
         }
       }
     }
