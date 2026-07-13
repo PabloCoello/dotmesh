@@ -58,7 +58,7 @@ function SystemSettings() {
   const [accent, setAccent] = React.useState("peach");
   const [transparency, setTransparency] = React.useState(true);
   const [contrast, setContrast] = React.useState(false);
-  const [sync, setSync] = React.useState({ Warp: true, "VS Code": true, Starship: false });
+  const [sync, setSync] = React.useState({ Ghostty: true, "VS Code": true, Starship: false });
 
   React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
@@ -67,7 +67,7 @@ function SystemSettings() {
     ["blue", "var(--syntax-blue)"], ["sage", "var(--syntax-sage)"], ["gold", "var(--syntax-gold)"], ["rose", "var(--syntax-rose)"],
   ];
   const tools = [
-    { name: "Warp", icon: "terminal", status: "synced" },
+    { name: "Ghostty", icon: "terminal", status: "synced" },
     { name: "VS Code", icon: "code", status: "synced" },
     { name: "Starship", icon: "chevron-right", status: "paused" },
   ];
