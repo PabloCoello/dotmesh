@@ -1,4 +1,4 @@
-/* Warp-style terminal window, re-skinned. Self-contained: uses
+/* Ghostty terminal window, dotmesh theme. Self-contained: uses
    design tokens via styles.css and the Prompt from Prompt.jsx. */
 
 const L = (t, c) => ({ t, c });
@@ -58,7 +58,7 @@ function Block({ block, dirty }) {
   );
 }
 
-function WarpWindow() {
+function GhosttyWindow() {
   const { Prompt } = window;
   const [blocks, setBlocks] = React.useState([
     { cmd: "make health", out: runCommand("make health") },
@@ -114,4 +114,4 @@ function WarpWindow() {
   );
 }
 
-Object.assign(window, { WarpWindow });
+Object.assign(window, { GhosttyWindow });
