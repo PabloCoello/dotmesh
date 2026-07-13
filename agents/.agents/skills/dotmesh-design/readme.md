@@ -17,7 +17,7 @@ no palettes or styles were lifted from the repo or from any other design system.
 The colour direction (monochrome + three seed accents) was specified by the owner.
 
 - **Dotfiles repo:** <https://github.com/PabloCoello/dotmesh> — macOS dotfiles
-  managing Warp (terminal), Zsh, Starship (prompt), VS Code, Git + delta, and the
+  managing Ghostty (terminal), Zsh, Starship (prompt), VS Code, Git + delta, and the
   AI CLIs OpenCode / Codex / Claude Code. Explore it to understand exactly which
   surfaces this system is meant to theme.
 
@@ -25,7 +25,7 @@ The tools that define the surfaces:
 
 | Surface | Tool | Where it shows up here |
 |---|---|---|
-| Terminal | Warp | `templates/terminal/` |
+| Terminal | Ghostty | `templates/terminal/` |
 | Prompt | Starship (powerline) | `templates/terminal/Prompt.jsx` |
 | Editor | VS Code (Fira Code) | `templates/editor/` |
 | System | macOS Settings | `templates/macos/` |
@@ -85,7 +85,7 @@ Avoid: `Let's get started! 🚀`, `Awesome — your theme is ready!!`.
   siblings (`--signal-*`) so they pass on white; on ink the pastels are used
   directly.
 - **Contrast / ergonomics (from the real implementation):** the shipped configs
-  (Warp, VS Code, Starship) surfaced three contrast needs that are now tokens, so
+  (Ghostty, VS Code, Starship) surfaced three contrast needs that are now tokens, so
   the system matches what actually reads on screen:
   - **Bright syntax tier (`--syntax-*-bright`).** The muted base tones sit calmly
     on ink but read soft when text must assert — bold markup, bright‑ANSI, a hot
@@ -209,7 +209,7 @@ Root manifest.
 - `templates/` — copyable starting folders (shown as **Templates** in consuming
   projects). Each is `templates/<slug>/` with an `@template` first line.
   - `deck/` — Deck personal (`Deck.dc.html`, deck‑stage slides).
-  - `terminal/` — Warp window + Starship prompt (`index.html`).
+  - `terminal/` — Ghostty window + Starship prompt (`index.html`).
   - `editor/` — VS Code with the dotmesh syntax theme (`index.html`).
   - `macos/` — System Settings · Appearance (`index.html`).
   - `tahoe/` — macOS Tahoe 26 desktop (`index.html`).

@@ -16,6 +16,6 @@ Where to look:
 - `tokens/` — colours (with `.theme-dark` scope), type, spacing, elevation.
 - `guidelines/` — foundation specimen cards.
 - `components/` — Button, Badge, Card, Kbd, Input, Switch, Tabs (consume via `window.DotmeshDesignSystem_512187.<Name>` after loading the compiled `_ds_bundle.js`; each has a `.prompt.md`).
-- `templates/` — copyable starting folders: deck (`Deck.dc.html`), terminal (Warp + Starship), editor (VS Code theme), macos (System Settings), tahoe (Tahoe 26 desktop) — full-surface recreations consuming projects can copy and adapt.
+- `templates/` — copyable starting folders: deck (`Deck.dc.html`), terminal (Ghostty + Starship), editor (VS Code theme), macos (System Settings), tahoe (Tahoe 26 desktop) — full-surface recreations consuming projects can copy and adapt.
 
 If the user invokes this skill without any other guidance, ask them what they want to build or design, ask some questions, and act as an expert designer who outputs HTML artifacts _or_ production code, depending on the need. Keep copy sober and lowercase-leaning; no emoji.
