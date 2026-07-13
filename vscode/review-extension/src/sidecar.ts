@@ -167,6 +167,19 @@ export function utcTimestampMs(): string {
 }
 
 /**
+ * Valida que una cadena tenga forma de UUID (v4 canónico, 8-4-4-4-12 hex).
+ *
+ * Seguridad: los ids de evento y de tarea se usan como nombre de fichero
+ * (`<id>.json`) en writeEvent/writeBacklogTask. Un id que no sea un UUID —por
+ * ejemplo `../../.ssh/evil` copiado verbatim de un sidecar V1 hostil durante la
+ * migración— permitiría escapar del directorio de eventos. Todo id que se
+ * convierta en nombre de fichero pasa por esta guarda antes de tocar el disco.
+ */
+export function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/**
  * Orden total de eventos para la proyección (spec "Orden y causalidad").
  * - created_at ascendente por instante real: Date.parse compara correctamente
  *   incluso con precisión mixta ms / sin-ms (eventos nativos vs migrados de V1),
@@ -279,6 +292,11 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
 export function migrateV1(sidecar: Sidecar): EventEnvelope[] {
   const events: EventEnvelope[] = [];
   for (const c of sidecar.comments) {
+    // El id V1 se reutiliza como id/thread_id del thread.opened, y el id acaba
+    // como nombre de fichero en writeEvent. Un sidecar hostil podría traer un id
+    // con traversal; se descarta el comentario en vez de propagarlo (el fichero
+    // V1 se conserva intacto, así que no hay pérdida de dato irreversible).
+    if (!isUuid(c.id)) continue;
     const opened: EventEnvelope = {
       id: c.id,
       version: 2,
@@ -333,6 +351,34 @@ export async function getGitRoot(fromDir: string): Promise<string | null> {
 }
 
 /**
+ * Directorio de fallback para eventos V2 de documentos fuera de cualquier
+ * repo git: `~/.local/state/mesh-review/<sha256-de-ruta-absoluta>/`
+ * Análogo a fallbackSidecarPath pero devuelve un directorio, sin `.json`.
+ * Pura: node:path, node:os, node:crypto únicamente.
+ */
+export function fallbackEventDir(docAbsPath: string): string {
+  const hash = sha256hex(docAbsPath);
+  return path.join(os.homedir(), '.local', 'state', 'mesh-review', hash);
+}
+
+/**
+ * Obtiene el hash corto del commit HEAD mediante `git rev-parse --short HEAD`.
+ * Devuelve null si el directorio no está en un repo o si git falla.
+ */
+export async function getHeadSha(gitRoot: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['rev-parse', '--short', 'HEAD'],
+      { cwd: gitRoot }
+    );
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Comprueba si `.ai/review/` está ignorado según git check-ignore
  * (cubre tanto .gitignore como .git/info/exclude).
  * Ejecuta desde gitRoot.
@@ -351,15 +397,18 @@ export async function isAiReviewIgnored(gitRoot: string): Promise<boolean> {
 }
 
 /**
- * Añade `.ai/review/` a `.git/info/exclude` del repo.
- * No toca nunca `.gitignore`.
+ * Añade `entry` a `.git/info/exclude` del repo.
+ * No toca nunca `.gitignore`. Idempotente por entrada.
+ * Por defecto añade `.ai/review/`.
  */
-export async function addToGitExclude(gitRoot: string): Promise<void> {
+export async function addToGitExclude(gitRoot: string, entry: string = '.ai/review/'): Promise<void> {
   const excludePath = path.join(gitRoot, '.git', 'info', 'exclude');
   const existing = await readFile(excludePath, 'utf8').catch(() => '');
-  if (existing.includes('.ai/review/')) return;
-  const entry = '\n# mesh-review: comentarios de revisión (no versionar)\n.ai/review/\n';
-  await appendFile(excludePath, entry, 'utf8');
+  // Comparación por línea, no substring: un patrón más largo o un comentario que
+  // contenga `entry` como subcadena no debe suprimir la inserción de la entrada real.
+  if (existing.split('\n').some((line) => line.trim() === entry.trim())) return;
+  const block = '\n# mesh-review (no versionar)\n' + entry + '\n';
+  await appendFile(excludePath, block, 'utf8');
 }
 
 // ---------------------------------------------------------------------------
@@ -446,6 +495,12 @@ export async function readEvents(dir: string): Promise<EventEnvelope[]> {
  * Nombre: <event.id>.json. Sangría 2 espacios + salto de línea final.
  */
 export async function writeEvent(dir: string, event: EventEnvelope): Promise<void> {
+  // Guarda de path traversal: el id se convierte en nombre de fichero. Rechaza
+  // cualquier id que no sea un UUID (p. ej. copiado de un sidecar V1 hostil por
+  // migrateV1) antes de tocar el disco. Guarda central: protege a todo llamante.
+  if (!isUuid(event.id)) {
+    throw new Error(`mesh-review: id de evento inválido (no es UUID): ${event.id}`);
+  }
   await mkdir(dir, { recursive: true });
   await writeFile(
     path.join(dir, `${event.id}.json`),
@@ -459,6 +514,9 @@ export async function writeEvent(dir: string, event: EventEnvelope): Promise<voi
  * V1 = <gitRoot>/.ai/review/<docRelPath>.json
  * V2 = <gitRoot>/.ai/review/<docRelPath>  (directorio)
  * Devuelve true solo si el fichero V1 existe Y el directorio V2 NO existe.
+ *
+ * Invariante del llamante: `docRelPath` debe venir ya saneado y contenido en el
+ * git root (resolveEventDir lo valida antes de devolverlo). Aquí no se revalida.
  */
 export async function detectLegacy(gitRoot: string, docRelPath: string): Promise<boolean> {
   const v1File = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
@@ -500,6 +558,10 @@ export async function ensureBacklogDir(gitRoot: string): Promise<void> {
  * Sangría 2 espacios + salto de línea final.
  */
 export async function writeBacklogTask(gitRoot: string, task: BacklogTask): Promise<void> {
+  // Misma guarda de path traversal que writeEvent: task.id es el nombre de fichero.
+  if (!isUuid(task.id)) {
+    throw new Error(`mesh-review: id de tarea inválido (no es UUID): ${task.id}`);
+  }
   await ensureBacklogDir(gitRoot);
   await writeFile(
     path.join(gitRoot, '.ai', 'backlog', `${task.id}.json`),

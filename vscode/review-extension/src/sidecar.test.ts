@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat, chmod, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, chmod, writeFile, mkdir, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 
@@ -8,6 +8,8 @@ import {
   sha256hex,
   sidecarPathForDoc,
   fallbackSidecarPath,
+  fallbackEventDir,
+  isUuid,
   utcTimestamp,
   utcTimestampMs,
   getGitRoot,
@@ -309,6 +311,42 @@ test('addToGitExclude es idempotente: dos llamadas dejan una sola entrada', asyn
     const content = await readFile(excludePath, 'utf8');
     const occurrences = (content.match(/\.ai\/review\//g) || []).length;
     assert.strictEqual(occurrences, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('addToGitExclude es idempotente para .ai/backlog/: dos llamadas dejan una sola entrada', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-git-'));
+  try {
+    const gitDir = join(dir, '.git', 'info');
+    await mkdir(gitDir, { recursive: true });
+    const excludePath = join(gitDir, 'exclude');
+    await writeFile(excludePath, '', 'utf8');
+    await addToGitExclude(dir, '.ai/backlog/');
+    await addToGitExclude(dir, '.ai/backlog/');
+    const content = await readFile(excludePath, 'utf8');
+    const occurrences = (content.match(/\.ai\/backlog\//g) || []).length;
+    assert.strictEqual(occurrences, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('addToGitExclude entradas distintas son independientes: review y backlog coexisten', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-git-'));
+  try {
+    const gitDir = join(dir, '.git', 'info');
+    await mkdir(gitDir, { recursive: true });
+    const excludePath = join(gitDir, 'exclude');
+    await writeFile(excludePath, '', 'utf8');
+    await addToGitExclude(dir);                     // .ai/review/
+    await addToGitExclude(dir, '.ai/backlog/');      // .ai/backlog/
+    await addToGitExclude(dir);                     // idempotente
+    await addToGitExclude(dir, '.ai/backlog/');      // idempotente
+    const content = await readFile(excludePath, 'utf8');
+    assert.strictEqual((content.match(/\.ai\/review\//g) || []).length, 1);
+    assert.strictEqual((content.match(/\.ai\/backlog\//g) || []).length, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -731,4 +769,113 @@ test('writeBacklogTask escribe el fichero de tarea en .ai/backlog/<id>.json', as
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Gate F4 — guardas de path traversal (SEC#1/#2/#3) y cobertura (REV#4)
+// ---------------------------------------------------------------------------
+
+test('isUuid acepta un UUID canónico y rechaza traversal / cadena arbitraria', () => {
+  assert.ok(isUuid('11111111-1111-4111-8111-111111111111'));
+  assert.ok(!isUuid('../../.ssh/evil'));
+  assert.ok(!isUuid('no-es-un-uuid'));
+  assert.ok(!isUuid(''));
+  assert.ok(!isUuid('11111111-1111-4111-8111-111111111111/../x'));
+});
+
+test('writeEvent rechaza un id que no es UUID sin escribir ningún fichero', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-guard-'));
+  try {
+    const evil = makeOpened({ id: '../../escape', thread_id: '../../escape' });
+    await assert.rejects(() => writeEvent(dir, evil), /id de evento inválido/);
+    // El directorio de eventos queda vacío: nada escapó ni se escribió dentro.
+    const entries = await readdir(dir).catch(() => []);
+    assert.deepStrictEqual(entries, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('writeBacklogTask rechaza un task.id que no es UUID', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-review-guard-'));
+  try {
+    const task = {
+      id: '../../evil',
+      session: '2026-07-13 docs/prueba.md',
+      author: { kind: 'human' },
+      commit: null,
+      body: 'x',
+    } as unknown as BacklogTask;
+    await assert.rejects(() => writeBacklogTask(root, task), /id de tarea inválido/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('migrateV1 descarta comentarios con id no-UUID y conserva los válidos', () => {
+  const hostile: Sidecar = {
+    version: 1,
+    file: 'docs/prueba.md',
+    comments: [
+      {
+        id: '../../.ssh/authorized_keys',
+        anchor: { quote: 'x', line_hint: 1, char_offset: 0 },
+        type: 'nota',
+        body: 'hostil',
+        status: 'open',
+        created_at: '2026-07-13T09:00:00Z',
+        updated_at: '2026-07-13T09:00:00Z',
+      },
+      {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        anchor: { quote: 'y', line_hint: 2, char_offset: 0 },
+        type: 'nota',
+        body: 'válido',
+        status: 'open',
+        created_at: '2026-07-13T09:01:00Z',
+        updated_at: '2026-07-13T09:01:00Z',
+      },
+    ],
+  } as unknown as Sidecar;
+  const events = migrateV1(hostile);
+  const opened = events.filter((e) => e.type === 'thread.opened');
+  assert.strictEqual(opened.length, 1);
+  assert.strictEqual(opened[0].id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  // Ningún evento generado arrastra el id hostil (que sería nombre de fichero).
+  assert.ok(events.every((e) => e.id !== '../../.ssh/authorized_keys'));
+});
+
+test('addToGitExclude compara por línea: una subcadena en un comentario no suprime la entrada', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-git-'));
+  try {
+    const excludeDir = join(dir, '.git', 'info');
+    await mkdir(excludeDir, { recursive: true });
+    // Línea que contiene '.ai/review/' como subcadena pero NO es la entrada real.
+    await writeFile(
+      join(excludeDir, 'exclude'),
+      '# nota sobre .ai/review/ para el equipo\n',
+      'utf8'
+    );
+    await addToGitExclude(dir); // .ai/review/
+    const lines = (await readFile(join(excludeDir, 'exclude'), 'utf8'))
+      .split('\n')
+      .map((l) => l.trim());
+    assert.ok(
+      lines.includes('.ai/review/'),
+      'la entrada real debe añadirse pese a la subcadena en el comentario'
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('fallbackEventDir incluye el sha256 de la ruta absoluta y es un directorio', () => {
+  const docPath = '/home/user/docs/fuera-de-repo.md';
+  const expected = join(homedir(), '.local', 'state', 'mesh-review', sha256hex(docPath));
+  assert.strictEqual(fallbackEventDir(docPath), expected);
+  assert.ok(!fallbackEventDir(docPath).endsWith('.json')); // directorio, no fichero plano
+});
+
+test('fallbackEventDir: rutas distintas producen directorios distintos', () => {
+  assert.notStrictEqual(fallbackEventDir('/a/doc.md'), fallbackEventDir('/b/doc.md'));
 });

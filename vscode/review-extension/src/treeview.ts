@@ -1,71 +1,125 @@
 /**
- * treeview.ts — proveedor del TreeView lateral de revisión.
+ * treeview.ts — proveedor del TreeView lateral de revisión (modelo V2).
  *
- * Implementa ReviewTreeDataProvider (vscode.TreeDataProvider) con dos
- * niveles de árbol:
- *   - GroupItem:   nodo colapsable con la etiqueta de tipo
- *   - CommentItem: hoja con el comentario; dispara jumpToComment al hacer clic
+ * Árbol de tres niveles:
+ *   GroupItem   — grupo por tipo o estado ('resolved'/'detached')
+ *   ThreadItem  — hilo de revisión con su ancla y estado
+ *   MessageItem — mensaje individual dentro del hilo
  *
- * La lógica pura de agrupación y ordenación vive en treeview-utils.ts para
- * poder testearse directamente con node:test.
+ * La lógica pura de agrupación vive en treeview-utils.ts (groupByThread).
  */
 
 import * as vscode from 'vscode';
-import type { Comment } from './sidecar';
-import { groupCommentsByType, type CommentGroup } from './treeview-utils';
+import type { ThreadProjection, MessageProjection, CommentType } from './sidecar';
+import { groupByThread } from './treeview-utils';
 
 // ---------------------------------------------------------------------------
 // Tipos del árbol
 // ---------------------------------------------------------------------------
 
-export type ReviewTreeItem = GroupItem | CommentItem;
+export type ReviewTreeItem = GroupItem | ThreadItem | MessageItem;
 
-/** Nodo de grupo (edita / sugerencia / pregunta / verifica / nota / resueltos). */
+// ---------------------------------------------------------------------------
+// GroupItem — nodo raíz de grupo (nivel 1)
+// ---------------------------------------------------------------------------
+
+/** Nodo de grupo: un tipo de comentario, 'resolved' o 'detached'. */
 export class GroupItem extends vscode.TreeItem {
   readonly kind = 'group' as const;
 
-  constructor(public readonly group: CommentGroup) {
-    super(group.label, vscode.TreeItemCollapsibleState.Expanded);
+  constructor(
+    public readonly groupKey: CommentType | 'resolved' | 'detached',
+    label: string,
+    public readonly threads: ThreadProjection[]
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'group';
-    this.description = `(${group.comments.length})`;
-    if (group.type === 'resolved') {
+    this.description = `(${threads.length})`;
+    // Resueltos y archivados comienzan colapsados
+    if (groupKey === 'resolved' || groupKey === 'detached') {
       this.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
     }
   }
 }
 
-/** Hoja de comentario individual. */
-export class CommentItem extends vscode.TreeItem {
-  readonly kind = 'comment' as const;
+// ---------------------------------------------------------------------------
+// ThreadItem — hilo de revisión (nivel 2)
+// ---------------------------------------------------------------------------
 
-  constructor(public readonly comment: Comment) {
-    const shortBody =
-      comment.body.length > 52
-        ? comment.body.slice(0, 52) + '…'
-        : comment.body;
-    const label = `${comment.type} — ${shortBody}`;
-    super(label, vscode.TreeItemCollapsibleState.None);
+export class ThreadItem extends vscode.TreeItem {
+  readonly kind = 'thread' as const;
+  readonly thread_id: string;
 
-    this.contextValue = comment.status === 'resolved' ? 'resolvedComment' : 'openComment';
-    this.tooltip = comment.body;
-    this.description = `L${comment.anchor.line_hint + 1}`;
-
-    // Atenuado visual para resueltos: prefijo en description
-    if (comment.status === 'resolved') {
-      this.description = `[resuelto] L${comment.anchor.line_hint + 1}`;
-    }
-
-    // Icono codicon según estado
-    this.iconPath = new vscode.ThemeIcon(
-      comment.status === 'resolved' ? 'pass-filled' : 'comment'
+  constructor(public readonly thread: ThreadProjection) {
+    const firstMsg = thread.messages[0];
+    const bodyExcerpt = firstMsg
+      ? (firstMsg.body.length > 40 ? firstMsg.body.slice(0, 40) + '…' : firstMsg.body)
+      : '';
+    super(
+      `${thread.commentType} — ${bodyExcerpt}`,
+      vscode.TreeItemCollapsibleState.Collapsed
     );
 
-    // Comando de navegación al hacer clic
-    this.command = {
-      command: 'mesh-review.jumpToComment',
-      title: 'Ir al comentario',
-      arguments: [comment],
-    };
+    this.thread_id = thread.thread_id;
+
+    this.contextValue =
+      thread.status === 'resolved' ? 'resolvedThread' :
+      thread.status === 'detached' ? 'detachedThread' :
+      'openThread';
+
+    this.tooltip = firstMsg?.body ?? '';
+
+    const lineLabel =
+      'line_hint' in thread.anchor
+        ? `L${thread.anchor.line_hint + 1}`
+        : '(desanclado)';
+    this.description = thread.messages.length > 1
+      ? `${lineLabel}  (${thread.messages.length} msgs)`
+      : lineLabel;
+
+    this.iconPath = new vscode.ThemeIcon(
+      thread.status === 'resolved' ? 'pass-filled' :
+      thread.status === 'detached' ? 'debug-disconnect' :
+      'comment-discussion'
+    );
+
+    // Clic navega al ancla (solo si el hilo no está desanclado)
+    if ('line_hint' in thread.anchor) {
+      this.command = {
+        command: 'mesh-review.jumpToComment',
+        title: 'Ir al hilo',
+        arguments: [thread.anchor],
+      };
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// MessageItem — mensaje individual (nivel 3)
+// ---------------------------------------------------------------------------
+
+export class MessageItem extends vscode.TreeItem {
+  readonly kind = 'message' as const;
+  readonly messageId: string;
+
+  constructor(
+    public readonly threadId: string,
+    public readonly message: MessageProjection
+  ) {
+    const bodyExcerpt = message.body.length > 52
+      ? message.body.slice(0, 52) + '…'
+      : message.body;
+    super(bodyExcerpt, vscode.TreeItemCollapsibleState.None);
+
+    this.messageId = message.id;
+    this.contextValue = message.retracted ? 'retractedMessage' : 'message';
+    this.tooltip = message.body;
+    this.description = message.retracted
+      ? '[retirado]'
+      : message.author.kind === 'ai' ? '[IA]' : undefined;
+    this.iconPath = new vscode.ThemeIcon(
+      message.retracted ? 'circle-slash' : 'comment'
+    );
   }
 }
 
@@ -78,10 +132,9 @@ export class ReviewTreeDataProvider
 {
   private readonly _onDidChangeTreeData =
     new vscode.EventEmitter<ReviewTreeItem | undefined | null | void>();
-
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private _comments: Comment[] = [];
+  private _projections: ThreadProjection[] = [];
   private _docUri: vscode.Uri | undefined;
 
   // ---------------------------------------------------------------------------
@@ -89,16 +142,16 @@ export class ReviewTreeDataProvider
   // ---------------------------------------------------------------------------
 
   /**
-   * Actualiza los comentarios mostrados y dispara un refresco del árbol.
-   * Llamar tras cada mutación del sidecar y al cambiar de editor activo.
+   * Actualiza las proyecciones mostradas y dispara un refresco del árbol.
+   * Llamar tras cada escritura de evento y al cambiar de editor activo.
    */
-  update(comments: Comment[], docUri?: vscode.Uri): void {
-    this._comments = comments;
+  update(projections: ThreadProjection[], docUri?: vscode.Uri): void {
+    this._projections = projections;
     this._docUri = docUri;
     this._onDidChangeTreeData.fire();
   }
 
-  /** URI del documento cuyo sidecar está mostrándose actualmente. */
+  /** URI del documento cuyas proyecciones se muestran actualmente. */
   get docUri(): vscode.Uri | undefined {
     return this._docUri;
   }
@@ -113,16 +166,23 @@ export class ReviewTreeDataProvider
 
   getChildren(element?: ReviewTreeItem): ReviewTreeItem[] {
     if (!element) {
-      // Raíz: devuelve los nodos de grupo
-      const groups = groupCommentsByType(this._comments);
-      return groups.map(g => new GroupItem(g));
+      // Raíz: grupos por tipo/estado
+      return groupByThread(this._projections).map(
+        g => new GroupItem(g.key, g.label, g.threads)
+      );
     }
 
     if (element instanceof GroupItem) {
-      return element.group.comments.map(c => new CommentItem(c));
+      return element.threads.map(t => new ThreadItem(t));
     }
 
-    // CommentItem es hoja: sin hijos
+    if (element instanceof ThreadItem) {
+      return element.thread.messages.map(
+        m => new MessageItem(element.thread_id, m)
+      );
+    }
+
+    // MessageItem es hoja
     return [];
   }
 }
