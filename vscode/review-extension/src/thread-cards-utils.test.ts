@@ -12,6 +12,7 @@ import {
   buildCardsHtml,
   buildBulletStyles,
   partitionCardsByStatus,
+  isWebviewActionMessage,
   type CardViewModel,
 } from './thread-cards-utils.ts';
 import type { ThreadProjection, MessageProjection } from './sidecar.ts';
@@ -29,6 +30,7 @@ function makeMsg(
     author:     overrides.author ?? { kind: 'human' },
     created_at: overrides.created_at ?? '2026-07-13T10:00:00Z',
     retracted:  overrides.retracted ?? false,
+    commit:     overrides.commit ?? null,
   };
 }
 
@@ -36,13 +38,14 @@ function makeThread(
   overrides: Pick<ThreadProjection, 'commentType'> & Partial<ThreadProjection>
 ): ThreadProjection {
   return {
-    thread_id:  overrides.thread_id ?? 'thread-1',
-    commentType: overrides.commentType,
-    anchor:     overrides.anchor ?? { quote: 'texto', line_hint: 12, char_offset: 0 },
-    status:     overrides.status ?? 'open',
-    messages:   overrides.messages ?? [],
-    openedAt:   overrides.openedAt ?? '2026-07-13T10:00:00Z',
-    openedBy:   overrides.openedBy ?? { kind: 'human' },
+    thread_id:    overrides.thread_id ?? 'thread-1',
+    commentType:  overrides.commentType,
+    anchor:       overrides.anchor ?? { quote: 'texto', line_hint: 12, char_offset: 0 },
+    status:       overrides.status ?? 'open',
+    messages:     overrides.messages ?? [],
+    openedAt:     overrides.openedAt ?? '2026-07-13T10:00:00Z',
+    openedBy:     overrides.openedBy ?? { kind: 'human' },
+    openedCommit: overrides.openedCommit ?? null,
   };
 }
 
@@ -172,6 +175,75 @@ test('buildCardViewModels autor IA sin subagent ni model cae a fallback (evento 
 });
 
 // ---------------------------------------------------------------------------
+// buildCardViewModels — fixCommit y openCommit (Fase commit-por-comentario)
+// ---------------------------------------------------------------------------
+
+test('buildCardViewModels openCommit toma el valor de thread.openedCommit', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    openedCommit: 'base001',
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(card.openCommit, 'base001');
+});
+
+test('buildCardViewModels openCommit es null cuando openedCommit es null', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    openedCommit: null,
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(card.openCommit, null);
+});
+
+test('buildCardViewModels fixCommit toma el commit del último message.posted de IA no retractado', () => {
+  const thread = makeThread({
+    commentType: 'edita',
+    messages: [
+      makeMsg({ id: 'm1', body: 'comentario humano', author: { kind: 'human' }, commit: null }),
+      makeMsg({ id: 'm2', body: 'fix 1', author: { kind: 'ai', model: 'claude-sonnet' }, commit: 'sha0001' }),
+      makeMsg({ id: 'm3', body: 'fix 2', author: { kind: 'ai', model: 'claude-sonnet' }, commit: 'sha0002' }),
+    ],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(card.fixCommit, 'sha0002');
+});
+
+test('buildCardViewModels fixCommit ignora mensajes de IA retractados', () => {
+  const thread = makeThread({
+    commentType: 'edita',
+    messages: [
+      makeMsg({ id: 'm1', body: 'fix retractado', author: { kind: 'ai', model: 'claude-sonnet' }, commit: 'sha0003', retracted: true }),
+      makeMsg({ id: 'm2', body: 'fix activo', author: { kind: 'ai', model: 'claude-sonnet' }, commit: 'sha0004' }),
+    ],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(card.fixCommit, 'sha0004');
+});
+
+test('buildCardViewModels fixCommit es null cuando no hay mensajes de IA con commit', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({ id: 'm1', body: 'respuesta sin commit', author: { kind: 'ai', model: 'claude-sonnet' }, commit: null }),
+    ],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(card.fixCommit, null);
+});
+
+test('buildCardViewModels fixCommit es null cuando no hay mensajes de IA', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({ id: 'm1', body: 'solo humano', author: { kind: 'human' }, commit: null }),
+    ],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(card.fixCommit, null);
+});
+
+// ---------------------------------------------------------------------------
 // partitionCardsByStatus — cubos por estado
 // ---------------------------------------------------------------------------
 
@@ -182,9 +254,9 @@ test('partitionCardsByStatus con array vacío devuelve tres cubos vacíos', () =
 
 test('partitionCardsByStatus reparte correctamente los tres estados', () => {
   const cards: CardViewModel[] = [
-    { thread_id: 'o1', commentType: 'nota', lineLabel: 'L1', hasAnchor: true,  status: 'open',     messages: [] },
-    { thread_id: 'r1', commentType: 'nota', lineLabel: 'L2', hasAnchor: true,  status: 'resolved', messages: [] },
-    { thread_id: 'd1', commentType: 'nota', lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [] },
+    { thread_id: 'o1', commentType: 'nota', lineLabel: 'L1', hasAnchor: true,  status: 'open',     messages: [], fixCommit: null, openCommit: null },
+    { thread_id: 'r1', commentType: 'nota', lineLabel: 'L2', hasAnchor: true,  status: 'resolved', messages: [], fixCommit: null, openCommit: null },
+    { thread_id: 'd1', commentType: 'nota', lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [], fixCommit: null, openCommit: null },
   ];
   const { open, resolved, detached } = partitionCardsByStatus(cards);
   assert.equal(open.length, 1);
@@ -197,11 +269,11 @@ test('partitionCardsByStatus reparte correctamente los tres estados', () => {
 
 test('partitionCardsByStatus con hilos mixtos respeta el orden dentro de cada cubo', () => {
   const cards: CardViewModel[] = [
-    { thread_id: 'o1', commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open',     messages: [] },
-    { thread_id: 'r1', commentType: 'nota', lineLabel: 'L2', hasAnchor: true, status: 'resolved', messages: [] },
-    { thread_id: 'o2', commentType: 'nota', lineLabel: 'L3', hasAnchor: true, status: 'open',     messages: [] },
-    { thread_id: 'r2', commentType: 'nota', lineLabel: 'L4', hasAnchor: true, status: 'resolved', messages: [] },
-    { thread_id: 'd1', commentType: 'nota', lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [] },
+    { thread_id: 'o1', commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open',     messages: [], fixCommit: null, openCommit: null },
+    { thread_id: 'r1', commentType: 'nota', lineLabel: 'L2', hasAnchor: true, status: 'resolved', messages: [], fixCommit: null, openCommit: null },
+    { thread_id: 'o2', commentType: 'nota', lineLabel: 'L3', hasAnchor: true, status: 'open',     messages: [], fixCommit: null, openCommit: null },
+    { thread_id: 'r2', commentType: 'nota', lineLabel: 'L4', hasAnchor: true, status: 'resolved', messages: [], fixCommit: null, openCommit: null },
+    { thread_id: 'd1', commentType: 'nota', lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [], fixCommit: null, openCommit: null },
   ];
   const { open, resolved, detached } = partitionCardsByStatus(cards);
   assert.deepEqual(open.map(c => c.thread_id),     ['o1', 'o2']);
@@ -220,6 +292,8 @@ test('buildCardsHtml body con <script> sale escapado', () => {
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages: [
       { id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'peligro <script>alert(1)</script>' },
     ],
@@ -236,6 +310,8 @@ test('buildCardsHtml authorLabel con < sale escapado', () => {
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages: [
       { id: 'm1', authorLabel: 'claude<script>', dateLabel: '13 jul', body: 'ok' },
     ],
@@ -257,6 +333,8 @@ test('buildCardsHtml con una tarjeta contiene commentType y body', () => {
     lineLabel:   'L5',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages: [
       { id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'texto del body' },
     ],
@@ -273,6 +351,8 @@ test('buildCardsHtml colorea el bullet por clase de tipo (sin style inline)', ()
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -291,6 +371,8 @@ test('buildCardsHtml sección resolved presente cuando hay hilos resueltos', () 
     lineLabel:   'L3',
     hasAnchor:   true,
     status:      'resolved',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -311,6 +393,8 @@ test('buildCardsHtml sección resolved ausente cuando no hay hilos resueltos', (
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -327,6 +411,8 @@ test('buildCardsHtml sección detached presente cuando hay hilos desanclados', (
     lineLabel:   '(desanclado)',
     hasAnchor:   false,
     status:      'detached',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -347,6 +433,8 @@ test('buildCardsHtml data-message-id presente en cada mensaje', () => {
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages: [
       { id: 'msg-abc', authorLabel: 'humano', dateLabel: '13 jul', body: 'primero' },
       { id: 'msg-xyz', authorLabel: 'humano', dateLabel: '13 jul', body: 'segundo' },
@@ -364,6 +452,8 @@ test('buildCardsHtml botones de acción presentes en hilo abierto', () => {
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -380,6 +470,8 @@ test('buildCardsHtml botones de acción ausentes en hilo resuelto', () => {
     lineLabel:   'L2',
     hasAnchor:   true,
     status:      'resolved',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -396,6 +488,8 @@ test('buildCardsHtml botones de acción ausentes en hilo desanclado', () => {
     lineLabel:   '(desanclado)',
     hasAnchor:   false,
     status:      'detached',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -407,9 +501,9 @@ test('buildCardsHtml botones de acción ausentes en hilo desanclado', () => {
 
 test('buildCardsHtml no contiene atributos style inline', () => {
   const cards: CardViewModel[] = [
-    { thread_id: 'o1', commentType: 'nota',     lineLabel: 'L1', hasAnchor: true,  status: 'open',     messages: [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
-    { thread_id: 'r1', commentType: 'sugerencia', lineLabel: 'L2', hasAnchor: true, status: 'resolved', messages: [{ id: 'm2', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
-    { thread_id: 'd1', commentType: 'verifica',  lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [{ id: 'm3', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
+    { thread_id: 'o1', commentType: 'nota',       lineLabel: 'L1',            hasAnchor: true,  status: 'open',     fixCommit: null, openCommit: null, messages: [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
+    { thread_id: 'r1', commentType: 'sugerencia', lineLabel: 'L2',            hasAnchor: true,  status: 'resolved', fixCommit: null, openCommit: null, messages: [{ id: 'm2', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
+    { thread_id: 'd1', commentType: 'verifica',   lineLabel: '(desanclado)',  hasAnchor: false, status: 'detached', fixCommit: null, openCommit: null, messages: [{ id: 'm3', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
   ];
   const html = buildCardsHtml(cards);
   assert.ok(!html.includes(' style='), 'El HTML no debe contener atributos style inline (CSP con nonce)');
@@ -433,6 +527,8 @@ test('buildCardsHtml escapa comillas en thread_id (no rompe el atributo)', () =>
     lineLabel:   'L1',
     hasAnchor:   true,
     status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -447,8 +543,95 @@ test('buildCardsHtml tarjeta desanclada tiene data-has-anchor="false"', () => {
     lineLabel:   '(desanclado)',
     hasAnchor:   false,
     status:      'detached',
+    fixCommit:   null,
+    openCommit:  null,
     messages:    [],
   };
   const html = buildCardsHtml([card]);
   assert.ok(html.includes('data-has-anchor="false"'), `Debe tener data-has-anchor="false", obtenido: ${html}`);
+});
+
+// ---------------------------------------------------------------------------
+// buildCardsHtml — botón diff por fixCommit (Fase 3)
+// ---------------------------------------------------------------------------
+
+test('buildCardsHtml botón diff presente en hilo abierto con fixCommit !== null', () => {
+  const card: CardViewModel = {
+    thread_id:   'o-diff',
+    commentType: 'edita',
+    lineLabel:   'L5',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   'abc1234',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('data-action="diff"'), 'Debe incluir botón diff cuando fixCommit !== null');
+  assert.ok(html.includes('data-diff-mode="last"'), 'El botón diff debe iniciarse en modo last');
+});
+
+test('buildCardsHtml botón diff ausente en hilo abierto con fixCommit === null', () => {
+  const card: CardViewModel = {
+    thread_id:   'o-nodiff',
+    commentType: 'nota',
+    lineLabel:   'L6',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="diff"'), 'No debe incluir botón diff cuando fixCommit === null');
+});
+
+test('buildCardsHtml botón diff ausente en hilo resuelto aunque fixCommit !== null', () => {
+  const card: CardViewModel = {
+    thread_id:   'r-diff',
+    commentType: 'edita',
+    lineLabel:   'L7',
+    hasAnchor:   true,
+    status:      'resolved',
+    fixCommit:   'abc1234',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="diff"'), 'No debe incluir botón diff en hilos resueltos (sin acciones)');
+});
+
+// ---------------------------------------------------------------------------
+// isWebviewActionMessage — validación del tipo diff (Fase 3)
+// ---------------------------------------------------------------------------
+
+test('isWebviewActionMessage acepta diff válido con mode last', () => {
+  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'last' }));
+});
+
+test('isWebviewActionMessage acepta diff válido con mode range', () => {
+  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'range' }));
+});
+
+test('isWebviewActionMessage rechaza diff con mode inválido', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'full' }));
+});
+
+test('isWebviewActionMessage rechaza diff sin mode', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1' }));
+});
+
+test('isWebviewActionMessage rechaza diff sin thread_id', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', mode: 'last' }));
+});
+
+test('isWebviewActionMessage rechaza diff con thread_id vacío', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: '', mode: 'last' }));
+});
+
+test('isWebviewActionMessage sigue aceptando tipos existentes tras añadir diff', () => {
+  assert.ok(isWebviewActionMessage({ type: 'reply',   thread_id: 'tid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'resolve', thread_id: 'tid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'edit',    thread_id: 'tid-1', message_id: 'mid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'retract', thread_id: 'tid-1', message_id: 'mid-1' }));
 });

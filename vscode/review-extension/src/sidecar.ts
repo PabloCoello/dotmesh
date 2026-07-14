@@ -97,6 +97,7 @@ export interface MessageProjection {
   author: Author;
   created_at: string;
   retracted: boolean;
+  commit: string | null;  // SHA del fix; null si no hay commit asociado al mensaje
 }
 
 export interface ThreadProjection {
@@ -110,6 +111,7 @@ export interface ThreadProjection {
   messages: MessageProjection[];
   openedAt: string;
   openedBy: Author;
+  openedCommit: string | null;  // commit del thread.opened (base para rango acumulado)
 }
 
 /**
@@ -222,12 +224,14 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
         commentType: ev.commentType as CommentType,
         anchor: ev.anchor as Anchor,
         status: 'open',
+        openedCommit: ev.commit ?? null,
         messages: [{
           id: ev.id,
           body: ev.body as string,
           author: ev.author,
           created_at: ev.created_at,
           retracted: false,
+          commit: ev.commit ?? null,
         }],
         openedAt: ev.created_at,
         openedBy: ev.author,
@@ -251,6 +255,7 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
           author: ev.author,
           created_at: ev.created_at,
           retracted: false,
+          commit: ev.commit ?? null,
         });
         break;
       case 'message.revised': {

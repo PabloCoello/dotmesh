@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { rename } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 import {
   getGitRoot,
@@ -529,6 +533,147 @@ async function jumpToAnchorImpl(
 }
 
 // ---------------------------------------------------------------------------
+// openDiffImpl — vista diff del commit de fix de un hilo
+// ---------------------------------------------------------------------------
+
+/** Patrón de validación de SHA: hex de 7 a 40 caracteres. */
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+
+/**
+ * Abre la vista diff de VS Code para el commit de fix del hilo indicado.
+ *
+ * Seguridad:
+ * - thread_id y mode fueron validados por isWebviewActionMessage en el boundary del webview.
+ * - Los SHAs (fixCommit, openCommit) provienen de las proyecciones del event log en disco,
+ *   nunca del webview.
+ * - Si se usa el fallback (Opción B), se valida el SHA contra SHA_RE antes de pasarlo
+ *   a execFile con array de argumentos (sin interpolación de strings en shell).
+ * - relPath se deriva de gitRoot en el servidor; no viaja desde el webview.
+ *
+ * Estrategia de URI:
+ * - Opción A (preferida): git URI scheme via la extensión git de VS Code. Sin shell-out.
+ * - Opción B (fallback): git show <sha>:<path> + openTextDocument virtual.
+ */
+async function openDiffImpl(
+  threadId: string,
+  mode: 'last' | 'range',
+  cardsProvider: ThreadCardsViewProvider
+): Promise<void> {
+  const docUri = cardsProvider.docUri;
+  if (!docUri) return;
+
+  const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
+
+  if (!gitRoot) {
+    vscode.window.showInformationMessage(
+      'mesh-review: diff no disponible — el documento no está dentro de un repositorio git.'
+    );
+    return;
+  }
+
+  // Lee proyecciones desde disco para obtener los SHAs del hilo.
+  const projections = project(await readEvents(eventDir));
+  const thread = projections.find(t => t.thread_id === threadId);
+  if (!thread) return;
+
+  // Calcula fixCommit (último message.posted de IA con commit !== null) y openCommit.
+  const lastAiFix = thread.messages
+    .filter(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null)
+    .at(-1);
+  const fixCommit = lastAiFix?.commit ?? null;
+  if (fixCommit === null) return; // nada que mostrar — no-op silencioso
+
+  const openCommit = thread.openedCommit ?? null;
+
+  // Boundary de seguridad: fixCommit/openCommit vienen de proyecciones en .ai/review/,
+  // que el reviser y otras herramientas pueden escribir. Se validan aquí —antes del fork
+  // Opción A / Opción B— y no solo antes del shell-out del fallback, para que ningún ref
+  // no confiable llegue ni a la URI git ni a execFile.
+  if (!SHA_RE.test(fixCommit) || (openCommit !== null && !SHA_RE.test(openCommit))) {
+    vscode.window.showErrorMessage(
+      'mesh-review: SHA de commit no válido — no se puede abrir el diff.'
+    );
+    return;
+  }
+
+  // Determina los refs (revspec) a comparar.
+  // Modo last: diff del commit del fix (fixCommit^ .. fixCommit).
+  // Modo range: si openCommit está disponible, diff acumulado (openCommit .. fixCommit);
+  //             si no, fallback a last.
+  const refBefore: string =
+    mode === 'range' && openCommit !== null
+      ? openCommit
+      : `${fixCommit}^`;
+  const refAfter: string = fixCommit;
+
+  const absPath = path.join(gitRoot, docRelPath);
+  const relPathGit = docRelPath.replace(/\\/g, '/'); // git espera separadores Unix
+  const titulo = mode === 'range' && openCommit !== null
+    ? `${path.basename(docRelPath)} (${openCommit}..${fixCommit})`
+    : `${path.basename(docRelPath)} (${fixCommit}^ .. ${fixCommit})`;
+
+  // Resuelve cada revspec a un SHA concreto con rev-parse. Dos motivos:
+  //  - La extensión git de VS Code espera un hash en la URI, no un revspec como
+  //    `fixCommit^`; sin resolverlo, la Opción A no abre el editor.
+  //  - Si fixCommit es el primer commit del repo, `fixCommit^` no tiene padre:
+  //    rev-parse devuelve null y el lado "antes" queda vacío (fichero añadido).
+  // El input ya está saneado (SHA_RE arriba); `^{commit}` fuerza a resolver a commit
+  // y execFile pasa los args en array, sin shell.
+  const revParse = async (ref: string): Promise<string | null> => {
+    try {
+      const { stdout } = await execFileAsync(
+        'git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: gitRoot }
+      );
+      const sha = stdout.trim();
+      return SHA_RE.test(sha) ? sha : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const shaAfter = await revParse(refAfter);
+  if (shaAfter === null) {
+    vscode.window.showErrorMessage('mesh-review: no se pudo resolver el commit del fix.');
+    return;
+  }
+  const shaBefore = await revParse(refBefore); // null si no hay padre (primer commit)
+
+  // Opción A: git URI scheme (extensión git activa y con un "antes" resoluble).
+  // Opción B: fallback — git show + openTextDocument virtual (también cuando no hay padre).
+  const gitExt = vscode.extensions.getExtension('vscode.git');
+  if (gitExt?.isActive && shaBefore !== null) {
+    // Opción A — sin shell-out; la extensión git resuelve el esquema `git:`.
+    // El query lleva { path, ref } (formato que espera GitFileSystemProvider).
+    const gitUri = (ref: string) => vscode.Uri.from({
+      scheme: 'git',
+      path: absPath,
+      query: JSON.stringify({ path: absPath, ref }),
+    });
+    await vscode.commands.executeCommand('vscode.diff', gitUri(shaBefore), gitUri(shaAfter), titulo);
+  } else {
+    // Opción B — fallback con git show + documento virtual.
+    // shaBefore null → "antes" vacío (fichero añadido). Args en array, sin shell.
+    const showBlob = async (ref: string | null): Promise<string> => {
+      if (ref === null) return '';
+      try {
+        const { stdout } = await execFileAsync('git', ['show', `${ref}:${relPathGit}`], { cwd: gitRoot });
+        return stdout;
+      } catch {
+        return '';
+      }
+    };
+    const [contentBefore, contentAfter] = await Promise.all([showBlob(shaBefore), showBlob(shaAfter)]);
+
+    const [docBefore, docAfter] = await Promise.all([
+      vscode.workspace.openTextDocument({ content: contentBefore }),
+      vscode.workspace.openTextDocument({ content: contentAfter }),
+    ]);
+
+    await vscode.commands.executeCommand('vscode.diff', docBefore.uri, docAfter.uri, titulo);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // activate / deactivate
 // ---------------------------------------------------------------------------
 
@@ -589,6 +734,9 @@ export function activate(context: vscode.ExtensionContext): void {
           break;
         case 'retract':
           await retractMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider);
+          break;
+        case 'diff':
+          await openDiffImpl(msg.thread_id, msg.mode, cardsProvider);
           break;
       }
     } catch (err) {

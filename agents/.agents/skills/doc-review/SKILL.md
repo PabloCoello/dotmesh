@@ -105,8 +105,8 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 
 | Event type | Fold action |
 |---|---|
-| `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `messages: [{ id, body, author, created_at, retracted: false }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
-| `message.posted` | Appends `{ id, body, author, created_at, retracted: false }` to `messages`. |
+| `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
+| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. |
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
 | `thread.status-changed` | Sets `status` to `to` (`"open"` or `"resolved"`). |
@@ -132,6 +132,7 @@ ThreadProjection {
   messages       : MessageProjection[]   // [0] = opening text
   openedAt       : ISO timestamp
   openedBy       : Author
+  openedCommit   : string | null         // commit from thread.opened; base for range diff
 }
 
 MessageProjection {
@@ -140,8 +141,14 @@ MessageProjection {
   author     : Author
   created_at : ISO timestamp
   retracted  : boolean
+  commit     : string | null             // SHA of the fix associated with this message; null if none
 }
 ```
+
+Derived fields used by the card UI:
+
+- **`fixCommit`** (not stored in the projection itself; computed at view time): the `commit` value of the last non-retracted `message.posted` with `author.kind === "ai"` and `commit !== null`.
+- **`openCommit`**: `ThreadProjection.openedCommit`.
 
 ### Anchor resolution
 
@@ -170,37 +177,106 @@ Seven comment types in two classes:
 | `referencia` | anotación | `refs[]`: `{ title, url?, note? }` | Record the reference; link from the relevant document section if appropriate. |
 | `supuesto` | anotación | `confidence`: `alta`/`media`/`baja` | Acknowledge the assumption; flag in the report if it materially affects document claims. |
 
-**Accionables** follow an open → resolved lifecycle. **Anotaciones** are durable while their anchor exists; they are archived by transitioning to `"detached"` when the anchored text disappears, not by resolving them.
+**Accionables** follow an open → resolved lifecycle (resolved by the human, not by the agent during a review pass). **Anotaciones** are durable while their anchor exists; they are archived by transitioning to `"detached"` when the anchored text disappears, not by resolving them.
 
 ---
 
-## 4. Propose-then-apply cycle
+## 4. Preconditions
 
-```
-project → fan-out workers → reconcile → apply → synthesize
-```
+Check these before touching any file or running any git command:
 
-1. **Project.** Read and project the event directory to get the current `ThreadProjection[]`. Filter to threads with `status: "open"`.
-2. **Fan-out workers.** Delegate open threads to subagents based on routing (§6). Each worker reads the event directory, evaluates its assigned threads, and writes **new event files only** — proposing status changes, new messages, or re-anchors.
-3. **Reconcile.** The principal reviews all worker proposals, collapses near-duplicates (§5), and decides the final set of document edits.
-4. **Apply.** The principal applies edits to the **document body** serially. Workers never touch the document body directly.
-5. **Synthesize.** Emit the 5-part response (§7).
-
-**CRITICAL INVARIANT:** Workers only write event files into `.ai/review/<doc-path>/`. Edits to the document body are applied exclusively by the principal, serially. New responses, status changes, and anchor moves are written by **appending a new `<event_id>.json` file** — never by editing or deleting existing event files. The log is append-only.
+1. **Worktree must be clean.** Run `git status --porcelain`. If the output is non-empty, stop. Describe the dirty files to the user and do not proceed.
+2. **Document must be inside a git repository.** Run `git rev-parse --show-toplevel` from the document's directory. If git fails, stop and inform the user.
+3. **Must not be on the default branch.** Run `git branch --show-current`. Compare with `git symbolic-ref --short refs/remotes/origin/HEAD` (falls back to `git config init.defaultBranch`). If on the default branch, go to §5 before touching any file.
 
 ---
 
-## 5. Deduplication
+## 5. Branch management
 
-Before applying document edits, the principal reconciles worker proposals:
+If the current branch is the default branch, propose a work branch name and wait for the user's confirmation before creating it:
 
-- Two proposals targeting the same anchor with substantially the same change are collapsed into one.
-- Conflicting proposals on the same anchor are resolved by the principal (prefer the more specific or higher-confidence proposal; surface the conflict in the report if ambiguous).
-- Proposals from different threads on different anchors are applied independently in document order (`char_offset` ascending, `line_hint` as tiebreaker).
+- Derive the name from the document(s) in the pass: one document → its path slug; multiple documents → a short theme that describes them.
+- Prefix with `review/` and append the date: `review/<slug>-<YYYYMMDD>`. Examples: `review/informe-20260714`, `review/auditoria-docs-20260714`.
+- No LLM attribution in the branch name (dotmesh rule).
+- State the proposed name and stop. Wait for the user to confirm or adjust it. Only run `git checkout -b <name>` after explicit confirmation.
 
 ---
 
-## 6. Routing
+## 6. Pass flow
+
+### 6.1 Determine pass type
+
+Project the event log. Identify the pass type using the iteration detection criteria in §7:
+
+- **Initial pass:** open threads with no prior AI fix (no `message.posted` with `author.kind === "ai"` and `commit !== null`).
+- **Iteration pass:** open threads where the last non-retracted message is from a human, posted after the last AI fix message.
+
+The two types are not mutually exclusive per-thread, but a full iteration pass occurs when all open threads meet the iteration criteria. In practice, a mixed set (some initial, some iteration) is processed the same way — each thread follows §6.2.
+
+### 6.2 Actionable threads with a code change
+
+Process threads with `commentType` in `{edita, sugerencia, pregunta, verifica}` that require a document edit, **serially in ascending `char_offset` order**:
+
+1. Resolve the anchor against the current buffer (§2 — anchor resolution). If the anchor is unresolvable, skip to §6.4 (conflict).
+2. Apply the edit to the document body.
+3. Run `git commit -m "<type>(<short-anchor>): <description>"` including only the reviewed file. No LLM attribution in the commit message.
+4. Capture the short SHA: `git rev-parse --short HEAD`.
+5. Write a `message.posted` event with `commit = SHA` and `author.kind = "ai"`. Do **not** write `thread.status-changed`.
+6. Re-anchor any threads displaced by this edit (§6.5).
+
+### 6.3 Annotations
+
+For threads with `commentType` in `{nota, referencia, supuesto}`, write a `message.posted` with `commit = null`. Do not resolve. Annotations are durable and archived to `detached` only when their anchor text disappears, never during a review pass.
+
+### 6.4 Conflict handling
+
+If an anchor cannot be resolved after preceding edits:
+
+- Write a `message.posted` describing the conflict: what text was expected, what the buffer currently contains at that location.
+- `commit = null`. Do not resolve the thread. Do not skip silently.
+
+### 6.5 "Already done" case
+
+If a thread requests a change already applied by an earlier thread in this pass:
+
+- Write a `message.posted` identifying the earlier commit: e.g. "resuelto junto con `<sha>`".
+- Set `commit = <sha>` of that earlier commit (not a new commit). The card UI uses this SHA to show the relevant diff.
+- Do not create a new commit. Do not resolve the thread.
+
+### 6.6 Re-anchoring between edits
+
+After each commit, update the in-memory positions of all remaining threads before processing the next one:
+
+- Threads whose anchor text has shifted: write `thread.reanchored` with the updated `anchor`.
+- Threads whose anchor text has disappeared: write `thread.reanchored` with `detached: true`.
+- Always resolve anchors against the current buffer, not the original document.
+
+### 6.7 Propose-then-apply invariant
+
+The `reviser` subagent proposes changes by writing `message.posted` events with `commit: null`. The principal:
+
+1. Reads the proposal from the event log.
+2. Applies the edit to the document body.
+3. Creates the commit.
+4. Writes the confirmation `message.posted` with `commit = SHA`.
+
+The `reviser` never touches the document body and never runs git commands. The commit is always the principal's step, executed after applying the proposal.
+
+---
+
+## 7. Iteration detection
+
+A thread is in iteration state when all three conditions hold:
+
+- `status === "open"`
+- At least one `message.posted` with `author.kind === "ai"` and `commit !== null` exists in its messages (there has been at least one fix).
+- The last non-retracted message has `author.kind === "human"` and a `created_at` value strictly later than the `created_at` of the last AI `message.posted` with `commit !== null`.
+
+When all open threads meet this criterion, the pass is an iteration pass. The principal applies one new commit per thread on the same work branch, following the same §6 flow.
+
+---
+
+## 8. Routing
 
 Route open threads to subagents based on `assignee` from `thread.assigned` events (most recent wins), or fall back to the `commentType` and content of `messages[0]`:
 
@@ -217,13 +293,13 @@ The dotmesh subagent roster: `build`, `plan`, `review`, `security`, `editor`, `m
 
 ---
 
-## 7. Response contract
+## 9. Response contract
 
 Every review session produces a structured response with five parts:
 
 | # | Section | Required | Content |
 |---|---|---|---|
-| 1 | **Contexto** | always | Document path, number of open threads, git commit if available. |
+| 1 | **Contexto** | always | Document path, number of open threads, current branch, git commit range if available. |
 | 2 | **Alcance** | always | Which threads are addressed in this session (IDs and types). |
 | 3 | **Supuestos** | conditional | Non-obvious assumptions made during the review. Omit if none. |
 | 4 | **Tareas accesorias** | conditional | Work items identified that fall outside the review scope (e.g. TODOs, follow-up spikes). Each is persisted to `<git-root>/.ai/backlog/<id>.json` with fields `{ id, doc, session, author, commit, body }`. Omit if none. |
@@ -231,19 +307,27 @@ Every review session produces a structured response with five parts:
 
 Sections 1, 2, and 5 are always present. Sections 3 and 4 appear only when they have content.
 
-After processing each thread, also emit a one-line log entry:
+After processing each thread, emit a one-line log entry:
 
-> `[<thread_id prefix>]` \<type\> — \<what was done\>. Resolved / Left open.
+> `[<thread_id prefix>]` \<type\> — \<what was done\>. Commit: `<sha>` | No commit.
+
+Use `Commit: <sha>` when the thread produced a commit (including the "already done" case pointing to a previous SHA). Use `No commit` for annotations, conflicts, and unapplied suggestions.
 
 ---
 
-## 8. Tool requirements
+## 10. Tool requirements
 
 This skill uses only standard file and shell operations:
 
 | Operation | Tool |
 |---|---|
 | Discover git root | `git -C <dir> rev-parse --show-toplevel` |
+| Check worktree cleanliness | `git status --porcelain` |
+| Check current branch | `git branch --show-current` |
+| Check default branch | `git symbolic-ref --short refs/remotes/origin/HEAD` |
+| Create work branch | `git checkout -b <name>` (after user confirmation) |
+| Commit a single file | `git commit -m "<message>" -- <file>` |
+| Capture short SHA | `git rev-parse --short HEAD` |
 | Read/write event files | file read/write (JSON, 2-space indent, trailing newline) |
 | List event directory | directory listing filtered to `*.json` |
 | SHA-256 of path string | `printf '%s' '<path>' \| sha256sum \| awk '{print $1}'` |

@@ -10,44 +10,15 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
 import type { ThreadProjection } from './sidecar';
-import { buildCardViewModels, buildCardsHtml, buildBulletStyles } from './thread-cards-utils';
+import { buildCardViewModels, buildCardsHtml, buildBulletStyles, isWebviewActionMessage, type WebviewActionMessage } from './thread-cards-utils';
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
 // ---------------------------------------------------------------------------
 
-/**
- * Mensajes de acción que el webview envía al provider.
- * El slice 4 (extension.ts) registra el handler con setActionHandler.
- */
-export type WebviewActionMessage =
-  | { type: 'reply';   thread_id: string }
-  | { type: 'resolve'; thread_id: string }
-  | { type: 'edit';    thread_id: string; message_id: string }
-  | { type: 'retract'; thread_id: string; message_id: string };
-
-/**
- * Valida en runtime que un mensaje del webview es una acción bien formada.
- * `thread_id` debe ser un string no vacío en los cuatro tipos; `message_id`
- * lo mismo en edit/retract. No confía en el cast estático porque el mensaje
- * cruza el límite webview → extensión.
- */
-function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessage {
-  if (typeof msg !== 'object' || msg === null) return false;
-  const m = msg as Record<string, unknown>;
-  const hasThread = typeof m.thread_id === 'string' && m.thread_id.length > 0;
-  const hasMessage = typeof m.message_id === 'string' && m.message_id.length > 0;
-  switch (m.type) {
-    case 'reply':
-    case 'resolve':
-      return hasThread;
-    case 'edit':
-    case 'retract':
-      return hasThread && hasMessage;
-    default:
-      return false;
-  }
-}
+// WebviewActionMessage e isWebviewActionMessage viven en thread-cards-utils.ts
+// (sin importaciones de VS Code) para poder testearse con node:test.
+export type { WebviewActionMessage } from './thread-cards-utils';
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -84,6 +55,11 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
     // Recibe mensajes del webview: jump al ancla o acciones sobre hilos/mensajes
     webviewView.webview.onDidReceiveMessage(msg => {
       if (msg.type === 'jump') {
+        // Excepción deliberada al boundary isWebviewActionMessage: jump es solo-lectura.
+        // msg.thread_id se usa únicamente como clave de búsqueda en las proyecciones del
+        // servidor; el comando ejecuta thread.anchor (dato del servidor), nunca el payload
+        // del webview. Si el hilo no existe, no-op. No amplíes este handler para usar
+        // campos del webview sin pasarlo por isWebviewActionMessage.
         const thread = this._projections.find(t => t.thread_id === msg.thread_id);
         if (thread && 'line_hint' in thread.anchor) {
           vscode.commands.executeCommand('mesh-review.jumpToComment', thread.anchor);
@@ -247,6 +223,14 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
         const action = btn.dataset.action;
         const threadId = btn.dataset.threadId;
         const messageId = btn.dataset.messageId;
+        // Diff: lee el modo actual, lo envía y alterna el atributo para el próximo clic.
+        // El SHA del fix se resuelve en extension.ts desde el event log, no desde el DOM.
+        if (action === 'diff') {
+          const mode = btn.dataset.diffMode || 'last';
+          btn.dataset.diffMode = mode === 'last' ? 'range' : 'last';
+          vscode.postMessage({ type: 'diff', thread_id: threadId, mode });
+          return;
+        }
         const msg = { type: action, thread_id: threadId };
         if (action === 'edit' || action === 'retract') {
           msg.message_id = messageId;
