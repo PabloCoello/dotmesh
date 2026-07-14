@@ -316,6 +316,26 @@ test('escapeHtml no modifica texto sin caracteres especiales', () => {
   assert.strictEqual(escapeHtml(plain), plain);
 });
 
+test('escapeHtml escapa comillas dobles a &quot; (seguro en atributos)', () => {
+  // Sin esto, un valor interpolado en data-thread-id="…" podría romper el
+  // atributo e inyectar atributos adicionales.
+  assert.strictEqual(escapeHtml('x"y'), 'x&quot;y');
+});
+
+test('escapeHtml escapa comillas simples a &#39;', () => {
+  assert.strictEqual(escapeHtml("x'y"), 'x&#39;y');
+});
+
+test('typeColor con clave contaminante (__proto__) cae al fallback', () => {
+  // Con un objeto de prototipo normal, TYPE_COLORS['__proto__'] devolvería
+  // Object.prototype (truthy) y se saltaría el guard ?? FALLBACK_COLOR.
+  assert.strictEqual(typeColor('__proto__'), typeColor('tipo-inexistente-zzz'));
+});
+
+test('typeColor con clave "constructor" cae al fallback', () => {
+  assert.strictEqual(typeColor('constructor'), typeColor('tipo-inexistente-zzz'));
+});
+
 // ---------------------------------------------------------------------------
 // buildHoverMessage — escape de contenido de usuario
 // ---------------------------------------------------------------------------
@@ -384,4 +404,20 @@ test('todos los <span style="color:...;"> del hover terminan el color con punto 
       );
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// TYPE_COLORS — tipos V2 añadidos en F3a
+// ---------------------------------------------------------------------------
+
+test('typeColor devuelve sage #A8CBA0 para referencia', () => {
+  assert.strictEqual(typeColor('referencia'), '#A8CBA0');
+});
+
+test('typeColor devuelve lilac #CBAACB para supuesto', () => {
+  assert.strictEqual(typeColor('supuesto'), '#CBAACB');
+});
+
+test('TYPE_COLORS tiene exactamente 7 entradas', () => {
+  assert.strictEqual(Object.keys(TYPE_COLORS).length, 7);
 });
