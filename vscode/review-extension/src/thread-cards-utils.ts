@@ -31,6 +31,7 @@ export interface CardViewModel {
   commentType: string;     // CommentType — determina también la clase de color del bullet
   lineLabel: string;       // "L12" | "(desanclado)"
   hasAnchor: boolean;      // true si 'line_hint' in thread.anchor
+  status: 'open' | 'resolved' | 'detached'; // estado del hilo
   messages: CardMessage[]; // solo mensajes no retractados
 }
 
@@ -73,9 +74,32 @@ export function buildCardViewModels(
       commentType: thread.commentType,
       lineLabel,
       hasAnchor,
+      status: thread.status,
       messages,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// partitionCardsByStatus
+// ---------------------------------------------------------------------------
+
+/**
+ * Divide un array de CardViewModel en tres cubos según el estado del hilo.
+ * Función pura, sin importaciones de VS Code.
+ */
+export function partitionCardsByStatus(
+  cards: CardViewModel[]
+): { open: CardViewModel[]; resolved: CardViewModel[]; detached: CardViewModel[] } {
+  const open: CardViewModel[] = [];
+  const resolved: CardViewModel[] = [];
+  const detached: CardViewModel[] = [];
+  for (const card of cards) {
+    if (card.status === 'open') open.push(card);
+    else if (card.status === 'resolved') resolved.push(card);
+    else detached.push(card);
+  }
+  return { open, resolved, detached };
 }
 
 // ---------------------------------------------------------------------------

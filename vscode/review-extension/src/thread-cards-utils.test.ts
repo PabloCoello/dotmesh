@@ -11,6 +11,7 @@ import {
   buildCardViewModels,
   buildCardsHtml,
   buildBulletStyles,
+  partitionCardsByStatus,
   type CardViewModel,
 } from './thread-cards-utils.ts';
 import type { ThreadProjection, MessageProjection } from './sidecar.ts';
@@ -171,6 +172,44 @@ test('buildCardViewModels autor IA sin subagent ni model cae a fallback (evento 
 });
 
 // ---------------------------------------------------------------------------
+// partitionCardsByStatus — cubos por estado
+// ---------------------------------------------------------------------------
+
+test('partitionCardsByStatus con array vacío devuelve tres cubos vacíos', () => {
+  const result = partitionCardsByStatus([]);
+  assert.deepEqual(result, { open: [], resolved: [], detached: [] });
+});
+
+test('partitionCardsByStatus reparte correctamente los tres estados', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: 'o1', commentType: 'nota', lineLabel: 'L1', hasAnchor: true,  status: 'open',     messages: [] },
+    { thread_id: 'r1', commentType: 'nota', lineLabel: 'L2', hasAnchor: true,  status: 'resolved', messages: [] },
+    { thread_id: 'd1', commentType: 'nota', lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [] },
+  ];
+  const { open, resolved, detached } = partitionCardsByStatus(cards);
+  assert.equal(open.length, 1);
+  assert.equal(open[0].thread_id, 'o1');
+  assert.equal(resolved.length, 1);
+  assert.equal(resolved[0].thread_id, 'r1');
+  assert.equal(detached.length, 1);
+  assert.equal(detached[0].thread_id, 'd1');
+});
+
+test('partitionCardsByStatus con hilos mixtos respeta el orden dentro de cada cubo', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: 'o1', commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open',     messages: [] },
+    { thread_id: 'r1', commentType: 'nota', lineLabel: 'L2', hasAnchor: true, status: 'resolved', messages: [] },
+    { thread_id: 'o2', commentType: 'nota', lineLabel: 'L3', hasAnchor: true, status: 'open',     messages: [] },
+    { thread_id: 'r2', commentType: 'nota', lineLabel: 'L4', hasAnchor: true, status: 'resolved', messages: [] },
+    { thread_id: 'd1', commentType: 'nota', lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [] },
+  ];
+  const { open, resolved, detached } = partitionCardsByStatus(cards);
+  assert.deepEqual(open.map(c => c.thread_id),     ['o1', 'o2']);
+  assert.deepEqual(resolved.map(c => c.thread_id), ['r1', 'r2']);
+  assert.deepEqual(detached.map(c => c.thread_id), ['d1']);
+});
+
+// ---------------------------------------------------------------------------
 // buildCardsHtml — escapado y estructura
 // ---------------------------------------------------------------------------
 
@@ -180,6 +219,7 @@ test('buildCardsHtml body con <script> sale escapado', () => {
     commentType: 'nota',
     lineLabel:   'L1',
     hasAnchor:   true,
+    status:      'open',
     messages: [
       { id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'peligro <script>alert(1)</script>' },
     ],
@@ -195,6 +235,7 @@ test('buildCardsHtml authorLabel con < sale escapado', () => {
     commentType: 'nota',
     lineLabel:   'L1',
     hasAnchor:   true,
+    status:      'open',
     messages: [
       { id: 'm1', authorLabel: 'claude<script>', dateLabel: '13 jul', body: 'ok' },
     ],
@@ -215,6 +256,7 @@ test('buildCardsHtml con una tarjeta contiene commentType y body', () => {
     commentType: 'sugerencia',
     lineLabel:   'L5',
     hasAnchor:   true,
+    status:      'open',
     messages: [
       { id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'texto del body' },
     ],
@@ -230,6 +272,7 @@ test('buildCardsHtml colorea el bullet por clase de tipo (sin style inline)', ()
     commentType: 'supuesto',
     lineLabel:   'L1',
     hasAnchor:   true,
+    status:      'open',
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -254,6 +297,7 @@ test('buildCardsHtml escapa comillas en thread_id (no rompe el atributo)', () =>
     commentType: 'nota',
     lineLabel:   'L1',
     hasAnchor:   true,
+    status:      'open',
     messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
   };
   const html = buildCardsHtml([card]);
@@ -267,6 +311,7 @@ test('buildCardsHtml tarjeta desanclada tiene data-has-anchor="false"', () => {
     commentType: 'nota',
     lineLabel:   '(desanclado)',
     hasAnchor:   false,
+    status:      'detached',
     messages:    [],
   };
   const html = buildCardsHtml([card]);
