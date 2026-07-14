@@ -20,7 +20,7 @@ import {
 /** Un mensaje individual dentro de una tarjeta (ya sin retractados). */
 export interface CardMessage {
   id: string;
-  authorLabel: string; // "humano" | author.name | subagent | model
+  authorLabel: string; // "humano" | author.name | "subagent · model" | model | "modelo desconocido"
   dateLabel: string;   // formatTimestamp(created_at)
   body: string;        // texto sin escapar; escapeHtml se aplica en buildCardsHtml
 }
@@ -63,7 +63,7 @@ export function buildCardViewModels(
       .filter(m => m.retracted !== true)
       .map(m => {
         const authorLabel = m.author.kind === 'ai'
-          ? (m.author.subagent ?? m.author.model ?? 'modelo desconocido')
+          ? ([m.author.subagent, m.author.model].filter(Boolean).join(' · ') || 'modelo desconocido')
           : (m.author.name ?? 'humano');
         const dateLabel = formatTimestamp(m.created_at, locale ?? 'es-ES', timeZone);
         return { id: m.id, authorLabel, dateLabel, body: m.body };

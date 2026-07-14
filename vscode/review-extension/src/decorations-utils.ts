@@ -180,7 +180,7 @@ export function buildHoverMessage(
  *   2. Separador: línea de 40 «─» en el color del tipo.
  *   3. Un bloque por mensaje no retractado. Cada bloque abre con una
  *      meta-línea tenue «── autor · fecha» y, debajo, el cuerpo escapado:
- *        - autor IA: subagent ?? model.
+ *        - autor IA: subagent · model (o solo el que esté presente).
  *        - autor humano: name ?? «humano».
  *      La meta-línea gris hace de separador visible entre mensajes, de modo
  *      que un salto de línea dentro de un cuerpo no se confunde con el inicio
@@ -208,7 +208,7 @@ export function buildThreadHover(
 
   const blocks = activeMessages.map(msg => {
     const label = msg.author.kind === 'ai'
-      ? (msg.author.subagent ?? msg.author.model ?? 'modelo desconocido')
+      ? ([msg.author.subagent, msg.author.model].filter(Boolean).join(' · ') || 'modelo desconocido')
       : (msg.author.name ?? 'humano');
     // formatTimestamp devuelve created_at crudo si no parsea, así que la fecha
     // también se escapa antes de interpolarla en el HTML del span.

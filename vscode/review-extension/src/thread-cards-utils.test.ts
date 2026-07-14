@@ -104,7 +104,7 @@ test('buildCardViewModels filtra mensajes retractados', () => {
   assert.equal(card.messages[0].body, 'visible');
 });
 
-test('buildCardViewModels autor IA con subagent: authorLabel=subagent', () => {
+test('buildCardViewModels autor IA con subagent y model: authorLabel=subagent · model', () => {
   const thread = makeThread({
     commentType: 'verifica',
     messages: [
@@ -115,7 +115,7 @@ test('buildCardViewModels autor IA con subagent: authorLabel=subagent', () => {
     ],
   });
   const [card] = buildCardViewModels([thread]);
-  assert.equal(card.messages[0].authorLabel, 'reviser');
+  assert.equal(card.messages[0].authorLabel, 'reviser · claude-sonnet');
 });
 
 test('buildCardViewModels autor IA sin subagent: authorLabel=model', () => {
