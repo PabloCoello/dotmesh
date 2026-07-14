@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
   buildLabelText,
   typeColor,
+  hexToRgba,
   formatTimestamp,
   escapeHtml,
   buildHoverMessage,
@@ -420,4 +421,37 @@ test('typeColor devuelve lilac #CBAACB para supuesto', () => {
 
 test('TYPE_COLORS tiene exactamente 7 entradas', () => {
   assert.strictEqual(Object.keys(TYPE_COLORS).length, 7);
+});
+
+// ---------------------------------------------------------------------------
+// hexToRgba
+// ---------------------------------------------------------------------------
+
+test('hexToRgba convierte «#rrggbb» a rgba con el alpha dado', () => {
+  assert.strictEqual(hexToRgba('#E59A9A', 0.18), 'rgba(229, 154, 154, 0.18)');
+});
+
+test('hexToRgba maneja negro y blanco puros', () => {
+  assert.strictEqual(hexToRgba('#000000', 1), 'rgba(0, 0, 0, 1)');
+  assert.strictEqual(hexToRgba('#FFFFFF', 0.5), 'rgba(255, 255, 255, 0.5)');
+});
+
+test('hexToRgba acepta hex en minúsculas', () => {
+  assert.strictEqual(hexToRgba('#6cb6b0', 0.18), 'rgba(108, 182, 176, 0.18)');
+});
+
+test('hexToRgba devuelve la entrada tal cual si no es «#rrggbb»', () => {
+  // Malformado (3 dígitos, sin #, con alpha ya incluido): se aplica opaco en
+  // vez de romper la decoración.
+  assert.strictEqual(hexToRgba('#fff', 0.18), '#fff');
+  assert.strictEqual(hexToRgba('rojo', 0.18), 'rojo');
+});
+
+test('hexToRgba compone con typeColor para cada tipo reconocido', () => {
+  // El backgroundColor real sale de hexToRgba(typeColor(tipo), RANGE_ALPHA);
+  // verifica que la cadena de composición produce rgba() válido, no el hex crudo.
+  for (const tipo of Object.keys(TYPE_COLORS)) {
+    const rgba = hexToRgba(typeColor(tipo), 0.18);
+    assert.ok(rgba.startsWith('rgba('), `Esperado rgba() para ${tipo}, obtenido: ${rgba}`);
+  }
 });
