@@ -12,6 +12,7 @@ import {
   detectLegacy,
   fallbackEventDir,
   getHeadSha,
+  getUserName,
   ensureFallbackDir,
   addToGitExclude,
   isAiReviewIgnored,
@@ -184,6 +185,22 @@ async function handleLegacyMigration(
 
 
 // ---------------------------------------------------------------------------
+// Autor humano — resuelve el nombre desde git config user.name
+// ---------------------------------------------------------------------------
+
+/**
+ * Construye el campo author para un evento humano.
+ * Ejecuta `git config user.name` desde `cwd`; si falla o está vacío,
+ * devuelve { kind: 'human' } sin el campo name.
+ */
+async function humanAuthor(
+  cwd: string
+): Promise<{ kind: 'human'; name?: string }> {
+  const name = await getUserName(cwd);
+  return { kind: 'human', name };
+}
+
+// ---------------------------------------------------------------------------
 // Implementación de comandos
 // ---------------------------------------------------------------------------
 
@@ -263,7 +280,7 @@ async function addCommentImpl(
     version: 2,
     type: 'thread.opened',
     thread_id: id,
-    author: { kind: 'human' },
+    author: await humanAuthor(gitRoot ?? path.dirname(docFsPath)),
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: editor.document.isDirty,
@@ -313,7 +330,7 @@ async function replyToThreadImpl(
     version: 2,
     type: 'message.posted',
     thread_id: threadId,
-    author: { kind: 'human' },
+    author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,
@@ -352,7 +369,7 @@ async function retractMessageImpl(
     version: 2,
     type: 'message.retracted',
     thread_id: threadId,
-    author: { kind: 'human' },
+    author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,
@@ -388,7 +405,7 @@ async function resolveThreadImpl(
     version: 2,
     type: 'thread.status-changed',
     thread_id: threadId,
-    author: { kind: 'human' },
+    author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,
@@ -449,7 +466,7 @@ async function editMessageImpl(
     version: 2,
     type: 'message.revised',
     thread_id: threadId,
-    author: { kind: 'human' },
+    author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,

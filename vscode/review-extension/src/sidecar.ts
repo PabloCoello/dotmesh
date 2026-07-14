@@ -379,6 +379,24 @@ export async function getHeadSha(gitRoot: string): Promise<string | null> {
 }
 
 /**
+ * Obtiene el nombre del autor de git (`git config user.name`) desde `fromDir`.
+ * Devuelve undefined si el directorio no está en un repo, si user.name no está
+ * configurado o si git falla por cualquier razón.
+ */
+export async function getUserName(fromDir: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['config', 'user.name'],
+      { cwd: fromDir }
+    );
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Comprueba si `.ai/review/` está ignorado según git check-ignore
  * (cubre tanto .gitignore como .git/info/exclude).
  * Ejecuta desde gitRoot.
