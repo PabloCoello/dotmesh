@@ -596,14 +596,10 @@ async function openDiffImpl(
     return;
   }
 
-  // Determina los refs a comparar.
+  // Determina los refs (revspec) a comparar.
   // Modo last: diff del commit del fix (fixCommit^ .. fixCommit).
   // Modo range: si openCommit está disponible, diff acumulado (openCommit .. fixCommit);
   //             si no, fallback a last.
-  // Nota: si fixCommit es el primer commit del repo no tiene padre; `fixCommit^` no
-  //       resuelve y el lado "antes" queda vacío (git show devuelve '' en el fallback;
-  //       la extensión git resuelve el árbol vacío). Aceptable: el diff muestra el
-  //       fichero como añadido.
   const refBefore: string =
     mode === 'range' && openCommit !== null
       ? openCommit
@@ -611,38 +607,62 @@ async function openDiffImpl(
   const refAfter: string = fixCommit;
 
   const absPath = path.join(gitRoot, docRelPath);
-  const relPathGit = docRelPath.replace(/\\/g, '/'); // git show espera separadores Unix
+  const relPathGit = docRelPath.replace(/\\/g, '/'); // git espera separadores Unix
   const titulo = mode === 'range' && openCommit !== null
     ? `${path.basename(docRelPath)} (${openCommit}..${fixCommit})`
     : `${path.basename(docRelPath)} (${fixCommit}^ .. ${fixCommit})`;
 
-  // Opción A: git URI scheme (extensión git de VS Code activa).
-  // Opción B: fallback — git show + openTextDocument virtual.
+  // Resuelve cada revspec a un SHA concreto con rev-parse. Dos motivos:
+  //  - La extensión git de VS Code espera un hash en la URI, no un revspec como
+  //    `fixCommit^`; sin resolverlo, la Opción A no abre el editor.
+  //  - Si fixCommit es el primer commit del repo, `fixCommit^` no tiene padre:
+  //    rev-parse devuelve null y el lado "antes" queda vacío (fichero añadido).
+  // El input ya está saneado (SHA_RE arriba); `^{commit}` fuerza a resolver a commit
+  // y execFile pasa los args en array, sin shell.
+  const revParse = async (ref: string): Promise<string | null> => {
+    try {
+      const { stdout } = await execFileAsync(
+        'git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: gitRoot }
+      );
+      const sha = stdout.trim();
+      return SHA_RE.test(sha) ? sha : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const shaAfter = await revParse(refAfter);
+  if (shaAfter === null) {
+    vscode.window.showErrorMessage('mesh-review: no se pudo resolver el commit del fix.');
+    return;
+  }
+  const shaBefore = await revParse(refBefore); // null si no hay padre (primer commit)
+
+  // Opción A: git URI scheme (extensión git activa y con un "antes" resoluble).
+  // Opción B: fallback — git show + openTextDocument virtual (también cuando no hay padre).
   const gitExt = vscode.extensions.getExtension('vscode.git');
-  if (gitExt?.isActive) {
-    // Opción A — sin shell-out; el esquema git lo resuelve la extensión git de VS Code.
-    const uriBefore = vscode.Uri.from({
+  if (gitExt?.isActive && shaBefore !== null) {
+    // Opción A — sin shell-out; la extensión git resuelve el esquema `git:`.
+    // El query lleva { path, ref } (formato que espera GitFileSystemProvider).
+    const gitUri = (ref: string) => vscode.Uri.from({
       scheme: 'git',
       path: absPath,
-      query: JSON.stringify({ ref: refBefore }),
+      query: JSON.stringify({ path: absPath, ref }),
     });
-    const uriAfter = vscode.Uri.from({
-      scheme: 'git',
-      path: absPath,
-      query: JSON.stringify({ ref: refAfter }),
-    });
-    await vscode.commands.executeCommand('vscode.diff', uriBefore, uriAfter, titulo);
+    await vscode.commands.executeCommand('vscode.diff', gitUri(shaBefore), gitUri(shaAfter), titulo);
   } else {
     // Opción B — fallback con git show + documento virtual.
-    // Los refs ya están validados arriba (SHA_RE); execFile con args en array, sin shell.
-    const [contentBefore, contentAfter] = await Promise.all([
-      execFileAsync('git', ['show', `${refBefore}:${relPathGit}`], { cwd: gitRoot })
-        .then(r => r.stdout)
-        .catch(() => ''),
-      execFileAsync('git', ['show', `${refAfter}:${relPathGit}`], { cwd: gitRoot })
-        .then(r => r.stdout)
-        .catch(() => ''),
-    ]);
+    // shaBefore null → "antes" vacío (fichero añadido). Args en array, sin shell.
+    const showBlob = async (ref: string | null): Promise<string> => {
+      if (ref === null) return '';
+      try {
+        const { stdout } = await execFileAsync('git', ['show', `${ref}:${relPathGit}`], { cwd: gitRoot });
+        return stdout;
+      } catch {
+        return '';
+      }
+    };
+    const [contentBefore, contentAfter] = await Promise.all([showBlob(shaBefore), showBlob(shaAfter)]);
 
     const [docBefore, docAfter] = await Promise.all([
       vscode.workspace.openTextDocument({ content: contentBefore }),
