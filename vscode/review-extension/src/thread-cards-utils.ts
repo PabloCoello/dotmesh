@@ -14,6 +14,52 @@ import {
 } from './decorations-utils.ts';
 
 // ---------------------------------------------------------------------------
+// WebviewActionMessage e isWebviewActionMessage
+// ---------------------------------------------------------------------------
+
+/**
+ * Mensajes de acción que el webview envía al provider.
+ * El slice 4 (extension.ts) registra el handler con setActionHandler.
+ *
+ * Vive aquí (sin importaciones de VS Code) para poder ser testeable con node:test
+ * y para que isWebviewActionMessage esté junto al tipo que valida.
+ */
+export type WebviewActionMessage =
+  | { type: 'reply';   thread_id: string }
+  | { type: 'resolve'; thread_id: string }
+  | { type: 'edit';    thread_id: string; message_id: string }
+  | { type: 'retract'; thread_id: string; message_id: string }
+  | { type: 'diff';    thread_id: string; mode: 'last' | 'range' };
+
+/**
+ * Valida en runtime que un mensaje del webview es una acción bien formada.
+ * Boundary de seguridad entre el contexto no privilegiado del webview y la extensión:
+ * ningún valor del webview cruza este límite sin pasar por aquí.
+ *
+ * - thread_id: string no vacío en los cinco tipos.
+ * - message_id: string no vacío en edit/retract.
+ * - mode: literal 'last' | 'range' en diff (no se interpola en comandos de shell).
+ */
+export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessage {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const m = msg as Record<string, unknown>;
+  const hasThread = typeof m.thread_id === 'string' && m.thread_id.length > 0;
+  const hasMessage = typeof m.message_id === 'string' && m.message_id.length > 0;
+  switch (m.type) {
+    case 'reply':
+    case 'resolve':
+      return hasThread;
+    case 'edit':
+    case 'retract':
+      return hasThread && hasMessage;
+    case 'diff':
+      return hasThread && (m.mode === 'last' || m.mode === 'range');
+    default:
+      return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Interfaces de modelo de vista
 // ---------------------------------------------------------------------------
 
@@ -126,8 +172,15 @@ export function partitionCardsByStatus(
 function buildCardHtml(card: CardViewModel, withActions: boolean): string {
   const tid = escapeHtml(card.thread_id);
 
+  // Botón diff: visible solo en hilos abiertos (withActions) con al menos un fix de IA.
+  // data-diff-mode rastrea el toggle last↔range en el webview; el SHA se resuelve
+  // en extension.ts desde las proyecciones del event log, nunca desde el DOM.
+  const diffBtnHtml = (withActions && card.fixCommit !== null)
+    ? `<button class="action-btn" data-action="diff" data-thread-id="${tid}" data-diff-mode="last">⟷</button>`
+    : '';
+
   const cardActionsHtml = withActions
-    ? `\n        <span class="card-actions"><button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
     : '';
 
   const messagesHtml = card.messages.map(msg => {

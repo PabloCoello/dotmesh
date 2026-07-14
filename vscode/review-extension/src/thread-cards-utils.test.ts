@@ -12,6 +12,7 @@ import {
   buildCardsHtml,
   buildBulletStyles,
   partitionCardsByStatus,
+  isWebviewActionMessage,
   type CardViewModel,
 } from './thread-cards-utils.ts';
 import type { ThreadProjection, MessageProjection } from './sidecar.ts';
@@ -548,4 +549,89 @@ test('buildCardsHtml tarjeta desanclada tiene data-has-anchor="false"', () => {
   };
   const html = buildCardsHtml([card]);
   assert.ok(html.includes('data-has-anchor="false"'), `Debe tener data-has-anchor="false", obtenido: ${html}`);
+});
+
+// ---------------------------------------------------------------------------
+// buildCardsHtml — botón diff por fixCommit (Fase 3)
+// ---------------------------------------------------------------------------
+
+test('buildCardsHtml botón diff presente en hilo abierto con fixCommit !== null', () => {
+  const card: CardViewModel = {
+    thread_id:   'o-diff',
+    commentType: 'edita',
+    lineLabel:   'L5',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   'abc1234',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('data-action="diff"'), 'Debe incluir botón diff cuando fixCommit !== null');
+  assert.ok(html.includes('data-diff-mode="last"'), 'El botón diff debe iniciarse en modo last');
+});
+
+test('buildCardsHtml botón diff ausente en hilo abierto con fixCommit === null', () => {
+  const card: CardViewModel = {
+    thread_id:   'o-nodiff',
+    commentType: 'nota',
+    lineLabel:   'L6',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="diff"'), 'No debe incluir botón diff cuando fixCommit === null');
+});
+
+test('buildCardsHtml botón diff ausente en hilo resuelto aunque fixCommit !== null', () => {
+  const card: CardViewModel = {
+    thread_id:   'r-diff',
+    commentType: 'edita',
+    lineLabel:   'L7',
+    hasAnchor:   true,
+    status:      'resolved',
+    fixCommit:   'abc1234',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="diff"'), 'No debe incluir botón diff en hilos resueltos (sin acciones)');
+});
+
+// ---------------------------------------------------------------------------
+// isWebviewActionMessage — validación del tipo diff (Fase 3)
+// ---------------------------------------------------------------------------
+
+test('isWebviewActionMessage acepta diff válido con mode last', () => {
+  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'last' }));
+});
+
+test('isWebviewActionMessage acepta diff válido con mode range', () => {
+  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'range' }));
+});
+
+test('isWebviewActionMessage rechaza diff con mode inválido', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'full' }));
+});
+
+test('isWebviewActionMessage rechaza diff sin mode', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1' }));
+});
+
+test('isWebviewActionMessage rechaza diff sin thread_id', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', mode: 'last' }));
+});
+
+test('isWebviewActionMessage rechaza diff con thread_id vacío', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: '', mode: 'last' }));
+});
+
+test('isWebviewActionMessage sigue aceptando tipos existentes tras añadir diff', () => {
+  assert.ok(isWebviewActionMessage({ type: 'reply',   thread_id: 'tid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'resolve', thread_id: 'tid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'edit',    thread_id: 'tid-1', message_id: 'mid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'retract', thread_id: 'tid-1', message_id: 'mid-1' }));
 });
