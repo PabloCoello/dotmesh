@@ -71,7 +71,7 @@ export function buildCardViewModels(
         return { id: m.id, authorLabel, dateLabel, body: m.body };
       });
 
-    const lastAiFix = [...thread.messages]
+    const lastAiFix = thread.messages
       .filter(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null)
       .at(-1);
 
