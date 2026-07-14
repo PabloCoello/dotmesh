@@ -35,7 +35,6 @@ import { ThreadCardsViewProvider } from './thread-cards';
 const suppressedWorkspaces = new Set<string>();
 
 // Documentos cuya oferta de migración V1→V2 ya se mostró en esta sesión.
-// Evita que el prompt reaparezca cada vez que el usuario enfoca el editor.
 const migrationPromptedDocs = new Set<string>();
 
 // ---------------------------------------------------------------------------
@@ -44,9 +43,6 @@ const migrationPromptedDocs = new Set<string>();
 
 /**
  * Calcula el directorio de eventos V2 y el git root para un documento activo.
- * - En repo: eventDir = <gitRoot>/.ai/review/<docRelPath> (directorio, sin .json).
- *   Rechaza rutas que escapen del gitRoot (espejo del guard de sidecarPathForDoc).
- * - Fuera de repo: eventDir = ~/.local/state/mesh-review/<sha256> (directorio).
  */
 async function resolveEventDir(
   docFsPath: string
@@ -54,7 +50,6 @@ async function resolveEventDir(
   const gitRoot = await getGitRoot(path.dirname(docFsPath));
   if (gitRoot) {
     const rel = path.relative(gitRoot, docFsPath);
-    // Guard de escape: rechaza rutas que salgan del gitRoot
     if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
       return {
         eventDir: path.join(gitRoot, '.ai', 'review', rel),
@@ -62,10 +57,8 @@ async function resolveEventDir(
         docRelPath: rel,
       };
     }
-    // Documento fuera del git root (caso de symlink): cae al fallback silenciosamente
   }
-  // Fallback: directorio fuera de cualquier repo
-  await ensureFallbackDir(); // crea ~/.local/state/mesh-review/ con 0o700
+  await ensureFallbackDir();
   return {
     eventDir: fallbackEventDir(docFsPath),
     gitRoot: null,
@@ -74,16 +67,13 @@ async function resolveEventDir(
 }
 
 /**
- * Comprueba si `.ai/review/` está ignorado por git y ofrece añadirlo a
- * `.git/info/exclude` si no lo está. Se suprime por workspace y sesión si
- * el usuario rechaza. También añade `.ai/backlog/` de forma idempotente.
+ * Comprueba si `.ai/review/` está ignorado y ofrece añadirlo a `.git/info/exclude`.
  */
 async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
   if (suppressedWorkspaces.has(gitRoot)) return;
 
   const ignored = await isAiReviewIgnored(gitRoot);
   if (ignored) {
-    // .ai/review/ ya está ignorado; añade backlog silenciosamente también
     await addToGitExclude(gitRoot, '.ai/backlog/').catch(() => {});
     return;
   }
@@ -96,8 +86,8 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
   );
 
   if (choice === 'Añadir') {
-    await addToGitExclude(gitRoot);               // .ai/review/
-    await addToGitExclude(gitRoot, '.ai/backlog/'); // .ai/backlog/
+    await addToGitExclude(gitRoot);
+    await addToGitExclude(gitRoot, '.ai/backlog/');
     vscode.window.showInformationMessage(
       'mesh-review: `.ai/review/` y `.ai/backlog/` añadidos a `.git/info/exclude`.'
     );
@@ -110,15 +100,18 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
 // Helper: refresca proyecciones y decoraciones tras escribir un evento
 // ---------------------------------------------------------------------------
 
+/**
+ * Rellena las proyecciones y decoraciones tras escribir un evento.
+ * Desde el slice 4, ya no actualiza el TreeView (provider) en la ruta de escritura:
+ * el árbol se retira en el slice 6. Solo cardsProvider recibe la actualización.
+ */
 async function refreshAfterWrite(
   eventDir: string,
   docUri: vscode.Uri,
-  provider: ReviewTreeDataProvider,
   cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const events = await readEvents(eventDir);
   const projections = project(events);
-  provider.update(projections, docUri);
   cardsProvider.update(projections, docUri);
   const editor = vscode.window.visibleTextEditors.find(
     e => e.document.uri.fsPath === docUri.fsPath
@@ -132,11 +125,6 @@ async function refreshAfterWrite(
 // Migración V1 (Slice 4)
 // ---------------------------------------------------------------------------
 
-/**
- * Materializa un sidecar V1 como eventos V2 en disco: escribe cada evento
- * migrado y renombra el fichero V1 a `<mismo>.v1.bak` (nunca lo elimina).
- * Devuelve los eventos escritos ([] si no hay sidecar legible).
- */
 async function migrateLegacyToV2(
   gitRoot: string,
   docRelPath: string,
@@ -149,17 +137,10 @@ async function migrateLegacyToV2(
   for (const ev of events) {
     await writeEvent(eventDir, ev);
   }
-  await rename(v1FilePath, `${v1FilePath}.v1.bak`); // conserva el V1, no lo elimina
+  await rename(v1FilePath, `${v1FilePath}.v1.bak`);
   return events;
 }
 
-/**
- * Absorbe cualquier sidecar V1 pendiente ANTES de escribir el primer evento V2
- * de un documento. Sin esto, el primer writeEvent crea el directorio V2 y
- * detectLegacy deja de dispararse, dejando los hilos V1 invisibles (huérfanos):
- * el usuario que rechazó la migración y luego añade/responde/resuelve perdería
- * de vista sus comentarios previos. No-op fuera de repo o sin V1 pendiente.
- */
 async function ensureLegacyMigrated(
   gitRoot: string | null,
   docRelPath: string,
@@ -175,12 +156,6 @@ async function ensureLegacyMigrated(
   }
 }
 
-/**
- * Ofrece migrar el sidecar V1 a eventos V2.
- * - Aceptado: escribe eventos, renombra el fichero V1 a <mismo>.v1.bak.
- * - Rechazado: proyecta el V1 en memoria sin escribir nada.
- * Nunca elimina el fichero V1.
- */
 async function handleLegacyMigration(
   editor: vscode.TextEditor,
   gitRoot: string,
@@ -206,17 +181,16 @@ async function handleLegacyMigration(
     return project(events);
   }
 
-  // Solo leer: proyecta en memoria sin escribir
   return project(migrateV1(sidecar));
 }
 
 // ---------------------------------------------------------------------------
-// Refresco de decoraciones y TreeView
+// Refresco de decoraciones y paneles al cambiar de editor
 // ---------------------------------------------------------------------------
 
 /**
  * Lee los eventos V2 del directorio del documento activo, proyecta el estado
- * net de los hilos y actualiza el TreeView y las decoraciones.
+ * net de los hilos y actualiza el TreeView, el panel de tarjetas y las decoraciones.
  * Comprueba también si existe un sidecar V1 y ofrece migración.
  *
  * No lanza: los errores se capturan silenciosamente.
@@ -237,7 +211,6 @@ async function refreshEditorState(
         migrationPromptedDocs.add(docFsPath);
         projections = await handleLegacyMigration(editor, gitRoot, docRelPath, eventDir);
       } else {
-        // Migración ya ofrecida (y rechazada) en esta sesión: sigue en read-only
         const v1FilePath = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
         const sidecar = await readSidecar(v1FilePath);
         projections = sidecar ? project(migrateV1(sidecar)) : [];
@@ -261,7 +234,6 @@ async function refreshEditorState(
 /** Añade un nuevo hilo de revisión (thread.opened) al documento activo. */
 async function addCommentImpl(
   output: vscode.OutputChannel,
-  provider: ReviewTreeDataProvider,
   cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -278,7 +250,6 @@ async function addCommentImpl(
     return;
   }
 
-  // Ancla capturada antes de abrir los modales
   const preModalText = editor.document.getText();
   const preModalAnchor = createAnchor(
     preModalText,
@@ -309,7 +280,6 @@ async function addCommentImpl(
   });
   if (body === undefined || body.trim() === '') return;
 
-  // Re-ancla si el documento cambió mientras los modales estaban abiertos
   const docFsPath = editor.document.uri.fsPath;
   const docText = editor.document.getText();
   let anchor = preModalAnchor;
@@ -328,7 +298,6 @@ async function addCommentImpl(
 
   if (gitRoot) {
     await checkAndWarnIgnore(gitRoot);
-    // Absorbe un V1 pendiente antes de crear el dir V2, o los hilos V1 quedarían huérfanos.
     await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
   }
 
@@ -337,7 +306,7 @@ async function addCommentImpl(
     id,
     version: 2,
     type: 'thread.opened',
-    thread_id: id, // nuevo hilo: thread_id = id del evento de apertura
+    thread_id: id,
     author: { kind: 'human' },
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
@@ -348,9 +317,7 @@ async function addCommentImpl(
   };
 
   await writeEvent(eventDir, event);
-
-  // Refresca inmediatamente sin esperar al FileSystemWatcher
-  await refreshAfterWrite(eventDir, editor.document.uri, provider, cardsProvider);
+  await refreshAfterWrite(eventDir, editor.document.uri, cardsProvider);
 
   output.appendLine(`mesh-review: hilo añadido — ${id} (${type.label})`);
   vscode.window.showInformationMessage(`mesh-review: comentario añadido (${type.label})`);
@@ -358,16 +325,21 @@ async function addCommentImpl(
 
 /**
  * Responde a un hilo existente (message.posted).
- * Invocado desde el menú contextual de un ThreadItem.
+ * Recibe el threadId en lugar de ThreadItem para ser invocable desde el webview.
+ * Valida que threadId exista en las proyecciones actuales antes de escribir.
  */
 async function replyToThreadImpl(
-  item: ThreadItem,
-  provider: ReviewTreeDataProvider,
+  threadId: string,
+  docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
-  const docUri = provider.docUri;
-  if (!docUri) {
-    vscode.window.showErrorMessage('mesh-review: No hay documento cargado en la vista.');
+  const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
+  await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
+
+  // Valida el id contra las proyecciones actuales antes de escribir
+  const projections = project(await readEvents(eventDir));
+  if (!projections.find(t => t.thread_id === threadId)) {
+    vscode.window.showErrorMessage('mesh-review: Hilo no encontrado.');
     return;
   }
 
@@ -380,14 +352,11 @@ async function replyToThreadImpl(
   });
   if (body === undefined || body.trim() === '') return;
 
-  const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
-  await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
-
   const event: EventEnvelope = {
     id: randomUUID(),
     version: 2,
     type: 'message.posted',
-    thread_id: item.thread_id,
+    thread_id: threadId,
     author: { kind: 'human' },
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
@@ -396,69 +365,73 @@ async function replyToThreadImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: respuesta añadida.');
 }
 
 /**
  * Retira un mensaje del hilo (message.retracted).
- * Invocado desde el menú contextual de un MessageItem.
- * El mensaje permanece en el log; retracted:true en la proyección.
+ * Recibe ids planos en lugar de MessageItem para ser invocable desde el webview.
+ * Valida que thread y mensaje existan antes de escribir.
  */
 async function retractMessageImpl(
-  item: MessageItem,
-  provider: ReviewTreeDataProvider,
+  threadId: string,
+  messageId: string,
+  docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
-  const docUri = provider.docUri;
-  if (!docUri) {
-    vscode.window.showErrorMessage('mesh-review: No hay documento cargado en la vista.');
-    return;
-  }
-
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
+
+  // Valida thread y mensaje contra las proyecciones actuales
+  const projections = project(await readEvents(eventDir));
+  const thread = projections.find(t => t.thread_id === threadId);
+  if (!thread || !thread.messages.find(m => m.id === messageId)) {
+    vscode.window.showErrorMessage('mesh-review: Hilo o mensaje no encontrado.');
+    return;
+  }
 
   const event: EventEnvelope = {
     id: randomUUID(),
     version: 2,
     type: 'message.retracted',
-    thread_id: item.threadId,
+    thread_id: threadId,
     author: { kind: 'human' },
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,
-    target_message_id: item.messageId,
+    target_message_id: messageId,
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: mensaje retirado.');
 }
 
 /**
  * Resuelve el hilo (thread.status-changed → resolved).
- * Invocado desde el menú contextual de un ThreadItem.
+ * Recibe threadId en lugar de ThreadItem para ser invocable desde el webview.
+ * No re-resuelve hilos ya resueltos o desanclados (no-op silencioso).
  */
 async function resolveThreadImpl(
-  item: ThreadItem,
-  provider: ReviewTreeDataProvider,
+  threadId: string,
+  docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
-  const docUri = provider.docUri;
-  if (!docUri) {
-    vscode.window.showErrorMessage('mesh-review: No hay documento cargado en la vista.');
-    return;
-  }
-
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
+
+  // Valida que el hilo exista y esté abierto
+  const projections = project(await readEvents(eventDir));
+  const thread = projections.find(t => t.thread_id === threadId);
+  if (!thread) return;          // hilo no encontrado — no-op silencioso
+  if (thread.status !== 'open') return; // ya resuelto o desanclado — no-op silencioso
 
   const event: EventEnvelope = {
     id: randomUUID(),
     version: 2,
     type: 'thread.status-changed',
-    thread_id: item.thread_id,
+    thread_id: threadId,
     author: { kind: 'human' },
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
@@ -467,36 +440,38 @@ async function resolveThreadImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: hilo marcado como resuelto.');
 }
 
 /**
  * Edita el texto de un mensaje existente (message.revised).
- * El modelo append-only no modifica el evento original; añade un evento revised.
- * Invocado desde el menú contextual de un MessageItem.
+ * Recibe ids planos en lugar de MessageItem para ser invocable desde el webview.
+ * Valida thread y mensaje; pre-rellena el InputBox con el body actual.
  */
 async function editMessageImpl(
-  item: MessageItem,
-  provider: ReviewTreeDataProvider,
+  threadId: string,
+  messageId: string,
+  docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
-  const docUri = provider.docUri;
-  if (!docUri) {
-    vscode.window.showErrorMessage('mesh-review: No hay documento cargado en la vista.');
-    return;
-  }
-
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
-  // Migra un V1 pendiente antes de leer: si no, el mensaje a editar (aún en V1)
-  // no estaría en el directorio de eventos y el pre-relleno saldría vacío.
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
 
-  // Lee el cuerpo actual para pre-rellenar el InputBox
+  // Lee proyecciones para validar ids y pre-rellenar el InputBox
   const events = await readEvents(eventDir);
   const projections = project(events);
-  const thread = projections.find(t => t.thread_id === item.threadId);
-  const currentBody = thread?.messages.find(m => m.id === item.messageId)?.body ?? '';
+  const thread = projections.find(t => t.thread_id === threadId);
+  if (!thread) {
+    vscode.window.showErrorMessage('mesh-review: Hilo no encontrado.');
+    return;
+  }
+  const msg = thread.messages.find(m => m.id === messageId);
+  if (!msg) {
+    vscode.window.showErrorMessage('mesh-review: Mensaje no encontrado.');
+    return;
+  }
+  const currentBody = msg.body;
 
   const newBody = await vscode.window.showInputBox({
     title: 'Editar mensaje',
@@ -517,29 +492,29 @@ async function editMessageImpl(
     id: randomUUID(),
     version: 2,
     type: 'message.revised',
-    thread_id: item.threadId,
+    thread_id: threadId,
     author: { kind: 'human' },
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,
-    target_message_id: item.messageId,
+    target_message_id: messageId,
     body: newBody.trim(),
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: mensaje actualizado.');
 }
 
 /**
  * Navega al ancla de un hilo en el editor.
- * Invocado al hacer clic en un ThreadItem.
+ * Lee el docUri desde cardsProvider en lugar de ReviewTreeDataProvider.
  */
 async function jumpToAnchorImpl(
   anchor: Anchor,
-  provider: ReviewTreeDataProvider
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
-  const docUri = provider.docUri;
+  const docUri = cardsProvider.docUri;
   let editor: vscode.TextEditor | undefined;
 
   if (docUri) {
@@ -588,7 +563,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('mesh-review');
   output.appendLine('mesh-review: activado (V2 event-sourced)');
 
-  // --- TreeView ---
+  // --- TreeView --- (se retira en el slice 6)
   const provider = new ReviewTreeDataProvider();
   const treeView = vscode.window.createTreeView('meshReviewComments', {
     treeDataProvider: provider,
@@ -597,6 +572,33 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // --- Panel de tarjetas de hilo ---
   const cardsProvider = new ThreadCardsViewProvider(context.extensionUri);
+
+  // --- Registra el handler de acciones del webview ---
+  // El webview emite reply/resolve/edit/retract con ids de hilo y mensaje.
+  // Cada acción valida los ids contra las proyecciones antes de escribir.
+  cardsProvider.setActionHandler(async (msg) => {
+    const docUri = cardsProvider.docUri;
+    if (!docUri) return;
+    try {
+      switch (msg.type) {
+        case 'reply':
+          await replyToThreadImpl(msg.thread_id, docUri, cardsProvider);
+          break;
+        case 'resolve':
+          await resolveThreadImpl(msg.thread_id, docUri, cardsProvider);
+          break;
+        case 'edit':
+          await editMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider);
+          break;
+        case 'retract':
+          await retractMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider);
+          break;
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`mesh-review: error en acción del panel — ${errMsg}`);
+    }
+  });
 
   // --- Estado inicial ---
   const initialEditor = vscode.window.activeTextEditor;
@@ -612,8 +614,6 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   // --- FileSystemWatcher sobre el directorio de eventos del workspace ---
-  // El glob '**/.ai/review/**/*.json' cubre tanto V2 (eventos en subdirs)
-  // como V1 (sidecar plano) — se mantiene igual que en V1 por compatibilidad.
   const watcher = vscode.workspace.createFileSystemWatcher('**/.ai/review/**/*.json');
   const onSidecarChange = () => {
     const editor = vscode.window.activeTextEditor;
@@ -635,10 +635,10 @@ export function activate(context: vscode.ExtensionContext): void {
     // --- Panel de tarjetas de hilo (webview view) ---
     vscode.window.registerWebviewViewProvider('meshReviewCards', cardsProvider),
 
-    // --- Add Comment (Slice 2) ---
+    // --- Add Comment ---
     vscode.commands.registerCommand('mesh-review.addComment', async () => {
       try {
-        await addCommentImpl(output, provider, cardsProvider);
+        await addCommentImpl(output, cardsProvider);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`mesh-review: error al guardar el comentario — ${msg}`);
@@ -646,13 +646,18 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
-    // --- Reply to Thread (Slice 3) — invocado desde ThreadItem ---
+    // --- Reply to Thread ---
+    // Mientras el árbol esté activo, extrae thread_id de ThreadItem.
+    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
     vscode.commands.registerCommand(
       'mesh-review.replyToThread',
       async (item?: ThreadItem) => {
-        if (!(item instanceof ThreadItem)) return;
+        const threadId = item instanceof ThreadItem ? item.thread_id : undefined;
+        if (!threadId) return;
+        const docUri = cardsProvider.docUri;
+        if (!docUri) return;
         try {
-          await replyToThreadImpl(item, provider, cardsProvider);
+          await replyToThreadImpl(threadId, docUri, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al responder — ${msg}`);
@@ -660,13 +665,19 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
 
-    // --- Retract Message (Slice 3) — invocado desde MessageItem ---
+    // --- Retract Message ---
+    // Mientras el árbol esté activo, extrae threadId y messageId de MessageItem.
+    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
     vscode.commands.registerCommand(
       'mesh-review.retractMessage',
       async (item?: MessageItem) => {
-        if (!(item instanceof MessageItem)) return;
+        const threadId  = item instanceof MessageItem ? item.threadId  : undefined;
+        const messageId = item instanceof MessageItem ? item.messageId : undefined;
+        if (!threadId || !messageId) return;
+        const docUri = cardsProvider.docUri;
+        if (!docUri) return;
         try {
-          await retractMessageImpl(item, provider, cardsProvider);
+          await retractMessageImpl(threadId, messageId, docUri, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al retirar — ${msg}`);
@@ -674,15 +685,19 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
 
-    // --- Resolve Thread (Slice 3) — invocado desde ThreadItem ---
+    // --- Resolve Thread ---
     // Mantiene el id 'mesh-review.resolveComment' para compatibilidad con
-    // keybindings existentes de los usuarios.
+    // keybindings existentes. Mientras el árbol esté activo, extrae thread_id de ThreadItem.
+    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
     vscode.commands.registerCommand(
       'mesh-review.resolveComment',
       async (item?: ThreadItem) => {
-        if (!(item instanceof ThreadItem)) return;
+        const threadId = item instanceof ThreadItem ? item.thread_id : undefined;
+        if (!threadId) return;
+        const docUri = cardsProvider.docUri;
+        if (!docUri) return;
         try {
-          await resolveThreadImpl(item, provider, cardsProvider);
+          await resolveThreadImpl(threadId, docUri, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al resolver — ${msg}`);
@@ -690,15 +705,20 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
 
-    // --- Edit Message (Slice 3) — invocado desde MessageItem ---
+    // --- Edit Message ---
     // Mantiene el id 'mesh-review.editComment' para compatibilidad con
-    // keybindings existentes de los usuarios.
+    // keybindings existentes. Mientras el árbol esté activo, extrae ids de MessageItem.
+    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
     vscode.commands.registerCommand(
       'mesh-review.editComment',
       async (item?: MessageItem) => {
-        if (!(item instanceof MessageItem)) return;
+        const threadId  = item instanceof MessageItem ? item.threadId  : undefined;
+        const messageId = item instanceof MessageItem ? item.messageId : undefined;
+        if (!threadId || !messageId) return;
+        const docUri = cardsProvider.docUri;
+        if (!docUri) return;
         try {
-          await editMessageImpl(item, provider, cardsProvider);
+          await editMessageImpl(threadId, messageId, docUri, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al editar — ${msg}`);
@@ -711,13 +731,14 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand('meshReviewComments.focus');
     }),
 
-    // --- Jump to Comment (clic en ThreadItem) ---
-    // El argumento es un Anchor (quote, line_hint, char_offset), no un Comment V1.
+    // --- Jump to Comment ---
+    // Invocado al hacer clic en un ThreadItem o desde el webview.
+    // Lee docUri desde cardsProvider (slice 4: migrado de provider a cardsProvider).
     vscode.commands.registerCommand(
       'mesh-review.jumpToComment',
       async (anchor: Anchor) => {
         try {
-          await jumpToAnchorImpl(anchor, provider);
+          await jumpToAnchorImpl(anchor, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al navegar — ${msg}`);
