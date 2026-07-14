@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { rename } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 import {
   getGitRoot,
@@ -529,6 +533,121 @@ async function jumpToAnchorImpl(
 }
 
 // ---------------------------------------------------------------------------
+// openDiffImpl — vista diff del commit de fix de un hilo
+// ---------------------------------------------------------------------------
+
+/** Patrón de validación de SHA: hex de 7 a 40 caracteres. */
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+
+/**
+ * Abre la vista diff de VS Code para el commit de fix del hilo indicado.
+ *
+ * Seguridad:
+ * - thread_id y mode fueron validados por isWebviewActionMessage en el boundary del webview.
+ * - Los SHAs (fixCommit, openCommit) provienen de las proyecciones del event log en disco,
+ *   nunca del webview.
+ * - Si se usa el fallback (Opción B), se valida el SHA contra SHA_RE antes de pasarlo
+ *   a execFile con array de argumentos (sin interpolación de strings en shell).
+ * - relPath se deriva de gitRoot en el servidor; no viaja desde el webview.
+ *
+ * Estrategia de URI:
+ * - Opción A (preferida): git URI scheme via la extensión git de VS Code. Sin shell-out.
+ * - Opción B (fallback): git show <sha>:<path> + openTextDocument virtual.
+ */
+async function openDiffImpl(
+  threadId: string,
+  mode: 'last' | 'range',
+  cardsProvider: ThreadCardsViewProvider
+): Promise<void> {
+  const docUri = cardsProvider.docUri;
+  if (!docUri) return;
+
+  const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
+
+  if (!gitRoot) {
+    vscode.window.showInformationMessage(
+      'mesh-review: diff no disponible — el documento no está dentro de un repositorio git.'
+    );
+    return;
+  }
+
+  // Lee proyecciones desde disco para obtener los SHAs del hilo.
+  const projections = project(await readEvents(eventDir));
+  const thread = projections.find(t => t.thread_id === threadId);
+  if (!thread) return;
+
+  // Calcula fixCommit (último message.posted de IA con commit !== null) y openCommit.
+  const lastAiFix = thread.messages
+    .filter(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null)
+    .at(-1);
+  const fixCommit = lastAiFix?.commit ?? null;
+  if (fixCommit === null) return; // nada que mostrar — no-op silencioso
+
+  const openCommit = thread.openedCommit ?? null;
+
+  // Determina los refs a comparar.
+  // Modo last: diff del commit del fix (fixCommit^ .. fixCommit).
+  // Modo range: si openCommit está disponible, diff acumulado (openCommit .. fixCommit);
+  //             si no, fallback a last.
+  const refBefore: string =
+    mode === 'range' && openCommit !== null
+      ? openCommit
+      : `${fixCommit}^`;
+  const refAfter: string = fixCommit;
+
+  const absPath = path.join(gitRoot, docRelPath);
+  const relPathGit = docRelPath.replace(/\\/g, '/'); // git show espera separadores Unix
+  const titulo = mode === 'range' && openCommit !== null
+    ? `${path.basename(docRelPath)} (${openCommit}..${fixCommit})`
+    : `${path.basename(docRelPath)} (${fixCommit}^ .. ${fixCommit})`;
+
+  // Opción A: git URI scheme (extensión git de VS Code activa).
+  // Opción B: fallback — git show + openTextDocument virtual.
+  const gitExt = vscode.extensions.getExtension('vscode.git');
+  if (gitExt?.isActive) {
+    // Opción A — sin shell-out; el esquema git lo resuelve la extensión git de VS Code.
+    const uriBefore = vscode.Uri.from({
+      scheme: 'git',
+      path: absPath,
+      query: JSON.stringify({ ref: refBefore }),
+    });
+    const uriAfter = vscode.Uri.from({
+      scheme: 'git',
+      path: absPath,
+      query: JSON.stringify({ ref: refAfter }),
+    });
+    await vscode.commands.executeCommand('vscode.diff', uriBefore, uriAfter, titulo);
+  } else {
+    // Opción B — fallback con git show + documento virtual.
+    // Validamos el SHA base antes de pasarlo a execFile (nunca interpolamos en shell).
+    const shaAfter = refAfter;
+    const shaBefore = refBefore.endsWith('^') ? refBefore.slice(0, -1) : refBefore;
+    if (!SHA_RE.test(shaAfter) || !SHA_RE.test(shaBefore)) {
+      vscode.window.showErrorMessage(
+        'mesh-review: SHA de commit no válido — no se puede abrir el diff.'
+      );
+      return;
+    }
+
+    const [contentBefore, contentAfter] = await Promise.all([
+      execFileAsync('git', ['show', `${refBefore}:${relPathGit}`], { cwd: gitRoot })
+        .then(r => r.stdout)
+        .catch(() => ''),
+      execFileAsync('git', ['show', `${refAfter}:${relPathGit}`], { cwd: gitRoot })
+        .then(r => r.stdout)
+        .catch(() => ''),
+    ]);
+
+    const [docBefore, docAfter] = await Promise.all([
+      vscode.workspace.openTextDocument({ content: contentBefore }),
+      vscode.workspace.openTextDocument({ content: contentAfter }),
+    ]);
+
+    await vscode.commands.executeCommand('vscode.diff', docBefore.uri, docAfter.uri, titulo);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // activate / deactivate
 // ---------------------------------------------------------------------------
 
@@ -589,6 +708,9 @@ export function activate(context: vscode.ExtensionContext): void {
           break;
         case 'retract':
           await retractMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider);
+          break;
+        case 'diff':
+          await openDiffImpl(msg.thread_id, msg.mode, cardsProvider);
           break;
       }
     } catch (err) {
