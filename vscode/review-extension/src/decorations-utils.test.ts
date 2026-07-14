@@ -25,6 +25,7 @@ function makeMsg(
     author:     overrides.author ?? { kind: 'human' },
     created_at: overrides.created_at ?? '2026-07-13T10:00:00Z',
     retracted:  overrides.retracted ?? false,
+    commit:     overrides.commit ?? null,
   };
 }
 

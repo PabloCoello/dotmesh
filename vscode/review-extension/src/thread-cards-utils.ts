@@ -33,6 +33,8 @@ export interface CardViewModel {
   hasAnchor: boolean;      // true si 'line_hint' in thread.anchor
   status: 'open' | 'resolved' | 'detached'; // estado del hilo
   messages: CardMessage[]; // solo mensajes no retractados
+  fixCommit: string | null;   // SHA del último message.posted de IA con commit !== null
+  openCommit: string | null;  // openedCommit del hilo (base para rango acumulado)
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +71,10 @@ export function buildCardViewModels(
         return { id: m.id, authorLabel, dateLabel, body: m.body };
       });
 
+    const lastAiFix = [...thread.messages]
+      .filter(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null)
+      .at(-1);
+
     return {
       thread_id: thread.thread_id,
       commentType: thread.commentType,
@@ -76,6 +82,8 @@ export function buildCardViewModels(
       hasAnchor,
       status: thread.status,
       messages,
+      fixCommit: lastAiFix?.commit ?? null,
+      openCommit: thread.openedCommit,
     };
   });
 }
