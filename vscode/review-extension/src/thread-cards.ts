@@ -26,6 +26,29 @@ export type WebviewActionMessage =
   | { type: 'edit';    thread_id: string; message_id: string }
   | { type: 'retract'; thread_id: string; message_id: string };
 
+/**
+ * Valida en runtime que un mensaje del webview es una acción bien formada.
+ * `thread_id` debe ser un string no vacío en los cuatro tipos; `message_id`
+ * lo mismo en edit/retract. No confía en el cast estático porque el mensaje
+ * cruza el límite webview → extensión.
+ */
+function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessage {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const m = msg as Record<string, unknown>;
+  const hasThread = typeof m.thread_id === 'string' && m.thread_id.length > 0;
+  const hasMessage = typeof m.message_id === 'string' && m.message_id.length > 0;
+  switch (m.type) {
+    case 'reply':
+    case 'resolve':
+      return hasThread;
+    case 'edit':
+    case 'retract':
+      return hasThread && hasMessage;
+    default:
+      return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -67,10 +90,13 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
         }
         return;
       }
-      // Acciones de hilo/mensaje: reply, resolve, edit, retract
-      const actionTypes = ['reply', 'resolve', 'edit', 'retract'];
-      if (actionTypes.includes(msg.type) && this._actionHandler) {
-        this._actionHandler(msg as WebviewActionMessage);
+      // Acciones de hilo/mensaje: reply, resolve, edit, retract.
+      // El mensaje llega del webview (contexto no privilegiado): validamos su
+      // forma en runtime antes de confiar en el cast. La CSP ya impide script
+      // arbitrario y los *Impl revalidan los ids contra las proyecciones, así
+      // que esto es defensa en profundidad para que el límite sea explícito.
+      if (this._actionHandler && isWebviewActionMessage(msg)) {
+        this._actionHandler(msg);
       }
     });
 
