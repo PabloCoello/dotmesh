@@ -17,15 +17,15 @@
 
 import * as vscode from 'vscode';
 import { resolveAnchor } from './anchor';
-import type { Comment } from './sidecar';
+import type { ThreadProjection } from './sidecar';
 import {
   RANGE_BG_COLOR,
   buildLabelText,
   typeColor,
-  buildHoverMessage,
+  buildThreadHover,
 } from './decorations-utils';
 
-export { buildLabelText, typeColor, buildHoverMessage } from './decorations-utils';
+export { buildLabelText, typeColor, buildHoverMessage, buildThreadHover } from './decorations-utils';
 
 // ---------------------------------------------------------------------------
 // Singleton de tipos de decoración
@@ -92,7 +92,7 @@ export function disposeDecorationTypes(): void {
  */
 export function applyDecorations(
   editor: vscode.TextEditor,
-  comments: Comment[]
+  threads: ThreadProjection[]
 ): void {
   const { rangeType, labelType } = getDecorationTypes();
   const doc = editor.document;
@@ -101,17 +101,18 @@ export function applyDecorations(
   const rangeOpts: vscode.DecorationOptions[] = [];
   const labelOpts: vscode.DecorationOptions[] = [];
 
-  for (const comment of comments) {
-    if (comment.status !== 'open') continue;
+  for (const thread of threads) {
+    if (thread.status !== 'open') continue;
+    if (!('line_hint' in thread.anchor)) continue;
 
-    const resolved = resolveAnchor(text, comment.anchor);
+    const resolved = resolveAnchor(text, thread.anchor);
     if (!resolved) continue;
 
     const start = doc.positionAt(resolved.startOffset);
     const end = doc.positionAt(resolved.endOffset);
     const range = new vscode.Range(start, end);
 
-    const hover = new vscode.MarkdownString(buildHoverMessage(comment, vscode.env.language));
+    const hover = new vscode.MarkdownString(buildThreadHover(thread, vscode.env.language));
     hover.isTrusted = false;   // no hay command links; no se necesita isTrusted
     hover.supportHtml = true;  // habilita <span style="color:#rrggbb;"> del sanitizador
 
@@ -125,8 +126,8 @@ export function applyDecorations(
       range: new vscode.Range(lineEnd, lineEnd),
       renderOptions: {
         after: {
-          contentText: buildLabelText(comment),
-          color: typeColor(comment.type),
+          contentText: buildLabelText({ type: thread.commentType }),
+          color: typeColor(thread.commentType),
           margin: '0 0 0 1ch',
           fontStyle: 'italic',
         },

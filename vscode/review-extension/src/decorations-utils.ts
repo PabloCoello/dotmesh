@@ -21,7 +21,7 @@
  * sobre Paper (blanco) y sobre Ink.
  */
 
-import type { Comment } from './sidecar';
+import type { Comment, ThreadProjection } from './sidecar';
 
 // ---------------------------------------------------------------------------
 // Constantes de paleta (DESIGN.md)
@@ -30,16 +30,26 @@ import type { Comment } from './sidecar';
 /** Fondo del rango anclado: teal con alpha, legible sobre Ink y Paper. */
 export const RANGE_BG_COLOR = 'rgba(108, 182, 176, 0.18)';
 
-/** Mapa tipo → color dotmesh (DESIGN.md). */
-export const TYPE_COLORS: Readonly<Record<string, string>> = {
-  edita:      '#E59A9A', // rose  — DESIGN.md
-  sugerencia: '#E3C58A', // gold  — DESIGN.md
-  pregunta:   '#8FB4E3', // blue  — DESIGN.md
-  verifica:   '#FFAA7A', // peach — DESIGN.md
-  nota:       '#6CB6B0', // teal  — DESIGN.md
-  referencia: '#A8CBA0', // sage  — DESIGN.md (formalizado en F5)
-  supuesto:   '#CBAACB', // lilac — DESIGN.md (formalizado en F5)
-};
+/**
+ * Mapa tipo → color dotmesh (DESIGN.md).
+ *
+ * Objeto de prototipo nulo: un commentType leído del disco podría ser
+ * «__proto__» o «constructor»; con un objeto normal, TYPE_COLORS[type]
+ * devolvería un miembro heredado de Object.prototype (truthy) y se saltaría
+ * el guard `?? FALLBACK_COLOR` de typeColor(). Sin prototipo, esas claves dan
+ * undefined y caen al fallback.
+ */
+export const TYPE_COLORS: Readonly<Record<string, string>> = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, string>, {
+    edita:      '#E59A9A', // rose  — DESIGN.md
+    sugerencia: '#E3C58A', // gold  — DESIGN.md
+    pregunta:   '#8FB4E3', // blue  — DESIGN.md
+    verifica:   '#FFAA7A', // peach — DESIGN.md
+    nota:       '#6CB6B0', // teal  — DESIGN.md
+    referencia: '#A8CBA0', // sage  — DESIGN.md (formalizado en F5)
+    supuesto:   '#CBAACB', // lilac — DESIGN.md (formalizado en F5)
+  })
+);
 
 /** Color de fallback si el tipo no está reconocido. */
 export const FALLBACK_COLOR = '#9e9e9e'; // Graphite secundario
@@ -105,12 +115,19 @@ export function formatTimestamp(
  * (ej. «el tipo <T> no compila» → «el tipo &lt;T&gt; no compila»).
  *
  * Orden obligatorio: & primero para no doble-escapar después.
+ *
+ * Se escapan también las comillas (« " » → &quot;, « ' » → &#39;) para que el
+ * resultado sea seguro al interpolarse dentro de un atributo HTML entre comillas
+ * (ej. data-thread-id="…" en buildCardsHtml); sin ello, una comilla en el valor
+ * rompería el atributo y permitiría inyectar atributos adicionales.
  */
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -152,4 +169,53 @@ export function buildHoverMessage(
   const footer = `<span style="color:#9e9e9e;">Creado: ${formatTimestamp(comment.created_at, locale, timeZone)}</span>`;
 
   return [header, separator, escapeHtml(comment.body), footer].join('\n\n');
+}
+
+/**
+ * Construye el mensaje de hover completo para un hilo entero (todos los
+ * mensajes no retractados), reutilizable en el editor y en el TreeView.
+ *
+ * Estructura emitida (párrafos separados por línea en blanco):
+ *   1. Cabecera: «● commentType» coloreado y, si hay assignee, « · assignee».
+ *   2. Separador: línea de 40 «─» en el color del tipo.
+ *   3. Un bloque por mensaje no retractado. Cada bloque abre con una
+ *      meta-línea tenue «── autor · fecha» y, debajo, el cuerpo escapado:
+ *        - autor IA: subagent ?? model.
+ *        - autor humano: name ?? «humano».
+ *      La meta-línea gris hace de separador visible entre mensajes, de modo
+ *      que un salto de línea dentro de un cuerpo no se confunde con el inicio
+ *      de una respuesta nueva. La fecha por mensaje sustituye al antiguo pie
+ *      «Creado:», que era redundante con la del primer mensaje.
+ *
+ * Parámetros:
+ *   thread   — hilo proyectado (commentType, assignee, messages)
+ *   locale   — locale BCP 47 para la fecha legible (por defecto 'es-ES')
+ *   timeZone — zona horaria IANA (por defecto: sistema)
+ */
+export function buildThreadHover(
+  thread: Pick<ThreadProjection, 'commentType' | 'assignee' | 'messages'>,
+  locale = 'es-ES',
+  timeZone?: string
+): string {
+  const color     = typeColor(thread.commentType);
+  const bullet    = `<span style="color:${color};">●</span>`;
+  const separator = `<span style="color:${color};">${'─'.repeat(40)}</span>`;
+
+  const assigneeSuffix = thread.assignee ? ` · ${escapeHtml(thread.assignee)}` : '';
+  const header = `${bullet} **${thread.commentType}**${assigneeSuffix}`;
+
+  const activeMessages = thread.messages.filter(m => !m.retracted);
+
+  const blocks = activeMessages.map(msg => {
+    const label = msg.author.kind === 'ai'
+      ? (msg.author.subagent ?? msg.author.model ?? 'modelo desconocido')
+      : (msg.author.name ?? 'humano');
+    // formatTimestamp devuelve created_at crudo si no parsea, así que la fecha
+    // también se escapa antes de interpolarla en el HTML del span.
+    const when = escapeHtml(formatTimestamp(msg.created_at, locale, timeZone));
+    const meta = `<span style="color:#9E9E9E;">── ${escapeHtml(label)} · ${when}</span>`;
+    return `${meta}\n\n${escapeHtml(msg.body)}`;
+  });
+
+  return [header, separator, ...blocks].join('\n\n');
 }

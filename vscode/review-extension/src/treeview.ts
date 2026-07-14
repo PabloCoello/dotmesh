@@ -12,6 +12,7 @@
 import * as vscode from 'vscode';
 import type { ThreadProjection, MessageProjection, CommentType } from './sidecar';
 import { groupByThread } from './treeview-utils';
+import { buildThreadHover } from './decorations-utils';
 
 // ---------------------------------------------------------------------------
 // Tipos del árbol
@@ -67,7 +68,9 @@ export class ThreadItem extends vscode.TreeItem {
       thread.status === 'detached' ? 'detachedThread' :
       'openThread';
 
-    this.tooltip = firstMsg?.body ?? '';
+    const md = new vscode.MarkdownString(buildThreadHover(thread, vscode.env.language));
+    md.supportHtml = true;
+    this.tooltip = md;
 
     const lineLabel =
       'line_hint' in thread.anchor
