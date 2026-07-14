@@ -110,7 +110,6 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
 
   /**
    * Actualiza las proyecciones y el docUri activo, y reenvía el HTML al webview.
-   * Misma firma que ReviewTreeDataProvider.update — se llama en los mismos puntos.
    */
   update(projections: ThreadProjection[], docUri?: vscode.Uri): void {
     this._projections = projections;

@@ -25,7 +25,6 @@ import {
 
 import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
-import { ReviewTreeDataProvider, ThreadItem, MessageItem } from './treeview';
 import { ThreadCardsViewProvider } from './thread-cards';
 
 // ---------------------------------------------------------------------------
@@ -102,8 +101,7 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
 
 /**
  * Rellena las proyecciones y decoraciones tras escribir un evento.
- * Desde el slice 4, ya no actualiza el TreeView (provider) en la ruta de escritura:
- * el árbol se retira en el slice 6. Solo cardsProvider recibe la actualización.
+ * Solo cardsProvider recibe la actualización (el árbol fue retirado).
  */
 async function refreshAfterWrite(
   eventDir: string,
@@ -283,7 +281,7 @@ async function addCommentImpl(
 
 /**
  * Responde a un hilo existente (message.posted).
- * Recibe el threadId en lugar de ThreadItem para ser invocable desde el webview.
+ * Invocable desde el webview vía setActionHandler.
  * Valida que threadId exista en las proyecciones actuales antes de escribir.
  */
 async function replyToThreadImpl(
@@ -329,7 +327,7 @@ async function replyToThreadImpl(
 
 /**
  * Retira un mensaje del hilo (message.retracted).
- * Recibe ids planos en lugar de MessageItem para ser invocable desde el webview.
+ * Invocable desde el webview vía setActionHandler.
  * Valida que thread y mensaje existan antes de escribir.
  */
 async function retractMessageImpl(
@@ -368,7 +366,7 @@ async function retractMessageImpl(
 
 /**
  * Resuelve el hilo (thread.status-changed → resolved).
- * Recibe threadId en lugar de ThreadItem para ser invocable desde el webview.
+ * Invocable desde el webview vía setActionHandler.
  * No re-resuelve hilos ya resueltos o desanclados (no-op silencioso).
  */
 async function resolveThreadImpl(
@@ -404,7 +402,7 @@ async function resolveThreadImpl(
 
 /**
  * Edita el texto de un mensaje existente (message.revised).
- * Recibe ids planos en lugar de MessageItem para ser invocable desde el webview.
+ * Invocable desde el webview vía setActionHandler.
  * Valida thread y mensaje; pre-rellena el InputBox con el body actual.
  */
 async function editMessageImpl(
@@ -466,7 +464,7 @@ async function editMessageImpl(
 
 /**
  * Navega al ancla de un hilo en el editor.
- * Lee el docUri desde cardsProvider en lugar de ReviewTreeDataProvider.
+ * Lee el docUri desde cardsProvider.
  */
 async function jumpToAnchorImpl(
   anchor: Anchor,
@@ -521,21 +519,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('mesh-review');
   output.appendLine('mesh-review: activado (V2 event-sourced)');
 
-  // --- TreeView --- (se retira en el slice 6)
-  const provider = new ReviewTreeDataProvider();
-  const treeView = vscode.window.createTreeView('meshReviewComments', {
-    treeDataProvider: provider,
-    showCollapseAll: true,
-  });
-
   // --- Panel de tarjetas de hilo ---
   const cardsProvider = new ThreadCardsViewProvider(context.extensionUri);
 
   // ---------------------------------------------------------------------------
-  // refreshEditorState — closure sobre provider y cardsProvider.
-  // Se define aquí para capturar ambos sin pasarlos como parámetros.
-  // Mantiene provider.update() hasta el slice 6 para que el árbol no quede vacío
-  // mientras coexisten los dos paneles. Se retira junto con el árbol en el slice 6.
+  // refreshEditorState — closure sobre cardsProvider.
+  // Se define aquí para capturar cardsProvider sin pasarlo como parámetro.
   // ---------------------------------------------------------------------------
   async function refreshEditorState(editor: vscode.TextEditor): Promise<void> {
     try {
@@ -558,10 +547,9 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       applyDecorations(editor, projections);
-      provider.update(projections, editor.document.uri);   // árbol: se retira en el slice 6
       cardsProvider.update(projections, editor.document.uri);
     } catch {
-      // Fallo silencioso: decoraciones, TreeView y panel de tarjetas simplemente no cambian.
+      // Fallo silencioso: decoraciones y panel de tarjetas simplemente no cambian.
     }
   }
 
@@ -619,7 +607,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     output,
-    treeView,
     onEditorChange,
     watcher,
     { dispose: disposeDecorationTypes },
@@ -639,93 +626,33 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     // --- Reply to Thread ---
-    // Mientras el árbol esté activo, extrae thread_id de ThreadItem.
-    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
-    vscode.commands.registerCommand(
-      'mesh-review.replyToThread',
-      async (item?: ThreadItem) => {
-        const threadId = item instanceof ThreadItem ? item.thread_id : undefined;
-        if (!threadId) return;
-        const docUri = cardsProvider.docUri;
-        if (!docUri) return;
-        try {
-          await replyToThreadImpl(threadId, docUri, cardsProvider);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          vscode.window.showErrorMessage(`mesh-review: error al responder — ${msg}`);
-        }
-      }
-    ),
+    // No-op silencioso: el árbol fue retirado; la acción la gestiona el webview
+    // vía setActionHandler. El command id se mantiene por compatibilidad con keybindings.
+    vscode.commands.registerCommand('mesh-review.replyToThread', async () => {}),
 
     // --- Retract Message ---
-    // Mientras el árbol esté activo, extrae threadId y messageId de MessageItem.
-    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
-    vscode.commands.registerCommand(
-      'mesh-review.retractMessage',
-      async (item?: MessageItem) => {
-        const threadId  = item instanceof MessageItem ? item.threadId  : undefined;
-        const messageId = item instanceof MessageItem ? item.messageId : undefined;
-        if (!threadId || !messageId) return;
-        const docUri = cardsProvider.docUri;
-        if (!docUri) return;
-        try {
-          await retractMessageImpl(threadId, messageId, docUri, cardsProvider);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          vscode.window.showErrorMessage(`mesh-review: error al retirar — ${msg}`);
-        }
-      }
-    ),
+    // No-op silencioso: el árbol fue retirado; la acción la gestiona el webview
+    // vía setActionHandler. El command id se mantiene por compatibilidad con keybindings.
+    vscode.commands.registerCommand('mesh-review.retractMessage', async () => {}),
 
     // --- Resolve Thread ---
-    // Mantiene el id 'mesh-review.resolveComment' para compatibilidad con
-    // keybindings existentes. Mientras el árbol esté activo, extrae thread_id de ThreadItem.
-    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
-    vscode.commands.registerCommand(
-      'mesh-review.resolveComment',
-      async (item?: ThreadItem) => {
-        const threadId = item instanceof ThreadItem ? item.thread_id : undefined;
-        if (!threadId) return;
-        const docUri = cardsProvider.docUri;
-        if (!docUri) return;
-        try {
-          await resolveThreadImpl(threadId, docUri, cardsProvider);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          vscode.window.showErrorMessage(`mesh-review: error al resolver — ${msg}`);
-        }
-      }
-    ),
+    // No-op silencioso: el árbol fue retirado; la acción la gestiona el webview
+    // vía setActionHandler. El command id se mantiene por compatibilidad con keybindings.
+    vscode.commands.registerCommand('mesh-review.resolveComment', async () => {}),
 
     // --- Edit Message ---
-    // Mantiene el id 'mesh-review.editComment' para compatibilidad con
-    // keybindings existentes. Mientras el árbol esté activo, extrae ids de MessageItem.
-    // Tras el slice 6 (retirada del árbol), este handler queda como no-op silencioso.
-    vscode.commands.registerCommand(
-      'mesh-review.editComment',
-      async (item?: MessageItem) => {
-        const threadId  = item instanceof MessageItem ? item.threadId  : undefined;
-        const messageId = item instanceof MessageItem ? item.messageId : undefined;
-        if (!threadId || !messageId) return;
-        const docUri = cardsProvider.docUri;
-        if (!docUri) return;
-        try {
-          await editMessageImpl(threadId, messageId, docUri, cardsProvider);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          vscode.window.showErrorMessage(`mesh-review: error al editar — ${msg}`);
-        }
-      }
-    ),
+    // No-op silencioso: el árbol fue retirado; la acción la gestiona el webview
+    // vía setActionHandler. El command id se mantiene por compatibilidad con keybindings.
+    vscode.commands.registerCommand('mesh-review.editComment', async () => {}),
 
     // --- List Comments ---
     vscode.commands.registerCommand('mesh-review.listComments', async () => {
-      await vscode.commands.executeCommand('meshReviewComments.focus');
+      await vscode.commands.executeCommand('meshReviewCards.focus');
     }),
 
     // --- Jump to Comment ---
-    // Invocado al hacer clic en un ThreadItem o desde el webview.
-    // Lee docUri desde cardsProvider (slice 4: migrado de provider a cardsProvider).
+    // Invocado desde el webview al hacer clic en una tarjeta de hilo.
+    // Lee docUri desde cardsProvider.
     vscode.commands.registerCommand(
       'mesh-review.jumpToComment',
       async (anchor: Anchor) => {

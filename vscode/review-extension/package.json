@@ -29,10 +29,6 @@
     "views": {
       "mesh-review": [
         {
-          "id": "meshReviewComments",
-          "name": "Comentarios"
-        },
-        {
           "id": "meshReviewCards",
           "name": "Hilos",
           "type": "webview"
@@ -82,37 +78,13 @@
         "mac": "alt+cmd+z",
         "when": "editorTextFocus"
       }
-    ],
-    "menus": {
-      "view/item/context": [
-        {
-          "command": "mesh-review.replyToThread",
-          "when": "view == meshReviewComments && viewItem == openThread",
-          "group": "inline@1"
-        },
-        {
-          "command": "mesh-review.resolveComment",
-          "when": "view == meshReviewComments && viewItem == openThread",
-          "group": "inline@2"
-        },
-        {
-          "command": "mesh-review.editComment",
-          "when": "view == meshReviewComments && viewItem == message",
-          "group": "inline@1"
-        },
-        {
-          "command": "mesh-review.retractMessage",
-          "when": "view == meshReviewComments && viewItem == message",
-          "group": "inline@2"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "build": "node build.js",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/treeview.test.ts src/thread-cards-utils.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
