@@ -55,6 +55,11 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
     // Recibe mensajes del webview: jump al ancla o acciones sobre hilos/mensajes
     webviewView.webview.onDidReceiveMessage(msg => {
       if (msg.type === 'jump') {
+        // Excepción deliberada al boundary isWebviewActionMessage: jump es solo-lectura.
+        // msg.thread_id se usa únicamente como clave de búsqueda en las proyecciones del
+        // servidor; el comando ejecuta thread.anchor (dato del servidor), nunca el payload
+        // del webview. Si el hilo no existe, no-op. No amplíes este handler para usar
+        // campos del webview sin pasarlo por isWebviewActionMessage.
         const thread = this._projections.find(t => t.thread_id === msg.thread_id);
         if (thread && 'line_hint' in thread.anchor) {
           vscode.commands.executeCommand('mesh-review.jumpToComment', thread.anchor);

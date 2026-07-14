@@ -585,10 +585,25 @@ async function openDiffImpl(
 
   const openCommit = thread.openedCommit ?? null;
 
+  // Boundary de seguridad: fixCommit/openCommit vienen de proyecciones en .ai/review/,
+  // que el reviser y otras herramientas pueden escribir. Se validan aquí —antes del fork
+  // Opción A / Opción B— y no solo antes del shell-out del fallback, para que ningún ref
+  // no confiable llegue ni a la URI git ni a execFile.
+  if (!SHA_RE.test(fixCommit) || (openCommit !== null && !SHA_RE.test(openCommit))) {
+    vscode.window.showErrorMessage(
+      'mesh-review: SHA de commit no válido — no se puede abrir el diff.'
+    );
+    return;
+  }
+
   // Determina los refs a comparar.
   // Modo last: diff del commit del fix (fixCommit^ .. fixCommit).
   // Modo range: si openCommit está disponible, diff acumulado (openCommit .. fixCommit);
   //             si no, fallback a last.
+  // Nota: si fixCommit es el primer commit del repo no tiene padre; `fixCommit^` no
+  //       resuelve y el lado "antes" queda vacío (git show devuelve '' en el fallback;
+  //       la extensión git resuelve el árbol vacío). Aceptable: el diff muestra el
+  //       fichero como añadido.
   const refBefore: string =
     mode === 'range' && openCommit !== null
       ? openCommit
@@ -619,16 +634,7 @@ async function openDiffImpl(
     await vscode.commands.executeCommand('vscode.diff', uriBefore, uriAfter, titulo);
   } else {
     // Opción B — fallback con git show + documento virtual.
-    // Validamos el SHA base antes de pasarlo a execFile (nunca interpolamos en shell).
-    const shaAfter = refAfter;
-    const shaBefore = refBefore.endsWith('^') ? refBefore.slice(0, -1) : refBefore;
-    if (!SHA_RE.test(shaAfter) || !SHA_RE.test(shaBefore)) {
-      vscode.window.showErrorMessage(
-        'mesh-review: SHA de commit no válido — no se puede abrir el diff.'
-      );
-      return;
-    }
-
+    // Los refs ya están validados arriba (SHA_RE); execFile con args en array, sin shell.
     const [contentBefore, contentAfter] = await Promise.all([
       execFileAsync('git', ['show', `${refBefore}:${relPathGit}`], { cwd: gitRoot })
         .then(r => r.stdout)
