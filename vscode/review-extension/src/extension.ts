@@ -184,48 +184,6 @@ async function handleLegacyMigration(
   return project(migrateV1(sidecar));
 }
 
-// ---------------------------------------------------------------------------
-// Refresco de decoraciones y paneles al cambiar de editor
-// ---------------------------------------------------------------------------
-
-/**
- * Lee los eventos V2 del directorio del documento activo, proyecta el estado
- * net de los hilos y actualiza el TreeView, el panel de tarjetas y las decoraciones.
- * Comprueba también si existe un sidecar V1 y ofrece migración.
- *
- * No lanza: los errores se capturan silenciosamente.
- */
-async function refreshEditorState(
-  editor: vscode.TextEditor,
-  provider: ReviewTreeDataProvider,
-  cardsProvider: ThreadCardsViewProvider
-): Promise<void> {
-  try {
-    const docFsPath = editor.document.uri.fsPath;
-    const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docFsPath);
-
-    let projections: ThreadProjection[];
-
-    if (gitRoot && await detectLegacy(gitRoot, docRelPath)) {
-      if (!migrationPromptedDocs.has(docFsPath)) {
-        migrationPromptedDocs.add(docFsPath);
-        projections = await handleLegacyMigration(editor, gitRoot, docRelPath, eventDir);
-      } else {
-        const v1FilePath = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
-        const sidecar = await readSidecar(v1FilePath);
-        projections = sidecar ? project(migrateV1(sidecar)) : [];
-      }
-    } else {
-      projections = project(await readEvents(eventDir));
-    }
-
-    applyDecorations(editor, projections);
-    provider.update(projections, editor.document.uri);
-    cardsProvider.update(projections, editor.document.uri);
-  } catch {
-    // Fallo silencioso: decoraciones, TreeView y panel de tarjetas simplemente no cambian.
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Implementación de comandos
@@ -573,6 +531,40 @@ export function activate(context: vscode.ExtensionContext): void {
   // --- Panel de tarjetas de hilo ---
   const cardsProvider = new ThreadCardsViewProvider(context.extensionUri);
 
+  // ---------------------------------------------------------------------------
+  // refreshEditorState — closure sobre provider y cardsProvider.
+  // Se define aquí para capturar ambos sin pasarlos como parámetros.
+  // Mantiene provider.update() hasta el slice 6 para que el árbol no quede vacío
+  // mientras coexisten los dos paneles. Se retira junto con el árbol en el slice 6.
+  // ---------------------------------------------------------------------------
+  async function refreshEditorState(editor: vscode.TextEditor): Promise<void> {
+    try {
+      const docFsPath = editor.document.uri.fsPath;
+      const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docFsPath);
+
+      let projections: ThreadProjection[];
+
+      if (gitRoot && await detectLegacy(gitRoot, docRelPath)) {
+        if (!migrationPromptedDocs.has(docFsPath)) {
+          migrationPromptedDocs.add(docFsPath);
+          projections = await handleLegacyMigration(editor, gitRoot, docRelPath, eventDir);
+        } else {
+          const v1FilePath = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
+          const sidecar = await readSidecar(v1FilePath);
+          projections = sidecar ? project(migrateV1(sidecar)) : [];
+        }
+      } else {
+        projections = project(await readEvents(eventDir));
+      }
+
+      applyDecorations(editor, projections);
+      provider.update(projections, editor.document.uri);   // árbol: se retira en el slice 6
+      cardsProvider.update(projections, editor.document.uri);
+    } catch {
+      // Fallo silencioso: decoraciones, TreeView y panel de tarjetas simplemente no cambian.
+    }
+  }
+
   // --- Registra el handler de acciones del webview ---
   // El webview emite reply/resolve/edit/retract con ids de hilo y mensaje.
   // Cada acción valida los ids contra las proyecciones antes de escribir.
@@ -603,13 +595,13 @@ export function activate(context: vscode.ExtensionContext): void {
   // --- Estado inicial ---
   const initialEditor = vscode.window.activeTextEditor;
   if (initialEditor) {
-    refreshEditorState(initialEditor, provider, cardsProvider).catch(() => {});
+    refreshEditorState(initialEditor).catch(() => {});
   }
 
   // --- Refresco al cambiar de editor ---
   const onEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
     if (editor) {
-      refreshEditorState(editor, provider, cardsProvider).catch(() => {});
+      refreshEditorState(editor).catch(() => {});
     }
   });
 
@@ -618,7 +610,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const onSidecarChange = () => {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
-      refreshEditorState(editor, provider, cardsProvider).catch(() => {});
+      refreshEditorState(editor).catch(() => {});
     }
   };
   watcher.onDidChange(onSidecarChange);
