@@ -931,3 +931,62 @@ test('fallbackEventDir incluye el sha256 de la ruta absoluta y es un directorio'
 test('fallbackEventDir: rutas distintas producen directorios distintos', () => {
   assert.notStrictEqual(fallbackEventDir('/a/doc.md'), fallbackEventDir('/b/doc.md'));
 });
+
+// ---------------------------------------------------------------------------
+// project — commit y openedCommit (Fase commit-por-comentario)
+// ---------------------------------------------------------------------------
+
+test('project rellena openedCommit desde ev.commit del thread.opened', () => {
+  const tid = 'a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2';
+  const ev = makeOpened({ id: tid, thread_id: tid, commit: 'abc1234' });
+  const result = project([ev]);
+  assert.strictEqual(result[0].openedCommit, 'abc1234');
+});
+
+test('project rellena openedCommit como null cuando ev.commit es null', () => {
+  const tid = 'b3b3b3b3-b3b3-4b3b-8b3b-b3b3b3b3b3b3';
+  const ev = makeOpened({ id: tid, thread_id: tid, commit: null });
+  const result = project([ev]);
+  assert.strictEqual(result[0].openedCommit, null);
+});
+
+test('project rellena commit en messages[0] desde el thread.opened', () => {
+  const tid = 'c4c4c4c4-c4c4-4c4c-8c4c-c4c4c4c4c4c4';
+  const ev = makeOpened({ id: tid, thread_id: tid, commit: 'def5678' });
+  const result = project([ev]);
+  assert.strictEqual(result[0].messages[0].commit, 'def5678');
+});
+
+test('project rellena commit null en messages[0] cuando thread.opened tiene commit null', () => {
+  const tid = 'd5d5d5d5-d5d5-4d5d-8d5d-d5d5d5d5d5d5';
+  const ev = makeOpened({ id: tid, thread_id: tid, commit: null });
+  const result = project([ev]);
+  assert.strictEqual(result[0].messages[0].commit, null);
+});
+
+test('project rellena commit en message.posted con el SHA del evento', () => {
+  const tid = 'e6e6e6e6-e6e6-4e6e-8e6e-e6e6e6e6e6e6';
+  const opened = makeOpened({ id: tid, thread_id: tid });
+  const posted: EventEnvelope = {
+    id: 'f7f7f7f7-f7f7-4f7f-8f7f-f7f7f7f7f7f7',
+    version: 2, type: 'message.posted', thread_id: tid,
+    author: { kind: 'ai', model: 'claude-sonnet' },
+    created_at: '2026-07-13T10:00:01.000Z',
+    commit: 'abc9999', dirty: false, body: 'fix aplicado',
+  } as unknown as EventEnvelope;
+  const result = project([opened, posted]);
+  assert.strictEqual(result[0].messages[1].commit, 'abc9999');
+});
+
+test('project rellena commit null en message.posted sin SHA', () => {
+  const tid = '07070707-0707-4707-8707-070707070707';
+  const opened = makeOpened({ id: tid, thread_id: tid });
+  const posted: EventEnvelope = {
+    id: '18181818-1818-4181-8181-181818181818',
+    version: 2, type: 'message.posted', thread_id: tid,
+    author: { kind: 'human' }, created_at: '2026-07-13T10:00:01.000Z',
+    commit: null, dirty: false, body: 'respuesta humana',
+  } as unknown as EventEnvelope;
+  const result = project([opened, posted]);
+  assert.strictEqual(result[0].messages[1].commit, null);
+});
