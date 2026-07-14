@@ -107,35 +107,89 @@ export function partitionCardsByStatus(
 // ---------------------------------------------------------------------------
 
 /**
- * Genera el fragmento HTML con todas las tarjetas de hilo.
+ * Genera el HTML de una tarjeta de hilo.
  *
- * Escapa con escapeHtml todo valor derivado de los datos del evento
- * (commentType, lineLabel, authorLabel, dateLabel, body, thread_id) antes de
- * interpolarlo. No se interpola ningún color: el bullet se colorea por la clase
- * `bullet-<tipo>` definida en buildBulletStyles(), de modo que el HTML no lleva
- * atributos style inline (requisito para restringir style-src a un nonce).
+ * - withActions=true: añade botones de acción en la cabecera y al pie de cada
+ *   mensaje (solo para hilos abiertos).
+ * - Añade data-message-id en cada div.card-message.
+ * - Todo valor derivado de datos de evento se escapa con escapeHtml.
+ * - Sin atributos style inline (requisito para restringir style-src a un nonce).
  */
-export function buildCardsHtml(cards: CardViewModel[]): string {
-  if (cards.length === 0) {
-    return '<p class="empty">Sin comentarios en este documento.</p>';
-  }
+function buildCardHtml(card: CardViewModel, withActions: boolean): string {
+  const tid = escapeHtml(card.thread_id);
 
-  return cards.map(card => {
-    const messagesHtml = card.messages.map(msg => `<div class="card-message">
+  const cardActionsHtml = withActions
+    ? `\n        <span class="card-actions"><button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    : '';
+
+  const messagesHtml = card.messages.map(msg => {
+    const mid = escapeHtml(msg.id);
+    const msgActionsHtml = withActions
+      ? `\n        <span class="msg-actions"><button class="action-btn" data-action="edit" data-thread-id="${tid}" data-message-id="${mid}">✎</button><button class="action-btn" data-action="retract" data-thread-id="${tid}" data-message-id="${mid}">⊘</button></span>`
+      : '';
+    return `<div class="card-message" data-message-id="${mid}">
         <div class="card-body">${escapeHtml(msg.body)}</div>
-        <div class="card-meta">── ${escapeHtml(msg.authorLabel)} · ${escapeHtml(msg.dateLabel)}</div>
-      </div>`).join('\n      ');
+        <div class="card-meta">── ${escapeHtml(msg.authorLabel)} · ${escapeHtml(msg.dateLabel)}</div>${msgActionsHtml}
+      </div>`;
+  }).join('\n      ');
 
-    return `<div class="card" data-thread-id="${escapeHtml(card.thread_id)}" data-has-anchor="${card.hasAnchor}">
+  return `<div class="card" data-thread-id="${tid}" data-has-anchor="${card.hasAnchor}">
       <div class="card-header">
         <span class="bullet bullet-${escapeHtml(card.commentType)}">●</span>
         <span class="card-type">${escapeHtml(card.commentType)}</span>
-        <span class="card-line">${escapeHtml(card.lineLabel)}</span>
+        <span class="card-line">${escapeHtml(card.lineLabel)}</span>${cardActionsHtml}
       </div>
       <div class="card-messages">
       ${messagesHtml}</div>
     </div>`;
-  }).join('\n');
+}
+
+/**
+ * Genera el fragmento HTML con todas las tarjetas de hilo, particionadas por estado.
+ *
+ * - Hilos abiertos: lista plana (sin agrupar por tipo), con botones de acción.
+ * - Hilos resueltos: sección <details data-section="resolved"> colapsada por defecto.
+ * - Hilos desanclados: sección <details data-section="detached"> colapsada por defecto.
+ * - Omite la sección completa si su cubo está vacío.
+ * - Sin atributos style inline (requisito de CSP con nonce).
+ */
+export function buildCardsHtml(cards: CardViewModel[]): string {
+  const { open, resolved, detached } = partitionCardsByStatus(cards);
+
+  if (open.length === 0 && resolved.length === 0 && detached.length === 0) {
+    return '<p class="empty">Sin comentarios en este documento.</p>';
+  }
+
+  const parts: string[] = [];
+
+  // Hilos abiertos: lista plana con botones de acción
+  for (const card of open) {
+    parts.push(buildCardHtml(card, true));
+  }
+
+  // Hilos resueltos: sección colapsada
+  if (resolved.length > 0) {
+    const inner = resolved.map(c => buildCardHtml(c, false)).join('\n');
+    parts.push(
+      `<details data-section="resolved" class="section-collapsed">\n` +
+      `<summary class="section-header">Resueltos (${resolved.length})</summary>\n` +
+      `${inner}\n` +
+      `</details>`
+    );
+  }
+
+  // Hilos desanclados: sección colapsada
+  if (detached.length > 0) {
+    const inner = detached.map(c => buildCardHtml(c, false)).join('\n');
+    parts.push(
+      `<details data-section="detached" class="section-collapsed">\n` +
+      `<summary class="section-header">Desanclados (${detached.length})</summary>\n` +
+      `${inner}\n` +
+      `</details>`
+    );
+  }
+
+  return parts.join('\n');
 }
 
 // ---------------------------------------------------------------------------

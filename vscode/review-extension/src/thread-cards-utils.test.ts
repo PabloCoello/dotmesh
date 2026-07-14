@@ -281,6 +281,141 @@ test('buildCardsHtml colorea el bullet por clase de tipo (sin style inline)', ()
 });
 
 // ---------------------------------------------------------------------------
+// buildCardsHtml — secciones por estado, botones de acción y data-message-id
+// ---------------------------------------------------------------------------
+
+test('buildCardsHtml sección resolved presente cuando hay hilos resueltos', () => {
+  const card: CardViewModel = {
+    thread_id:   'r1',
+    commentType: 'nota',
+    lineLabel:   'L3',
+    hasAnchor:   true,
+    status:      'resolved',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(
+    html.includes('data-section="resolved"'),
+    'Debe incluir data-section="resolved" cuando hay resueltos'
+  );
+  assert.ok(
+    html.includes('Resueltos (1)'),
+    'El summary debe indicar el recuento'
+  );
+});
+
+test('buildCardsHtml sección resolved ausente cuando no hay hilos resueltos', () => {
+  const card: CardViewModel = {
+    thread_id:   'o1',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(
+    !html.includes('data-section="resolved"'),
+    'No debe incluir data-section="resolved" cuando no hay resueltos'
+  );
+});
+
+test('buildCardsHtml sección detached presente cuando hay hilos desanclados', () => {
+  const card: CardViewModel = {
+    thread_id:   'd1',
+    commentType: 'nota',
+    lineLabel:   '(desanclado)',
+    hasAnchor:   false,
+    status:      'detached',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(
+    html.includes('data-section="detached"'),
+    'Debe incluir data-section="detached" cuando hay desanclados'
+  );
+  assert.ok(
+    html.includes('Desanclados (1)'),
+    'El summary debe indicar el recuento'
+  );
+});
+
+test('buildCardsHtml data-message-id presente en cada mensaje', () => {
+  const card: CardViewModel = {
+    thread_id:   't1',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    messages: [
+      { id: 'msg-abc', authorLabel: 'humano', dateLabel: '13 jul', body: 'primero' },
+      { id: 'msg-xyz', authorLabel: 'humano', dateLabel: '13 jul', body: 'segundo' },
+    ],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('data-message-id="msg-abc"'), 'Debe contener data-message-id del primer mensaje');
+  assert.ok(html.includes('data-message-id="msg-xyz"'), 'Debe contener data-message-id del segundo mensaje');
+});
+
+test('buildCardsHtml botones de acción presentes en hilo abierto', () => {
+  const card: CardViewModel = {
+    thread_id:   'o1',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('data-action="reply"'),   'Debe incluir botón reply en abiertos');
+  assert.ok(html.includes('data-action="resolve"'), 'Debe incluir botón resolve en abiertos');
+  assert.ok(html.includes('data-action="edit"'),    'Debe incluir botón edit en abiertos');
+  assert.ok(html.includes('data-action="retract"'), 'Debe incluir botón retract en abiertos');
+});
+
+test('buildCardsHtml botones de acción ausentes en hilo resuelto', () => {
+  const card: CardViewModel = {
+    thread_id:   'r1',
+    commentType: 'nota',
+    lineLabel:   'L2',
+    hasAnchor:   true,
+    status:      'resolved',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="reply"'),   'No debe incluir botón reply en resueltos');
+  assert.ok(!html.includes('data-action="resolve"'), 'No debe incluir botón resolve en resueltos');
+  assert.ok(!html.includes('data-action="edit"'),    'No debe incluir botón edit en resueltos');
+  assert.ok(!html.includes('data-action="retract"'), 'No debe incluir botón retract en resueltos');
+});
+
+test('buildCardsHtml botones de acción ausentes en hilo desanclado', () => {
+  const card: CardViewModel = {
+    thread_id:   'd1',
+    commentType: 'nota',
+    lineLabel:   '(desanclado)',
+    hasAnchor:   false,
+    status:      'detached',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="reply"'),   'No debe incluir botón reply en desanclados');
+  assert.ok(!html.includes('data-action="resolve"'), 'No debe incluir botón resolve en desanclados');
+  assert.ok(!html.includes('data-action="edit"'),    'No debe incluir botón edit en desanclados');
+  assert.ok(!html.includes('data-action="retract"'), 'No debe incluir botón retract en desanclados');
+});
+
+test('buildCardsHtml no contiene atributos style inline', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: 'o1', commentType: 'nota',     lineLabel: 'L1', hasAnchor: true,  status: 'open',     messages: [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
+    { thread_id: 'r1', commentType: 'sugerencia', lineLabel: 'L2', hasAnchor: true, status: 'resolved', messages: [{ id: 'm2', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
+    { thread_id: 'd1', commentType: 'verifica',  lineLabel: '(desanclado)', hasAnchor: false, status: 'detached', messages: [{ id: 'm3', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }] },
+  ];
+  const html = buildCardsHtml(cards);
+  assert.ok(!html.includes(' style='), 'El HTML no debe contener atributos style inline (CSP con nonce)');
+});
+
+// ---------------------------------------------------------------------------
 // buildBulletStyles — reglas CSS del bullet generadas desde la paleta
 // ---------------------------------------------------------------------------
 
