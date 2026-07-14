@@ -15,10 +15,14 @@
  *   lilac  #CBAACB   supuesto
  *   grey   #6e6e6e   texto atenuado (Graphite, «atenuado»)
  *
- * El fondo del rango es teal con alpha 0.18: el gris ink-2 sobre Ink
- * (#121212) quedaba por debajo del umbral de visibilidad. El teal es el
- * color de nota en todo dotmesh (hunk, VS Code accent) y con alpha funciona
- * sobre Paper (blanco) y sobre Ink.
+ * El fondo del rango se tinta con el color del tipo a alpha 0.18 (RANGE_ALPHA):
+ * el gris ink-2 sobre Ink (#121212) quedaba por debajo del umbral de
+ * visibilidad, pero los pasteles de la paleta a 0.18 funcionan sobre Paper
+ * (blanco) y sobre Ink. Un comentario «nota» conserva el teal histórico porque
+ * teal es su color de tipo; el resto reciben su propio tinte. Ese fondo es
+ * además lo que VS Code pinta en el minimapa, de modo que el tinte por tipo
+ * sirve de indicador de color para localizar comentarios en la vista previa;
+ * la overview ruler recibe el mismo color a opacidad plena (ver decorations.ts).
  */
 
 import type { Comment, ThreadProjection } from './sidecar';
@@ -27,8 +31,8 @@ import type { Comment, ThreadProjection } from './sidecar';
 // Constantes de paleta (DESIGN.md)
 // ---------------------------------------------------------------------------
 
-/** Fondo del rango anclado: teal con alpha, legible sobre Ink y Paper. */
-export const RANGE_BG_COLOR = 'rgba(108, 182, 176, 0.18)';
+/** Alpha del fondo del rango anclado: legible sobre Ink y Paper. */
+export const RANGE_ALPHA = 0.18;
 
 /**
  * Mapa tipo → color dotmesh (DESIGN.md).
@@ -81,6 +85,23 @@ export function buildLabelText(
  */
 export function typeColor(type: string): string {
   return TYPE_COLORS[type] ?? FALLBACK_COLOR;
+}
+
+/**
+ * Convierte un color «#rrggbb» en «rgba(r, g, b, alpha)» para usarlo como
+ * backgroundColor con transparencia. Los valores de TYPE_COLORS y
+ * FALLBACK_COLOR ya son hex de 6 dígitos, así que esta es la única forma que
+ * necesita soportar; ante una entrada malformada devuelve el hex tal cual, de
+ * modo que el color se aplica opaco en vez de romper la decoración.
+ */
+export function hexToRgba(hex: string, alpha: number): string {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!match) return hex;
+  const int = parseInt(match[1], 16);
+  const r = (int >> 16) & 0xff;
+  const g = (int >> 8) & 0xff;
+  const b = int & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /**
