@@ -21,12 +21,12 @@ import {
   type ThreadProjection,
   type Anchor,
   type CommentType,
-  type Comment,
 } from './sidecar';
 
 import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ReviewTreeDataProvider, ThreadItem, MessageItem } from './treeview';
+import { ThreadCardsViewProvider } from './thread-cards';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -37,26 +37,6 @@ const suppressedWorkspaces = new Set<string>();
 // Documentos cuya oferta de migración V1→V2 ya se mostró en esta sesión.
 // Evita que el prompt reaparezca cada vez que el usuario enfoca el editor.
 const migrationPromptedDocs = new Set<string>();
-
-// ---------------------------------------------------------------------------
-// Helper: convierte proyecciones V2 al shape mínimo que applyDecorations espera.
-// Filtra hilos desanclados (anchor sin line_hint) y los resueltos/detached no
-// reciben decoración de todos modos (applyDecorations salta !open).
-// ---------------------------------------------------------------------------
-
-function projectionsToDecorationComments(projections: ThreadProjection[]): Comment[] {
-  return projections
-    .filter((t): t is ThreadProjection & { anchor: Anchor } => 'line_hint' in t.anchor)
-    .map(t => ({
-      id: t.thread_id,
-      anchor: t.anchor,
-      type: t.commentType,
-      body: t.messages[0]?.body ?? '',
-      status: t.status as 'open' | 'resolved' | 'detached',
-      created_at: t.openedAt,
-      updated_at: t.openedAt,
-    }));
-}
 
 // ---------------------------------------------------------------------------
 // Helpers de ruta
@@ -133,16 +113,18 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
 async function refreshAfterWrite(
   eventDir: string,
   docUri: vscode.Uri,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const events = await readEvents(eventDir);
   const projections = project(events);
   provider.update(projections, docUri);
+  cardsProvider.update(projections, docUri);
   const editor = vscode.window.visibleTextEditors.find(
     e => e.document.uri.fsPath === docUri.fsPath
   ) ?? vscode.window.activeTextEditor;
   if (editor) {
-    applyDecorations(editor, projectionsToDecorationComments(projections));
+    applyDecorations(editor, projections);
   }
 }
 
@@ -241,7 +223,8 @@ async function handleLegacyMigration(
  */
 async function refreshEditorState(
   editor: vscode.TextEditor,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   try {
     const docFsPath = editor.document.uri.fsPath;
@@ -263,10 +246,11 @@ async function refreshEditorState(
       projections = project(await readEvents(eventDir));
     }
 
-    applyDecorations(editor, projectionsToDecorationComments(projections));
+    applyDecorations(editor, projections);
     provider.update(projections, editor.document.uri);
+    cardsProvider.update(projections, editor.document.uri);
   } catch {
-    // Fallo silencioso: decoraciones y TreeView simplemente no cambian.
+    // Fallo silencioso: decoraciones, TreeView y panel de tarjetas simplemente no cambian.
   }
 }
 
@@ -277,7 +261,8 @@ async function refreshEditorState(
 /** Añade un nuevo hilo de revisión (thread.opened) al documento activo. */
 async function addCommentImpl(
   output: vscode.OutputChannel,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
@@ -308,6 +293,8 @@ async function addCommentImpl(
       { label: 'pregunta',   description: 'Pregunta sobre el contenido' },
       { label: 'verifica',   description: 'Comprueba un dato o afirmación contra la fuente' },
       { label: 'nota',       description: 'Anotación informativa sin acción requerida' },
+      { label: 'referencia', description: 'Referencia o fuente enlazada' },
+      { label: 'supuesto',   description: 'Supuesto con traza de confianza' },
     ],
     { title: 'Tipo de comentario', placeHolder: 'Selecciona el tipo' }
   );
@@ -363,7 +350,7 @@ async function addCommentImpl(
   await writeEvent(eventDir, event);
 
   // Refresca inmediatamente sin esperar al FileSystemWatcher
-  await refreshAfterWrite(eventDir, editor.document.uri, provider);
+  await refreshAfterWrite(eventDir, editor.document.uri, provider, cardsProvider);
 
   output.appendLine(`mesh-review: hilo añadido — ${id} (${type.label})`);
   vscode.window.showInformationMessage(`mesh-review: comentario añadido (${type.label})`);
@@ -375,7 +362,8 @@ async function addCommentImpl(
  */
 async function replyToThreadImpl(
   item: ThreadItem,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const docUri = provider.docUri;
   if (!docUri) {
@@ -408,7 +396,7 @@ async function replyToThreadImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider);
+  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: respuesta añadida.');
 }
 
@@ -419,7 +407,8 @@ async function replyToThreadImpl(
  */
 async function retractMessageImpl(
   item: MessageItem,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const docUri = provider.docUri;
   if (!docUri) {
@@ -443,7 +432,7 @@ async function retractMessageImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider);
+  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: mensaje retirado.');
 }
 
@@ -453,7 +442,8 @@ async function retractMessageImpl(
  */
 async function resolveThreadImpl(
   item: ThreadItem,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const docUri = provider.docUri;
   if (!docUri) {
@@ -477,7 +467,7 @@ async function resolveThreadImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider);
+  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: hilo marcado como resuelto.');
 }
 
@@ -488,7 +478,8 @@ async function resolveThreadImpl(
  */
 async function editMessageImpl(
   item: MessageItem,
-  provider: ReviewTreeDataProvider
+  provider: ReviewTreeDataProvider,
+  cardsProvider: ThreadCardsViewProvider
 ): Promise<void> {
   const docUri = provider.docUri;
   if (!docUri) {
@@ -536,7 +527,7 @@ async function editMessageImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, provider);
+  await refreshAfterWrite(eventDir, docUri, provider, cardsProvider);
   vscode.window.showInformationMessage('mesh-review: mensaje actualizado.');
 }
 
@@ -604,16 +595,19 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
 
+  // --- Panel de tarjetas de hilo ---
+  const cardsProvider = new ThreadCardsViewProvider(context.extensionUri);
+
   // --- Estado inicial ---
   const initialEditor = vscode.window.activeTextEditor;
   if (initialEditor) {
-    refreshEditorState(initialEditor, provider).catch(() => {});
+    refreshEditorState(initialEditor, provider, cardsProvider).catch(() => {});
   }
 
   // --- Refresco al cambiar de editor ---
   const onEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
     if (editor) {
-      refreshEditorState(editor, provider).catch(() => {});
+      refreshEditorState(editor, provider, cardsProvider).catch(() => {});
     }
   });
 
@@ -624,7 +618,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const onSidecarChange = () => {
     const editor = vscode.window.activeTextEditor;
     if (editor) {
-      refreshEditorState(editor, provider).catch(() => {});
+      refreshEditorState(editor, provider, cardsProvider).catch(() => {});
     }
   };
   watcher.onDidChange(onSidecarChange);
@@ -638,10 +632,13 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher,
     { dispose: disposeDecorationTypes },
 
+    // --- Panel de tarjetas de hilo (webview view) ---
+    vscode.window.registerWebviewViewProvider('meshReviewCards', cardsProvider),
+
     // --- Add Comment (Slice 2) ---
     vscode.commands.registerCommand('mesh-review.addComment', async () => {
       try {
-        await addCommentImpl(output, provider);
+        await addCommentImpl(output, provider, cardsProvider);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`mesh-review: error al guardar el comentario — ${msg}`);
@@ -655,7 +652,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (item?: ThreadItem) => {
         if (!(item instanceof ThreadItem)) return;
         try {
-          await replyToThreadImpl(item, provider);
+          await replyToThreadImpl(item, provider, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al responder — ${msg}`);
@@ -669,7 +666,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (item?: MessageItem) => {
         if (!(item instanceof MessageItem)) return;
         try {
-          await retractMessageImpl(item, provider);
+          await retractMessageImpl(item, provider, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al retirar — ${msg}`);
@@ -685,7 +682,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (item?: ThreadItem) => {
         if (!(item instanceof ThreadItem)) return;
         try {
-          await resolveThreadImpl(item, provider);
+          await resolveThreadImpl(item, provider, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al resolver — ${msg}`);
@@ -701,7 +698,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (item?: MessageItem) => {
         if (!(item instanceof MessageItem)) return;
         try {
-          await editMessageImpl(item, provider);
+          await editMessageImpl(item, provider, cardsProvider);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           vscode.window.showErrorMessage(`mesh-review: error al editar — ${msg}`);

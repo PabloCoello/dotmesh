@@ -455,9 +455,10 @@ export async function ensureFallbackDir(
 // IO V2: directorio de eventos
 //
 // Seguridad: `dir`, `docRelPath` y `event.id` se asumen ya saneados por quien
-// llama. El acotado de rutas al git root y la validación del input externo son
-// responsabilidad del gate de seguridad de F4 (ver plan "Gate de security (F4)"),
-// que añade las guardas en los call-sites de extension.ts. Aquí no se valida.
+// llama para las rutas de escritura. El acotado de rutas al git root vive en
+// los call-sites de extension.ts (gate F4). readEvents, además, valida en
+// runtime la forma de los eventos que lee del disco (id/thread_id UUID, body
+// string) como defensa en profundidad frente a ficheros de evento malformados.
 // ---------------------------------------------------------------------------
 
 /**
@@ -480,6 +481,14 @@ export async function readEvents(dir: string): Promise<EventEnvelope[]> {
       const content = await readFile(path.join(dir, name), 'utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
       if (parsed?.version !== 2) continue;
+      // Endurecimiento: un evento en disco puede estar malformado (escrito por
+      // otro colaborador o un agente). Se descartan los que no tengan id y
+      // thread_id con forma de UUID, o cuyo body —cuando está presente— no sea
+      // string, para que ni la proyección ni el render del webview reciban
+      // datos corruptos (un body no-string haría fallar escapeHtml).
+      if (typeof parsed.id !== 'string' || !isUuid(parsed.id)) continue;
+      if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
+      if ('body' in parsed && typeof parsed.body !== 'string') continue;
       results.push(parsed as unknown as EventEnvelope);
     } catch {
       // fichero ilegible o JSON inválido — se ignora

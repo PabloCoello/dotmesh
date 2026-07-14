@@ -698,6 +698,58 @@ test('readEvents devuelve eventos ordenados por created_at asc, desempate por id
   }
 });
 
+test('readEvents descarta un evento con thread_id no-UUID', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-badtid-'));
+  try {
+    const bad = {
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0001',
+      version: 2, type: 'thread.opened', thread_id: 'no-es-uuid',
+      author: { kind: 'human' }, created_at: '2026-07-13T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'x', line_hint: 0, char_offset: 0 },
+      commentType: 'nota', body: 'x',
+    };
+    await writeFile(join(dir, `${bad.id}.json`), JSON.stringify(bad), 'utf8');
+    const events = await readEvents(dir);
+    assert.deepStrictEqual(events, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents descarta un evento cuyo body no es string', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-badbody-'));
+  try {
+    const tid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0002';
+    const bad = {
+      id: tid, version: 2, type: 'thread.opened', thread_id: tid,
+      author: { kind: 'human' }, created_at: '2026-07-13T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'x', line_hint: 0, char_offset: 0 },
+      commentType: 'nota', body: { inyeccion: true },
+    };
+    await writeFile(join(dir, `${bad.id}.json`), JSON.stringify(bad), 'utf8');
+    const events = await readEvents(dir);
+    assert.deepStrictEqual(events, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents conserva un evento V2 bien formado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-goodev-'));
+  try {
+    const tid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0003';
+    const good = makeOpened({ id: tid, thread_id: tid });
+    await writeEvent(dir, good);
+    const events = await readEvents(dir);
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual(events[0].thread_id, tid);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // detectLegacy (F2 — IO)
 // ---------------------------------------------------------------------------

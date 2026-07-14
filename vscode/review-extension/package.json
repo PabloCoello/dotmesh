@@ -31,6 +31,11 @@
         {
           "id": "meshReviewComments",
           "name": "Comentarios"
+        },
+        {
+          "id": "meshReviewCards",
+          "name": "Hilos",
+          "type": "webview"
         }
       ]
     },
@@ -107,7 +112,7 @@
     "build": "node build.js",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/treeview.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/treeview.test.ts src/thread-cards-utils.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
