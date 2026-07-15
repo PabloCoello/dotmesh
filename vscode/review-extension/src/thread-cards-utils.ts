@@ -72,10 +72,10 @@ export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessag
     case 'diff':
       return hasThread && (m.mode === 'last' || m.mode === 'range');
     case 'reply-submit':
-      // body es texto libre del usuario: no vacío ni solo espacios.
-      return hasThread && typeof m.body === 'string' && m.body.trim() !== '';
+      // body es texto libre del usuario: no vacío, no solo espacios, y ≤ 10 000 chars.
+      return hasThread && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
     case 'edit-submit':
-      return hasThread && hasMessage && typeof m.body === 'string' && m.body.trim() !== '';
+      return hasThread && hasMessage && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
     default:
       return false;
   }

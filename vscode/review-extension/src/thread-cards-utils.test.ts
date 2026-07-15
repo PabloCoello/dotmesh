@@ -1068,3 +1068,38 @@ test('isWebviewActionMessage rechaza edit-submit con body solo espacios', () => 
     body: '   ',
   }));
 });
+
+// Cota de tamaño: body <= 10 000 caracteres en reply-submit y edit-submit
+test('isWebviewActionMessage acepta reply-submit con body de exactamente 10000 caracteres', () => {
+  assert.ok(isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: TID,
+    body: 'a'.repeat(10_000),
+  }));
+});
+
+test('isWebviewActionMessage rechaza reply-submit con body de 10001 caracteres', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: TID,
+    body: 'a'.repeat(10_001),
+  }));
+});
+
+test('isWebviewActionMessage acepta edit-submit con body de exactamente 10000 caracteres', () => {
+  assert.ok(isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    message_id: MID,
+    body: 'a'.repeat(10_000),
+  }));
+});
+
+test('isWebviewActionMessage rechaza edit-submit con body de 10001 caracteres', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    message_id: MID,
+    body: 'a'.repeat(10_001),
+  }));
+});

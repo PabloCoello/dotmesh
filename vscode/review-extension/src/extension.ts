@@ -351,7 +351,9 @@ async function replyToThreadImpl(
       prompt: 'Escribe la respuesta (Enter para confirmar)',
       ignoreFocusOut: true,
       validateInput: (v) =>
-        v.trim() === '' ? 'La respuesta no puede estar vacía' : undefined,
+        v.trim() === ''   ? 'La respuesta no puede estar vacía' :
+        v.length > 10_000 ? 'La respuesta no puede superar 10 000 caracteres' :
+        undefined,
     });
     if (input === undefined || input.trim() === '') return;
     body = input.trim();
@@ -494,13 +496,15 @@ async function editMessageImpl(
       value: currentBody,
       ignoreFocusOut: true,
       validateInput: (v) =>
-        v.trim() === '' ? 'El mensaje no puede estar vacío' : undefined,
+        v.trim() === ''   ? 'El mensaje no puede estar vacío' :
+        v.length > 10_000 ? 'El mensaje no puede superar 10 000 caracteres' :
+        undefined,
     });
     if (input === undefined) return;
     newBody = input.trim();
   }
 
-  if (newBody === currentBody.trim()) {
+  if (newBody.trim() === currentBody.trim()) {
     vscode.window.showInformationMessage('mesh-review: Sin cambios.');
     return;
   }
