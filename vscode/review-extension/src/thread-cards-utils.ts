@@ -18,6 +18,18 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
+ * ACK que el provider posta de vuelta al webview tras completar una acción.
+ * El webview lo usa para re-habilitar el botón y mostrar errores inline.
+ * No forma parte de WebviewActionMessage (fluye en dirección opuesta).
+ */
+export type WebviewAckMessage = {
+  type: 'action-ack';
+  ok: boolean;
+  error?: string;
+  thread_id: string;
+};
+
+/**
  * Mensajes de acción que el webview envía al provider.
  * El slice 4 (extension.ts) registra el handler con setActionHandler.
  *

@@ -72,7 +72,15 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       // arbitrario y los *Impl revalidan los ids contra las proyecciones, así
       // que esto es defensa en profundidad para que el límite sea explícito.
       if (this._actionHandler && isWebviewActionMessage(msg)) {
-        this._actionHandler(msg);
+        const thread_id = msg.thread_id;
+        Promise.resolve(this._actionHandler(msg))
+          .then(() => {
+            this._view?.webview.postMessage({ type: 'action-ack', ok: true, thread_id });
+          })
+          .catch((err: unknown) => {
+            const error = err instanceof Error ? err.message : String(err);
+            this._view?.webview.postMessage({ type: 'action-ack', ok: false, error, thread_id });
+          });
       }
     });
 
@@ -180,6 +188,14 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       opacity: 0.7;
     }
     .action-btn:hover { opacity: 1; }
+    .action-btn:disabled { opacity: 0.3; cursor: default; }
+    /* Error inline bajo la tarjeta tras una acción fallida */
+    .card-error {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.85em;
+      color: var(--vscode-errorForeground, #f48771);
+    }
     /* Secciones colapsables de hilos resueltos y desanclados */
     .section-header {
       cursor: pointer;
@@ -216,6 +232,29 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       });
     });
 
+    // Escucha el ACK del provider: re-habilita los botones del hilo y
+    // muestra el error inline si la acción falló.
+    window.addEventListener('message', event => {
+      if (event.data.type !== 'action-ack') return;
+      const { ok, error, thread_id } = event.data;
+      // Re-habilita todos los botones del hilo
+      document.querySelectorAll('[data-thread-id="' + thread_id + '"][data-action]').forEach(b => {
+        b.disabled = false;
+      });
+      if (!ok && error) {
+        // Inserta el error inline bajo la tarjeta del hilo
+        const card = document.querySelector('[data-thread-id="' + thread_id + '"].card');
+        if (card) {
+          // Elimina cualquier error previo del mismo hilo
+          card.querySelector('.card-error')?.remove();
+          const span = document.createElement('span');
+          span.className = 'card-error';
+          span.textContent = error;
+          card.appendChild(span);
+        }
+      }
+    });
+
     document.getElementById('cards-container').addEventListener('click', e => {
       // Delegación de acciones: comprobamos primero si el clic viene de un botón de acción
       const btn = e.target.closest('[data-action]');
@@ -231,6 +270,7 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({ type: 'diff', thread_id: threadId, mode });
           return;
         }
+        btn.disabled = true; // deshabilita mientras la acción está en vuelo
         const msg = { type: action, thread_id: threadId };
         if (action === 'edit' || action === 'retract') {
           msg.message_id = messageId;

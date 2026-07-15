@@ -14,6 +14,7 @@ import {
   partitionCardsByStatus,
   isWebviewActionMessage,
   type CardViewModel,
+  type WebviewAckMessage,
 } from './thread-cards-utils.ts';
 import type { ThreadProjection, MessageProjection } from './sidecar.ts';
 
@@ -634,4 +635,32 @@ test('isWebviewActionMessage sigue aceptando tipos existentes tras añadir diff'
   assert.ok(isWebviewActionMessage({ type: 'resolve', thread_id: 'tid-1' }));
   assert.ok(isWebviewActionMessage({ type: 'edit',    thread_id: 'tid-1', message_id: 'mid-1' }));
   assert.ok(isWebviewActionMessage({ type: 'retract', thread_id: 'tid-1', message_id: 'mid-1' }));
+});
+
+// ---------------------------------------------------------------------------
+// F4 — WebviewAckMessage: tipo del ACK de acción del webview
+// ---------------------------------------------------------------------------
+
+test('WebviewAckMessage tiene la forma esperada (ok:true)', () => {
+  const ack: WebviewAckMessage = {
+    type: 'action-ack',
+    ok: true,
+    thread_id: 'tid-1',
+  };
+  assert.strictEqual(ack.type, 'action-ack');
+  assert.strictEqual(ack.ok, true);
+  assert.strictEqual(ack.thread_id, 'tid-1');
+  assert.strictEqual(ack.error, undefined);
+});
+
+test('WebviewAckMessage tiene la forma esperada (ok:false con error)', () => {
+  const ack: WebviewAckMessage = {
+    type: 'action-ack',
+    ok: false,
+    error: 'algo falló',
+    thread_id: 'tid-2',
+  };
+  assert.strictEqual(ack.ok, false);
+  assert.strictEqual(ack.error, 'algo falló');
+  assert.strictEqual(ack.thread_id, 'tid-2');
 });
