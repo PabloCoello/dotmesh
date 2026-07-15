@@ -9,9 +9,9 @@ export interface ParsedChunk {
   /** Offset del primer backtick de la valla de apertura en el texto. */
   startOffset: number;
   /**
-   * Offset del carácter inmediatamente después del último carácter de la
-   * línea de cierre, sin incluir el \n final. Si la línea de cierre es la
-   * última del fichero (sin \n), coincide con text.length.
+   * Offset del \n que sigue a la línea de cierre de la valla. Si la línea
+   * de cierre es la última del fichero (sin \n final), coincide con
+   * text.length.
    *
    * Invariante: text[endOffset] === '\n' || endOffset === text.length
    */
