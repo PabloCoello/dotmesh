@@ -296,6 +296,58 @@ export function computeUnseenCount(
 }
 
 // ---------------------------------------------------------------------------
+// pickNextThread — navegación por teclado entre hilos (P2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Selecciona el siguiente o anterior hilo abierto con ancla, en orden de
+ * `char_offset`, respecto a la posición del cursor en el documento activo.
+ *
+ * Función pura: sin IO ni dependencias de VS Code.
+ *
+ * - Filtra hilos con `status === 'open'` y `'line_hint' in anchor`.
+ * - Ordena por `anchor.char_offset` ascendente.
+ * - `currentOffset`: posición del cursor (offset en caracteres del documento).
+ * - `direction: 'next'`: el hilo cuyo `char_offset` es estrictamente mayor;
+ *   si no hay ninguno y `cyclic: true`, devuelve el primero.
+ * - `direction: 'prev'`: el hilo cuyo `char_offset` es estrictamente menor;
+ *   si no hay ninguno y `cyclic: true`, devuelve el último.
+ * - Lista vacía o sin candidatos no cíclicos → null.
+ */
+export function pickNextThread(
+  projections: ThreadProjection[],
+  currentOffset: number,
+  direction: 'next' | 'prev',
+  cyclic: boolean
+): ThreadProjection | null {
+  // Filtrar y ordenar por char_offset
+  const candidates = projections
+    .filter(t => t.status === 'open' && 'line_hint' in t.anchor)
+    .sort((a, b) => {
+      const offA = (a.anchor as { char_offset: number }).char_offset;
+      const offB = (b.anchor as { char_offset: number }).char_offset;
+      return offA - offB;
+    });
+
+  if (candidates.length === 0) return null;
+
+  if (direction === 'next') {
+    const found = candidates.find(
+      t => (t.anchor as { char_offset: number }).char_offset > currentOffset
+    );
+    if (found) return found;
+    return cyclic ? candidates[0] : null;
+  } else {
+    // 'prev': el último con char_offset estrictamente menor que currentOffset
+    const found = [...candidates]
+      .reverse()
+      .find(t => (t.anchor as { char_offset: number }).char_offset < currentOffset);
+    if (found) return found;
+    return cyclic ? candidates[candidates.length - 1] : null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // buildBulletStyles
 // ---------------------------------------------------------------------------
 

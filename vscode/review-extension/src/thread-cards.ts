@@ -37,6 +37,9 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
   /** URI del documento activo; lo asigna update() y lo lee extension.ts. */
   get docUri(): vscode.Uri | undefined { return this._docUri; }
 
+  /** Proyecciones actuales del documento activo. Las lee navigateThread en extension.ts. */
+  get projections(): ThreadProjection[] { return this._projections; }
+
   /** `true` si el panel de tarjetas está actualmente visible para el usuario. */
   get isVisible(): boolean { return this._view?.visible ?? false; }
 

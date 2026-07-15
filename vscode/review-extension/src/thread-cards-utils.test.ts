@@ -14,6 +14,7 @@ import {
   partitionCardsByStatus,
   isWebviewActionMessage,
   computeUnseenCount,
+  pickNextThread,
   type CardViewModel,
   type WebviewAckMessage,
 } from './thread-cards-utils.ts';
@@ -742,4 +743,130 @@ test('computeUnseenCount devuelve 0 si todos los mensajes IA ya están vistos', 
   });
   const seen = new Set<string>([mid]);
   assert.equal(computeUnseenCount([thread], seen), 0);
+});
+
+// ---------------------------------------------------------------------------
+// P2 — pickNextThread: navegación entre hilos abiertos
+// ---------------------------------------------------------------------------
+
+// Fixture: hilo anclado con char_offset dado
+function makeAnchoredThread(
+  thread_id: string,
+  charOffset: number,
+  status: 'open' | 'resolved' | 'detached' = 'open'
+): import('./sidecar.ts').ThreadProjection {
+  return makeThread({
+    thread_id,
+    commentType: 'nota',
+    anchor: { quote: 'texto', line_hint: 0, char_offset: charOffset },
+    status,
+  });
+}
+
+test('pickNextThread con lista vacía devuelve null', () => {
+  assert.equal(pickNextThread([], 0, 'next', true), null);
+});
+
+test('pickNextThread con lista vacía devuelve null (prev)', () => {
+  assert.equal(pickNextThread([], 0, 'prev', true), null);
+});
+
+test('pickNextThread con un solo hilo abierto devuelve ese hilo (next, cyclic)', () => {
+  const t = makeAnchoredThread('t1', 10);
+  const result = pickNextThread([t], 0, 'next', true);
+  assert.equal(result?.thread_id, 't1');
+});
+
+test('pickNextThread con un solo hilo abierto devuelve ese hilo (prev, cyclic)', () => {
+  const t = makeAnchoredThread('t1', 10);
+  const result = pickNextThread([t], 999, 'prev', true);
+  assert.equal(result?.thread_id, 't1');
+});
+
+test('pickNextThread con varios hilos devuelve el siguiente en orden de char_offset', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  // Cursor en offset 5 (antes del primero): siguiente es t1
+  const result = pickNextThread([t3, t1, t2], 5, 'next', false);
+  assert.equal(result?.thread_id, 't1');
+});
+
+test('pickNextThread salta al siguiente tras el cursor', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  // Cursor en offset 10 (en t1): siguiente es t2
+  const result = pickNextThread([t1, t2, t3], 10, 'next', false);
+  assert.equal(result?.thread_id, 't2');
+});
+
+test('pickNextThread al llegar al final con cyclic:true vuelve al primero', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  // Cursor en offset 100 (en t3): siguiente con cyclic es t1
+  const result = pickNextThread([t1, t2, t3], 100, 'next', true);
+  assert.equal(result?.thread_id, 't1');
+});
+
+test('pickNextThread al llegar al final con cyclic:false devuelve null', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  // Cursor en offset 100 (en t3): sin cyclic no hay siguiente
+  const result = pickNextThread([t1, t2, t3], 100, 'next', false);
+  assert.equal(result, null);
+});
+
+test('pickNextThread prev devuelve el hilo anterior al cursor', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  // Cursor en offset 100 (en t3): anterior es t2
+  const result = pickNextThread([t1, t2, t3], 100, 'prev', false);
+  assert.equal(result?.thread_id, 't2');
+});
+
+test('pickNextThread prev al llegar al primero con cyclic:true vuelve al último', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  // Cursor en offset 10 (en t1): anterior con cyclic es t3
+  const result = pickNextThread([t1, t2, t3], 10, 'prev', true);
+  assert.equal(result?.thread_id, 't3');
+});
+
+test('pickNextThread prev al llegar al primero con cyclic:false devuelve null', () => {
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  // Cursor en offset 10 (en t1): sin cyclic no hay anterior
+  const result = pickNextThread([t1, t2], 10, 'prev', false);
+  assert.equal(result, null);
+});
+
+test('pickNextThread ignora hilos resueltos y desanclados', () => {
+  const open = makeAnchoredThread('open', 50);
+  const resolved = makeAnchoredThread('resolved', 10, 'resolved');
+  const detached = makeThread({
+    thread_id: 'detached',
+    commentType: 'nota',
+    anchor: { detached: true },
+    status: 'detached',
+  });
+  // Solo hay un hilo abierto con ancla; debe devolverlo siempre
+  const result = pickNextThread([resolved, open, detached], 0, 'next', true);
+  assert.equal(result?.thread_id, 'open');
+});
+
+test('pickNextThread ignora hilos abiertos sin line_hint (desanclados en estado open)', () => {
+  const anchored = makeAnchoredThread('anchored', 50);
+  const noAnchor = makeThread({
+    thread_id: 'no-anchor',
+    commentType: 'nota',
+    anchor: { detached: true },
+    status: 'open',
+  });
+  const result = pickNextThread([noAnchor, anchored], 0, 'next', false);
+  assert.equal(result?.thread_id, 'anchored');
 });

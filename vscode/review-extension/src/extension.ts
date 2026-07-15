@@ -32,7 +32,7 @@ import {
 import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
-import { computeUnseenCount } from './thread-cards-utils';
+import { computeUnseenCount, pickNextThread } from './thread-cards-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -552,6 +552,45 @@ async function jumpToAnchorImpl(
 }
 
 // ---------------------------------------------------------------------------
+// navigateThread — navegación por teclado entre hilos (P2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Navega al siguiente o anterior hilo abierto del documento activo, usando la
+ * posición actual del cursor como referencia de `currentOffset`.
+ *
+ * Lógica de selección delegada a la función pura `pickNextThread` (testeable).
+ * Una vez elegido el hilo, reutiliza `jumpToAnchorImpl` para revelar y
+ * seleccionar el rango anclado en el editor.
+ *
+ * El setting `mesh-review.navigation.cyclic` (boolean, default true) controla
+ * si la navegación cicla al llegar al primero/último hilo.
+ */
+async function navigateThread(
+  direction: 'next' | 'prev',
+  cardsProvider: ThreadCardsViewProvider
+): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
+
+  const cyclic = vscode.workspace
+    .getConfiguration('mesh-review')
+    .get<boolean>('navigation.cyclic', true);
+
+  const currentOffset = editor.document.offsetAt(editor.selection.active);
+  const target = pickNextThread(
+    cardsProvider.projections,
+    currentOffset,
+    direction,
+    cyclic
+  );
+
+  if (!target) return; // Sin candidatos: no-op silencioso
+
+  await jumpToAnchorImpl(target.anchor as Anchor, cardsProvider);
+}
+
+// ---------------------------------------------------------------------------
 // openDiffImpl — vista diff del commit de fix de un hilo
 // ---------------------------------------------------------------------------
 
@@ -900,7 +939,27 @@ export function activate(context: vscode.ExtensionContext): void {
           vscode.window.showErrorMessage(`mesh-review: error al navegar — ${msg}`);
         }
       }
-    )
+    ),
+
+    // --- Next Thread (P2) ---
+    vscode.commands.registerCommand('mesh-review.nextThread', async () => {
+      try {
+        await navigateThread('next', cardsProvider);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`mesh-review: error al navegar al siguiente hilo — ${msg}`);
+      }
+    }),
+
+    // --- Previous Thread (P2) ---
+    vscode.commands.registerCommand('mesh-review.previousThread', async () => {
+      try {
+        await navigateThread('prev', cardsProvider);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`mesh-review: error al navegar al hilo anterior — ${msg}`);
+      }
+    })
   );
 }
 

@@ -69,6 +69,16 @@
         "command": "mesh-review.jumpToComment",
         "title": "Ir al hilo",
         "icon": "$(arrow-right)"
+      },
+      {
+        "command": "mesh-review.nextThread",
+        "title": "Mesh Review: Siguiente hilo",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "mesh-review.previousThread",
+        "title": "Mesh Review: Hilo anterior",
+        "icon": "$(arrow-up)"
       }
     ],
     "keybindings": [
@@ -76,6 +86,18 @@
         "command": "mesh-review.addComment",
         "key": "ctrl+alt+z",
         "mac": "alt+cmd+z",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mesh-review.nextThread",
+        "key": "ctrl+alt+]",
+        "mac": "alt+cmd+]",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mesh-review.previousThread",
+        "key": "ctrl+alt+[",
+        "mac": "alt+cmd+[",
         "when": "editorTextFocus"
       }
     ],
@@ -86,6 +108,11 @@
           "type": "boolean",
           "default": false,
           "description": "Muestra una notificación cuando llegan respuestas IA nuevas (badge solo por defecto)."
+        },
+        "mesh-review.navigation.cyclic": {
+          "type": "boolean",
+          "default": true,
+          "description": "La navegación entre hilos cicla al llegar al último o al primero."
         }
       }
     }
