@@ -12,3 +12,4 @@ keybindings\.linux\.json
 ^/USAGE\.md
 ^/Makefile
 ^/review-extension
+^/run-extension
