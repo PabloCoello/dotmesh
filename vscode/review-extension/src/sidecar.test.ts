@@ -1442,6 +1442,29 @@ test('scanAllDocs solo incluye hilos abiertos del documento escaneado', async ()
   }
 });
 
+test('scanAllDocs no recursa más allá de 20 niveles de profundidad (fix 2)', async () => {
+  // collectEventDirs para cuando maxDepth <= 0: una jerarquía de 22 niveles
+  // no debe encontrar el directorio de eventos que está en el nivel 21.
+  const root = await mkdtemp(join(tmpdir(), 'mesh-depth-'));
+  try {
+    // Construye: .ai/review/a/b/c/.../doc.md/ (21 componentes bajo .ai/review/)
+    // Con maxDepth=20 el walker se detiene y NO alcanza el directorio de eventos.
+    let deepDir = join(root, '.ai', 'review');
+    for (let i = 0; i < 21; i++) {
+      deepDir = join(deepDir, `lvl${i}`);
+    }
+    await mkdir(deepDir, { recursive: true });
+    await writeFile(join(deepDir, `${randomUUID()}.json`), '{}', 'utf8');
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, 0, 'no debe encontrar docs más allá de 20 niveles');
+    assert.strictEqual(result.overflow, 0, 'no debe haber overflow');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('scanAllDocs salta en silencio el evento corrupto y procesa los demás documentos (fix 7)', async () => {
   // Documenta el comportamiento actual de readEvents: un fichero .json inválido en el
   // directorio de eventos de un documento se descarta silenciosamente (parse error

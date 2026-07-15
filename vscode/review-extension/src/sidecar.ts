@@ -710,8 +710,12 @@ export const SCAN_ALL_DOCS_LIMIT = 50;
 async function collectEventDirs(
   dir: string,
   relPath: string,
-  result: string[]
+  result: string[],
+  maxDepth = 20
 ): Promise<void> {
+  // Fix 2: protección contra symlinks circulares o jerarquías anómalamente profundas.
+  if (maxDepth <= 0) return;
+
   let entries: import('fs').Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -730,7 +734,7 @@ async function collectEventDirs(
   const subDirs = entries.filter(e => e.isDirectory());
   for (const sub of subDirs) {
     const subRelPath = relPath.length > 0 ? `${relPath}/${sub.name}` : sub.name;
-    await collectEventDirs(path.join(dir, sub.name), subRelPath, result);
+    await collectEventDirs(path.join(dir, sub.name), subRelPath, result, maxDepth - 1);
   }
 }
 

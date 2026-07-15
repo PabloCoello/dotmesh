@@ -897,6 +897,10 @@ export function activate(context: vscode.ExtensionContext): void {
   let _allDocsOverflow = 0;
   let _currentDocRelPath: string | undefined;
   let _currentGitRoot: string | null = null;
+  // Fix 1: temporizador de debounce para doScanAllDocs; evita escaneos en ráfaga
+  // cuando el watcher emite múltiples eventos en rápida sucesión (p. ej. una operación
+  // multi-fichero de un agente). 500 ms después del último evento se ejecuta el escaneo.
+  let _scanDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   /**
    * Actualiza el badge de la activity bar con el recuento de mensajes IA no vistos.
@@ -1086,8 +1090,19 @@ export function activate(context: vscode.ExtensionContext): void {
           if (!thread) break;
 
           // Abrir el documento y saltar al ancla del hilo.
+          // Fix 3: el fichero puede haber sido eliminado desde el último escaneo;
+          // en ese caso showTextDocument lanza y se informa al usuario, y se
+          // dispara un re-escaneo para eliminar el doc de la sección Repositorio.
           const targetUri = vscode.Uri.file(absDocPath);
-          await vscode.window.showTextDocument(targetUri, { preview: false });
+          try {
+            await vscode.window.showTextDocument(targetUri, { preview: false });
+          } catch {
+            vscode.window.showInformationMessage(
+              'mesh-review: el documento ya no existe en disco. Actualizando vista…'
+            );
+            if (_currentGitRoot) doScanAllDocs(_currentGitRoot).catch(() => {});
+            break;
+          }
           if ('line_hint' in thread.anchor) {
             await vscode.commands.executeCommand('mesh-review.jumpToComment', thread.anchor);
           }
@@ -1307,9 +1322,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const onSidecarChange = (changedUri: vscode.Uri) => {
     const editor = vscode.window.activeTextEditor;
 
-    // P6: re-escanear el repositorio completo en cualquier cambio de eventos.
+    // Fix 1: debounce del escaneo multi-fichero (500 ms); cancela el temporizador
+    // anterior si llega otro evento antes de que expire (ráfagas de cambios del agente).
     if (_currentGitRoot) {
-      doScanAllDocs(_currentGitRoot).catch(() => {});
+      clearTimeout(_scanDebounceTimer);
+      const gitRoot = _currentGitRoot;
+      _scanDebounceTimer = setTimeout(() => {
+        doScanAllDocs(gitRoot).catch(() => {});
+      }, 500);
     }
 
     if (!editor) return;
