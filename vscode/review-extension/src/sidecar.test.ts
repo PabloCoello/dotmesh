@@ -1243,3 +1243,70 @@ test('thread.reanchored variante detached: writeEvent→readEvents→project ref
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// P5 — ciclos de ida y vuelta: thread.opened con confidence + thread.assigned
+// Fija que writeEvent + readEvents + project reproduzca los campos opcionales
+// confidence (thread.opened) y agent (thread.assigned) correctamente.
+// ---------------------------------------------------------------------------
+
+test('thread.opened con confidence: writeEvent→readEvents→project refleja la confianza', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-confidence-'));
+  try {
+    const tid = 'e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1';
+    const opened: EventEnvelope = {
+      id: tid, version: 2, type: 'thread.opened', thread_id: tid,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T11:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto de prueba', line_hint: 5, char_offset: 50 },
+      commentType: 'verifica', body: 'comprueba la afirmación',
+      confidence: 'alta',
+    };
+
+    await writeEvent(dir, opened);
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    assert.strictEqual(projections[0].confidence, 'alta', 'confidence debe propagarse tras el ciclo completo');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('thread.assigned: writeEvent→readEvents→project refleja el agente asignado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-assigned-'));
+  try {
+    const tid = 'f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2';
+    const eid = 'a3a3a3a3-a3a3-4a3a-8a3a-a3a3a3a3a3a3';
+
+    const opened: EventEnvelope = {
+      id: tid, version: 2, type: 'thread.opened', thread_id: tid,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T11:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto asignado', line_hint: 2, char_offset: 10 },
+      commentType: 'edita', body: 'tarea para el revisor',
+    };
+
+    const assigned: EventEnvelope = {
+      id: eid, version: 2, type: 'thread.assigned', thread_id: tid,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T11:01:00.000Z',
+      commit: null, dirty: false,
+      agent: 'security',
+    };
+
+    await writeEvent(dir, opened);
+    await writeEvent(dir, assigned);
+
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    assert.strictEqual(projections[0].assignee, 'security', 'assignee debe propagarse tras el ciclo completo');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

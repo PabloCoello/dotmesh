@@ -44,7 +44,8 @@ export type WebviewActionMessage =
   | { type: 'retract';       thread_id: string; message_id: string }
   | { type: 'diff';          thread_id: string; mode: 'last' | 'range' }
   | { type: 'reply-submit';  thread_id: string; body: string }
-  | { type: 'edit-submit';   thread_id: string; message_id: string; body: string };
+  | { type: 'edit-submit';   thread_id: string; message_id: string; body: string }
+  | { type: 'assign';        thread_id: string };
 
 /**
  * Valida en runtime que un mensaje del webview es una acción bien formada.
@@ -76,6 +77,8 @@ export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessag
       return hasThread && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
     case 'edit-submit':
       return hasThread && hasMessage && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
+    case 'assign':
+      return hasThread;
     default:
       return false;
   }
@@ -103,6 +106,8 @@ export interface CardViewModel {
   messages: CardMessage[]; // solo mensajes no retractados
   fixCommit: string | null;   // SHA del último message.posted de IA con commit !== null
   openCommit: string | null;  // openedCommit del hilo (base para rango acumulado)
+  confidence?: 'alta' | 'media' | 'baja'; // P5: nivel de confianza (verifica/supuesto)
+  assignee?: string;                       // P5: subagente asignado al hilo
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +148,7 @@ export function buildCardViewModels(
       .filter(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null)
       .at(-1);
 
-    return {
+    const card: CardViewModel = {
       thread_id: thread.thread_id,
       commentType: thread.commentType,
       lineLabel,
@@ -153,6 +158,9 @@ export function buildCardViewModels(
       fixCommit: lastAiFix?.commit ?? null,
       openCommit: thread.openedCommit,
     };
+    if (thread.confidence !== undefined) card.confidence = thread.confidence;
+    if (thread.assignee   !== undefined) card.assignee   = thread.assignee;
+    return card;
   });
 }
 
@@ -202,7 +210,15 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
     : '';
 
   const cardActionsHtml = withActions
-    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="assign" data-thread-id="${tid}">⊕</button><button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    : '';
+
+  // Etiquetas opcionales de confianza y asignado: escapadas y con clase semántica
+  const confidenceHtml = card.confidence !== undefined
+    ? ` <span class="card-confidence card-confidence-${escapeHtml(card.confidence)}">${escapeHtml(card.confidence)}</span>`
+    : '';
+  const assigneeHtml = card.assignee !== undefined
+    ? ` <span class="card-assignee">${escapeHtml(card.assignee)}</span>`
     : '';
 
   const messagesHtml = card.messages.map(msg => {
@@ -219,7 +235,7 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
   return `<div class="card" data-thread-id="${tid}" data-has-anchor="${card.hasAnchor}">
       <div class="card-header">
         <span class="bullet bullet-${escapeHtml(card.commentType)}">●</span>
-        <span class="card-type">${escapeHtml(card.commentType)}</span>
+        <span class="card-type">${escapeHtml(card.commentType)}</span>${confidenceHtml}${assigneeHtml}
         <span class="card-line">${escapeHtml(card.lineLabel)}</span>${cardActionsHtml}
       </div>
       <div class="card-messages">

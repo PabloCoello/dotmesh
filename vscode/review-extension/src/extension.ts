@@ -263,6 +263,21 @@ async function addCommentImpl(
   );
   if (!type) return;
 
+  // P5: para tipos verifica/supuesto, pedir nivel de confianza antes del cuerpo.
+  let confidence: 'alta' | 'media' | 'baja' | undefined;
+  if (type.label === 'verifica' || type.label === 'supuesto') {
+    const confItem = await vscode.window.showQuickPick<vscode.QuickPickItem>(
+      [
+        { label: 'alta',  description: 'Datos sólidos o fuente primaria' },
+        { label: 'media', description: 'Fuente secundaria o inferencia razonable' },
+        { label: 'baja',  description: 'Suposición o dato sin verificar' },
+      ],
+      { title: 'Nivel de confianza', placeHolder: 'Selecciona el nivel de confianza (Esc para cancelar)' }
+    );
+    if (!confItem) return;
+    confidence = confItem.label as 'alta' | 'media' | 'baja';
+  }
+
   const body = await vscode.window.showInputBox({
     title: 'Comentario',
     prompt: 'Escribe el comentario (Enter para confirmar)',
@@ -306,6 +321,8 @@ async function addCommentImpl(
     anchor,
     commentType: type.label as CommentType,
     body: body.trim(),
+    // P5: confidence se incluye solo para tipos verifica/supuesto
+    ...(confidence !== undefined ? { confidence } : {}),
   };
 
   await writeEvent(eventDir, event);

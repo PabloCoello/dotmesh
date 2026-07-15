@@ -40,7 +40,7 @@ function makeMsg(
 function makeThread(
   overrides: Pick<ThreadProjection, 'commentType'> & Partial<ThreadProjection>
 ): ThreadProjection {
-  return {
+  const base: ThreadProjection = {
     thread_id:    overrides.thread_id ?? 'thread-1',
     commentType:  overrides.commentType,
     anchor:       overrides.anchor ?? { quote: 'texto', line_hint: 12, char_offset: 0 },
@@ -50,6 +50,9 @@ function makeThread(
     openedBy:     overrides.openedBy ?? { kind: 'human' },
     openedCommit: overrides.openedCommit ?? null,
   };
+  if (overrides.confidence !== undefined) base.confidence = overrides.confidence;
+  if (overrides.assignee   !== undefined) base.assignee   = overrides.assignee;
+  return base;
 }
 
 // ---------------------------------------------------------------------------
@@ -1102,4 +1105,52 @@ test('isWebviewActionMessage rechaza edit-submit con body de 10001 caracteres', 
     message_id: MID,
     body: 'a'.repeat(10_001),
   }));
+});
+
+// ---------------------------------------------------------------------------
+// P5 — slice 6.1: confidence en CardViewModel
+// ---------------------------------------------------------------------------
+
+test('buildCardViewModels propaga confidence cuando el hilo la tiene', () => {
+  const thread = makeThread({ commentType: 'verifica', confidence: 'alta' });
+  const [card] = buildCardViewModels([thread]);
+  assert.strictEqual(card.confidence, 'alta');
+});
+
+test('buildCardViewModels confidence es undefined cuando el hilo no la tiene', () => {
+  const thread = makeThread({ commentType: 'nota' });
+  const [card] = buildCardViewModels([thread]);
+  assert.strictEqual(card.confidence, undefined);
+});
+
+test('buildCardsHtml incluye etiqueta card-confidence cuando confidence está presente', () => {
+  const card: CardViewModel = {
+    thread_id:   't-conf',
+    commentType: 'verifica',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    confidence:  'alta',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('card-confidence'), 'debe incluir la clase card-confidence');
+  assert.ok(html.includes('alta'), 'debe incluir el valor de confianza');
+});
+
+test('buildCardsHtml no incluye etiqueta card-confidence cuando confidence es undefined', () => {
+  const card: CardViewModel = {
+    thread_id:   't-noconf',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('card-confidence'), 'no debe incluir la clase card-confidence cuando no hay confianza');
 });

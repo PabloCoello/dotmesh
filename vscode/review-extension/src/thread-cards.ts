@@ -248,6 +248,22 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       font-size: 0.85em;
       color: var(--vscode-errorForeground, #f48771);
     }
+    /* Etiqueta de confianza (P5 — verifica/supuesto) */
+    .card-confidence {
+      font-size: 0.78em;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: normal;
+    }
+    .card-confidence-alta  { color: var(--vscode-testing-iconPassed, #73c991); }
+    .card-confidence-media { color: var(--vscode-editorWarning-foreground, #cca700); }
+    .card-confidence-baja  { color: var(--vscode-errorForeground, #f48771); }
+    /* Etiqueta de subagente asignado (P5) */
+    .card-assignee {
+      font-size: 0.78em;
+      color: var(--vscode-descriptionForeground);
+      font-weight: normal;
+    }
     /* Compositor multilínea (P4): textarea in-place bajo la tarjeta */
     .composer {
       display: none;
