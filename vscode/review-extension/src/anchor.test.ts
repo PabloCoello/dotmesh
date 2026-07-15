@@ -187,6 +187,30 @@ test('resolveAnchor devuelve uncertain:true en varias ocurrencias cuando la más
   assert.strictEqual(result.uncertain, true);
 });
 
+// ---------------------------------------------------------------------------
+// rev#6 — umbral de incertidumbre: 200 es exclusivo (>200 → uncertain)
+// ---------------------------------------------------------------------------
+
+test('resolveAnchor NO marca uncertain cuando bestDist === ANCHOR_UNCERTAINTY_THRESHOLD (límite exclusivo)', () => {
+  // 'marca' en offset 0; char_offset = 200 → bestDist = 200, que NO supera el umbral.
+  const text = 'marca' + 'x'.repeat(300);
+  const anchor: Anchor = { quote: 'marca', line_hint: 0, char_offset: 200 };
+  const result = resolveAnchor(text, anchor);
+  assert.ok(result !== null);
+  assert.strictEqual(result.startOffset, 0);
+  assert.ok(!result.uncertain, 'bestDist===200 no debe marcar uncertain (umbral exclusivo)');
+});
+
+test('resolveAnchor SÍ marca uncertain cuando bestDist === ANCHOR_UNCERTAINTY_THRESHOLD + 1', () => {
+  // 'marca' en offset 0; char_offset = 201 → bestDist = 201 > 200 → uncertain.
+  const text = 'marca' + 'x'.repeat(300);
+  const anchor: Anchor = { quote: 'marca', line_hint: 0, char_offset: 201 };
+  const result = resolveAnchor(text, anchor);
+  assert.ok(result !== null);
+  assert.strictEqual(result.startOffset, 0);
+  assert.strictEqual(result.uncertain, true, 'bestDist===201 debe marcar uncertain');
+});
+
 test('resolveAnchor funciona tras pequeñas ediciones que desplazan el texto', () => {
   const originalText = 'Introducción\nContenido relevante aquí\nFin';
   const target = 'Contenido relevante';

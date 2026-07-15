@@ -235,11 +235,20 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       });
     });
 
+    // Mapa thread_id → timeoutId para la red de seguridad del ACK.
+    // Si el provider no responde en 10 s, re-habilita los botones del hilo.
+    const _ackTimers = new Map();
+
     // Escucha el ACK del provider: re-habilita los botones del hilo y
     // muestra el error inline si la acción falló.
     window.addEventListener('message', event => {
       if (event.data.type !== 'action-ack') return;
       const { ok, error, thread_id } = event.data;
+      // Cancela la red de seguridad si el ACK llegó a tiempo
+      if (_ackTimers.has(thread_id)) {
+        clearTimeout(_ackTimers.get(thread_id));
+        _ackTimers.delete(thread_id);
+      }
       // Re-habilita todos los botones del hilo
       document.querySelectorAll('[data-thread-id="' + thread_id + '"][data-action]').forEach(b => {
         b.disabled = false;
@@ -274,6 +283,15 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           return;
         }
         btn.disabled = true; // deshabilita mientras la acción está en vuelo
+        // Red de seguridad: si el ACK no llega en 10 s, re-habilita los botones
+        // para que la UI no quede bloqueada ante un error silencioso del provider.
+        if (_ackTimers.has(threadId)) clearTimeout(_ackTimers.get(threadId));
+        _ackTimers.set(threadId, setTimeout(() => {
+          _ackTimers.delete(threadId);
+          document.querySelectorAll('[data-thread-id="' + threadId + '"][data-action]').forEach(b => {
+            b.disabled = false;
+          });
+        }, 10000));
         const msg = { type: action, thread_id: threadId };
         if (action === 'edit' || action === 'retract') {
           msg.message_id = messageId;

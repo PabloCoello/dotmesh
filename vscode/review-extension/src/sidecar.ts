@@ -563,10 +563,16 @@ export async function readEvents(
       results.push(parsed as unknown as EventEnvelope);
     } catch (err) {
       // ENOENT: el fichero desapareció entre readdir y readFile — silencio esperado.
-      // Cualquier otro error (permisos, I/O, JSON inválido) se notifica al llamante.
+      // Cualquier otro error (permisos, I/O, JSON inválido) se notifica al llamante:
+      // via onError si se proporcionó, o via console.error como fallback para que
+      // los errores reales no se pierdan en silencio.
       const code = (err as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT' && onError) {
-        onError(filePath, err);
+      if (code !== 'ENOENT') {
+        if (onError) {
+          onError(filePath, err);
+        } else {
+          console.error(`mesh-review: error leyendo evento ${filePath}:`, err);
+        }
       }
     }
   }
