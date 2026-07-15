@@ -149,6 +149,19 @@ export function sidecarPathForDoc(docAbsPath: string, gitRoot: string): string {
 }
 
 /**
+ * Construye la ruta del sidecar V1 para un documento relativo al git root.
+ * Valida que `docRelPath` no escape del git root (no empieza por `..` ni es absoluto).
+ * Centraliza la construcción duplicada que antes hacía `migrateLegacyToV2` y
+ * `handleLegacyMigration` en extension.ts.
+ */
+export function buildV1FilePath(gitRoot: string, docRelPath: string): string {
+  if (docRelPath.startsWith('..') || path.isAbsolute(docRelPath)) {
+    throw new Error(`mesh-review: document path escapes git root — ${docRelPath}`);
+  }
+  return path.join(gitRoot, '.ai', 'review', docRelPath + '.json');
+}
+
+/**
  * Ruta de fallback (doc fuera de repo git):
  * `~/.local/state/mesh-review/<sha256-de-ruta-absoluta>.json`
  * SHA-256 de la ruta absoluta UTF-8, sin salto de línea final.

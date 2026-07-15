@@ -22,6 +22,7 @@ import {
   isAiReviewIgnored,
   readSidecar,
   utcTimestampMs,
+  buildV1FilePath,
   type EventEnvelope,
   type ThreadProjection,
   type Anchor,
@@ -134,7 +135,7 @@ async function migrateLegacyToV2(
   docRelPath: string,
   eventDir: string
 ): Promise<EventEnvelope[]> {
-  const v1FilePath = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
+  const v1FilePath = buildV1FilePath(gitRoot, docRelPath);
   const sidecar = await readSidecar(v1FilePath);
   if (!sidecar) return [];
   const events = migrateV1(sidecar);
@@ -166,7 +167,7 @@ async function handleLegacyMigration(
   docRelPath: string,
   eventDir: string
 ): Promise<ThreadProjection[]> {
-  const v1FilePath = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
+  const v1FilePath = buildV1FilePath(gitRoot, docRelPath);
   const sidecar = await readSidecar(v1FilePath);
   if (!sidecar) return [];
 
@@ -702,7 +703,7 @@ export function activate(context: vscode.ExtensionContext): void {
           migrationPromptedDocs.add(docFsPath);
           projections = await handleLegacyMigration(editor, gitRoot, docRelPath, eventDir);
         } else {
-          const v1FilePath = path.join(gitRoot, '.ai', 'review', `${docRelPath}.json`);
+          const v1FilePath = buildV1FilePath(gitRoot, docRelPath);
           const sidecar = await readSidecar(v1FilePath);
           projections = sidecar ? project(migrateV1(sidecar)) : [];
         }

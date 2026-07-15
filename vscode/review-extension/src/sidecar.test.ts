@@ -24,6 +24,7 @@ import {
   detectLegacy,
   ensureBacklogDir,
   writeBacklogTask,
+  buildV1FilePath,
   type Sidecar,
   type EventEnvelope,
   type BacklogTask,
@@ -989,6 +990,35 @@ test('project rellena commit null en message.posted sin SHA', () => {
   } as unknown as EventEnvelope;
   const result = project([opened, posted]);
   assert.strictEqual(result[0].messages[1].commit, null);
+});
+
+// ---------------------------------------------------------------------------
+// F1 — readEvents con onError: distingue ENOENT de errores reales
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// F2 — buildV1FilePath: helper centralizado con validación de contención
+// ---------------------------------------------------------------------------
+
+test('buildV1FilePath devuelve la ruta correcta para un docRelPath normal', () => {
+  assert.strictEqual(
+    buildV1FilePath('/Users/user/project', 'docs/informe.md'),
+    '/Users/user/project/.ai/review/docs/informe.md.json'
+  );
+});
+
+test('buildV1FilePath lanza si docRelPath empieza por ..', () => {
+  assert.throws(
+    () => buildV1FilePath('/project', '../evil/doc.md'),
+    /mesh-review: document path escapes/
+  );
+});
+
+test('buildV1FilePath lanza si docRelPath es absoluto', () => {
+  assert.throws(
+    () => buildV1FilePath('/project', '/absolute/path.md'),
+    /mesh-review: document path escapes/
+  );
 });
 
 // ---------------------------------------------------------------------------
