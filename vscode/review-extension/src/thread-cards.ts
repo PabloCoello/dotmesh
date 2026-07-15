@@ -109,17 +109,20 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
     this._view.webview.postMessage({ type: 'update', html });
   }
 
-  /** Construye el documento HTML estático del webview con CSP y nonce. */
+  /** Construye el documento HTML estático del webview con CSP y nonces independientes. */
   private _buildHtml(webview: vscode.Webview): string {
-    // Nonce de 32 hex sin guiones — válido como token CSP (UUID v4 hex)
-    const nonce = randomUUID().replace(/-/g, '');
+    // Dos nonces distintos: uno para style-src y otro para script-src.
+    // Usar el mismo nonce para ambas directivas mezcla los permisos; separarlos
+    // es más estricto y evita que un script pueda inyectar estilos arbitrarios.
+    const nonceStyle  = randomUUID().replace(/-/g, '');
+    const nonceScript = randomUUID().replace(/-/g, '');
     return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
-  <style nonce="${nonce}">
+        content="default-src 'none'; style-src 'nonce-${nonceStyle}'; script-src 'nonce-${nonceScript}';">
+  <style nonce="${nonceStyle}">
     body {
       background: var(--vscode-sideBar-background);
       color: var(--vscode-foreground);
@@ -211,7 +214,7 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div id="cards-container"></div>
-  <script nonce="${nonce}">
+  <script nonce="${nonceScript}">
     // acquireVsCodeApi() se llama una sola vez y se guarda en la variable vscode
     const vscode = acquireVsCodeApi();
 
