@@ -86,7 +86,13 @@ function registerStaleDecorations(
       return;
     }
 
-    const states = computeOutputStates(doc.getText());
+    // getText() y positionAt() son operaciones síncronas sobre el mismo
+    // TextDocument. Toda esta función es síncrona (sin await), por lo que el
+    // motor de JavaScript garantiza que el documento no puede cambiar entre
+    // doc.getText() y doc.positionAt(): ambas operaciones ven exactamente el
+    // mismo snapshot. No se requiere validación defensiva de offsets ni clamps.
+    const text = doc.getText();
+    const states = computeOutputStates(text);
 
     const staleRanges: vscode.Range[] = [];
     const errorRanges: vscode.Range[] = [];
@@ -110,11 +116,14 @@ function registerStaleDecorations(
 
   /** Programa applyDecorations con debounce de 150 ms. */
   function scheduleDecorations(editor: vscode.TextEditor): void {
-    if (debounceTimer !== undefined) {
-      clearTimeout(debounceTimer);
-    }
+    // clearTimeout(undefined) es un no-op en JavaScript; la guarda es redundante.
+    clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = undefined;
+      // El editor puede haber sido cerrado mientras el timer estaba pendiente.
+      // vscode.window.visibleTextEditors incluye todos los grupos; si el editor
+      // ya no está ahí, setDecorations sobre él sería un comportamiento indefinido.
+      if (!vscode.window.visibleTextEditors.includes(editor)) return;
       applyDecorations(editor);
     }, 150);
   }
@@ -123,10 +132,8 @@ function registerStaleDecorations(
   // anterior y aplicar inmediatamente en el nuevo.
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(editor => {
-      if (debounceTimer !== undefined) {
-        clearTimeout(debounceTimer);
-        debounceTimer = undefined;
-      }
+      clearTimeout(debounceTimer);
+      debounceTimer = undefined;
       if (editor) {
         applyDecorations(editor);
       }
@@ -147,10 +154,8 @@ function registerStaleDecorations(
   // Liberar el timer si la extensión se desactiva mientras hay uno pendiente
   context.subscriptions.push({
     dispose: () => {
-      if (debounceTimer !== undefined) {
-        clearTimeout(debounceTimer);
-        debounceTimer = undefined;
-      }
+      clearTimeout(debounceTimer);
+      debounceTimer = undefined;
     },
   });
 
