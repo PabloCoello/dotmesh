@@ -911,6 +911,78 @@ test('pickNextThread cursor exactamente sobre char_offset de un hilo: prev salta
 });
 
 // ---------------------------------------------------------------------------
+// P4 — XSS: cuerpo precargado en textarea y rendering en tarjeta
+// ---------------------------------------------------------------------------
+//
+// El body de un mensaje circula por dos vías:
+//   a) Rendering en tarjeta → buildCardHtml aplica escapeHtml → HTML seguro.
+//   b) Pre-relleno del textarea (modo edit) → textarea.value = currentBody
+//      → no hay parsing HTML; el valor es texto plano.
+//
+// En la vía (b), el body que viaja al webview debe ser texto crudo (NO
+// HTML-escapado), porque textarea.value no interpreta entidades y el usuario
+// vería "&lt;script&gt;" en lugar de "<script>". El escaping ocurre solo
+// en la vía (a). Los tests siguientes fijan ambos contratos.
+
+test('buildCardViewModels preserva body crudo con caracteres HTML especiales (no pre-escapa)', () => {
+  // El ViewModel debe conservar el texto tal como viene del evento.
+  // El escaping ocurre en buildCardsHtml, no antes.
+  const rawBody = '<script>xss()</script>&amp;";';
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [makeMsg({ id: 'm1', body: rawBody })],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.equal(
+    card.messages[0].body,
+    rawBody,
+    'buildCardViewModels no debe pre-escapar el body; el escaping lo hace buildCardsHtml'
+  );
+});
+
+test('buildCardsHtml escapa body con caracteres XSS al renderizar la tarjeta', () => {
+  // Contrato inverso: el HTML final sí debe contener el body escapado.
+  const card: CardViewModel = {
+    thread_id:   'p4-xss',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages: [
+      { id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: '<script>xss()</script>' },
+    ],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(
+    !html.includes('<script>xss()'),
+    'El body con <script> crudo no debe aparecer en el HTML'
+  );
+  assert.ok(
+    html.includes('&lt;script&gt;xss()&lt;/script&gt;'),
+    'El body debe salir HTML-escapado en la tarjeta renderizada'
+  );
+});
+
+test('buildCardsHtml escapa body con ampersand y comillas (entidades HTML)', () => {
+  const card: CardViewModel = {
+    thread_id:   'p4-entities',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages: [
+      { id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'a & b "c"' },
+    ],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('a &amp; b &quot;c&quot;'), 'Ampersand y comillas deben escaparse');
+});
+
+// ---------------------------------------------------------------------------
 // P4 — reply-submit y edit-submit: compositor multilínea del webview
 // ---------------------------------------------------------------------------
 

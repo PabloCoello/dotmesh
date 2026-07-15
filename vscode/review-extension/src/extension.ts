@@ -326,7 +326,8 @@ async function replyToThreadImpl(
   threadId: string,
   docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider,
-  afterUpdate?: (projections: ThreadProjection[]) => void
+  afterUpdate?: (projections: ThreadProjection[]) => void,
+  providedBody?: string
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
@@ -338,14 +339,23 @@ async function replyToThreadImpl(
     return;
   }
 
-  const body = await vscode.window.showInputBox({
-    title: 'Responder al hilo',
-    prompt: 'Escribe la respuesta (Enter para confirmar)',
-    ignoreFocusOut: true,
-    validateInput: (v) =>
-      v.trim() === '' ? 'La respuesta no puede estar vacía' : undefined,
-  });
-  if (body === undefined || body.trim() === '') return;
+  let body: string;
+  if (providedBody !== undefined) {
+    // Body ya suministrado por el compositor multilínea del webview (P4).
+    // isWebviewActionMessage ya validó que no está vacío antes de llegar aquí.
+    body = providedBody.trim();
+  } else {
+    // Fallback: InputBox de una línea (ruta de compatibilidad).
+    const input = await vscode.window.showInputBox({
+      title: 'Responder al hilo',
+      prompt: 'Escribe la respuesta (Enter para confirmar)',
+      ignoreFocusOut: true,
+      validateInput: (v) =>
+        v.trim() === '' ? 'La respuesta no puede estar vacía' : undefined,
+    });
+    if (input === undefined || input.trim() === '') return;
+    body = input.trim();
+  }
 
   const event: EventEnvelope = {
     id: randomUUID(),
@@ -356,7 +366,7 @@ async function replyToThreadImpl(
     created_at: utcTimestampMs(),
     commit: gitRoot ? await getHeadSha(gitRoot) : null,
     dirty: false,
-    body: body.trim(),
+    body,
   };
 
   await writeEvent(eventDir, event);
@@ -451,12 +461,13 @@ async function editMessageImpl(
   messageId: string,
   docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider,
-  afterUpdate?: (projections: ThreadProjection[]) => void
+  afterUpdate?: (projections: ThreadProjection[]) => void,
+  providedBody?: string
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
 
-  // Lee proyecciones para validar ids y pre-rellenar el InputBox
+  // Lee proyecciones para validar ids y (si no hay providedBody) pre-rellenar el InputBox
   const events = await readEvents(eventDir);
   const projections = project(events);
   const thread = projections.find(t => t.thread_id === threadId);
@@ -471,17 +482,25 @@ async function editMessageImpl(
   }
   const currentBody = msg.body;
 
-  const newBody = await vscode.window.showInputBox({
-    title: 'Editar mensaje',
-    prompt: 'Modifica el texto del mensaje',
-    value: currentBody,
-    ignoreFocusOut: true,
-    validateInput: (v) =>
-      v.trim() === '' ? 'El mensaje no puede estar vacío' : undefined,
-  });
-  if (newBody === undefined) return;
+  let newBody: string;
+  if (providedBody !== undefined) {
+    // Body ya suministrado por el compositor multilínea del webview (P4).
+    newBody = providedBody.trim();
+  } else {
+    // Fallback: InputBox de una línea (ruta de compatibilidad).
+    const input = await vscode.window.showInputBox({
+      title: 'Editar mensaje',
+      prompt: 'Modifica el texto del mensaje',
+      value: currentBody,
+      ignoreFocusOut: true,
+      validateInput: (v) =>
+        v.trim() === '' ? 'El mensaje no puede estar vacío' : undefined,
+    });
+    if (input === undefined) return;
+    newBody = input.trim();
+  }
 
-  if (newBody.trim() === currentBody.trim()) {
+  if (newBody === currentBody.trim()) {
     vscode.window.showInformationMessage('mesh-review: Sin cambios.');
     return;
   }
@@ -872,13 +891,41 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       switch (msg.type) {
         case 'reply':
-          await replyToThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
+          // P4: en lugar de abrir InputBox directamente, pide al webview que
+          // muestre el compositor multilínea. El submit llega como 'reply-submit'.
+          cardsProvider.postMessage({
+            type: 'open-composer',
+            thread_id: msg.thread_id,
+            mode: 'reply',
+          });
+          break;
+        case 'reply-submit':
+          // P4: el webview envió el body desde su compositor; lo pasamos directamente.
+          await replyToThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge, msg.body);
           break;
         case 'resolve':
           await resolveThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
           break;
         case 'edit':
-          await editMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider, updateBadge);
+          // P4: pide al webview que abra el compositor precargado con el body actual.
+          // Necesitamos el body actual del mensaje para pre-rellenar el textarea.
+          {
+            const { eventDir } = await resolveEventDir(docUri.fsPath);
+            const pjs = project(await readEvents(eventDir));
+            const th = pjs.find(t => t.thread_id === msg.thread_id);
+            const msgData = th?.messages.find(m => m.id === msg.message_id);
+            cardsProvider.postMessage({
+              type: 'open-composer',
+              thread_id: msg.thread_id,
+              mode: 'edit',
+              message_id: msg.message_id,
+              current_body: msgData?.body ?? '',
+            });
+          }
+          break;
+        case 'edit-submit':
+          // P4: el webview envió el body editado desde su compositor.
+          await editMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider, updateBadge, msg.body);
           break;
         case 'retract':
           await retractMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider, updateBadge);
