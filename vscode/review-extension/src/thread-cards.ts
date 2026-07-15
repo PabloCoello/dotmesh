@@ -321,9 +321,41 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
     // acquireVsCodeApi() se llama una sola vez y se guarda en la variable vscode
     const vscode = acquireVsCodeApi();
 
+    // _drafts: borradores del compositor por hilo, supervivientes al repintado del DOM.
+    // Clave: thread_id. Valor: { mode, messageId, value }.
+    // Persiste en el estado JS del webview entre mensajes 'update'.
+    const _drafts = new Map();
+
+    // _ackTimers: timer de red de seguridad del ACK, por thread_id.
+    // Cubre tanto botones de acción (resolve, retract) como el compositor (reply-submit, edit-submit).
+    const _ackTimers = new Map();
+
+    // Regex UUID para validar thread_id en mensajes del provider antes de usarlo en querySelector.
+    const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    // -----------------------------------------------------------------------
+    // Listener 'update': repinta las tarjetas preservando estado de plegado
+    // y borradores del compositor abierto.
+    // -----------------------------------------------------------------------
     window.addEventListener('message', event => {
       if (event.data.type !== 'update') return;
       const container = document.getElementById('cards-container');
+
+      // Antes de reemplazar el DOM: guardar borrador del compositor activo
+      // (solo si no está en estado "enviando", identificado por textarea.disabled).
+      const _activeComposer = container.querySelector('.composer.active');
+      const _activeThreadId = _activeComposer ? _activeComposer.dataset.composerThreadId : null;
+      if (_activeComposer && _activeThreadId) {
+        const _ta = _activeComposer.querySelector('.composer-textarea');
+        if (_ta && !_ta.disabled) {
+          _drafts.set(_activeThreadId, {
+            mode:      _activeComposer.dataset.composerMode,
+            messageId: _activeComposer.dataset.composerMessageId,
+            value:     _ta.value,
+          });
+        }
+      }
+
       // Guardar el estado de plegado antes de reemplazar el innerHTML
       const foldState = {};
       container.querySelectorAll('details[data-section]').forEach(el => {
@@ -336,14 +368,19 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           el.open = foldState[el.dataset.section];
         }
       });
+
+      // Restaurar el compositor activo si hay borrador para su hilo
+      if (_activeThreadId && _drafts.has(_activeThreadId)) {
+        const _draft = _drafts.get(_activeThreadId);
+        const _card = container.querySelector('.card[data-thread-id="' + _activeThreadId + '"]');
+        // undefined como currentBody fuerza a openComposer a usar el borrador
+        if (_card) openComposer(_activeThreadId, _draft.mode, _draft.messageId, undefined);
+      }
     });
 
-    // Mapa thread_id → timeoutId para la red de seguridad del ACK.
-    // Si el provider no responde en 10 s, re-habilita los botones del hilo.
-    const _ackTimers = new Map();
-
-    // Escucha el ACK del provider: re-habilita los botones del hilo y
-    // muestra el error inline si la acción falló.
+    // -----------------------------------------------------------------------
+    // Listener 'action-ack': distingue ACK del compositor de ACK de botones.
+    // -----------------------------------------------------------------------
     window.addEventListener('message', event => {
       if (event.data.type !== 'action-ack') return;
       const { ok, error, thread_id } = event.data;
@@ -352,7 +389,26 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
         clearTimeout(_ackTimers.get(thread_id));
         _ackTimers.delete(thread_id);
       }
-      // Re-habilita todos los botones del hilo
+      // ¿Hay un compositor en vuelo para este hilo?
+      const _composer = document.querySelector('.composer[data-composer-thread-id="' + thread_id + '"]');
+      if (_composer) {
+        if (ok) {
+          // Éxito: borrar borrador y cerrar el compositor
+          _drafts.delete(thread_id);
+          _composer.remove();
+        } else {
+          // Error: re-habilitar compositor y mostrar error inline
+          _composer.querySelectorAll('button, textarea').forEach(function(el) { el.disabled = false; });
+          _composer.querySelector('textarea')?.focus();
+          _composer.querySelector('.card-error')?.remove();
+          const errSpan = document.createElement('span');
+          errSpan.className = 'card-error';
+          errSpan.textContent = error || 'Error desconocido';
+          _composer.appendChild(errSpan);
+        }
+        return;
+      }
+      // ACK de botón de acción regular (resolve, retract, diff)
       document.querySelectorAll('[data-thread-id="' + thread_id + '"][data-action]').forEach(b => {
         b.disabled = false;
       });
@@ -360,7 +416,6 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
         // Inserta el error inline bajo la tarjeta del hilo
         const card = document.querySelector('[data-thread-id="' + thread_id + '"].card');
         if (card) {
-          // Elimina cualquier error previo del mismo hilo
           card.querySelector('.card-error')?.remove();
           const span = document.createElement('span');
           span.className = 'card-error';
@@ -370,39 +425,64 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // ---------------------------------------------------------------------------
-    // Compositor multilínea (P4)
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Compositor multilínea (P4) — borradores + envío ligado al ACK
+    // -----------------------------------------------------------------------
 
     /**
      * Abre el compositor in-place bajo la tarjeta indicada.
      *
-     * @param {string}  threadId    - ID del hilo (UUID ya escapado en los data-attrs).
-     * @param {'reply'|'edit'} mode - Modo de apertura.
-     * @param {string}  [messageId] - Solo en modo edit: ID del mensaje.
-     * @param {string}  [currentBody] - Solo en modo edit: cuerpo actual para pre-rellenar.
+     * Si hay un compositor abierto para OTRO hilo (no enviando), guarda su borrador
+     * antes de cerrarlo. Si hay un borrador propio en _drafts que coincida en modo y
+     * message_id, lo precarga (el borrador gana sobre currentBody del host en edit).
+     *
+     * El envío NO cierra el compositor: lo deshabilita y espera el action-ack.
+     *
+     * @param {string}           threadId    - UUID del hilo.
+     * @param {'reply'|'edit'}   mode        - Modo de apertura.
+     * @param {string|undefined} messageId   - Solo en modo edit: UUID del mensaje.
+     * @param {string|undefined} currentBody - Body actual del servidor (edit sin borrador).
      */
     function openComposer(threadId, mode, messageId, currentBody) {
-      // Cierra cualquier compositor abierto antes
-      closeComposer();
+      // Cierra cualquier compositor existente; guarda borrador si no está enviando
+      const existingComposer = document.querySelector('.composer.active');
+      if (existingComposer) {
+        const eTid = existingComposer.dataset.composerThreadId;
+        const eTa  = existingComposer.querySelector('.composer-textarea');
+        if (eTid && eTa && !eTa.disabled) {
+          _drafts.set(eTid, {
+            mode:      existingComposer.dataset.composerMode,
+            messageId: existingComposer.dataset.composerMessageId,
+            value:     eTa.value,
+          });
+        }
+        existingComposer.remove();
+      }
 
       const card = document.querySelector('.card[data-thread-id="' + threadId + '"]');
       if (!card) return;
 
+      // Pre-carga: borrador propio gana sobre currentBody del host
+      const draft = _drafts.get(threadId);
+      let initialValue = '';
+      if (draft && draft.mode === mode && (mode === 'reply' || draft.messageId === messageId)) {
+        initialValue = draft.value;
+      } else if (mode === 'edit' && currentBody !== undefined) {
+        initialValue = currentBody;
+      }
+
       const composer = document.createElement('div');
       composer.className = 'composer active';
       composer.dataset.composerThreadId = threadId;
-      if (mode === 'edit') composer.dataset.composerMessageId = messageId;
       composer.dataset.composerMode = mode;
+      if (messageId) composer.dataset.composerMessageId = messageId;
 
       const textarea = document.createElement('textarea');
       textarea.className = 'composer-textarea';
+      textarea.maxLength = 10000;
       textarea.setAttribute('aria-label', mode === 'reply' ? 'Respuesta' : 'Editar mensaje');
-      // En modo edición, pre-rellenar con el cuerpo actual.
-      // currentBody llega como texto plano desde extension.ts; no necesita des-escapado.
-      if (mode === 'edit' && currentBody !== undefined) {
-        textarea.value = currentBody;
-      }
+      // textarea.value recibe texto plano; no hay riesgo de XSS (no es innerHTML).
+      textarea.value = initialValue;
 
       const actions = document.createElement('div');
       actions.className = 'composer-actions';
@@ -431,29 +511,46 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       // Coloca el cursor al final en modo edición
       if (mode === 'edit') textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
 
+      /**
+       * Envía el cuerpo del compositor. NO cierra el compositor: lo deshabilita y
+       * espera el action-ack. El ack-handler cerrará en éxito o rehabilitará en error.
+       */
       function submitComposer() {
         const body = textarea.value;
-        if (body.trim() === '') {
-          textarea.focus();
-          return;
-        }
-        sendBtn.disabled = true;
+        if (body.trim() === '') { textarea.focus(); return; }
+        // Deshabilitar todo el compositor mientras la acción está en vuelo
+        textarea.disabled  = true;
+        sendBtn.disabled   = true;
         cancelBtn.disabled = true;
+        // Red de seguridad: 10 s rehabilita el compositor sin cerrar el borrador
+        if (_ackTimers.has(threadId)) clearTimeout(_ackTimers.get(threadId));
+        _ackTimers.set(threadId, setTimeout(function() {
+          _ackTimers.delete(threadId);
+          textarea.disabled  = false;
+          sendBtn.disabled   = false;
+          cancelBtn.disabled = false;
+        }, 10000));
         if (mode === 'reply') {
           vscode.postMessage({ type: 'reply-submit', thread_id: threadId, body });
         } else {
           vscode.postMessage({ type: 'edit-submit', thread_id: threadId, message_id: messageId, body });
         }
-        closeComposer();
+        // El compositor se cierra en el handler de action-ack, no aquí.
+      }
+
+      /** Cancelación explícita: borra el borrador del mapa y elimina el compositor. */
+      function cancelComposer() {
+        _drafts.delete(threadId);
+        document.querySelectorAll('.composer').forEach(function(c) { c.remove(); });
       }
 
       sendBtn.addEventListener('click', submitComposer);
-      cancelBtn.addEventListener('click', closeComposer);
+      cancelBtn.addEventListener('click', cancelComposer);
 
       textarea.addEventListener('keydown', function(ev) {
         if (ev.key === 'Escape') {
           ev.preventDefault();
-          closeComposer();
+          cancelComposer();
         } else if (ev.key === 'Enter' && ev.ctrlKey) {
           ev.preventDefault();
           submitComposer();
@@ -461,16 +558,12 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       });
     }
 
-    /** Elimina cualquier compositor abierto en el panel. */
-    function closeComposer() {
-      document.querySelectorAll('.composer').forEach(function(c) { c.remove(); });
-    }
-
-    // Escucha 'open-composer' desde el provider (extension.ts lo posta al procesar
-    // los clics en reply/edit una vez que ha resuelto el body actual del mensaje).
+    // Escucha 'open-composer' desde el provider.
+    // Valida thread_id como UUID antes de usarlo en querySelector (defensa en profundidad).
     window.addEventListener('message', function(event) {
       const data = event.data;
       if (data.type !== 'open-composer') return;
+      if (typeof data.thread_id !== 'string' || !_uuidRe.test(data.thread_id)) return;
       openComposer(data.thread_id, data.mode, data.message_id, data.current_body);
     });
 
@@ -489,10 +582,7 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({ type: 'diff', thread_id: threadId, mode });
           return;
         }
-        // reply y edit abren el compositor in-place; el postMessage va al servidor
-        // para que este resuelva el body actual (en edit) y envíe 'open-composer'.
-        // No deshabilitamos el botón aquí: el compositor aparece inmediatamente y
-        // el ciclo ACK no aplica a estos dos tipos de acción (no escriben eventos).
+        // reply y edit abren el compositor in-place vía el servidor (para resolver el body actual).
         if (action === 'reply' || action === 'edit') {
           const msg = { type: action, thread_id: threadId };
           if (action === 'edit') msg.message_id = messageId;
@@ -500,8 +590,7 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           return;
         }
         btn.disabled = true; // deshabilita mientras la acción está en vuelo
-        // Red de seguridad: si el ACK no llega en 10 s, re-habilita los botones
-        // para que la UI no quede bloqueada ante un error silencioso del provider.
+        // Red de seguridad: si el ACK no llega en 10 s, re-habilita los botones del hilo
         if (_ackTimers.has(threadId)) clearTimeout(_ackTimers.get(threadId));
         _ackTimers.set(threadId, setTimeout(() => {
           _ackTimers.delete(threadId);
@@ -510,9 +599,7 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           });
         }, 10000));
         const msg = { type: action, thread_id: threadId };
-        if (action === 'retract') {
-          msg.message_id = messageId;
-        }
+        if (action === 'retract') msg.message_id = messageId;
         vscode.postMessage(msg);
         return; // evita que el clic también dispare el salto al ancla
       }
