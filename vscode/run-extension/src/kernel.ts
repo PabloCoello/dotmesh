@@ -20,6 +20,7 @@
 
 import * as vscode from 'vscode';
 import type { Jupyter, Kernel } from '@vscode/jupyter-extension';
+import { splitOutputLines } from './lines.js';
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -313,10 +314,7 @@ class KernelSessionImpl implements KernelSession {
       cts.dispose();
     }
 
-    // Dividir el texto acumulado en líneas, eliminando solo el salto final
-    // (print("hello") produce "hello\n"; queremos ["hello"], no ["hello", ""]).
     const stdout = splitOutputLines(outputText);
-
     return { stdout, repr: lastValueRepr, error: errorText };
   }
 }
@@ -324,19 +322,6 @@ class KernelSessionImpl implements KernelSession {
 // ---------------------------------------------------------------------------
 // Utilidades
 // ---------------------------------------------------------------------------
-
-/**
- * Divide texto de salida en líneas.
- * Elimina el salto de línea final para que print("a") → ["a"] y no ["a", ""].
- * Los saltos de línea intermedios se preservan como separadores.
- */
-function splitOutputLines(text: string): string[] {
-  if (!text) {
-    return [];
-  }
-  const stripped = text.endsWith('\n') ? text.slice(0, -1) : text;
-  return stripped.split('\n');
-}
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
