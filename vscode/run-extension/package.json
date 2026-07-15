@@ -1,0 +1,53 @@
+{
+  "name": "mesh-run",
+  "displayName": "mesh-run",
+  "description": "Ejecutor de chunks de código en documentos Markdown con salida versionable",
+  "version": "0.1.0",
+  "publisher": "pablocoello",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PabloCoello/dotmesh"
+  },
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=22.6.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mesh-run.runChunk",
+        "title": "Mesh Run: Ejecutar chunk"
+      },
+      {
+        "command": "mesh-run.runAll",
+        "title": "Mesh Run: Ejecutar todo"
+      },
+      {
+        "command": "mesh-run.restartKernel",
+        "title": "Mesh Run: Reiniciar kernel"
+      },
+      {
+        "command": "mesh-run.clearOutputs",
+        "title": "Mesh Run: Limpiar salidas"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node build.js",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies",
+    "install-ext": "npm run package && code --install-extension \"$(ls mesh-run-*.vsix | head -1)\" --force",
+    "test": "ls src/*.test.ts 2>/dev/null | xargs -r node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.4.0"
+  }
+}
