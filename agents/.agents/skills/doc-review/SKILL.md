@@ -284,12 +284,16 @@ Route open threads to subagents based on `assignee` from `thread.assigned` event
 |---|---|
 | `assignee: "security"` or `verifica` on a security claim | `security` |
 | `assignee: "maths"` or `verifica` on a quantitative/mathematical claim | `maths` |
-| `edita` or `sugerencia` (prose change) | `reviser` |
-| `pregunta` requiring factual research | `editor` |
+| `assignee: "reviser"` | `reviser` |
+| `assignee: "editor"` | `editor` |
+| `edita` or `sugerencia` (prose change, no assignee) | `reviser` |
+| `pregunta` requiring factual research (no assignee) | `editor` |
 | `nota`, `referencia`, `supuesto` (annotations) | principal |
 | No assignee, no clear signal | principal |
 
 The dotmesh subagent roster: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`.
+
+> The human can assign a thread directly from the mesh-review VS Code extension (button "Asignar" on open thread cards). The extension writes a `thread.assigned` event with `agent` set to one of the four assignable values: `security`, `maths`, `reviser`, `editor`.
 
 ---
 

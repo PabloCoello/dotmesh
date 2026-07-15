@@ -1154,3 +1154,93 @@ test('buildCardsHtml no incluye etiqueta card-confidence cuando confidence es un
   const html = buildCardsHtml([card]);
   assert.ok(!html.includes('card-confidence'), 'no debe incluir la clase card-confidence cuando no hay confianza');
 });
+
+// ---------------------------------------------------------------------------
+// P5 — slice 6.2: assignee en CardViewModel + botón assign + isWebviewActionMessage
+// ---------------------------------------------------------------------------
+
+test('buildCardViewModels propaga assignee cuando el hilo lo tiene', () => {
+  const thread = makeThread({ commentType: 'edita', assignee: 'security' });
+  const [card] = buildCardViewModels([thread]);
+  assert.strictEqual(card.assignee, 'security');
+});
+
+test('buildCardViewModels assignee es undefined cuando el hilo no lo tiene', () => {
+  const thread = makeThread({ commentType: 'nota' });
+  const [card] = buildCardViewModels([thread]);
+  assert.strictEqual(card.assignee, undefined);
+});
+
+test('buildCardsHtml incluye etiqueta card-assignee cuando assignee está presente', () => {
+  const card: CardViewModel = {
+    thread_id:   't-assign',
+    commentType: 'edita',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    assignee:    'security',
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('card-assignee'), 'debe incluir la clase card-assignee');
+  assert.ok(html.includes('security'), 'debe incluir el nombre del agente asignado');
+});
+
+test('buildCardsHtml no incluye card-assignee cuando assignee es undefined', () => {
+  const card: CardViewModel = {
+    thread_id:   't-noassign',
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('card-assignee'), 'no debe incluir la clase card-assignee cuando no hay asignado');
+});
+
+test('isWebviewActionMessage acepta assign con thread_id UUID', () => {
+  assert.ok(isWebviewActionMessage({ type: 'assign', thread_id: TID }));
+});
+
+test('isWebviewActionMessage rechaza assign sin thread_id', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'assign' }));
+});
+
+test('isWebviewActionMessage rechaza assign con thread_id no-UUID', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'assign', thread_id: 'no-es-uuid' }));
+});
+
+test('buildCardsHtml incluye botón assign en hilo abierto', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'edita',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('data-action="assign"'), 'debe incluir botón assign en hilo abierto');
+});
+
+test('buildCardsHtml no incluye botón assign en hilo resuelto', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'edita',
+    lineLabel:   'L2',
+    hasAnchor:   true,
+    status:      'resolved',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="assign"'), 'no debe incluir botón assign en hilo resuelto');
+});

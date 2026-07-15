@@ -471,6 +471,55 @@ async function resolveThreadImpl(
 }
 
 /**
+ * Asigna un hilo a un subagente (thread.assigned).
+ * Invocable desde el webview vía setActionHandler (acción 'assign').
+ * Muestra un QuickPick con los cuatro subagentes asignables del roster 2+6.
+ */
+async function assignThreadImpl(
+  threadId: string,
+  docUri: vscode.Uri,
+  cardsProvider: ThreadCardsViewProvider,
+  afterUpdate?: (projections: ThreadProjection[]) => void
+): Promise<void> {
+  const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
+  await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
+
+  const projections = project(await readEvents(eventDir));
+  const thread = projections.find(t => t.thread_id === threadId);
+  if (!thread || thread.status !== 'open') {
+    vscode.window.showErrorMessage('mesh-review: Hilo no encontrado o no está abierto.');
+    return;
+  }
+
+  const agentItem = await vscode.window.showQuickPick<vscode.QuickPickItem>(
+    [
+      { label: 'security', description: 'Revisor de seguridad — hardening, secretos, permisos' },
+      { label: 'maths',    description: 'Revisor de lógica y matemáticas' },
+      { label: 'reviser',  description: 'Revisor conversacional — doc-review' },
+      { label: 'editor',   description: 'Editor de prosa' },
+    ],
+    { title: 'Asignar hilo a subagente', placeHolder: 'Selecciona el subagente' }
+  );
+  if (!agentItem) return;
+
+  const event: EventEnvelope = {
+    id: randomUUID(),
+    version: 2,
+    type: 'thread.assigned',
+    thread_id: threadId,
+    author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
+    created_at: utcTimestampMs(),
+    commit: gitRoot ? await getHeadSha(gitRoot) : null,
+    dirty: false,
+    agent: agentItem.label,
+  };
+
+  await writeEvent(eventDir, event);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider, undefined, afterUpdate);
+  vscode.window.showInformationMessage(`mesh-review: hilo asignado a ${agentItem.label}.`);
+}
+
+/**
  * Edita el texto de un mensaje existente (message.revised).
  * Invocable desde el webview vía setActionHandler.
  * Valida thread y mensaje; pre-rellena el InputBox con el body actual.
@@ -953,6 +1002,9 @@ export function activate(context: vscode.ExtensionContext): void {
           break;
         case 'diff':
           await openDiffImpl(msg.thread_id, msg.mode, cardsProvider);
+          break;
+        case 'assign':
+          await assignThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
           break;
       }
     } catch (err) {
