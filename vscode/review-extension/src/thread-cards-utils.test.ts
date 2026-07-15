@@ -1328,17 +1328,49 @@ test('buildAllDocsHtml omite grupos con 0 hilos', () => {
   assert.ok(html.includes('conhilos.md'), 'debe incluir grupos con hilos');
 });
 
-test('buildAllDocsHtml solo overflow sin docs muestra sección mínima', () => {
-  // Caso borde: sin docs pero con overflow (no ocurre en producción pero robustez)
-  // En realidad con mapa vacío y overflow > 0 sí debe mostrarse algo
+test('buildAllDocsHtml solo overflow sin docs devuelve cadena vacía', () => {
+  // Fix 6: sin hilos visibles no se renderiza la sección aunque haya overflow;
+  // una sección con 0 entradas concretas no aporta información útil.
   const html = buildAllDocsHtml(new Map(), 3);
-  // Cuando el mapa está vacío pero hay overflow, devuelve '' ya que no hay nada concreto
-  // que mostrar — el overflow es de docs con 0 hilos o no procesados. En este caso
-  // la función devuelve '' (implementación actual). Este test documenta el comportamiento.
-  // Nota: la condición `allDocs.size === 0 && overflow === 0` → si overflow > 0 y size 0,
-  // NO es vacío, así que sí genera HTML.
-  assert.ok(html.includes('Repositorio (0)'), 'con overflow pero sin docs muestra Repositorio (0)');
-  assert.ok(html.includes('(+3 más)'), 'debe incluir el indicador de overflow');
+  assert.strictEqual(html, '', 'sin hilos visibles devuelve cadena vacía aunque haya overflow');
+});
+
+test('buildAllDocsHtml ordena documentos alfabéticamente (fix 4)', () => {
+  // Los documentos deben aparecer en orden localeCompare independientemente
+  // del orden de inserción en el Map.
+  const card: CardViewModel = {
+    thread_id: TID, commentType: 'nota', lineLabel: 'L1',
+    hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [],
+  };
+  const allDocs = new Map<string, CardViewModel[]>([
+    ['zebra.md',  [card]],
+    ['alpha.md',  [card]],
+    ['middle.md', [card]],
+  ]);
+  const html = buildAllDocsHtml(allDocs);
+
+  const idxAlpha  = html.indexOf('alpha.md');
+  const idxMiddle = html.indexOf('middle.md');
+  const idxZebra  = html.indexOf('zebra.md');
+  assert.ok(idxAlpha  < idxMiddle, 'alpha.md debe aparecer antes que middle.md');
+  assert.ok(idxMiddle < idxZebra,  'middle.md debe aparecer antes que zebra.md');
+});
+
+test('buildAllDocsHtml usa clase "nota" como fallback para commentType desconocido (fix 5)', () => {
+  // Un commentType no incluido en VALID_COMMENT_TYPES no debe inyectar clases arbitrarias.
+  const card: CardViewModel = {
+    thread_id: TID, commentType: 'tipo-malicioso con espacios', lineLabel: 'L1',
+    hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [],
+  };
+  const allDocs = new Map([['doc.md', [card]]]);
+  const html = buildAllDocsHtml(allDocs);
+
+  // La clase CSS usa el fallback seguro
+  assert.ok(html.includes('bullet-nota'), 'debe usar bullet-nota como clase fallback');
+  // El texto visible muestra el valor (escapado) del tipo original
+  assert.ok(html.includes('tipo-malicioso'), 'el texto visible muestra el tipo original escapado');
+  // No debe inyectar la clase con espacios tal cual
+  assert.ok(!html.includes('bullet-tipo-malicioso con espacios'), 'no debe inyectar la clase con espacios');
 });
 
 // ---------------------------------------------------------------------------

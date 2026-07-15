@@ -6,7 +6,7 @@
  */
 
 import type { ThreadProjection } from './sidecar';
-import { isUuid } from './sidecar.ts';
+import { isUuid, VALID_COMMENT_TYPES } from './sidecar.ts';
 import {
   formatTimestamp,
   escapeHtml,
@@ -282,13 +282,18 @@ export function buildAllDocsHtml(
   allDocs: Map<string, CardViewModel[]>,
   overflow = 0
 ): string {
-  if (allDocs.size === 0 && overflow === 0) return '';
-
+  // Fix 6: si no hay hilos visibles no renderizar la sección, aunque haya overflow;
+  // una sección con 0 entradas concretas no aporta información útil.
   let totalThreads = 0;
   for (const cards of allDocs.values()) totalThreads += cards.length;
+  if (totalThreads === 0) return '';
+
+  // Fix 4: orden estable — alfabético por ruta relativa (localeCompare),
+  // independientemente del orden que devuelva readdir en el sistema de ficheros.
+  const sortedEntries = [...allDocs.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   const groups: string[] = [];
-  for (const [docPath, cards] of allDocs) {
+  for (const [docPath, cards] of sortedEntries) {
     if (cards.length === 0) continue;
     const escapedPath = escapeHtml(docPath);
     // Cabecera del grupo: solo el nombre de fichero; la ruta completa va en data-doc-path.
@@ -296,9 +301,14 @@ export function buildAllDocsHtml(
     const displayName = escapeHtml(segments[segments.length - 1] ?? docPath);
     const threads = cards.map(card => {
       const tid  = escapeHtml(card.thread_id);
-      const type = escapeHtml(card.commentType);
+      // Fix 5: la clase CSS sale de la lista blanca VALID_COMMENT_TYPES para evitar
+      // inyección de clases arbitrarias desde un commentType manipulado en disco.
+      // El texto visible usa el valor escapado sin restricción de lista blanca.
+      const rawType     = card.commentType;
+      const safeClass   = VALID_COMMENT_TYPES.has(rawType) ? escapeHtml(rawType) : 'nota';
+      const displayType = escapeHtml(rawType);
       const line = escapeHtml(card.lineLabel);
-      return `<button class="all-doc-thread action-btn" data-action="jump-doc" data-thread-id="${tid}" data-doc-path="${escapedPath}"><span class="bullet bullet-${type}">●</span> ${type} · ${line}</button>`;
+      return `<button class="all-doc-thread action-btn" data-action="jump-doc" data-thread-id="${tid}" data-doc-path="${escapedPath}"><span class="bullet bullet-${safeClass}">●</span> ${displayType} · ${line}</button>`;
     }).join('\n');
     groups.push(
       `<div class="all-doc-group">\n` +

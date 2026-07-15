@@ -1441,3 +1441,43 @@ test('scanAllDocs solo incluye hilos abiertos del documento escaneado', async ()
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('scanAllDocs salta en silencio el evento corrupto y procesa los demás documentos (fix 7)', async () => {
+  // Documenta el comportamiento actual de readEvents: un fichero .json inválido en el
+  // directorio de eventos de un documento se descarta silenciosamente (parse error
+  // capturado internamente); el documento puede aparecer en el mapa con 0 proyecciones
+  // si todos sus eventos eran inválidos. El resto de documentos se procesan con normalidad.
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const validId = randomUUID();
+
+    // Doc válido: un evento bien formado
+    await writeMinimalEvent(join(root, '.ai', 'review', 'valid.md'), validId);
+
+    // Doc corrupto: fichero JSON inválido en su directorio de eventos
+    const corruptEventDir = join(root, '.ai', 'review', 'corrupt.md');
+    await mkdir(corruptEventDir, { recursive: true });
+    await writeFile(join(corruptEventDir, `${randomUUID()}.json`), 'esto no es json', 'utf8');
+
+    const errors: Array<{ file: string; err: unknown }> = [];
+    const result = await scanAllDocs(root, (file, err) => errors.push({ file, err }));
+
+    // El documento válido se proyecta correctamente
+    assert.ok(result.docs.has('valid.md'), 'el documento válido debe aparecer en el mapa');
+    const proj = result.docs.get('valid.md');
+    assert.ok(Array.isArray(proj) && proj.length === 1, 'valid.md debe tener 1 proyección');
+    assert.strictEqual(proj![0].thread_id, validId, 'el thread_id debe coincidir');
+
+    // El doc corrupto puede estar en el mapa (readEvents retorna []) pero con 0 proyecciones:
+    // el evento inválido fue descartado silenciosamente por readEvents.
+    if (result.docs.has('corrupt.md')) {
+      const corruptProj = result.docs.get('corrupt.md');
+      assert.ok(Array.isArray(corruptProj) && corruptProj.length === 0,
+        'el documento corrupto debe tener 0 proyecciones (el evento inválido se descartó)');
+    }
+    // scanAllDocs no lanza incluso con JSON inválido en disco
+    assert.strictEqual(result.overflow, 0, 'no debe haber overflow');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
