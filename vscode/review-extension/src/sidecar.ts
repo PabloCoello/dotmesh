@@ -684,3 +684,97 @@ export async function writeBacklogTask(gitRoot: string, task: BacklogTask): Prom
     'utf8'
   );
 }
+
+// ---------------------------------------------------------------------------
+// IO V2: escaneo multi-fichero (P6)
+// ---------------------------------------------------------------------------
+
+/** Tope máximo de documentos que escanea scanAllDocs (DA-7). */
+export const SCAN_ALL_DOCS_LIMIT = 50;
+
+/**
+ * Recorre recursivamente el árbol bajo `dir` buscando directorios de eventos:
+ * directorios que contienen ficheros .json directamente (no subdirectorios).
+ *
+ * Un directorio que solo contiene subdirectorios es un componente de ruta
+ * (p. ej. `src/` en la jerarquía `.ai/review/src/foo.ts/`); se recorre en ellos.
+ * Un directorio que contiene al menos un `.json` es un directorio de eventos;
+ * se añade su ruta relativa a `result` y NO se recursa en él.
+ *
+ * La ruta relativa se construye siempre con `/` como separador para ser
+ * independiente del SO (se usa solo como clave lógica, no como ruta del sistema
+ * de ficheros directamente).
+ *
+ * Sin límite propio: el tope lo aplica scanAllDocs.
+ */
+async function collectEventDirs(
+  dir: string,
+  relPath: string,
+  result: string[]
+): Promise<void> {
+  let entries: import('fs').Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // directorio inaccesible — omitir silenciosamente
+  }
+
+  const hasJson = entries.some(e => e.isFile() && e.name.endsWith('.json'));
+  if (hasJson && relPath.length > 0) {
+    // Directorio de eventos encontrado
+    result.push(relPath);
+    return;
+  }
+
+  // Componente de ruta: recursar en subdirectorios
+  const subDirs = entries.filter(e => e.isDirectory());
+  for (const sub of subDirs) {
+    const subRelPath = relPath.length > 0 ? `${relPath}/${sub.name}` : sub.name;
+    await collectEventDirs(path.join(dir, sub.name), subRelPath, result);
+  }
+}
+
+/**
+ * Escanea el árbol `.ai/review/` del repositorio y devuelve las proyecciones de
+ * todos los documentos con eventos V2, con un tope de `SCAN_ALL_DOCS_LIMIT` (50).
+ *
+ * - `docs`: Map cuya clave es la ruta relativa del documento desde el git root
+ *   (separador `/`) y el valor son sus proyecciones.
+ * - `overflow`: número de directorios de eventos adicionales que no se procesaron
+ *   por superar el tope. Permite mostrar un indicador "(+N más)" en la UI.
+ * - Si `.ai/review/` no existe (ENOENT), devuelve mapa vacío sin error.
+ * - Llama a `onError` para errores de IO no-ENOENT en la raíz del árbol.
+ * - No lanza: los errores en subdirectorios individuales se omiten silenciosamente.
+ */
+export async function scanAllDocs(
+  gitRoot: string,
+  onError?: (file: string, err: unknown) => void
+): Promise<{ docs: Map<string, ThreadProjection[]>; overflow: number }> {
+  const reviewBase = path.join(gitRoot, '.ai', 'review');
+
+  const allRelPaths: string[] = [];
+  try {
+    await collectEventDirs(reviewBase, '', allRelPaths);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      onError?.(reviewBase, err);
+    }
+    return { docs: new Map(), overflow: 0 };
+  }
+
+  const overflow = Math.max(0, allRelPaths.length - SCAN_ALL_DOCS_LIMIT);
+  const toProcess = allRelPaths.slice(0, SCAN_ALL_DOCS_LIMIT);
+
+  const docs = new Map<string, ThreadProjection[]>();
+  for (const docRelPath of toProcess) {
+    const eventDirAbs = path.join(reviewBase, docRelPath);
+    try {
+      const events = await readEvents(eventDirAbs, onError);
+      docs.set(docRelPath, project(events));
+    } catch (err) {
+      onError?.(eventDirAbs, err);
+    }
+  }
+
+  return { docs, overflow };
+}

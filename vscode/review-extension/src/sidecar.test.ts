@@ -27,6 +27,8 @@ import {
   buildV1FilePath,
   VALID_COMMENT_TYPES,
   anchorChanged,
+  scanAllDocs,
+  SCAN_ALL_DOCS_LIMIT,
   type Anchor,
   type Sidecar,
   type EventEnvelope,
@@ -1308,5 +1310,134 @@ test('thread.assigned: writeEvent→readEvents→project refleja el agente asign
     assert.strictEqual(projections[0].assignee, 'security', 'assignee debe propagarse tras el ciclo completo');
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// P6 — scanAllDocs: escaneo multi-fichero del workspace
+// ---------------------------------------------------------------------------
+
+/** Escribe un evento thread.opened mínimo en el directorio de eventos dado. */
+async function writeMinimalEvent(eventDir: string, threadId: string): Promise<void> {
+  await mkdir(eventDir, { recursive: true });
+  const ev: EventEnvelope = {
+    id: randomUUID(),
+    version: 2,
+    type: 'thread.opened',
+    thread_id: threadId,
+    author: { kind: 'human' },
+    created_at: '2026-07-16T10:00:00.000Z',
+    commit: null,
+    dirty: false,
+    commentType: 'nota',
+    anchor: { quote: 'texto', line_hint: 0, char_offset: 0 },
+    body: 'comentario',
+  };
+  await writeFile(join(eventDir, `${ev.id}.json`), JSON.stringify(ev, null, 2) + '\n', 'utf8');
+}
+
+import { randomUUID } from 'node:crypto';
+
+test('scanAllDocs con directorio .ai/review/ inexistente devuelve mapa vacío', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const result = await scanAllDocs(root);
+    assert.strictEqual(result.docs.size, 0, 'docs debe estar vacío');
+    assert.strictEqual(result.overflow, 0, 'overflow debe ser 0');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs con dos subdirectorios devuelve Map con dos entradas', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const tid1 = randomUUID();
+    const tid2 = randomUUID();
+    // Doc: README.md → eventDir: .ai/review/README.md/
+    await writeMinimalEvent(join(root, '.ai', 'review', 'README.md'), tid1);
+    // Doc: src/foo.ts → eventDir: .ai/review/src/foo.ts/
+    await writeMinimalEvent(join(root, '.ai', 'review', 'src', 'foo.ts'), tid2);
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, 2, 'debe devolver 2 entradas');
+    assert.strictEqual(result.overflow, 0, 'no debe haber overflow');
+    assert.ok(result.docs.has('README.md'),  'debe incluir README.md');
+    assert.ok(result.docs.has('src/foo.ts'), 'debe incluir src/foo.ts');
+
+    // Las proyecciones del primer doc deben tener un hilo
+    const readmeProj = result.docs.get('README.md');
+    assert.ok(Array.isArray(readmeProj), 'las proyecciones de README.md deben ser array');
+    assert.strictEqual(readmeProj!.length, 1, 'README.md debe tener 1 hilo');
+    assert.strictEqual(readmeProj![0].thread_id, tid1, 'el thread_id debe coincidir');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs respeta el tope de SCAN_ALL_DOCS_LIMIT documentos', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    // Crea SCAN_ALL_DOCS_LIMIT + 5 documentos
+    const total = SCAN_ALL_DOCS_LIMIT + 5;
+    for (let i = 0; i < total; i++) {
+      const docName = `doc${String(i).padStart(3, '0')}.md`;
+      await writeMinimalEvent(join(root, '.ai', 'review', docName), randomUUID());
+    }
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, SCAN_ALL_DOCS_LIMIT, `docs no debe superar el tope (${SCAN_ALL_DOCS_LIMIT})`);
+    assert.strictEqual(result.overflow, 5, 'overflow debe ser 5');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs solo incluye hilos abiertos del documento escaneado', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const openId    = randomUUID();
+    const resolvedId = randomUUID();
+    const eventDir  = join(root, '.ai', 'review', 'doc.md');
+    await mkdir(eventDir, { recursive: true });
+
+    // Hilo abierto
+    const evOpen: EventEnvelope = {
+      id: randomUUID(), version: 2, type: 'thread.opened',
+      thread_id: openId, author: { kind: 'human' },
+      created_at: '2026-07-16T10:00:00.000Z', commit: null, dirty: false,
+      commentType: 'nota', anchor: { quote: 'a', line_hint: 0, char_offset: 0 }, body: 'ok',
+    };
+    // Hilo que se resuelve
+    const evResOpen: EventEnvelope = {
+      id: randomUUID(), version: 2, type: 'thread.opened',
+      thread_id: resolvedId, author: { kind: 'human' },
+      created_at: '2026-07-16T10:01:00.000Z', commit: null, dirty: false,
+      commentType: 'nota', anchor: { quote: 'b', line_hint: 1, char_offset: 5 }, body: 'ok',
+    };
+    const evResolve: EventEnvelope = {
+      id: randomUUID(), version: 2, type: 'thread.status-changed',
+      thread_id: resolvedId, author: { kind: 'human' },
+      created_at: '2026-07-16T10:02:00.000Z', commit: null, dirty: false,
+      to: 'resolved',
+    };
+    await writeFile(join(eventDir, `${evOpen.id}.json`),    JSON.stringify(evOpen, null, 2) + '\n', 'utf8');
+    await writeFile(join(eventDir, `${evResOpen.id}.json`), JSON.stringify(evResOpen, null, 2) + '\n', 'utf8');
+    await writeFile(join(eventDir, `${evResolve.id}.json`), JSON.stringify(evResolve, null, 2) + '\n', 'utf8');
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, 1, 'debe haber 1 doc');
+    const projections = result.docs.get('doc.md');
+    assert.ok(projections, 'debe tener proyecciones para doc.md');
+    assert.strictEqual(projections!.length, 2, 'debe tener 2 hilos (abierto y resuelto)');
+    // project() devuelve todos los hilos, la sección multi-fichero filtra los abiertos
+    const open = projections!.filter(p => p.status === 'open');
+    assert.strictEqual(open.length, 1, 'solo 1 hilo abierto');
+    assert.strictEqual(open[0].thread_id, openId, 'el hilo abierto es el correcto');
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

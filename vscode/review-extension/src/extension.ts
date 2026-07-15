@@ -24,6 +24,7 @@ import {
   utcTimestampMs,
   buildV1FilePath,
   anchorChanged,
+  scanAllDocs,
   type EventEnvelope,
   type ThreadProjection,
   type Anchor,
@@ -33,7 +34,7 @@ import {
 import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
-import { computeUnseenCount, pickNextThread } from './thread-cards-utils';
+import { buildCardViewModels, computeUnseenCount, pickNextThread } from './thread-cards-utils';
 import { buildDiffTitle, isMeshReviewDiffTabLabel } from './diff-utils';
 
 // ---------------------------------------------------------------------------
@@ -885,6 +886,18 @@ export function activate(context: vscode.ExtensionContext): void {
   /** Proyecciones más recientes; se actualiza en cada llamada a updateBadge. */
   let _currentProjections: ThreadProjection[] = [];
 
+  // ---------------------------------------------------------------------------
+  // P6: vista multi-fichero — estado de sesión
+  // _allDocs: resultado completo del último scanAllDocs (todas las proyecciones).
+  // _allDocsOverflow: docs que no se procesaron por superar SCAN_ALL_DOCS_LIMIT.
+  // _currentDocRelPath: ruta relativa del documento activo (excluida de allDocs).
+  // _currentGitRoot: git root del workspace activo (para el escaneo y jump-doc).
+  // ---------------------------------------------------------------------------
+  let _allDocs: Map<string, ThreadProjection[]> = new Map();
+  let _allDocsOverflow = 0;
+  let _currentDocRelPath: string | undefined;
+  let _currentGitRoot: string | null = null;
+
   /**
    * Actualiza el badge de la activity bar con el recuento de mensajes IA no vistos.
    * Si el panel está visible, marca todos los mensajes IA actuales como vistos.
@@ -918,6 +931,47 @@ export function activate(context: vscode.ExtensionContext): void {
   cardsProvider.setOnVisibleCallback(() => updateBadge(_currentProjections));
 
   // ---------------------------------------------------------------------------
+  // P6: vista multi-fichero — helpers de escaneo y actualización del panel
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Construye el Map de CardViewModel[] para el panel multi-fichero a partir
+   * de los datos del último scanAllDocs, filtrando el documento activo y los
+   * hilos no abiertos, y llama a cardsProvider.updateAllDocs.
+   *
+   * Sin IO: solo transforma los datos ya en memoria.
+   */
+  function refreshAllDocsPanel(): void {
+    const docsForPanel = new Map<string, ReturnType<typeof buildCardViewModels>>();
+    for (const [relPath, projections] of _allDocs) {
+      if (relPath === _currentDocRelPath) continue; // excluir el doc activo
+      const openThreads = projections.filter(p => p.status === 'open');
+      if (openThreads.length > 0) {
+        docsForPanel.set(relPath, buildCardViewModels(openThreads));
+      }
+    }
+    cardsProvider.updateAllDocs(docsForPanel, _allDocsOverflow);
+  }
+
+  /**
+   * Ejecuta scanAllDocs y actualiza el estado y el panel multi-fichero.
+   * Se llama al activar la extensión y en el watcher de eventos.
+   * Fallo silencioso: los errores de IO se registran en el OutputChannel.
+   */
+  async function doScanAllDocs(gitRoot: string): Promise<void> {
+    try {
+      const onError = (file: string, err: unknown) =>
+        output.appendLine(`mesh-review: error en scan all-docs ${file} — ${err}`);
+      const result = await scanAllDocs(gitRoot, onError);
+      _allDocs = result.docs;
+      _allDocsOverflow = result.overflow;
+      refreshAllDocsPanel();
+    } catch {
+      // fallo silencioso: el panel simplemente no muestra la sección multi-fichero
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // refreshEditorState — closure sobre cardsProvider.
   // Se define aquí para capturar cardsProvider sin pasarlo como parámetro.
   // ---------------------------------------------------------------------------
@@ -926,6 +980,10 @@ export function activate(context: vscode.ExtensionContext): void {
       const docFsPath = editor.document.uri.fsPath;
       const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docFsPath);
       _activeEventDir = eventDir;
+
+      // P6: actualizar el doc activo y el git root para el escaneo multi-fichero
+      _currentDocRelPath = docRelPath;
+      _currentGitRoot = gitRoot;
 
       let projections: ThreadProjection[];
 
@@ -947,6 +1005,8 @@ export function activate(context: vscode.ExtensionContext): void {
       applyDecorations(editor, projections);
       cardsProvider.update(projections, editor.document.uri);
       updateBadge(projections);
+      // P6: re-filtrar allDocs para excluir el nuevo doc activo (sin re-escanear)
+      refreshAllDocsPanel();
     } catch {
       // Fallo silencioso: decoraciones y panel de tarjetas simplemente no cambian.
     }
@@ -1006,6 +1066,33 @@ export function activate(context: vscode.ExtensionContext): void {
         case 'assign':
           await assignThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
           break;
+        case 'jump-doc': {
+          // Salto a un hilo de otro documento (P6 — vista multi-fichero).
+          // msg.doc_path ya fue validado como relativo sin .. por isWebviewActionMessage.
+          const gitRoot = _currentGitRoot;
+          if (!gitRoot) break;
+
+          // Comprobación de contención definitiva en el host (defensa en profundidad).
+          const absDocPath = path.join(gitRoot, msg.doc_path);
+          const rel = path.relative(gitRoot, absDocPath);
+          if (rel.startsWith('..') || path.isAbsolute(rel)) {
+            output.appendLine(`mesh-review: jump-doc rechazado por traversal: ${msg.doc_path}`);
+            break;
+          }
+
+          // Buscar el hilo en las proyecciones del scan (datos del host, no del webview).
+          const docProjections = _allDocs.get(msg.doc_path);
+          const thread = docProjections?.find(t => t.thread_id === msg.thread_id);
+          if (!thread) break;
+
+          // Abrir el documento y saltar al ancla del hilo.
+          const targetUri = vscode.Uri.file(absDocPath);
+          await vscode.window.showTextDocument(targetUri, { preview: false });
+          if ('line_hint' in thread.anchor) {
+            await vscode.commands.executeCommand('mesh-review.jumpToComment', thread.anchor);
+          }
+          break;
+        }
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1096,6 +1183,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const initialEditor = vscode.window.activeTextEditor;
   if (initialEditor) {
     refreshEditorState(initialEditor).catch(() => {});
+  }
+
+  // P6: escaneo inicial de todos los documentos del workspace.
+  // Se dispara tras refreshEditorState para que _currentDocRelPath ya esté
+  // actualizado cuando refreshAllDocsPanel filtra el doc activo.
+  // Solo aplica si hay workspace y git root disponible.
+  {
+    const ws = vscode.workspace.workspaceFolders?.[0];
+    if (ws) {
+      getGitRoot(ws.uri.fsPath)
+        .then(wsGitRoot => { if (wsGitRoot) doScanAllDocs(wsGitRoot).catch(() => {}); })
+        .catch(() => {});
+    }
   }
 
   // --- Refresco al cambiar de editor ---
@@ -1201,13 +1301,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // --- FileSystemWatcher sobre el directorio de eventos del workspace ---
   const watcher = vscode.workspace.createFileSystemWatcher('**/.ai/review/**/*.json');
-  // Filtra refrescos de otros documentos: solo recarga si el fichero cambiado
-  // pertenece al directorio de eventos del documento activo.
+  // Filtra refrescos del documento activo: solo recarga si el fichero cambiado
+  // pertenece al directorio de eventos del documento activo. Para todos los
+  // cambios (incluidos los de otros documentos), re-escanea la vista multi-fichero.
   const onSidecarChange = (changedUri: vscode.Uri) => {
     const editor = vscode.window.activeTextEditor;
+
+    // P6: re-escanear el repositorio completo en cualquier cambio de eventos.
+    if (_currentGitRoot) {
+      doScanAllDocs(_currentGitRoot).catch(() => {});
+    }
+
     if (!editor) return;
     if (_activeEventDir && !changedUri.fsPath.startsWith(_activeEventDir + path.sep)) {
-      return; // evento de otro documento — ignorar
+      return; // evento de otro documento — no recargar el doc activo
     }
     refreshEditorState(editor).catch(() => {});
   };

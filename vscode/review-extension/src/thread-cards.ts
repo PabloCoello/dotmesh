@@ -10,7 +10,7 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
 import type { ThreadProjection } from './sidecar';
-import { buildCardViewModels, buildCardsHtml, buildBulletStyles, isWebviewActionMessage, type WebviewActionMessage } from './thread-cards-utils';
+import { buildCardViewModels, buildCardsHtml, buildBulletStyles, isWebviewActionMessage, type WebviewActionMessage, type CardViewModel } from './thread-cards-utils';
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -31,6 +31,10 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
   private _actionHandler?: (msg: WebviewActionMessage) => void | Promise<void>;
   /** Callback invocado desde extension.ts cuando el panel se hace visible. */
   private _onBecameVisible?: () => void;
+  /** Hilos abiertos de otros documentos del repositorio (P6 — vista multi-fichero). */
+  private _allDocs: Map<string, CardViewModel[]> = new Map();
+  /** Número de documentos adicionales que superen SCAN_ALL_DOCS_LIMIT. */
+  private _allDocsOverflow = 0;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
@@ -150,11 +154,26 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
     this._view?.webview.postMessage(msg);
   }
 
+  /**
+   * Actualiza la sección multi-fichero (P6) con los hilos abiertos de otros
+   * documentos del repositorio. Llama a _push() para refrescar el webview.
+   *
+   * @param allDocs  Map<docRelPath, CardViewModel[]> filtrado: solo hilos abiertos
+   *                 de documentos que NO son el documento activo.
+   * @param overflow Número de documentos adicionales no procesados por superar
+   *                 el tope SCAN_ALL_DOCS_LIMIT.
+   */
+  updateAllDocs(allDocs: Map<string, CardViewModel[]>, overflow = 0): void {
+    this._allDocs = allDocs;
+    this._allDocsOverflow = overflow;
+    this._push();
+  }
+
   /** Envía el HTML de tarjetas actualizado al webview mediante postMessage. */
   private _push(): void {
     if (!this._view) return;
     const cards = buildCardViewModels(this._projections);
-    const html  = buildCardsHtml(cards);
+    const html  = buildCardsHtml(cards, this._allDocs, this._allDocsOverflow);
     this._view.webview.postMessage({ type: 'update', html });
   }
 
@@ -328,6 +347,39 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
     .section-header::-webkit-details-marker { display: none; }
     .section-header::marker { display: none; }
     details.section-collapsed { margin-top: 12px; }
+    /* Vista multi-fichero (P6): sección Repositorio */
+    .all-doc-group {
+      margin-bottom: 8px;
+      margin-top: 6px;
+    }
+    .all-doc-title {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      font-weight: 600;
+      padding: 2px 0;
+    }
+    .all-doc-thread {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 2px 0;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: inherit;
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+    }
+    .all-doc-thread:hover {
+      color: var(--vscode-textLink-activeForeground, var(--vscode-foreground));
+      text-decoration: underline;
+    }
+    .all-doc-overflow {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+      padding-top: 4px;
+    }
     ${buildBulletStyles()}
   </style>
 </head>
@@ -596,6 +648,12 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           const mode = btn.dataset.diffMode || 'last';
           btn.dataset.diffMode = mode === 'last' ? 'range' : 'last';
           vscode.postMessage({ type: 'diff', thread_id: threadId, mode });
+          return;
+        }
+        // jump-doc: salto a un hilo de otro documento (P6 — vista multi-fichero)
+        if (action === 'jump-doc') {
+          const docPath = btn.dataset.docPath;
+          vscode.postMessage({ type: 'jump-doc', thread_id: threadId, doc_path: docPath });
           return;
         }
         // reply y edit abren el compositor in-place vía el servidor (para resolver el body actual).
