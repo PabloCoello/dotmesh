@@ -42,6 +42,10 @@ const suppressedWorkspaces = new Set<string>();
 // Documentos cuya oferta de migración V1→V2 ya se mostró en esta sesión.
 const migrationPromptedDocs = new Set<string>();
 
+// Directorio de eventos del documento activo (se actualiza en refreshEditorState).
+// El watcher lo usa para filtrar eventos de otros documentos.
+let _activeEventDir: string | undefined;
+
 // ---------------------------------------------------------------------------
 // Helpers de ruta
 // ---------------------------------------------------------------------------
@@ -695,6 +699,7 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       const docFsPath = editor.document.uri.fsPath;
       const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docFsPath);
+      _activeEventDir = eventDir;
 
       let projections: ThreadProjection[];
 
@@ -765,11 +770,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // --- FileSystemWatcher sobre el directorio de eventos del workspace ---
   const watcher = vscode.workspace.createFileSystemWatcher('**/.ai/review/**/*.json');
-  const onSidecarChange = () => {
+  // Filtra refrescos de otros documentos: solo recarga si el fichero cambiado
+  // pertenece al directorio de eventos del documento activo.
+  const onSidecarChange = (changedUri: vscode.Uri) => {
     const editor = vscode.window.activeTextEditor;
-    if (editor) {
-      refreshEditorState(editor).catch(() => {});
+    if (!editor) return;
+    if (_activeEventDir && !changedUri.fsPath.startsWith(_activeEventDir + path.sep)) {
+      return; // evento de otro documento — ignorar
     }
+    refreshEditorState(editor).catch(() => {});
   };
   watcher.onDidChange(onSidecarChange);
   watcher.onDidCreate(onSidecarChange);
