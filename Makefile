@@ -1,4 +1,4 @@
-.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install seed-claude-settings gnome-rice gnome-unrice health clean
+.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install run-build run-install seed-claude-settings gnome-rice gnome-unrice health clean
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
@@ -23,6 +23,8 @@ help:
 	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; macOS: no-op, va por stow)"
 	@echo "  make review-build   - Compila la extensión mesh-review"
 	@echo "  make review-install - Instala mesh-review en VS Code (requiere node y code)"
+	@echo "  make run-build      - Compila la extensión mesh-run"
+	@echo "  make run-install    - Instala mesh-run en VS Code (requiere node y code)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
@@ -32,7 +34,7 @@ help:
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
-install: backup stow vscode-install review-install seed-claude-settings link-skills
+install: backup stow vscode-install review-install run-install seed-claude-settings link-skills
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -104,6 +106,18 @@ review-install:
 		echo "  !!  'code' o 'node' no disponibles; instálalos y ejecuta 'make review-install'"; \
 	fi
 
+run-build:
+	@echo "→ build mesh-run"
+	@(cd vscode/run-extension && npm run build)
+
+run-install:
+	@echo "→ instalando mesh-run"
+	@if command -v code >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then \
+		(cd vscode/run-extension && npm run install-ext); \
+	else \
+		echo "  !!  'code' o 'node' no disponibles; instálalos y ejecuta 'make run-install'"; \
+	fi
+
 # settings.json es plantilla base y NO se enlaza con Stow (ver claude/.stow-local-ignore).
 # Se copia una vez a un ~/.claude/settings.json REAL y nunca se sobreescribe, para que
 # los ajustes por-máquina queden fuera del repo. Idempotente.
@@ -166,6 +180,9 @@ health:
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-review' \
 		&& echo "  ok  mesh-review" \
 		|| echo "  --  mesh-review (corre 'make review-install')"
+	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-run' \
+		&& echo "  ok  mesh-run" \
+		|| echo "  --  mesh-run (corre 'make run-install')"
 	@[ "$$(uname -s)" = "Linux" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
 	@[ "$$(uname -s)" = "Linux" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
