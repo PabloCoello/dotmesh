@@ -6,6 +6,18 @@
 import path from 'node:path';
 
 /**
+ * Regex que reconoce etiquetas de pestaña generadas por buildDiffTitle.
+ *
+ * Patrón: '<basename> · <commentType> · <sha7>'
+ * - El separador ' · ' contiene U+00B7 (MIDDLE DOT) flanqueado por espacios.
+ * - El sha final tiene exactamente 7 dígitos hexadecimales en minúscula.
+ *
+ * Ni el basename ni el commentType contienen ' · ', así que los dos separadores
+ * dividen el título en exactamente tres partes.
+ */
+const MESH_DIFF_LABEL_RE = /^.+? · .+? · [0-9a-f]{7}$/;
+
+/**
  * Construye el título compacto de una pestaña de diff de mesh-review.
  *
  * Formato: `basename · commentType · sha7`
@@ -25,4 +37,17 @@ export function buildDiffTitle(
   sha: string
 ): string {
   return `${path.basename(docRelPath)} · ${commentType} · ${sha.slice(0, 7)}`;
+}
+
+/**
+ * Devuelve `true` si la etiqueta de una pestaña de diff fue generada por
+ * `buildDiffTitle`, es decir, sigue el patrón `basename · commentType · sha7`.
+ *
+ * Uso: discrimina pestañas de diff de mesh-review frente a diffs del SCM de
+ * VS Code (cuyas URIs usan igualmente el esquema `git:`).
+ *
+ * @param label - Etiqueta de la pestaña (`vscode.Tab.label`).
+ */
+export function isMeshReviewDiffTabLabel(label: string): boolean {
+  return MESH_DIFF_LABEL_RE.test(label);
 }

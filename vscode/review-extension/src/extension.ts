@@ -33,7 +33,7 @@ import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
 import { computeUnseenCount, pickNextThread } from './thread-cards-utils';
-import { buildDiffTitle } from './diff-utils';
+import { buildDiffTitle, isMeshReviewDiffTabLabel } from './diff-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -706,8 +706,12 @@ async function openDiffImpl(
 
   // Cierra pestañas de diff de mesh-review ya abiertas antes de abrir la nueva.
   // La API tabGroups se introdujo en VS Code 1.81; envolver en try/catch para versiones
-  // anteriores. Solo se cierran tabs cuyo input sea un diff con al menos un lado en
-  // esquema 'git:' (URIs que produce openDiffImpl en la Opción A).
+  // anteriores.
+  //
+  // El esquema 'git:' solo NO basta como discriminador: el SCM de VS Code (Compare with
+  // HEAD) también usa URIs con ese esquema. Se usa la etiqueta de la pestaña porque
+  // buildDiffTitle produce un patrón reconocible exclusivo de mesh-review
+  // ('basename · tipo · sha7'), tanto en la Opción A (git:) como en la Opción B (untitled:).
   try {
     const toClose: vscode.Tab[] = [];
     for (const group of vscode.window.tabGroups.all) {
@@ -715,7 +719,7 @@ async function openDiffImpl(
         const input = tab.input;
         if (
           input instanceof vscode.TabInputTextDiff &&
-          (input.original.scheme === 'git' || input.modified.scheme === 'git')
+          isMeshReviewDiffTabLabel(tab.label)
         ) {
           toClose.push(tab);
         }
