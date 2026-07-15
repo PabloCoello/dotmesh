@@ -269,6 +269,33 @@ export function buildCardsHtml(cards: CardViewModel[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// computeUnseenCount — badge de respuestas IA nuevas (P1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cuenta los mensajes de autor IA no retractados cuyo `id` no está en `seen`.
+ * Función pura: no modifica `seen`, sin IO, testeable con node:test.
+ *
+ * Un mensaje se considera "visto" cuando su `id` aparece en el Set `seen`,
+ * que se persiste en `workspaceState` y se actualiza en extension.ts al
+ * mostrar el panel (DA-1).
+ */
+export function computeUnseenCount(
+  projections: ThreadProjection[],
+  seen: Set<string>
+): number {
+  let count = 0;
+  for (const thread of projections) {
+    for (const msg of thread.messages) {
+      if (!msg.retracted && msg.author.kind === 'ai' && !seen.has(msg.id)) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
 // buildBulletStyles
 // ---------------------------------------------------------------------------
 

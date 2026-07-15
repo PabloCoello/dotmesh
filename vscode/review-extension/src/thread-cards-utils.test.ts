@@ -13,6 +13,7 @@ import {
   buildBulletStyles,
   partitionCardsByStatus,
   isWebviewActionMessage,
+  computeUnseenCount,
   type CardViewModel,
   type WebviewAckMessage,
 } from './thread-cards-utils.ts';
@@ -689,4 +690,56 @@ test('WebviewAckMessage tiene la forma esperada (ok:false con error)', () => {
   assert.strictEqual(ack.ok, false);
   assert.strictEqual(ack.error, 'algo falló');
   assert.strictEqual(ack.thread_id, 'tid-2');
+});
+
+// ---------------------------------------------------------------------------
+// P1 — computeUnseenCount: badge de respuestas IA nuevas
+// ---------------------------------------------------------------------------
+
+test('computeUnseenCount cuenta mensajes IA no vistos', () => {
+  const mid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({ id: mid, body: 'respuesta IA', author: { kind: 'ai', model: 'claude-sonnet' } }),
+    ],
+  });
+  assert.equal(computeUnseenCount([thread], new Set()), 1);
+});
+
+test('computeUnseenCount ignora mensajes humanos', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({ id: 'm-human', body: 'solo humano', author: { kind: 'human' } }),
+    ],
+  });
+  assert.equal(computeUnseenCount([thread], new Set()), 0);
+});
+
+test('computeUnseenCount ignora mensajes IA retractados', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({
+        id: 'm-retract',
+        body: 'retirado',
+        author: { kind: 'ai', model: 'claude-sonnet' },
+        retracted: true,
+      }),
+    ],
+  });
+  assert.equal(computeUnseenCount([thread], new Set()), 0);
+});
+
+test('computeUnseenCount devuelve 0 si todos los mensajes IA ya están vistos', () => {
+  const mid = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({ id: mid, body: 'IA visto', author: { kind: 'ai', model: 'claude-sonnet' } }),
+    ],
+  });
+  const seen = new Set<string>([mid]);
+  assert.equal(computeUnseenCount([thread], seen), 0);
 });

@@ -32,6 +32,7 @@ import {
 import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
+import { computeUnseenCount } from './thread-cards-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -112,16 +113,21 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
 /**
  * Rellena las proyecciones y decoraciones tras escribir un evento.
  * Solo cardsProvider recibe la actualización (el árbol fue retirado).
+ *
+ * @param afterUpdate Callback opcional invocado con las proyecciones resultantes.
+ *   extension.ts lo usa para actualizar el badge de la activity bar (P1).
  */
 async function refreshAfterWrite(
   eventDir: string,
   docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider,
-  onError?: (file: string, err: unknown) => void
+  onError?: (file: string, err: unknown) => void,
+  afterUpdate?: (projections: ThreadProjection[]) => void
 ): Promise<void> {
   const events = await readEvents(eventDir, onError);
   const projections = project(events);
   cardsProvider.update(projections, docUri);
+  afterUpdate?.(projections);
   const editor = vscode.window.visibleTextEditors.find(
     e => e.document.uri.fsPath === docUri.fsPath
   ) ?? vscode.window.activeTextEditor;
@@ -217,7 +223,8 @@ async function humanAuthor(
 /** Añade un nuevo hilo de revisión (thread.opened) al documento activo. */
 async function addCommentImpl(
   output: vscode.OutputChannel,
-  cardsProvider: ThreadCardsViewProvider
+  cardsProvider: ThreadCardsViewProvider,
+  afterUpdate?: (projections: ThreadProjection[]) => void
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
@@ -301,7 +308,8 @@ async function addCommentImpl(
 
   await writeEvent(eventDir, event);
   await refreshAfterWrite(eventDir, editor.document.uri, cardsProvider,
-    (file, err) => output.appendLine(`mesh-review: error leyendo evento ${file} — ${err}`));
+    (file, err) => output.appendLine(`mesh-review: error leyendo evento ${file} — ${err}`),
+    afterUpdate);
 
   output.appendLine(`mesh-review: hilo añadido — ${id} (${type.label})`);
   vscode.window.showInformationMessage(`mesh-review: comentario añadido (${type.label})`);
@@ -315,7 +323,8 @@ async function addCommentImpl(
 async function replyToThreadImpl(
   threadId: string,
   docUri: vscode.Uri,
-  cardsProvider: ThreadCardsViewProvider
+  cardsProvider: ThreadCardsViewProvider,
+  afterUpdate?: (projections: ThreadProjection[]) => void
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
@@ -349,7 +358,7 @@ async function replyToThreadImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider, undefined, afterUpdate);
   vscode.window.showInformationMessage('mesh-review: respuesta añadida.');
 }
 
@@ -362,7 +371,8 @@ async function retractMessageImpl(
   threadId: string,
   messageId: string,
   docUri: vscode.Uri,
-  cardsProvider: ThreadCardsViewProvider
+  cardsProvider: ThreadCardsViewProvider,
+  afterUpdate?: (projections: ThreadProjection[]) => void
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
@@ -388,7 +398,7 @@ async function retractMessageImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider, undefined, afterUpdate);
   vscode.window.showInformationMessage('mesh-review: mensaje retirado.');
 }
 
@@ -400,7 +410,8 @@ async function retractMessageImpl(
 async function resolveThreadImpl(
   threadId: string,
   docUri: vscode.Uri,
-  cardsProvider: ThreadCardsViewProvider
+  cardsProvider: ThreadCardsViewProvider,
+  afterUpdate?: (projections: ThreadProjection[]) => void
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
@@ -424,7 +435,7 @@ async function resolveThreadImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider, undefined, afterUpdate);
   vscode.window.showInformationMessage('mesh-review: hilo marcado como resuelto.');
 }
 
@@ -437,7 +448,8 @@ async function editMessageImpl(
   threadId: string,
   messageId: string,
   docUri: vscode.Uri,
-  cardsProvider: ThreadCardsViewProvider
+  cardsProvider: ThreadCardsViewProvider,
+  afterUpdate?: (projections: ThreadProjection[]) => void
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
@@ -486,7 +498,7 @@ async function editMessageImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, docUri, cardsProvider);
+  await refreshAfterWrite(eventDir, docUri, cardsProvider, undefined, afterUpdate);
   vscode.window.showInformationMessage('mesh-review: mensaje actualizado.');
 }
 
@@ -692,6 +704,51 @@ export function activate(context: vscode.ExtensionContext): void {
   const cardsProvider = new ThreadCardsViewProvider(context.extensionUri);
 
   // ---------------------------------------------------------------------------
+  // P1: Badge de respuestas IA nuevas
+  // Estado efímero de UI (DA-1): los IDs vistos se persisten en workspaceState,
+  // no en eventos. Se leen al activar y se actualizan cada vez que el panel
+  // está visible al refrescar las proyecciones.
+  // ---------------------------------------------------------------------------
+
+  const _seenMessageIds = new Set<string>(
+    context.workspaceState.get<string[]>('meshReview.seenMessageIds', [])
+  );
+  /** Proyecciones más recientes; se actualiza en cada llamada a updateBadge. */
+  let _currentProjections: ThreadProjection[] = [];
+
+  /**
+   * Actualiza el badge de la activity bar con el recuento de mensajes IA no vistos.
+   * Si el panel está visible, marca todos los mensajes IA actuales como vistos.
+   * Si `mesh-review.badge.toast` está activo, muestra un toast al incrementar.
+   */
+  function updateBadge(projections: ThreadProjection[]): void {
+    _currentProjections = projections;
+    if (cardsProvider.isVisible) {
+      for (const thread of projections) {
+        for (const msg of thread.messages) {
+          if (!msg.retracted && msg.author.kind === 'ai') {
+            _seenMessageIds.add(msg.id);
+          }
+        }
+      }
+      // Persiste de forma asíncrona; no esperamos el resultado para no bloquear la UI.
+      context.workspaceState.update('meshReview.seenMessageIds', [..._seenMessageIds]).then(
+        undefined,
+        () => {} // fallo silencioso de workspaceState
+      );
+    }
+    const count = computeUnseenCount(projections, _seenMessageIds);
+    cardsProvider.setBadge(count);
+    if (count > 0 && vscode.workspace.getConfiguration('mesh-review').get<boolean>('badge.toast') === true) {
+      const s = count === 1 ? '' : 's';
+      vscode.window.showInformationMessage(`mesh-review: ${count} respuesta${s} nueva${s} de IA.`);
+    }
+  }
+
+  // Al hacerse visible el panel, limpia el badge actualizando con las proyecciones actuales.
+  cardsProvider.setOnVisibleCallback(() => updateBadge(_currentProjections));
+
+  // ---------------------------------------------------------------------------
   // refreshEditorState — closure sobre cardsProvider.
   // Se define aquí para capturar cardsProvider sin pasarlo como parámetro.
   // ---------------------------------------------------------------------------
@@ -720,6 +777,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
       applyDecorations(editor, projections);
       cardsProvider.update(projections, editor.document.uri);
+      updateBadge(projections);
     } catch {
       // Fallo silencioso: decoraciones y panel de tarjetas simplemente no cambian.
     }
@@ -734,16 +792,16 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       switch (msg.type) {
         case 'reply':
-          await replyToThreadImpl(msg.thread_id, docUri, cardsProvider);
+          await replyToThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
           break;
         case 'resolve':
-          await resolveThreadImpl(msg.thread_id, docUri, cardsProvider);
+          await resolveThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
           break;
         case 'edit':
-          await editMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider);
+          await editMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider, updateBadge);
           break;
         case 'retract':
-          await retractMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider);
+          await retractMessageImpl(msg.thread_id, msg.message_id, docUri, cardsProvider, updateBadge);
           break;
         case 'diff':
           await openDiffImpl(msg.thread_id, msg.mode, cardsProvider);
@@ -796,7 +854,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // --- Add Comment ---
     vscode.commands.registerCommand('mesh-review.addComment', async () => {
       try {
-        await addCommentImpl(output, cardsProvider);
+        await addCommentImpl(output, cardsProvider, updateBadge);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`mesh-review: error al guardar el comentario — ${msg}`);

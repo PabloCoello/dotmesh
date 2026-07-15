@@ -78,7 +78,17 @@
         "mac": "alt+cmd+z",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "mesh-review",
+      "properties": {
+        "mesh-review.badge.toast": {
+          "type": "boolean",
+          "default": false,
+          "description": "Muestra una notificación cuando llegan respuestas IA nuevas (badge solo por defecto)."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node build.js",

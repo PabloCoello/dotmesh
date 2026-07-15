@@ -29,11 +29,16 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
   private _projections: ThreadProjection[] = [];
   private _docUri?: vscode.Uri;
   private _actionHandler?: (msg: WebviewActionMessage) => void | Promise<void>;
+  /** Callback invocado desde extension.ts cuando el panel se hace visible. */
+  private _onBecameVisible?: () => void;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
   /** URI del documento activo; lo asigna update() y lo lee extension.ts. */
   get docUri(): vscode.Uri | undefined { return this._docUri; }
+
+  /** `true` si el panel de tarjetas está actualmente visible para el usuario. */
+  get isVisible(): boolean { return this._view?.visible ?? false; }
 
   /**
    * Registra el callback que despacha los mensajes de acción del webview.
@@ -41,6 +46,34 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
    */
   setActionHandler(handler: (msg: WebviewActionMessage) => void | Promise<void>): void {
     this._actionHandler = handler;
+  }
+
+  /**
+   * Registra un callback que se invoca cada vez que el panel pasa de no-visible
+   * a visible. Extension.ts lo usa para limpiar el badge al mostrar el panel.
+   */
+  setOnVisibleCallback(cb: () => void): void {
+    this._onBecameVisible = cb;
+  }
+
+  /**
+   * Asigna el badge numérico en el contenedor de la activity bar.
+   * Cuando `count` es 0, elimina el badge (badge = undefined).
+   * Usa el campo `badge` de la WebviewView API (disponible desde VS Code 1.75).
+   * Se omite silenciosamente si la vista aún no ha sido resuelta.
+   */
+  setBadge(count: number): void {
+    if (!this._view) return;
+    // La API badge no está en las definiciones de tipo de @types/vscode 1.75
+    // pero sí existe en runtime desde esa versión. Se accede como any para
+    // no introducir una dependencia de @types más reciente.
+    const view = this._view as unknown as {
+      badge?: { value: number; tooltip: string } | undefined;
+    };
+    const s = count === 1 ? '' : 's';
+    view.badge = count > 0
+      ? { value: count, tooltip: `${count} respuesta${s} nueva${s} de IA` }
+      : undefined;
   }
 
   resolveWebviewView(
@@ -84,9 +117,13 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // Al volver a mostrar el panel, el DOM se descartó: rehidrata las tarjetas
+    // Al volver a mostrar el panel, el DOM se descartó: rehidrata las tarjetas.
+    // También notifica a extension.ts para que actualice el badge.
     webviewView.onDidChangeVisibility(() => {
-      if (webviewView.visible) this._push();
+      if (webviewView.visible) {
+        this._push();
+        this._onBecameVisible?.();
+      }
     });
 
     this._push();
