@@ -38,11 +38,13 @@ export type WebviewAckMessage = {
  * y para que isWebviewActionMessage esté junto al tipo que valida.
  */
 export type WebviewActionMessage =
-  | { type: 'reply';   thread_id: string }
-  | { type: 'resolve'; thread_id: string }
-  | { type: 'edit';    thread_id: string; message_id: string }
-  | { type: 'retract'; thread_id: string; message_id: string }
-  | { type: 'diff';    thread_id: string; mode: 'last' | 'range' };
+  | { type: 'reply';         thread_id: string }
+  | { type: 'resolve';       thread_id: string }
+  | { type: 'edit';          thread_id: string; message_id: string }
+  | { type: 'retract';       thread_id: string; message_id: string }
+  | { type: 'diff';          thread_id: string; mode: 'last' | 'range' }
+  | { type: 'reply-submit';  thread_id: string; body: string }
+  | { type: 'edit-submit';   thread_id: string; message_id: string; body: string };
 
 /**
  * Valida en runtime que un mensaje del webview es una acción bien formada.
@@ -69,6 +71,11 @@ export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessag
       return hasThread && hasMessage;
     case 'diff':
       return hasThread && (m.mode === 'last' || m.mode === 'range');
+    case 'reply-submit':
+      // body es texto libre del usuario: no vacío ni solo espacios.
+      return hasThread && typeof m.body === 'string' && m.body.trim() !== '';
+    case 'edit-submit':
+      return hasThread && hasMessage && typeof m.body === 'string' && m.body.trim() !== '';
     default:
       return false;
   }

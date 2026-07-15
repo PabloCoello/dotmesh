@@ -909,3 +909,90 @@ test('pickNextThread cursor exactamente sobre char_offset de un hilo: prev salta
   const result = pickNextThread([t1, t2, t3], 50, 'prev', false);
   assert.equal(result?.thread_id, 't1');
 });
+
+// ---------------------------------------------------------------------------
+// P4 — reply-submit y edit-submit: compositor multilínea del webview
+// ---------------------------------------------------------------------------
+
+test('isWebviewActionMessage acepta reply-submit con body no vacío', () => {
+  assert.ok(isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: TID,
+    body: 'Texto de respuesta',
+  }));
+});
+
+test('isWebviewActionMessage rechaza reply-submit con body vacío', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: TID,
+    body: '',
+  }));
+});
+
+test('isWebviewActionMessage rechaza reply-submit con body solo espacios', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: TID,
+    body: '   ',
+  }));
+});
+
+test('isWebviewActionMessage rechaza reply-submit sin body', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: TID,
+  }));
+});
+
+test('isWebviewActionMessage rechaza reply-submit con thread_id no UUID', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'reply-submit',
+    thread_id: 'no-es-uuid',
+    body: 'Texto',
+  }));
+});
+
+test('isWebviewActionMessage acepta edit-submit con thread_id, message_id y body', () => {
+  assert.ok(isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    message_id: MID,
+    body: 'Texto editado',
+  }));
+});
+
+test('isWebviewActionMessage rechaza edit-submit sin message_id', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    body: 'Texto editado',
+  }));
+});
+
+test('isWebviewActionMessage rechaza edit-submit con message_id no UUID', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    message_id: 'no-es-uuid',
+    body: 'Texto editado',
+  }));
+});
+
+test('isWebviewActionMessage rechaza edit-submit con body vacío', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    message_id: MID,
+    body: '',
+  }));
+});
+
+test('isWebviewActionMessage rechaza edit-submit con body solo espacios', () => {
+  assert.ok(!isWebviewActionMessage({
+    type: 'edit-submit',
+    thread_id: TID,
+    message_id: MID,
+    body: '   ',
+  }));
+});
