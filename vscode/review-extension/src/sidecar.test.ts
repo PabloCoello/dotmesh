@@ -25,6 +25,7 @@ import {
   ensureBacklogDir,
   writeBacklogTask,
   buildV1FilePath,
+  VALID_COMMENT_TYPES,
   type Sidecar,
   type EventEnvelope,
   type BacklogTask,
@@ -995,6 +996,29 @@ test('project rellena commit null en message.posted sin SHA', () => {
 // ---------------------------------------------------------------------------
 // F1 — readEvents con onError: distingue ENOENT de errores reales
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// F5-a — VALID_COMMENT_TYPES y guarda de commentType en project()
+// ---------------------------------------------------------------------------
+
+test('VALID_COMMENT_TYPES contiene los 7 tipos del schema y no contiene desconocido', () => {
+  const expected = ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota', 'referencia', 'supuesto'];
+  for (const t of expected) {
+    assert.ok(VALID_COMMENT_TYPES.has(t), `${t} debe estar en VALID_COMMENT_TYPES`);
+  }
+  assert.ok(!VALID_COMMENT_TYPES.has('desconocido'), 'desconocido no debe estar en VALID_COMMENT_TYPES');
+  assert.strictEqual(VALID_COMMENT_TYPES.size, 7, 'debe haber exactamente 7 tipos');
+});
+
+test('project() con commentType desconocido no lanza y devuelve el hilo con ese valor', () => {
+  const tid = 'f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0';
+  const ev = makeOpened({ id: tid, thread_id: tid, commentType: 'desconocido' });
+  // No debe lanzar aunque el tipo no sea válido
+  const result = project([ev]);
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].thread_id, tid);
+  assert.strictEqual(result[0].commentType as string, 'desconocido');
+});
 
 // ---------------------------------------------------------------------------
 // F2 — buildV1FilePath: helper centralizado con validación de contención

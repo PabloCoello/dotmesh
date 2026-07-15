@@ -128,6 +128,18 @@ export interface BacklogTask {
 }
 
 // ---------------------------------------------------------------------------
+// Constantes de validación
+// ---------------------------------------------------------------------------
+
+/**
+ * Conjunto de valores válidos de `commentType` según el schema de eventos.
+ * Exportado para validar en `project()` y en tests.
+ */
+export const VALID_COMMENT_TYPES: ReadonlySet<string> = new Set<string>([
+  'edita', 'sugerencia', 'pregunta', 'verifica', 'nota', 'referencia', 'supuesto',
+]);
+
+// ---------------------------------------------------------------------------
 // Funciones puras (sin IO de red ni VS Code)
 // ---------------------------------------------------------------------------
 
@@ -232,6 +244,11 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
     const tid = ev.thread_id;
 
     if (ev.type === 'thread.opened') {
+      // Guarda defensiva: notificar si el tipo no es uno de los 7 valores del schema.
+      // El hilo se proyecta igualmente (typeColor lo maneja con FALLBACK_COLOR).
+      if (!VALID_COMMENT_TYPES.has(ev.commentType as string)) {
+        console.error(`mesh-review: commentType desconocido "${ev.commentType as string}" en hilo ${tid}`);
+      }
       const proj: ThreadProjection = {
         thread_id: tid,
         commentType: ev.commentType as CommentType,
