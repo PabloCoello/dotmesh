@@ -875,9 +875,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ---------------------------------------------------------------------------
   // P1: Badge de respuestas IA nuevas
-  // Estado efímero de UI (DA-1): los IDs vistos se persisten en workspaceState,
-  // no en eventos. Se leen al activar y se actualizan cada vez que el panel
-  // está visible al refrescar las proyecciones.
+  // Estado local del workspace, fuera del log de eventos (DA-1): los IDs vistos se persisten
+  // en workspaceState entre recargas, pero no contaminan los eventos del log. Se leen al
+  // activar y se actualizan cada vez que el panel está visible al refrescar las proyecciones.
   // ---------------------------------------------------------------------------
 
   const _seenMessageIds = new Set<string>(
