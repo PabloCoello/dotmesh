@@ -1152,3 +1152,94 @@ test('anchorChanged devuelve false si ambos son detached', () => {
   const b = { detached: true as const };
   assert.strictEqual(anchorChanged(a, b), false);
 });
+
+// ---------------------------------------------------------------------------
+// Ciclo de ida y vuelta de thread.reanchored (contrato extensión → skill)
+// Fija que writeEvent + readEvents + project reproduzca correctamente ambas
+// variantes del evento: con anchor nuevo y con detached:true.
+// ---------------------------------------------------------------------------
+
+test('thread.reanchored variante anchor: writeEvent→readEvents→project refleja el ancla nueva', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-reanchor-anchor-'));
+  try {
+    const threadId = 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1';
+    const openedId  = 'b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2';
+    const reanchorId = 'c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3';
+
+    const opened: EventEnvelope = {
+      id: openedId, version: 2, type: 'thread.opened', thread_id: threadId,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto original', line_hint: 0, char_offset: 5 },
+      commentType: 'nota', body: 'comentario de prueba',
+    };
+
+    const reanchored: EventEnvelope = {
+      id: reanchorId, version: 2, type: 'thread.reanchored', thread_id: threadId,
+      author: { kind: 'human', name: 'test-user' },
+      created_at: '2026-07-16T10:01:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto original', line_hint: 3, char_offset: 120 },
+    };
+
+    await writeEvent(dir, opened);
+    await writeEvent(dir, reanchored);
+
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    const proj = projections[0];
+
+    // La proyección debe reflejar el ancla nueva del thread.reanchored
+    assert.ok(!('detached' in proj.anchor), 'el ancla no debe ser detached');
+    const anchor = proj.anchor as Anchor;
+    assert.strictEqual(anchor.char_offset, 120, 'char_offset actualizado');
+    assert.strictEqual(anchor.line_hint, 3, 'line_hint actualizado');
+    assert.strictEqual(anchor.quote, 'texto original', 'quote preservada');
+    assert.strictEqual(proj.status, 'open', 'el hilo sigue abierto tras reanclado');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('thread.reanchored variante detached: writeEvent→readEvents→project refleja estado desanclado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-reanchor-detached-'));
+  try {
+    const threadId  = 'd4d4d4d4-d4d4-4d4d-8d4d-d4d4d4d4d4d4';
+    const openedId  = 'e5e5e5e5-e5e5-4e5e-8e5e-e5e5e5e5e5e5';
+    const reanchorId = 'f6f6f6f6-f6f6-4f6f-8f6f-f6f6f6f6f6f6';
+
+    const opened: EventEnvelope = {
+      id: openedId, version: 2, type: 'thread.opened', thread_id: threadId,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto a desanclar', line_hint: 1, char_offset: 20 },
+      commentType: 'edita', body: 'hilo que perderá su ancla',
+    };
+
+    const reanchored: EventEnvelope = {
+      id: reanchorId, version: 2, type: 'thread.reanchored', thread_id: threadId,
+      author: { kind: 'human', name: 'test-user' },
+      created_at: '2026-07-16T10:01:00.000Z',
+      commit: null, dirty: false,
+      detached: true,
+    };
+
+    await writeEvent(dir, opened);
+    await writeEvent(dir, reanchored);
+
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    const proj = projections[0];
+
+    assert.ok('detached' in proj.anchor, 'el ancla debe ser { detached: true }');
+    assert.strictEqual(proj.status, 'detached', 'el estado del hilo debe ser detached');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -56,14 +56,19 @@ export function resolveAnchor(
 
   if (!quote) return null;
 
-  // Recopila todas las ocurrencias de quote en text
+  // Recopila todas las ocurrencias NO solapadas de quote en text.
+  // Avanzamos searchFrom por quote.length en lugar de +1: las ocurrencias
+  // solapadas (p. ej. "aa" en "aaa") no aportan como ancla y generarían
+  // iteraciones extra en el bucle de mejor candidato (peor caso O(n²)
+  // para citas muy cortas en documentos grandes). Para citas de 1 char,
+  // quote.length === 1 y el comportamiento es idéntico al anterior.
   const occurrences: number[] = [];
   let searchFrom = 0;
   while (searchFrom <= text.length) {
     const idx = text.indexOf(quote, searchFrom);
     if (idx === -1) break;
     occurrences.push(idx);
-    searchFrom = idx + 1;
+    searchFrom = idx + quote.length;
   }
 
   if (occurrences.length === 0) return null;
