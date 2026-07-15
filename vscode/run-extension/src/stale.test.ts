@@ -147,6 +147,79 @@ test('computeOutputStates: múltiples bloques → cada uno recibe su estado corr
 });
 
 // ---------------------------------------------------------------------------
+// IDs de chunk duplicados (hallazgo 1)
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: chunkId duplicado entre chunks → output marcado stale', () => {
+  // Dos chunks con el mismo id: el emparejamiento es ambiguo.
+  // El output tiene el hash del primer chunk pero igualmente se marca stale.
+  const code1 = 'x = 1';
+  const code2 = 'x = 2';
+  const hash1 = chunkHash(code1);
+
+  const doc = [
+    makeChunk('dup', code1),
+    '',
+    makeChunk('dup', code2), // duplicado
+    '',
+    makeOutput('dup', hash1, 'resultado'),
+    '',
+  ].join('\n');
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'stale');
+});
+
+test('computeOutputStates: chunkId duplicado con prefijo error → stale (no error)', () => {
+  // Con id duplicado, el estado es stale incluso si el output tiene prefijo
+  // de error: el emparejamiento ambiguo toma precedencia.
+  const code = 'raise ValueError()';
+  const hash = chunkHash(code);
+  const errorContent = '# Error\nValueError';
+
+  const doc = [
+    makeChunk('dup', code),
+    '',
+    makeChunk('dup', code), // duplicado
+    '',
+    makeOutput('dup', hash, errorContent),
+    '',
+  ].join('\n');
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'stale');
+});
+
+// ---------------------------------------------------------------------------
+// Múltiples outputs para el mismo chunkId (hallazgo 4)
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: dos outputs con el mismo chunkId reciben estado independiente', () => {
+  // El usuario tiene accidentalmente dos bloques output para el mismo chunk.
+  // Cada uno se evalúa por separado: hash coincidente → fresh, hash antiguo → stale.
+  const code = 'print("a")';
+  const currentHash = chunkHash(code);
+  const oldHash = chunkHash('print("old")');
+
+  const doc = [
+    makeChunk('c1', code),
+    '',
+    makeOutput('c1', currentHash, 'a'), // hash coincide → fresh
+    '',
+    makeOutput('c1', oldHash, 'old'),   // hash obsoleto → stale
+    '',
+  ].join('\n');
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 2);
+  // Orden de aparición en el documento
+  assert.strictEqual(states[0].state, 'fresh');
+  assert.strictEqual(states[1].state, 'stale');
+});
+
+// ---------------------------------------------------------------------------
 // Offsets
 // ---------------------------------------------------------------------------
 
