@@ -111,9 +111,10 @@ async function checkAndWarnIgnore(gitRoot: string): Promise<void> {
 async function refreshAfterWrite(
   eventDir: string,
   docUri: vscode.Uri,
-  cardsProvider: ThreadCardsViewProvider
+  cardsProvider: ThreadCardsViewProvider,
+  onError?: (file: string, err: unknown) => void
 ): Promise<void> {
-  const events = await readEvents(eventDir);
+  const events = await readEvents(eventDir, onError);
   const projections = project(events);
   cardsProvider.update(projections, docUri);
   const editor = vscode.window.visibleTextEditors.find(
@@ -294,7 +295,8 @@ async function addCommentImpl(
   };
 
   await writeEvent(eventDir, event);
-  await refreshAfterWrite(eventDir, editor.document.uri, cardsProvider);
+  await refreshAfterWrite(eventDir, editor.document.uri, cardsProvider,
+    (file, err) => output.appendLine(`mesh-review: error leyendo evento ${file} — ${err}`));
 
   output.appendLine(`mesh-review: hilo añadido — ${id} (${type.label})`);
   vscode.window.showInformationMessage(`mesh-review: comentario añadido (${type.label})`);
@@ -705,7 +707,9 @@ export function activate(context: vscode.ExtensionContext): void {
           projections = sidecar ? project(migrateV1(sidecar)) : [];
         }
       } else {
-        projections = project(await readEvents(eventDir));
+        const onError = (file: string, err: unknown) =>
+          output.appendLine(`mesh-review: error leyendo evento ${file} — ${err}`);
+        projections = project(await readEvents(eventDir, onError));
       }
 
       applyDecorations(editor, projections);

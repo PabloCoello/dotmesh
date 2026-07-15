@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat, chmod, writeFile, mkdir, readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, rm, stat, chmod, writeFile, mkdir, readFile, readdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 
@@ -989,4 +989,59 @@ test('project rellena commit null en message.posted sin SHA', () => {
   } as unknown as EventEnvelope;
   const result = project([opened, posted]);
   assert.strictEqual(result[0].messages[1].commit, null);
+});
+
+// ---------------------------------------------------------------------------
+// F1 — readEvents con onError: distingue ENOENT de errores reales
+// ---------------------------------------------------------------------------
+
+test('readEvents sin onError no lanza cuando un fichero no puede parsearse (compatibilidad)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-compat-'));
+  try {
+    await writeFile(join(dir, 'malformed.json'), 'esto no es json válido', 'utf8');
+    // Sin onError debe devolver [] sin lanzar
+    const result = await readEvents(dir);
+    assert.deepStrictEqual(result, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents con onError llama al callback cuando el fichero es ilegible por permisos (no ENOENT)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-perms-'));
+  const filePath = join(dir, 'locked.json');
+  try {
+    const tid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0099';
+    const ev = makeOpened({ id: tid, thread_id: tid });
+    await writeFile(filePath, JSON.stringify(ev), 'utf8');
+    await chmod(filePath, 0o000); // quita todos los permisos → EACCES
+
+    const errors: Array<{ file: string; err: unknown }> = [];
+    const result = await readEvents(dir, (file, err) => errors.push({ file, err }));
+
+    assert.deepStrictEqual(result, []);
+    assert.strictEqual(errors.length, 1, 'debe haber exactamente un error reportado');
+    assert.ok(errors[0].file.endsWith('locked.json'), 'el fichero reportado debe ser locked.json');
+
+    await chmod(filePath, 0o644); // restaurar para que rm funcione
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents con onError no llama al callback cuando el fichero no existe (ENOENT)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-enoent-'));
+  try {
+    // Symlink apuntando a un fichero inexistente: readdir lo ve (.json),
+    // readFile falla con ENOENT porque el destino no existe.
+    await symlink(join(dir, 'nonexistent-target.json'), join(dir, 'dangling.json'));
+
+    const errors: Array<{ file: string; err: unknown }> = [];
+    const result = await readEvents(dir, (file, err) => errors.push({ file, err }));
+
+    assert.deepStrictEqual(result, []);
+    assert.strictEqual(errors.length, 0, 'ENOENT no debe llamar a onError');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

@@ -490,7 +490,10 @@ export async function ensureFallbackDir(
  * Salta ficheros que no pueden parsearse o cuya version !== 2.
  * Ordena por created_at ascendente; desempate por id lexicográfico.
  */
-export async function readEvents(dir: string): Promise<EventEnvelope[]> {
+export async function readEvents(
+  dir: string,
+  onError?: (file: string, err: unknown) => void
+): Promise<EventEnvelope[]> {
   let entries: string[];
   try {
     entries = await readdir(dir);
@@ -500,8 +503,9 @@ export async function readEvents(dir: string): Promise<EventEnvelope[]> {
   const results: EventEnvelope[] = [];
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
+    const filePath = path.join(dir, name);
     try {
-      const content = await readFile(path.join(dir, name), 'utf8');
+      const content = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
       if (parsed?.version !== 2) continue;
       // Endurecimiento: un evento en disco puede estar malformado (escrito por
@@ -513,8 +517,13 @@ export async function readEvents(dir: string): Promise<EventEnvelope[]> {
       if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
       if ('body' in parsed && typeof parsed.body !== 'string') continue;
       results.push(parsed as unknown as EventEnvelope);
-    } catch {
-      // fichero ilegible o JSON inválido — se ignora
+    } catch (err) {
+      // ENOENT: el fichero desapareció entre readdir y readFile — silencio esperado.
+      // Cualquier otro error (permisos, I/O, JSON inválido) se notifica al llamante.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && onError) {
+        onError(filePath, err);
+      }
     }
   }
   results.sort(compareEvents);
