@@ -10,9 +10,10 @@
     "url": "https://github.com/PabloCoello/dotmesh"
   },
   "engines": {
-    "vscode": "^1.85.0",
+    "vscode": "^1.87.0",
     "node": ">=22.6.0"
   },
+  "extensionDependencies": ["ms-toolsai.jupyter"],
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
@@ -45,7 +46,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.87.0",
+    "@vscode/jupyter-extension": "^1.1.1",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.4.0"
