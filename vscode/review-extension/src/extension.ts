@@ -33,6 +33,7 @@ import { createAnchor, resolveAnchor } from './anchor';
 import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
 import { computeUnseenCount, pickNextThread } from './thread-cards-utils';
+import { buildDiffTitle } from './diff-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -675,9 +676,7 @@ async function openDiffImpl(
 
   const absPath = path.join(gitRoot, docRelPath);
   const relPathGit = docRelPath.replace(/\\/g, '/'); // git espera separadores Unix
-  const titulo = mode === 'range' && openCommit !== null
-    ? `${path.basename(docRelPath)} (${openCommit}..${fixCommit})`
-    : `${path.basename(docRelPath)} (${fixCommit}^ .. ${fixCommit})`;
+  const titulo = buildDiffTitle(docRelPath, thread.commentType, fixCommit);
 
   // Resuelve cada revspec a un SHA concreto con rev-parse. Dos motivos:
   //  - La extensión git de VS Code espera un hash en la URI, no un revspec como
@@ -705,6 +704,30 @@ async function openDiffImpl(
   }
   const shaBefore = await revParse(refBefore); // null si no hay padre (primer commit)
 
+  // Cierra pestañas de diff de mesh-review ya abiertas antes de abrir la nueva.
+  // La API tabGroups se introdujo en VS Code 1.81; envolver en try/catch para versiones
+  // anteriores. Solo se cierran tabs cuyo input sea un diff con al menos un lado en
+  // esquema 'git:' (URIs que produce openDiffImpl en la Opción A).
+  try {
+    const toClose: vscode.Tab[] = [];
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        const input = tab.input;
+        if (
+          input instanceof vscode.TabInputTextDiff &&
+          (input.original.scheme === 'git' || input.modified.scheme === 'git')
+        ) {
+          toClose.push(tab);
+        }
+      }
+    }
+    if (toClose.length > 0) {
+      await vscode.window.tabGroups.close(toClose, true);
+    }
+  } catch {
+    // tabGroups no disponible en versiones anteriores de VS Code; continuar sin cerrar.
+  }
+
   // Opción A: git URI scheme (extensión git activa y con un "antes" resoluble).
   // Opción B: fallback — git show + openTextDocument virtual (también cuando no hay padre).
   const gitExt = vscode.extensions.getExtension('vscode.git');
@@ -716,7 +739,9 @@ async function openDiffImpl(
       path: absPath,
       query: JSON.stringify({ path: absPath, ref }),
     });
-    await vscode.commands.executeCommand('vscode.diff', gitUri(shaBefore), gitUri(shaAfter), titulo);
+    await vscode.commands.executeCommand(
+      'vscode.diff', gitUri(shaBefore), gitUri(shaAfter), titulo, { preview: true }
+    );
   } else {
     // Opción B — fallback con git show + documento virtual.
     // shaBefore null → "antes" vacío (fichero añadido). Args en array, sin shell.
@@ -736,7 +761,9 @@ async function openDiffImpl(
       vscode.workspace.openTextDocument({ content: contentAfter }),
     ]);
 
-    await vscode.commands.executeCommand('vscode.diff', docBefore.uri, docAfter.uri, titulo);
+    await vscode.commands.executeCommand(
+      'vscode.diff', docBefore.uri, docAfter.uri, titulo, { preview: true }
+    );
   }
 }
 
