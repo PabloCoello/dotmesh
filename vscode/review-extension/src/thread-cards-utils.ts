@@ -6,6 +6,7 @@
  */
 
 import type { ThreadProjection } from './sidecar';
+import { isUuid } from './sidecar.ts';
 import {
   formatTimestamp,
   escapeHtml,
@@ -55,8 +56,10 @@ export type WebviewActionMessage =
 export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessage {
   if (typeof msg !== 'object' || msg === null) return false;
   const m = msg as Record<string, unknown>;
-  const hasThread = typeof m.thread_id === 'string' && m.thread_id.length > 0;
-  const hasMessage = typeof m.message_id === 'string' && m.message_id.length > 0;
+  // thread_id y message_id deben ser UUIDs canónicos: rechaza cadenas arbitrarias
+  // y valores manipulados del webview (p. ej. traversal: «../../.ssh/evil»).
+  const hasThread  = typeof m.thread_id  === 'string' && isUuid(m.thread_id);
+  const hasMessage = typeof m.message_id === 'string' && isUuid(m.message_id);
   switch (m.type) {
     case 'reply':
     case 'resolve':

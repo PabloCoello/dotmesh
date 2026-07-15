@@ -1041,6 +1041,15 @@ test('buildV1FilePath lanza si docRelPath es absoluto', () => {
   );
 });
 
+test('buildV1FilePath lanza si docRelPath usa .. embebido (foo/../../bar) para escapar de .ai/review/', () => {
+  // 'foo/../../bar' no empieza por '..' pero path.resolve lo normaliza a
+  // <gitRoot>/.ai/bar.json, que queda fuera de <gitRoot>/.ai/review/.
+  assert.throws(
+    () => buildV1FilePath('/project', 'foo/../../bar'),
+    /mesh-review: document path escapes/
+  );
+});
+
 // ---------------------------------------------------------------------------
 // F1 — readEvents con onError: distingue ENOENT de errores reales
 // ---------------------------------------------------------------------------

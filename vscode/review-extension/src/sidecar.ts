@@ -151,26 +151,40 @@ export function sha256hex(input: string): string {
 /**
  * Ruta primaria del sidecar: espejo de la ruta relativa del documento.
  * `docs/informe.md` → `<gitRoot>/.ai/review/docs/informe.md.json`
+ *
+ * Guarda de path traversal: usa path.resolve() para detectar tanto rutas que
+ * empiezan por `..` como rutas con `..` embebido (p. ej. `foo/../../bar`) que
+ * también escaparían de `.ai/review/`. La comprobación de contención es la
+ * única defensa fiable frente a estas variantes.
  */
 export function sidecarPathForDoc(docAbsPath: string, gitRoot: string): string {
-  const relative = path.relative(gitRoot, docAbsPath);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  const relative  = path.relative(gitRoot, docAbsPath);
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const resolved  = path.resolve(reviewDir, relative + '.json');
+  if (!resolved.startsWith(reviewDir + path.sep)) {
     throw new Error(`mesh-review: document path escapes git root — ${docAbsPath}`);
   }
-  return path.join(gitRoot, '.ai', 'review', relative + '.json');
+  return resolved;
 }
 
 /**
  * Construye la ruta del sidecar V1 para un documento relativo al git root.
- * Valida que `docRelPath` no escape del git root (no empieza por `..` ni es absoluto).
+ * Valida que la ruta resuelta permanezca dentro de `<gitRoot>/.ai/review/`.
  * Centraliza la construcción duplicada que antes hacía `migrateLegacyToV2` y
  * `handleLegacyMigration` en extension.ts.
+ *
+ * Guarda de path traversal: usa path.resolve() para detectar tanto rutas que
+ * empiezan por `..` como rutas con `..` embebido (p. ej. `foo/../../bar`) que
+ * también escaparían de `.ai/review/`. El guard `startsWith('..')` previo fallaba
+ * para estas rutas intermedias.
  */
 export function buildV1FilePath(gitRoot: string, docRelPath: string): string {
-  if (docRelPath.startsWith('..') || path.isAbsolute(docRelPath)) {
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const resolved  = path.resolve(reviewDir, docRelPath + '.json');
+  if (!resolved.startsWith(reviewDir + path.sep)) {
     throw new Error(`mesh-review: document path escapes git root — ${docRelPath}`);
   }
-  return path.join(gitRoot, '.ai', 'review', docRelPath + '.json');
+  return resolved;
 }
 
 /**

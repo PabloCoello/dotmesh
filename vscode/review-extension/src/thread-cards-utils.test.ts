@@ -587,6 +587,28 @@ test('buildCardsHtml botón diff ausente en hilo abierto con fixCommit === null'
   assert.ok(!html.includes('data-action="diff"'), 'No debe incluir botón diff cuando fixCommit === null');
 });
 
+// ---------------------------------------------------------------------------
+// sec#3 — isWebviewActionMessage valida thread_id y message_id como UUID
+// ---------------------------------------------------------------------------
+
+test('isWebviewActionMessage rechaza thread_id que no es UUID', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'reply', thread_id: 'no-es-uuid' }));
+  assert.ok(!isWebviewActionMessage({ type: 'resolve', thread_id: 'any-string' }));
+});
+
+test('isWebviewActionMessage acepta thread_id que es UUID canónico', () => {
+  assert.ok(isWebviewActionMessage({ type: 'reply', thread_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }));
+});
+
+test('isWebviewActionMessage rechaza message_id que no es UUID en edit/retract', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'edit', thread_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', message_id: 'no-es-uuid' }));
+  assert.ok(!isWebviewActionMessage({ type: 'retract', thread_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', message_id: '' }));
+});
+
+test('isWebviewActionMessage acepta message_id UUID en edit/retract', () => {
+  assert.ok(isWebviewActionMessage({ type: 'edit', thread_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', message_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }));
+});
+
 test('buildCardsHtml botón diff ausente en hilo resuelto aunque fixCommit !== null', () => {
   const card: CardViewModel = {
     thread_id:   'r-diff',
@@ -606,20 +628,24 @@ test('buildCardsHtml botón diff ausente en hilo resuelto aunque fixCommit !== n
 // isWebviewActionMessage — validación del tipo diff (Fase 3)
 // ---------------------------------------------------------------------------
 
+// UUIDs canónicos de uso en los tests de isWebviewActionMessage
+const TID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const MID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
 test('isWebviewActionMessage acepta diff válido con mode last', () => {
-  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'last' }));
+  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: TID, mode: 'last' }));
 });
 
 test('isWebviewActionMessage acepta diff válido con mode range', () => {
-  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'range' }));
+  assert.ok(isWebviewActionMessage({ type: 'diff', thread_id: TID, mode: 'range' }));
 });
 
 test('isWebviewActionMessage rechaza diff con mode inválido', () => {
-  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1', mode: 'full' }));
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: TID, mode: 'full' }));
 });
 
 test('isWebviewActionMessage rechaza diff sin mode', () => {
-  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: 'tid-1' }));
+  assert.ok(!isWebviewActionMessage({ type: 'diff', thread_id: TID }));
 });
 
 test('isWebviewActionMessage rechaza diff sin thread_id', () => {
@@ -631,10 +657,10 @@ test('isWebviewActionMessage rechaza diff con thread_id vacío', () => {
 });
 
 test('isWebviewActionMessage sigue aceptando tipos existentes tras añadir diff', () => {
-  assert.ok(isWebviewActionMessage({ type: 'reply',   thread_id: 'tid-1' }));
-  assert.ok(isWebviewActionMessage({ type: 'resolve', thread_id: 'tid-1' }));
-  assert.ok(isWebviewActionMessage({ type: 'edit',    thread_id: 'tid-1', message_id: 'mid-1' }));
-  assert.ok(isWebviewActionMessage({ type: 'retract', thread_id: 'tid-1', message_id: 'mid-1' }));
+  assert.ok(isWebviewActionMessage({ type: 'reply',   thread_id: TID }));
+  assert.ok(isWebviewActionMessage({ type: 'resolve', thread_id: TID }));
+  assert.ok(isWebviewActionMessage({ type: 'edit',    thread_id: TID, message_id: MID }));
+  assert.ok(isWebviewActionMessage({ type: 'retract', thread_id: TID, message_id: MID }));
 });
 
 // ---------------------------------------------------------------------------
