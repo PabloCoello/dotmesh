@@ -78,8 +78,17 @@ export class KernelManager {
    * Devuelve (o crea) una sesión de kernel para el documento dado.
    * Si el kernel del acompañante ya no está vivo (la pestaña fue cerrada),
    * crea un nuevo acompañante automáticamente.
+   *
+   * @param token Token de cancelación opcional. Si se cancela durante el arranque
+   *   del kernel (fase de polling), se lanza vscode.CancellationError inmediatamente
+   *   sin esperar a agotar el timeout de 30 s. Nota conocida: si el usuario cancela
+   *   el picker de kernel sin seleccionar ninguno, el polling sigue hasta que el
+   *   token se cancele (o expire el timeout si no hay token).
    */
-  async getOrStart(docUri: vscode.Uri): Promise<KernelSession> {
+  async getOrStart(
+    docUri: vscode.Uri,
+    token?: vscode.CancellationToken
+  ): Promise<KernelSession> {
     if (!vscode.workspace.isTrusted) {
       throw new Error(
         'mesh-run: el workspace no es de confianza. ' +
@@ -105,7 +114,7 @@ export class KernelManager {
     const entry = await this.createCompanion();
     this.companions.set(key, entry);
 
-    const kernel = await this.pollForKernel(api, entry.companionUri);
+    const kernel = await this.pollForKernel(api, entry.companionUri, token);
     if (!kernel) {
       this.companions.delete(key);
       throw new Error(
@@ -199,21 +208,28 @@ export class KernelManager {
   }
 
   /**
-   * Sondea getKernel hasta que devuelve un kernel (o expira el timeout).
+   * Sondea getKernel hasta que devuelve un kernel, expira el timeout o se cancela.
    * Necesario porque userStartedKernel se establece de forma asíncrona durante
    * la ejecución de la celda bootstrap.
+   *
+   * Lanza vscode.CancellationError si token se cancela durante la espera,
+   * sin aguardar al próximo intervalo.
    */
   private async pollForKernel(
     api: Jupyter,
-    companionUri: vscode.Uri
+    companionUri: vscode.Uri,
+    token?: vscode.CancellationToken
   ): Promise<Kernel | undefined> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
     while (Date.now() < deadline) {
+      if (token?.isCancellationRequested) {
+        throw new vscode.CancellationError();
+      }
       const kernel = await api.kernels.getKernel(companionUri);
       if (kernel) {
         return kernel;
       }
-      await delay(POLL_INTERVAL_MS);
+      await delay(POLL_INTERVAL_MS, token);
     }
     return undefined;
   }
@@ -323,6 +339,19 @@ class KernelSessionImpl implements KernelSession {
 // Utilidades
 // ---------------------------------------------------------------------------
 
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/**
+ * Espera ms milisegundos. Si token se cancela antes de que expire el temporizador,
+ * limpia el timeout y rechaza con CancellationError de inmediato.
+ */
+function delay(ms: number, token?: vscode.CancellationToken): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    if (token) {
+      const sub = token.onCancellationRequested(() => {
+        clearTimeout(timer);
+        sub.dispose();
+        reject(new vscode.CancellationError());
+      });
+    }
+  });
 }
