@@ -32,7 +32,14 @@ function enqueue(docUri: vscode.Uri, task: () => Promise<void>): void {
       task().catch(err => {
         console.error('mesh-run: error en cola de ejecución:', err);
       }),
-    );
+    )
+    .then(() => {
+      // Limpiar la entrada si esta promesa sigue siendo la cabeza de la cola,
+      // evitando que el Map crezca indefinidamente con promesas ya resueltas.
+      if (executionQueues.get(key) === next) {
+        executionQueues.delete(key);
+      }
+    });
   executionQueues.set(key, next);
 }
 
@@ -222,6 +229,12 @@ async function getGitRootForDoc(document: vscode.TextDocument): Promise<string |
   if (!vscode.workspace.getWorkspaceFolder(document.uri)) {
     return null;
   }
+  // URIs virtuales (git://, untitled://, vscode-notebook-cell://, etc.) no tienen
+  // ruta de sistema de ficheros válida; execFile con un cwd inválido fallaría con
+  // un error confuso. Solo procesamos URIs de fichero real.
+  if (document.uri.scheme !== 'file') {
+    return null;
+  }
 
   const fromDir = path.dirname(document.uri.fsPath);
   try {
@@ -233,7 +246,8 @@ async function getGitRootForDoc(document: vscode.TextDocument): Promise<string |
     const root = stdout.trim();
     // Rechazar cadena vacía (comportamiento defensivo; git no produce vacío para repos válidos)
     return root || null;
-  } catch {
+  } catch (err) {
+    console.warn('mesh-run: git rev-parse falló; el re-anclaje quedará deshabilitado:', err);
     return null;
   }
 }
@@ -578,8 +592,11 @@ async function executeClearOutputs(document: vscode.TextDocument): Promise<void>
     textAfter = textAfter.slice(0, output.startOffset) + textAfter.slice(output.endOffset);
   }
 
-  // Re-anclaje por cada bloque eliminado (newOutputRange null = bloque desaparecido)
-  // getGitRootForDoc ya comprueba getWorkspaceFolder; se llama una vez y se reutiliza
+  // Re-anclaje por cada bloque eliminado (newOutputRange null = bloque desaparecido).
+  // Todas las llamadas comparten el mismo textBefore (freshText) porque los
+  // previousOutputRange de cada bloque se midieron sobre ese snapshot; textAfter
+  // es el mismo para todas (resultado de eliminar todos los bloques a la vez).
+  // getGitRootForDoc ya comprueba getWorkspaceFolder; se llama una vez y se reutiliza.
   const gitRoot = await getGitRootForDoc(document);
 
   for (const output of outputs) {
