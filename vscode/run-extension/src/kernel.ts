@@ -168,9 +168,7 @@ export class KernelManager {
       }
       this.jupyterApi = ext.isActive ? ext.exports : await ext.activate();
     }
-    // La asignación dentro del if deja jupyterApi como Jupyter | undefined para
-    // el compilador; la aserción es correcta porque el if garantiza la asignación.
-    return this.jupyterApi!;
+    return this.jupyterApi!; // asignación garantizada arriba; tsc no infiere campos de clase
   }
 
   /**
@@ -258,8 +256,8 @@ class KernelSessionImpl implements KernelSession {
 
     const textDecoder = new TextDecoder();
 
-    // Acumuladores de texto: stdout y stderr se mezclan en el mismo buffer
-    // (stderr → stdout[] según especificación de la Tarea 4 del plan).
+    // stdout y stderr se acumulan en el mismo buffer: stderr va a stdout[]
+    // por decisión de la Tarea 4 del plan.
     let outputText = '';
     let lastValueRepr: string | null = null;
     let errorText: string | null = null;
@@ -281,11 +279,16 @@ class KernelSessionImpl implements KernelSession {
             }
           | undefined;
 
+        // Outputs ignorados deliberadamente en el MVP:
+        //   display_data — puede portar mimes ricos (text/html, image/png) que no
+        //     tienen representación natural en un bloque Markdown de texto plano.
+        //   Items con mimes no contemplados (text/html, image/svg+xml, etc.) — mismo
+        //     motivo; se omiten sin error.
+        //   Outputs con items vacíos — no hay contenido que acumular.
         for (const item of output.items) {
           if (item.mime === STDOUT_MIME) {
             outputText += textDecoder.decode(item.data);
           } else if (item.mime === STDERR_MIME) {
-            // stderr se mezcla en el buffer de texto de salida.
             outputText += textDecoder.decode(item.data);
           } else if (item.mime === ERROR_MIME) {
             // Traceback crudo (con códigos ANSI) disponible en originalError.traceback.
@@ -305,12 +308,10 @@ class KernelSessionImpl implements KernelSession {
             meta?.outputType === 'execute_result' &&
             item.mime === 'text/plain'
           ) {
-            // Repr del último valor evaluado.
-            // display_data también puede tener text/plain pero su outputType es
-            // 'display_data', no 'execute_result'; se ignora en este MVP.
+            // Repr del último valor evaluado. display_data puede tener text/plain
+            // pero con outputType 'display_data', no 'execute_result'; se ignora.
             lastValueRepr = textDecoder.decode(item.data);
           }
-          // display_data y otros tipos de mime se ignoran en el MVP.
         }
       }
     } catch (err) {
