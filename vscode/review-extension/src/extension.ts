@@ -892,6 +892,15 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // P3: Reanclado en vivo
+  // anchorOverride — mapa de estado de sesión (DA-4): anclas desplazadas en
+  // memoria mientras el usuario edita. No se persiste en workspaceState ni en
+  // eventos; se pierde al cerrar VS Code (correcto: la proyección en disco es
+  // el estado durable). Se limpia al cambiar de documento activo.
+  // ---------------------------------------------------------------------------
+  const _anchorOverride = new Map<string, Anchor | { detached: true }>();
+
   // --- Estado inicial ---
   const initialEditor = vscode.window.activeTextEditor;
   if (initialEditor) {
@@ -899,9 +908,66 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   // --- Refresco al cambiar de editor ---
+  // Al cambiar de documento activo, descartamos las anclas en memoria porque
+  // ya no son válidas para el nuevo documento (DA-4).
   const onEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
+    _anchorOverride.clear();
     if (editor) {
       refreshEditorState(editor).catch(() => {});
+    }
+  });
+
+  // --- Desplazamiento de anclas en memoria al editar (P3, DA-4) ---
+  // No hace IO: solo actualiza _anchorOverride y reaplica las decoraciones con
+  // las anclas virtuales. El guardado persiste en onDidSaveTextDocument.
+  const onDocChange = vscode.workspace.onDidChangeTextDocument((e) => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    if (e.document.uri.fsPath !== editor.document.uri.fsPath) return;
+    if (e.contentChanges.length === 0) return;
+
+    const newText = e.document.getText();
+
+    for (const proj of cardsProvider.projections) {
+      if (proj.status !== 'open') continue;
+      // Solo procesamos hilos con ancla válida en disco
+      if ('detached' in proj.anchor) continue;
+
+      // Usamos la posición más reciente conocida para la desambiguación:
+      // el override si existe y no es detached, si no el ancla del disco.
+      const existingOverride = _anchorOverride.get(proj.thread_id);
+      const hintAnchor: Anchor =
+        existingOverride !== undefined && !('detached' in existingOverride)
+          ? (existingOverride as Anchor)
+          : (proj.anchor as Anchor);
+
+      const resolved = resolveAnchor(newText, hintAnchor);
+      if (resolved) {
+        const newAnchor: Anchor = {
+          quote: hintAnchor.quote,
+          char_offset: resolved.startOffset,
+          line_hint: newText.slice(0, resolved.startOffset).split('\n').length - 1,
+        };
+        _anchorOverride.set(proj.thread_id, newAnchor);
+        if (resolved.uncertain) {
+          output.appendLine(
+            `mesh-review: ancla de hilo ${proj.thread_id} resuelta con incertidumbre` +
+            ` (distancia >200 chars al char_offset esperado)`
+          );
+        }
+      } else {
+        // La cita ya no existe en el texto — marcar como desanclado en memoria
+        _anchorOverride.set(proj.thread_id, { detached: true });
+      }
+    }
+
+    // Aplica decoraciones con anclas virtuales (sin IO, sin actualizar el webview)
+    if (_anchorOverride.size > 0) {
+      const virtualProjections = cardsProvider.projections.map(p => {
+        const override = _anchorOverride.get(p.thread_id);
+        return override !== undefined ? { ...p, anchor: override } : p;
+      });
+      applyDecorations(editor, virtualProjections);
     }
   });
 
@@ -924,6 +990,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     output,
     onEditorChange,
+    onDocChange,
     watcher,
     { dispose: disposeDecorationTypes },
 
