@@ -763,12 +763,20 @@ function makeAnchoredThread(
   });
 }
 
-test('pickNextThread con lista vacía devuelve null', () => {
+test('pickNextThread con lista vacía devuelve null (next, cyclic:true)', () => {
   assert.equal(pickNextThread([], 0, 'next', true), null);
 });
 
-test('pickNextThread con lista vacía devuelve null (prev)', () => {
+test('pickNextThread con lista vacía devuelve null (next, cyclic:false)', () => {
+  assert.equal(pickNextThread([], 0, 'next', false), null);
+});
+
+test('pickNextThread con lista vacía devuelve null (prev, cyclic:true)', () => {
   assert.equal(pickNextThread([], 0, 'prev', true), null);
+});
+
+test('pickNextThread con lista vacía devuelve null (prev, cyclic:false)', () => {
+  assert.equal(pickNextThread([], 0, 'prev', false), null);
 });
 
 test('pickNextThread con un solo hilo abierto devuelve ese hilo (next, cyclic)', () => {
@@ -869,4 +877,35 @@ test('pickNextThread ignora hilos abiertos sin line_hint (desanclados en estado 
   });
   const result = pickNextThread([noAnchor, anchored], 0, 'next', false);
   assert.equal(result?.thread_id, 'anchored');
+});
+
+// Empate de char_offset: fija el comportamiento de desempate.
+// El sort es estable (V8 ≥ 70, Node ≥ 11): igual char_offset → preserva el
+// orden del array de entrada (primer candidato en projections gana).
+
+test('pickNextThread cursor antes de dos hilos con mismo char_offset: next devuelve el primero en projections', () => {
+  // t-a y t-b ambos en offset 50; cursor en 10 (antes de ambos)
+  const ta = makeAnchoredThread('t-a', 50);
+  const tb = makeAnchoredThread('t-b', 50);
+  // Entrada: [ta, tb] → sort estable mantiene ta antes que tb
+  const result = pickNextThread([ta, tb], 10, 'next', false);
+  assert.equal(result?.thread_id, 't-a');
+});
+
+test('pickNextThread cursor exactamente sobre char_offset de un hilo: next salta al siguiente (estricto)', () => {
+  // cursor en 50 (igual que t2); 'next' debe saltar a t3, no quedarse en t2
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  const result = pickNextThread([t1, t2, t3], 50, 'next', false);
+  assert.equal(result?.thread_id, 't3');
+});
+
+test('pickNextThread cursor exactamente sobre char_offset de un hilo: prev salta al anterior (estricto)', () => {
+  // cursor en 50 (igual que t2); 'prev' debe saltar a t1, no quedarse en t2
+  const t1 = makeAnchoredThread('t1', 10);
+  const t2 = makeAnchoredThread('t2', 50);
+  const t3 = makeAnchoredThread('t3', 100);
+  const result = pickNextThread([t1, t2, t3], 50, 'prev', false);
+  assert.equal(result?.thread_id, 't1');
 });

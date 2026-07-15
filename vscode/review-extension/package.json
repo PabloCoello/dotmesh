@@ -90,14 +90,14 @@
       },
       {
         "command": "mesh-review.nextThread",
-        "key": "ctrl+alt+]",
-        "mac": "alt+cmd+]",
+        "key": "ctrl+alt+n",
+        "mac": "alt+cmd+n",
         "when": "editorTextFocus"
       },
       {
         "command": "mesh-review.previousThread",
-        "key": "ctrl+alt+[",
-        "mac": "alt+cmd+[",
+        "key": "ctrl+alt+p",
+        "mac": "alt+cmd+p",
         "when": "editorTextFocus"
       }
     ],

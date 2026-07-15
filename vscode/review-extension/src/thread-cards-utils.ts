@@ -306,12 +306,19 @@ export function computeUnseenCount(
  * Función pura: sin IO ni dependencias de VS Code.
  *
  * - Filtra hilos con `status === 'open'` y `'line_hint' in anchor`.
- * - Ordena por `anchor.char_offset` ascendente.
+ * - Ordena por `anchor.char_offset` ascendente. En caso de empate de
+ *   `char_offset`, se preserva el orden del array de proyecciones de entrada
+ *   (el sort de V8 es estable).
  * - `currentOffset`: posición del cursor (offset en caracteres del documento).
- * - `direction: 'next'`: el hilo cuyo `char_offset` es estrictamente mayor;
- *   si no hay ninguno y `cyclic: true`, devuelve el primero.
- * - `direction: 'prev'`: el hilo cuyo `char_offset` es estrictamente menor;
- *   si no hay ninguno y `cyclic: true`, devuelve el último.
+ * - `direction: 'next'`: el primer hilo cuyo `char_offset` es **estrictamente
+ *   mayor** que `currentOffset`. Si el cursor está exactamente sobre el
+ *   `char_offset` de un hilo, ese hilo se omite y se salta al siguiente (mismo
+ *   comportamiento que F8 de diagnósticos de VS Code). Si no hay ninguno y
+ *   `cyclic: true`, devuelve el primero.
+ * - `direction: 'prev'`: el último hilo cuyo `char_offset` es **estrictamente
+ *   menor** que `currentOffset`. Si el cursor está exactamente sobre el
+ *   `char_offset` de un hilo, ese hilo se omite. Si no hay ninguno y
+ *   `cyclic: true`, devuelve el último.
  * - Lista vacía o sin candidatos no cíclicos → null.
  */
 export function pickNextThread(

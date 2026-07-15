@@ -565,6 +565,11 @@ async function jumpToAnchorImpl(
  *
  * El setting `mesh-review.navigation.cyclic` (boolean, default true) controla
  * si la navegación cicla al llegar al primero/último hilo.
+ *
+ * Guarda de sincronización: si el docUri de las proyecciones del provider no
+ * coincide con el documento del editor activo (puede ocurrir si el comando se
+ * dispara justo tras cambiar de editor y antes de que refreshEditorState
+ * complete), la función es no-op.
  */
 async function navigateThread(
   direction: 'next' | 'prev',
@@ -572,6 +577,10 @@ async function navigateThread(
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
+
+  // Guarda de sincronización: las proyecciones deben corresponder al documento
+  // activo. Si no, el cambio de editor aún no ha completado refreshEditorState.
+  if (cardsProvider.docUri?.fsPath !== editor.document.uri.fsPath) return;
 
   const cyclic = vscode.workspace
     .getConfiguration('mesh-review')
