@@ -45,7 +45,26 @@ export type WebviewActionMessage =
   | { type: 'diff';          thread_id: string; mode: 'last' | 'range' }
   | { type: 'reply-submit';  thread_id: string; body: string }
   | { type: 'edit-submit';   thread_id: string; message_id: string; body: string }
-  | { type: 'assign';        thread_id: string };
+  | { type: 'assign';        thread_id: string }
+  | { type: 'jump-doc';      thread_id: string; doc_path: string };
+
+/**
+ * Valida que una ruta de documento sea relativa y sin segmentos de traversal.
+ *
+ * Reglas:
+ * - No vacía.
+ * - No absoluta (ni Unix `/…` ni Windows `C:\…`).
+ * - Sin segmentos `..` (separador `/` o `\`).
+ *
+ * El host (extension.ts) aplica además una comprobación de contención con
+ * `path.relative` antes de abrir el documento.
+ */
+function isRelativeSafePath(p: unknown): p is string {
+  if (typeof p !== 'string' || p.length === 0) return false;
+  if (p.startsWith('/') || /^[A-Za-z]:/.test(p)) return false;
+  const segments = p.split(/[/\\]/);
+  return !segments.some(seg => seg === '..');
+}
 
 /**
  * Valida en runtime que un mensaje del webview es una acción bien formada.
@@ -55,6 +74,7 @@ export type WebviewActionMessage =
  * - thread_id: string no vacío en los cinco tipos.
  * - message_id: string no vacío en edit/retract.
  * - mode: literal 'last' | 'range' en diff (no se interpola en comandos de shell).
+ * - doc_path: ruta relativa sin traversal en jump-doc.
  */
 export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessage {
   if (typeof msg !== 'object' || msg === null) return false;
@@ -79,6 +99,9 @@ export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessag
       return hasThread && hasMessage && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
     case 'assign':
       return hasThread;
+    case 'jump-doc':
+      // doc_path: ruta relativa segura; la contención definitiva se valida en el host.
+      return hasThread && isRelativeSafePath(m.doc_path);
     default:
       return false;
   }
@@ -244,19 +267,82 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
 }
 
 /**
+ * Genera el HTML de la sección multi-fichero "Repositorio (N)" al pie del panel.
+ *
+ * - Devuelve cadena vacía si `allDocs` está vacío y `overflow` es 0.
+ * - Sección `<details data-section="all-docs">` colapsada por defecto.
+ * - N = total de hilos abiertos en el mapa (no el número de documentos).
+ * - Cada documento aparece como grupo con nombre de fichero y recuento.
+ * - Cada hilo en el grupo tiene un botón con data-action="jump-doc",
+ *   data-thread-id y data-doc-path; el clic envía el mensaje al host.
+ * - overflow > 0: añade una nota "(+N más)" al final de la sección.
+ * - Toda interpolación de datos pasa por escapeHtml.
+ */
+export function buildAllDocsHtml(
+  allDocs: Map<string, CardViewModel[]>,
+  overflow = 0
+): string {
+  if (allDocs.size === 0 && overflow === 0) return '';
+
+  let totalThreads = 0;
+  for (const cards of allDocs.values()) totalThreads += cards.length;
+
+  const groups: string[] = [];
+  for (const [docPath, cards] of allDocs) {
+    if (cards.length === 0) continue;
+    const escapedPath = escapeHtml(docPath);
+    // Cabecera del grupo: solo el nombre de fichero; la ruta completa va en data-doc-path.
+    const segments = docPath.split(/[/\\]/);
+    const displayName = escapeHtml(segments[segments.length - 1] ?? docPath);
+    const threads = cards.map(card => {
+      const tid  = escapeHtml(card.thread_id);
+      const type = escapeHtml(card.commentType);
+      const line = escapeHtml(card.lineLabel);
+      return `<button class="all-doc-thread action-btn" data-action="jump-doc" data-thread-id="${tid}" data-doc-path="${escapedPath}"><span class="bullet bullet-${type}">●</span> ${type} · ${line}</button>`;
+    }).join('\n');
+    groups.push(
+      `<div class="all-doc-group">\n` +
+      `<div class="all-doc-title">${displayName} (${cards.length})</div>\n` +
+      threads + '\n' +
+      `</div>`
+    );
+  }
+
+  const overflowHtml = overflow > 0
+    ? `\n<div class="all-doc-overflow">(+${overflow} más)</div>`
+    : '';
+
+  return (
+    `<details data-section="all-docs" class="section-collapsed">\n` +
+    `<summary class="section-header">Repositorio (${totalThreads})</summary>\n` +
+    groups.join('\n') +
+    overflowHtml + '\n' +
+    `</details>`
+  );
+}
+
+/**
  * Genera el fragmento HTML con todas las tarjetas de hilo, particionadas por estado.
  *
  * - Hilos abiertos: lista plana (sin agrupar por tipo), con botones de acción.
  * - Hilos resueltos: sección <details data-section="resolved"> colapsada por defecto.
  * - Hilos desanclados: sección <details data-section="detached"> colapsada por defecto.
+ * - Sección multi-fichero: `<details data-section="all-docs">` al final si `allDocs`
+ *   tiene entradas (generada con buildAllDocsHtml).
  * - Omite la sección completa si su cubo está vacío.
  * - Sin atributos style inline (requisito de CSP con nonce).
  */
-export function buildCardsHtml(cards: CardViewModel[]): string {
+export function buildCardsHtml(
+  cards: CardViewModel[],
+  allDocs?: Map<string, CardViewModel[]>,
+  overflow?: number
+): string {
   const { open, resolved, detached } = partitionCardsByStatus(cards);
+  const allDocsHtml = buildAllDocsHtml(allDocs ?? new Map(), overflow ?? 0);
 
   if (open.length === 0 && resolved.length === 0 && detached.length === 0) {
-    return '<p class="empty">Sin comentarios en este documento.</p>';
+    const emptyMsg = '<p class="empty">Sin comentarios en este documento.</p>';
+    return allDocsHtml ? emptyMsg + '\n' + allDocsHtml : emptyMsg;
   }
 
   const parts: string[] = [];
@@ -287,6 +373,9 @@ export function buildCardsHtml(cards: CardViewModel[]): string {
       `</details>`
     );
   }
+
+  // Sección multi-fichero (P6)
+  if (allDocsHtml) parts.push(allDocsHtml);
 
   return parts.join('\n');
 }

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import {
   buildCardViewModels,
   buildCardsHtml,
+  buildAllDocsHtml,
   buildBulletStyles,
   partitionCardsByStatus,
   isWebviewActionMessage,
@@ -1243,4 +1244,204 @@ test('buildCardsHtml no incluye botón assign en hilo resuelto', () => {
   };
   const html = buildCardsHtml([card]);
   assert.ok(!html.includes('data-action="assign"'), 'no debe incluir botón assign en hilo resuelto');
+});
+
+// ---------------------------------------------------------------------------
+// P6 — buildAllDocsHtml: sección multi-fichero
+// ---------------------------------------------------------------------------
+
+test('buildAllDocsHtml con mapa vacío devuelve cadena vacía', () => {
+  assert.strictEqual(buildAllDocsHtml(new Map()), '');
+});
+
+test('buildAllDocsHtml con mapa vacío y overflow 0 devuelve cadena vacía', () => {
+  assert.strictEqual(buildAllDocsHtml(new Map(), 0), '');
+});
+
+test('buildAllDocsHtml con un doc y dos hilos genera sección colapsada con nombre y recuento', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: TID, commentType: 'nota',      lineLabel: 'L5',  hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] },
+    { thread_id: MID, commentType: 'sugerencia', lineLabel: 'L10', hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] },
+  ];
+  const allDocs = new Map([['README.md', cards]]);
+  const html = buildAllDocsHtml(allDocs);
+
+  assert.ok(html.includes('data-section="all-docs"'),  'debe incluir data-section="all-docs"');
+  assert.ok(html.includes('section-collapsed'),         'debe estar colapsada por defecto');
+  assert.ok(html.includes('Repositorio (2)'),           'el summary debe indicar 2 hilos');
+  assert.ok(html.includes('README.md (2)'),             'el grupo debe indicar el nombre y recuento');
+  assert.ok(html.includes('data-action="jump-doc"'),    'debe incluir botones jump-doc');
+  assert.ok(html.includes(`data-doc-path="README.md"`), 'debe incluir la ruta del documento');
+});
+
+test('buildAllDocsHtml escapa paths con caracteres especiales', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: TID, commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] },
+  ];
+  const allDocs = new Map([['src/<evil>.ts', cards]]);
+  const html = buildAllDocsHtml(allDocs);
+
+  assert.ok(!html.includes('src/<evil>'), 'el path con < no debe aparecer sin escapar');
+  assert.ok(html.includes('src/&lt;evil&gt;.ts'), 'el path debe salir escapado en data-doc-path');
+});
+
+test('buildAllDocsHtml con overflow > 0 incluye el indicador "(+N más)"', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: TID, commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] },
+  ];
+  const allDocs = new Map([['doc.md', cards]]);
+  const html = buildAllDocsHtml(allDocs, 7);
+
+  assert.ok(html.includes('(+7 más)'), 'debe incluir el indicador de overflow');
+});
+
+test('buildAllDocsHtml sin overflow no incluye indicador de overflow', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: TID, commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] },
+  ];
+  const allDocs = new Map([['doc.md', cards]]);
+  const html = buildAllDocsHtml(allDocs, 0);
+
+  assert.ok(!html.includes('más)'), 'no debe incluir indicador de overflow cuando overflow es 0');
+});
+
+test('buildAllDocsHtml muestra solo el nombre de fichero en la cabecera del grupo (no la ruta completa)', () => {
+  const cards: CardViewModel[] = [
+    { thread_id: TID, commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] },
+  ];
+  const allDocs = new Map([['src/deep/file.ts', cards]]);
+  const html = buildAllDocsHtml(allDocs);
+
+  assert.ok(html.includes('file.ts (1)'), 'la cabecera del grupo debe mostrar solo el nombre de fichero');
+  // la ruta completa debe aparecer en data-doc-path pero no en el título del grupo
+  assert.ok(html.includes('data-doc-path="src/deep/file.ts"'), 'data-doc-path debe contener la ruta completa');
+});
+
+test('buildAllDocsHtml omite grupos con 0 hilos', () => {
+  const allDocs = new Map<string, CardViewModel[]>([
+    ['vacio.md', []],
+    ['conhilos.md', [{ thread_id: TID, commentType: 'nota', lineLabel: 'L1', hasAnchor: true, status: 'open', fixCommit: null, openCommit: null, messages: [] }]],
+  ]);
+  const html = buildAllDocsHtml(allDocs);
+
+  assert.ok(!html.includes('vacio.md'), 'no debe incluir grupos con 0 hilos');
+  assert.ok(html.includes('conhilos.md'), 'debe incluir grupos con hilos');
+});
+
+test('buildAllDocsHtml solo overflow sin docs muestra sección mínima', () => {
+  // Caso borde: sin docs pero con overflow (no ocurre en producción pero robustez)
+  // En realidad con mapa vacío y overflow > 0 sí debe mostrarse algo
+  const html = buildAllDocsHtml(new Map(), 3);
+  // Cuando el mapa está vacío pero hay overflow, devuelve '' ya que no hay nada concreto
+  // que mostrar — el overflow es de docs con 0 hilos o no procesados. En este caso
+  // la función devuelve '' (implementación actual). Este test documenta el comportamiento.
+  // Nota: la condición `allDocs.size === 0 && overflow === 0` → si overflow > 0 y size 0,
+  // NO es vacío, así que sí genera HTML.
+  assert.ok(html.includes('Repositorio (0)'), 'con overflow pero sin docs muestra Repositorio (0)');
+  assert.ok(html.includes('(+3 más)'), 'debe incluir el indicador de overflow');
+});
+
+// ---------------------------------------------------------------------------
+// P6 — isWebviewActionMessage: jump-doc
+// ---------------------------------------------------------------------------
+
+test('isWebviewActionMessage acepta jump-doc con UUID y ruta relativa válida', () => {
+  assert.ok(isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: 'src/foo.ts' }));
+});
+
+test('isWebviewActionMessage acepta jump-doc con ruta en el raíz del repo', () => {
+  assert.ok(isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: 'README.md' }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc con ruta absoluta Unix', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: '/etc/passwd' }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc con ruta absoluta Windows', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: 'C:\\Users\\evil' }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc con traversal ..' , () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: '../../etc/passwd' }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc con .. en segmento interno', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: 'src/../../../etc/passwd' }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc con ruta vacía', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: TID, doc_path: '' }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc sin doc_path', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: TID }));
+});
+
+test('isWebviewActionMessage rechaza jump-doc con thread_id no-UUID', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'jump-doc', thread_id: 'no-uuid', doc_path: 'README.md' }));
+});
+
+// ---------------------------------------------------------------------------
+// P6 — buildCardsHtml con allDocs incluye la sección multi-fichero
+// ---------------------------------------------------------------------------
+
+test('buildCardsHtml con allDocs incluye sección all-docs al final', () => {
+  const currentCard: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const otherCard: CardViewModel = {
+    thread_id:   MID,
+    commentType: 'sugerencia',
+    lineLabel:   'L3',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [],
+  };
+  const allDocs = new Map([['otro.md', [otherCard]]]);
+  const html = buildCardsHtml([currentCard], allDocs);
+
+  assert.ok(html.includes('data-section="all-docs"'), 'debe incluir la sección all-docs');
+  assert.ok(html.includes('Repositorio (1)'), 'la sección all-docs debe indicar 1 hilo');
+});
+
+test('buildCardsHtml sin allDocs no incluye sección all-docs', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '13 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-section="all-docs"'), 'no debe incluir sección all-docs sin el parámetro');
+});
+
+test('buildCardsHtml vacío con allDocs muestra mensaje vacío y sección all-docs', () => {
+  const otherCard: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   'L5',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [],
+  };
+  const allDocs = new Map([['otro.md', [otherCard]]]);
+  const html = buildCardsHtml([], allDocs);
+
+  assert.ok(html.includes('Sin comentarios'), 'debe incluir el mensaje de vacío');
+  assert.ok(html.includes('data-section="all-docs"'), 'también debe incluir la sección all-docs');
 });
