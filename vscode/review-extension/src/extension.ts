@@ -895,59 +895,59 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ---------------------------------------------------------------------------
   // P3: Reanclado en vivo
-  // anchorOverride — mapa de estado de sesión (DA-4): anclas desplazadas en
+  // _anchorOverride — mapa de estado de sesión (DA-4): anclas desplazadas en
   // memoria mientras el usuario edita. No se persiste en workspaceState ni en
   // eventos; se pierde al cerrar VS Code (correcto: la proyección en disco es
   // el estado durable). Se limpia al cambiar de documento activo.
+  // _debounceTimer — retrasa el recálculo 150 ms desde el último keystroke.
   // ---------------------------------------------------------------------------
   const _anchorOverride = new Map<string, Anchor | { detached: true }>();
+  let _debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // --- Estado inicial ---
-  const initialEditor = vscode.window.activeTextEditor;
-  if (initialEditor) {
-    refreshEditorState(initialEditor).catch(() => {});
-  }
-
-  // --- Refresco al cambiar de editor ---
-  // Al cambiar de documento activo, descartamos las anclas en memoria porque
-  // ya no son válidas para el nuevo documento (DA-4).
-  const onEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
-    _anchorOverride.clear();
-    if (editor) {
-      refreshEditorState(editor).catch(() => {});
-    }
-  });
-
-  // --- Desplazamiento de anclas en memoria al editar (P3, DA-4) ---
-  // No hace IO: solo actualiza _anchorOverride y reaplica las decoraciones con
-  // las anclas virtuales. El guardado persiste en onDidSaveTextDocument.
-  const onDocChange = vscode.workspace.onDidChangeTextDocument((e) => {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) return;
-    if (e.document.uri.fsPath !== editor.document.uri.fsPath) return;
-    if (e.contentChanges.length === 0) return;
-
-    const newText = e.document.getText();
-
+  /**
+   * Recalcula las anclas en memoria para todos los hilos abiertos con ancla
+   * válida en disco. Sin IO: solo string ops + VS Code API de decoraciones.
+   *
+   * Defensa en profundidad: omite hilos cuya cita tenga menos de 4 chars —
+   * una cita tan corta tiene demasiadas ocurrencias en documentos grandes y
+   * dispara el peor caso O(n²) del bucle de indexOf en resolveAnchor.
+   *
+   * Recuperación de detached: cuando el override existente es { detached: true }
+   * (la cita fue eliminada), se reintenta resolveAnchor usando el ancla del
+   * disco como hint. Si la cita reaparece (p. ej. Ctrl+Z), el override vuelve
+   * a ser un ancla válida; solo permanece detached mientras la cita no se
+   * encuentre en el texto.
+   */
+  function doRecalculate(text: string, editor: vscode.TextEditor): void {
     for (const proj of cardsProvider.projections) {
       if (proj.status !== 'open') continue;
       // Solo procesamos hilos con ancla válida en disco
       if ('detached' in proj.anchor) continue;
 
-      // Usamos la posición más reciente conocida para la desambiguación:
-      // el override si existe y no es detached, si no el ancla del disco.
+      const diskAnchor = proj.anchor as Anchor;
+
+      // Defensa en profundidad: citas < 4 chars generan O(n²) en resolveAnchor
+      // (demasiadas ocurrencias) y no son anclas útiles. Se omiten sin actualizar
+      // el override; conservan el ancla de disco en las decoraciones.
+      if (diskAnchor.quote.length < 4) continue;
+
+      // Para la desambiguación usamos la posición más reciente conocida: el
+      // override si existe y NO está desanclado; si no (incluido el caso
+      // detached), usamos el ancla del disco. Esto permite la recuperación:
+      // si el override era detached y la cita reaparece, resolveAnchor la
+      // encuentra usando char_offset del disco como punto de referencia.
       const existingOverride = _anchorOverride.get(proj.thread_id);
       const hintAnchor: Anchor =
         existingOverride !== undefined && !('detached' in existingOverride)
           ? (existingOverride as Anchor)
-          : (proj.anchor as Anchor);
+          : diskAnchor;
 
-      const resolved = resolveAnchor(newText, hintAnchor);
+      const resolved = resolveAnchor(text, hintAnchor);
       if (resolved) {
         const newAnchor: Anchor = {
-          quote: hintAnchor.quote,
+          quote: diskAnchor.quote,
           char_offset: resolved.startOffset,
-          line_hint: newText.slice(0, resolved.startOffset).split('\n').length - 1,
+          line_hint: text.slice(0, resolved.startOffset).split('\n').length - 1,
         };
         _anchorOverride.set(proj.thread_id, newAnchor);
         if (resolved.uncertain) {
@@ -970,17 +970,61 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       applyDecorations(editor, virtualProjections);
     }
+  }
+
+  // --- Estado inicial ---
+  const initialEditor = vscode.window.activeTextEditor;
+  if (initialEditor) {
+    refreshEditorState(initialEditor).catch(() => {});
+  }
+
+  // --- Refresco al cambiar de editor ---
+  // Al cambiar de documento activo, descartamos el override y el timer pendiente
+  // porque ya no son válidos para el nuevo documento (DA-4).
+  const onEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
+    clearTimeout(_debounceTimer);
+    _debounceTimer = undefined;
+    _anchorOverride.clear();
+    if (editor) {
+      refreshEditorState(editor).catch(() => {});
+    }
+  });
+
+  // --- Desplazamiento de anclas en memoria al editar (P3, DA-4) ---
+  // Debounce de 150 ms: cancela y reprograma el recálculo por cada evento de
+  // cambio. Reduce la presión de CPU en el hilo de extensiones durante la
+  // escritura continua; el flush en onDidSaveTextDocument garantiza que el
+  // estado sea correcto al guardar aunque el timer no haya disparado.
+  const onDocChange = vscode.workspace.onDidChangeTextDocument((e) => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    if (e.document.uri.fsPath !== editor.document.uri.fsPath) return;
+    if (e.contentChanges.length === 0) return;
+
+    const newText = e.document.getText();
+    clearTimeout(_debounceTimer);
+    _debounceTimer = setTimeout(() => doRecalculate(newText, editor), 150);
   });
 
   // --- Persistencia de thread.reanchored al guardar (P3, DA-3) ---
-  // Solo escribe eventos para los hilos cuyo ancla en _anchorOverride difiere
-  // del ancla proyectada desde disco. No hace IO en cada keystroke.
-  // Después de persistir, limpia _anchorOverride; el watcher relanzará
-  // refreshEditorState y leerá las proyecciones actualizadas del disco.
+  // Flush crítico: si hay un timer de debounce pendiente, lo cancela y ejecuta
+  // doRecalculate de forma síncrona con el texto ya guardado ANTES de comparar
+  // con anchorChanged y escribir eventos. Sin este flush, un guardado inmediato
+  // (<150 ms) tras la última edición persistiría anclas obsoletas porque el
+  // _anchorOverride aún no reflejaría los últimos cambios.
   const onDocSave = vscode.workspace.onDidSaveTextDocument(async (doc) => {
-    if (_anchorOverride.size === 0) return; // nada que persistir
-
     const editor = vscode.window.activeTextEditor;
+
+    // Flush del debounce pendiente con el texto definitivo del fichero guardado
+    if (_debounceTimer !== undefined) {
+      clearTimeout(_debounceTimer);
+      _debounceTimer = undefined;
+      if (editor && editor.document.uri.fsPath === doc.uri.fsPath) {
+        doRecalculate(doc.getText(), editor);
+      }
+    }
+
+    if (_anchorOverride.size === 0) return; // nada que persistir
     if (!editor || editor.document.uri.fsPath !== doc.uri.fsPath) return;
 
     try {
