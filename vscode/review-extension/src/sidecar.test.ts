@@ -26,6 +26,8 @@ import {
   writeBacklogTask,
   buildV1FilePath,
   VALID_COMMENT_TYPES,
+  anchorChanged,
+  type Anchor,
   type Sidecar,
   type EventEnvelope,
   type BacklogTask,
@@ -1103,4 +1105,50 @@ test('readEvents con onError no llama al callback cuando el fichero no existe (E
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// anchorChanged
+// ---------------------------------------------------------------------------
+
+test('anchorChanged devuelve false si quote, line_hint y char_offset son iguales', () => {
+  const a: Anchor = { quote: 'texto de prueba', line_hint: 5, char_offset: 100 };
+  const b: Anchor = { quote: 'texto de prueba', line_hint: 5, char_offset: 100 };
+  assert.strictEqual(anchorChanged(a, b), false);
+});
+
+test('anchorChanged devuelve true si char_offset cambia', () => {
+  const a: Anchor = { quote: 'texto', line_hint: 3, char_offset: 100 };
+  const b: Anchor = { quote: 'texto', line_hint: 3, char_offset: 108 };
+  assert.strictEqual(anchorChanged(a, b), true);
+});
+
+test('anchorChanged devuelve true si line_hint cambia', () => {
+  const a: Anchor = { quote: 'texto', line_hint: 3, char_offset: 100 };
+  const b: Anchor = { quote: 'texto', line_hint: 4, char_offset: 100 };
+  assert.strictEqual(anchorChanged(a, b), true);
+});
+
+test('anchorChanged devuelve true si quote cambia', () => {
+  const a: Anchor = { quote: 'texto original', line_hint: 3, char_offset: 100 };
+  const b: Anchor = { quote: 'texto distinto', line_hint: 3, char_offset: 100 };
+  assert.strictEqual(anchorChanged(a, b), true);
+});
+
+test('anchorChanged devuelve true si el primer argumento es detached y el segundo no', () => {
+  const anclado: Anchor = { quote: 'texto', line_hint: 2, char_offset: 50 };
+  const desanclado = { detached: true as const };
+  assert.strictEqual(anchorChanged(desanclado, anclado), true);
+});
+
+test('anchorChanged devuelve true si el segundo argumento es detached y el primero no', () => {
+  const anclado: Anchor = { quote: 'texto', line_hint: 2, char_offset: 50 };
+  const desanclado = { detached: true as const };
+  assert.strictEqual(anchorChanged(anclado, desanclado), true);
+});
+
+test('anchorChanged devuelve false si ambos son detached', () => {
+  const a = { detached: true as const };
+  const b = { detached: true as const };
+  assert.strictEqual(anchorChanged(a, b), false);
 });

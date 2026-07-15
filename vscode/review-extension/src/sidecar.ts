@@ -143,6 +143,30 @@ export const VALID_COMMENT_TYPES: ReadonlySet<string> = new Set<string>([
 // Funciones puras (sin IO de red ni VS Code)
 // ---------------------------------------------------------------------------
 
+/**
+ * Compara dos valores de ancla y devuelve `true` si han cambiado.
+ *
+ * - Ambos `{ detached: true }` → sin cambio (`false`).
+ * - Uno detached y el otro no → cambio (`true`).
+ * - Dos anclas normales → compara `quote`, `line_hint` y `char_offset`.
+ *
+ * Usada en `onDidSaveTextDocument` (P3) para decidir si escribir un evento
+ * `thread.reanchored` para un hilo cuyo ancla en memoria difiere del último
+ * estado persistido en disco.
+ */
+export function anchorChanged(
+  a: Anchor | { detached: true },
+  b: Anchor | { detached: true }
+): boolean {
+  const aDetached = 'detached' in a;
+  const bDetached = 'detached' in b;
+  if (aDetached !== bDetached) return true;
+  if (aDetached && bDetached) return false;
+  const aa = a as Anchor;
+  const bb = b as Anchor;
+  return aa.quote !== bb.quote || aa.line_hint !== bb.line_hint || aa.char_offset !== bb.char_offset;
+}
+
 /** SHA-256 hex de una cadena UTF-8. */
 export function sha256hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');

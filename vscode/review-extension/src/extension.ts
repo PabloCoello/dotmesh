@@ -23,6 +23,7 @@ import {
   readSidecar,
   utcTimestampMs,
   buildV1FilePath,
+  anchorChanged,
   type EventEnvelope,
   type ThreadProjection,
   type Anchor,
@@ -971,6 +972,69 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
+  // --- Persistencia de thread.reanchored al guardar (P3, DA-3) ---
+  // Solo escribe eventos para los hilos cuyo ancla en _anchorOverride difiere
+  // del ancla proyectada desde disco. No hace IO en cada keystroke.
+  // Después de persistir, limpia _anchorOverride; el watcher relanzará
+  // refreshEditorState y leerá las proyecciones actualizadas del disco.
+  const onDocSave = vscode.workspace.onDidSaveTextDocument(async (doc) => {
+    if (_anchorOverride.size === 0) return; // nada que persistir
+
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.fsPath !== doc.uri.fsPath) return;
+
+    try {
+      const { eventDir, gitRoot, docRelPath } = await resolveEventDir(doc.uri.fsPath);
+      await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
+
+      const onError = (file: string, err: unknown) =>
+        output.appendLine(`mesh-review: error leyendo evento ${file} — ${err}`);
+      const events = await readEvents(eventDir, onError);
+      const projections = project(events);
+
+      const headSha = gitRoot ? await getHeadSha(gitRoot) : null;
+      const author = await humanAuthor(gitRoot ?? path.dirname(doc.uri.fsPath));
+
+      for (const proj of projections) {
+        if (proj.status !== 'open') continue;
+        const override = _anchorOverride.get(proj.thread_id);
+        if (override === undefined) continue;
+        if (!anchorChanged(proj.anchor, override)) continue;
+
+        // Escribe thread.reanchored: con anchor (si sigue ubicado) o detached (si desapareció)
+        const extra: Record<string, unknown> =
+          'detached' in override
+            ? { detached: true }
+            : { anchor: override };
+
+        const event: EventEnvelope = {
+          id: randomUUID(),
+          version: 2,
+          type: 'thread.reanchored',
+          thread_id: proj.thread_id,
+          author,
+          created_at: utcTimestampMs(),
+          commit: headSha,
+          dirty: false,
+          ...extra,
+        };
+
+        await writeEvent(eventDir, event);
+        const tag = 'detached' in override ? ' (desanclado)' : '';
+        output.appendLine(
+          `mesh-review: thread.reanchored escrito para hilo ${proj.thread_id}${tag}`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      output.appendLine(`mesh-review: error al persistir reanclados — ${msg}`);
+    } finally {
+      // Independientemente del resultado, limpia el override.
+      // Las proyecciones recargadas por el watcher tomarán el relevo.
+      _anchorOverride.clear();
+    }
+  });
+
   // --- FileSystemWatcher sobre el directorio de eventos del workspace ---
   const watcher = vscode.workspace.createFileSystemWatcher('**/.ai/review/**/*.json');
   // Filtra refrescos de otros documentos: solo recarga si el fichero cambiado
@@ -991,6 +1055,7 @@ export function activate(context: vscode.ExtensionContext): void {
     output,
     onEditorChange,
     onDocChange,
+    onDocSave,
     watcher,
     { dispose: disposeDecorationTypes },
 
