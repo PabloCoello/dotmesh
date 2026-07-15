@@ -13,6 +13,14 @@ export interface Anchor {
 }
 
 /**
+ * Umbral de distancia (en caracteres) entre el mejor match de `resolveAnchor`
+ * y el `char_offset` original a partir del cual el resultado se marca como
+ * incierto (`uncertain: true`). Exportado para su uso en tests y en la capa
+ * de reanclado en vivo (P3).
+ */
+export const ANCHOR_UNCERTAINTY_THRESHOLD = 200;
+
+/**
  * Crea un ancla a partir del texto completo del documento y los offsets de
  * carácter de inicio y fin de la selección.
  *
@@ -43,7 +51,7 @@ export function createAnchor(text: string, startOffset: number, endOffset: numbe
 export function resolveAnchor(
   text: string,
   anchor: Anchor
-): { startOffset: number; endOffset: number } | null {
+): { startOffset: number; endOffset: number; uncertain?: boolean } | null {
   const { quote, char_offset } = anchor;
 
   if (!quote) return null;
@@ -60,12 +68,7 @@ export function resolveAnchor(
 
   if (occurrences.length === 0) return null;
 
-  // Una sola ocurrencia: resultado directo
-  if (occurrences.length === 1) {
-    return { startOffset: occurrences[0], endOffset: occurrences[0] + quote.length };
-  }
-
-  // Varias ocurrencias: elige la más cercana a char_offset
+  // Elige la ocurrencia más cercana a char_offset (cubre tanto una como varias).
   let best = occurrences[0];
   let bestDist = Math.abs(occurrences[0] - char_offset);
 
@@ -77,5 +80,12 @@ export function resolveAnchor(
     }
   }
 
-  return { startOffset: best, endOffset: best + quote.length };
+  const result: { startOffset: number; endOffset: number; uncertain?: boolean } = {
+    startOffset: best,
+    endOffset: best + quote.length,
+  };
+  if (bestDist > ANCHOR_UNCERTAINTY_THRESHOLD) {
+    result.uncertain = true;
+  }
+  return result;
 }

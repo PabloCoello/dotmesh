@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAnchor, resolveAnchor, type Anchor } from './anchor.ts';
+import { createAnchor, resolveAnchor, ANCHOR_UNCERTAINTY_THRESHOLD, type Anchor } from './anchor.ts';
 
 // ---------------------------------------------------------------------------
 // createAnchor
@@ -142,6 +142,49 @@ test('resolveAnchor devuelve null cuando el texto fue eliminado del documento', 
   const result = resolveAnchor(editedText, anchor);
 
   assert.strictEqual(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// F3 — resolveAnchor con flag uncertain
+// ---------------------------------------------------------------------------
+
+test('ANCHOR_UNCERTAINTY_THRESHOLD es 200', () => {
+  assert.strictEqual(ANCHOR_UNCERTAINTY_THRESHOLD, 200);
+});
+
+test('resolveAnchor devuelve uncertain:true cuando la única ocurrencia dista >200 chars del char_offset', () => {
+  // Texto de 300 chars. La única ocurrencia de 'marca' está en offset 0.
+  // char_offset = 250 → distancia 250 > 200 → uncertain:true.
+  const text = 'marca' + 'x'.repeat(295);
+  const anchor: Anchor = { quote: 'marca', line_hint: 0, char_offset: 250 };
+  const result = resolveAnchor(text, anchor);
+  assert.ok(result !== null);
+  assert.strictEqual(result.startOffset, 0);
+  assert.strictEqual(result.uncertain, true);
+});
+
+test('resolveAnchor no añade uncertain cuando la ocurrencia está dentro del umbral', () => {
+  const text = 'marca' + 'x'.repeat(295);
+  const anchor: Anchor = { quote: 'marca', line_hint: 0, char_offset: 50 };
+  const result = resolveAnchor(text, anchor);
+  assert.ok(result !== null);
+  assert.strictEqual(result.startOffset, 0);
+  assert.ok(!result.uncertain, 'uncertain no debe estar presente ni ser true');
+});
+
+test('resolveAnchor devuelve uncertain:true en varias ocurrencias cuando la más cercana dista >200 chars', () => {
+  // 'nota' en offset 0 y en offset 350; char_offset = 280.
+  // La más cercana es 350 (distancia 70), bien dentro del umbral → NOT uncertain.
+  // Ahora invertir: char_offset = 490, la más cercana es 350 (distancia 140) → NOT uncertain.
+  // Para uncertain: poner char_offset = 600 con 'nota' solo en 350 → distancia 250 > 200.
+  const filler = 'x'.repeat(345);
+  const text = filler + 'nota' + 'x'.repeat(200);
+  // 'nota' está solo en offset 345; char_offset = 600 → distancia 255 > 200 → uncertain.
+  const anchor: Anchor = { quote: 'nota', line_hint: 0, char_offset: 600 };
+  const result = resolveAnchor(text, anchor);
+  assert.ok(result !== null);
+  assert.strictEqual(result.startOffset, 345);
+  assert.strictEqual(result.uncertain, true);
 });
 
 test('resolveAnchor funciona tras pequeñas ediciones que desplazan el texto', () => {
