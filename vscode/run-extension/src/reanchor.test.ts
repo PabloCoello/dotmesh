@@ -273,6 +273,83 @@ test('classifyThread: cita duplicada — char_offset selecciona la de fuera del 
 });
 
 // ---------------------------------------------------------------------------
+// Tests de stableFencePrefix + ancla estable entre regeneraciones
+// ---------------------------------------------------------------------------
+
+test('classifyThread: ancla nueva no contiene "hash=" (prefijo estable de la línea de cerca)', () => {
+  // Simula un bloque de salida con línea de cerca que incluye hash
+  const header = 'header\n';
+  const hLen = header.length;
+  const oldContent = 'resultado viejo';
+  const textBefore = header + oldContent + '\nfooter\n';
+  const prevRange = { startOffset: hLen, endOffset: hLen + oldContent.length + 1 };
+
+  const fenceLine = '```output {#myChunk hash=abc12345}';
+  const textAfter = header + fenceLine + '\nnew content\n```\nfooter\n';
+  const newRange = {
+    startOffset: hLen,
+    endOffset: hLen + fenceLine.length + 1 + 'new content\n'.length + '```\n'.length,
+  };
+
+  const anchor: Anchor = { quote: oldContent, line_hint: 1, char_offset: hLen };
+  const decision = classifyThread(anchor, textBefore, textAfter, prevRange, newRange);
+
+  assert.strictEqual(decision.action, 'reanchor');
+  if (decision.action === 'reanchor') {
+    assert.ok(
+      !decision.newAnchor.quote.includes('hash='),
+      'el ancla nueva no debe contener "hash=" porque cambia en cada ejecución'
+    );
+    assert.ok(
+      decision.newAnchor.quote.includes('#myChunk'),
+      'el ancla nueva debe contener el chunkId estable'
+    );
+    assert.strictEqual(decision.newAnchor.quote, '```output {#myChunk');
+  }
+});
+
+test('classifyThread: dos regeneraciones consecutivas — la segunda no dispara re-anclaje', () => {
+  // Primera ejecución: contenido original → bloque de salida con hash=firsthash
+  const header = 'header\n';
+  const hLen = header.length;
+  const originalContent = 'resultado original';
+  const textBefore = header + originalContent + '\nfooter\n';
+  const prevRange1 = { startOffset: hLen, endOffset: hLen + originalContent.length + 1 };
+
+  const fenceLine1 = '```output {#myChunk hash=firsthash}';
+  const block1 = fenceLine1 + '\nnew content\n```\n';
+  const textAfter1 = header + block1 + 'footer\n';
+  const newRange1 = { startOffset: hLen, endOffset: hLen + block1.length };
+
+  const originalAnchor: Anchor = { quote: originalContent, line_hint: 1, char_offset: hLen };
+
+  // Primera clasificación: cita original desaparece → reanchor con prefijo estable
+  const d1 = classifyThread(originalAnchor, textBefore, textAfter1, prevRange1, newRange1);
+  assert.strictEqual(d1.action, 'reanchor');
+  if (d1.action !== 'reanchor') return;
+
+  const newAnchor = d1.newAnchor;
+  // El ancla nueva usa el prefijo sin hash
+  assert.strictEqual(newAnchor.quote, '```output {#myChunk');
+
+  // Segunda ejecución: mismo chunk, hash distinto (secondhash)
+  const fenceLine2 = '```output {#myChunk hash=secondhash}';
+  const block2 = fenceLine2 + '\nnew content 2\n```\n';
+  const textAfter2 = header + block2 + 'footer\n';
+  const prevRange2 = { startOffset: hLen, endOffset: hLen + block1.length };
+  const newRange2 = { startOffset: hLen, endOffset: hLen + block2.length };
+
+  // El prefijo estable '```output {#myChunk' sigue presente en textAfter2
+  // (la nueva línea de cerca también empieza con ese prefijo) → ignore
+  const d2 = classifyThread(newAnchor, textAfter1, textAfter2, prevRange2, newRange2);
+  assert.strictEqual(
+    d2.action,
+    'ignore',
+    'el prefijo estable resuelve en textAfter2: la segunda regeneración no debe generar re-anclaje'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Tests de projectEvents
 // ---------------------------------------------------------------------------
 

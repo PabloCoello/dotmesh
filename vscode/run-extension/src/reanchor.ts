@@ -151,6 +151,26 @@ export function firstNonEmptyLineInRange(
 // Funciones puras: clasificación de hilos
 // ---------------------------------------------------------------------------
 
+/**
+ * Extrae el prefijo estable de la línea de cerca de un bloque de salida.
+ *
+ * "```output {#chunkId hash=XXXXXXXX}" → "```output {#chunkId"
+ *
+ * El hash cambia en cada regeneración del bloque. Si se usara como cita del
+ * ancla, el ancla se rompería en la siguiente ejecución y generaría una
+ * cascada de eventos thread.reanchored. El prefijo hasta el chunkId (sin
+ * incluir el atributo hash) es estable entre ejecuciones y único en el
+ * documento (los chunkIds son únicos por contrato del formato).
+ *
+ * Si la línea no coincide con el patrón de cerca de salida (p. ej., es
+ * contenido del bloque), se devuelve la línea completa sin modificar.
+ */
+export function stableFencePrefix(lineText: string): string {
+  // Captura los backticks de apertura + "output {#<chunkId>" sin el hash
+  const m = lineText.match(/^(`{3,}output \{#[^\s}]+)/);
+  return m ? m[1] : lineText;
+}
+
 export type ThreadDecision =
   | { action: 'ignore' }
   | { action: 'reanchor'; newAnchor: Anchor; oldQuote: string }
@@ -208,7 +228,13 @@ export function classifyThread(
   }
 
   const newAnchor: Anchor = {
-    quote: firstLine.lineText,
+    // stableFencePrefix elimina el atributo hash= de la línea de cerca.
+    // El hash cambia en cada regeneración del bloque; si se usara como cita,
+    // el ancla se rompería de inmediato en la siguiente ejecución y generaría
+    // una cascada de eventos thread.reanchored. El prefijo sin hash
+    // ("```output {#chunkId") es único en el documento (los chunkIds son
+    // únicos por contrato de formato) y estable entre ejecuciones.
+    quote: stableFencePrefix(firstLine.lineText),
     line_hint: firstLine.lineNumber,
     char_offset: firstLine.lineStart,
   };
