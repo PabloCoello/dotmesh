@@ -13,7 +13,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -194,6 +194,9 @@ export function classifyThread(
   newOutputRange: { startOffset: number; endOffset: number } | null
 ): ThreadDecision {
   // 1. ¿La cita resolvía dentro del bloque anterior?
+  // Semántica de pertenencia: una cita cuenta como "dentro" del rango si su
+  // startOffset cae en [rangeStart, rangeEnd), aunque el final de la cita
+  // sobresalga del rango. El ancla apunta al inicio de la selección.
   const resolvedBefore = resolveQuote(textBefore, anchor);
   if (
     resolvedBefore === null ||
@@ -245,9 +248,13 @@ export function classifyThread(
 // Funciones puras: proyección mínima de eventos V2
 // ---------------------------------------------------------------------------
 
-/** Valida forma de UUID (leniente: acepta cualquier 8-4-4-4-12 hex). */
+/**
+ * Valida UUID v4 con el patrón estricto del schema V2:
+ * tercera sección comienza con 4, cuarta sección comienza con [89ab].
+ * Solo acepta hex en minúsculas (Node's randomUUID() siempre produce minúsculas).
+ */
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 
 function compareEvents(a: EventEnvelope, b: EventEnvelope): number {
@@ -291,13 +298,19 @@ export function projectEvents(events: EventEnvelope[]): ThreadProjection[] {
     if (ev.type === 'thread.reanchored') {
       if (ev['anchor'] !== undefined) {
         proj.anchor = ev['anchor'] as Anchor;
+        // Reabrir un hilo detached al recibir un ancla nueva replica
+        // la semántica de mesh-review (sidecar.ts, case 'thread.reanchored').
         if (proj.status === 'detached') proj.status = 'open';
       } else if (ev['detached'] === true) {
         proj.anchor = { detached: true };
         proj.status = 'detached';
       }
     } else if (ev.type === 'thread.status-changed') {
-      proj.status = ev['to'] as 'open' | 'resolved' | 'detached';
+      // Validar el valor de 'to' antes de asignarlo; ignorar valores desconocidos.
+      const to = ev['to'];
+      if (to === 'open' || to === 'resolved' || to === 'detached') {
+        proj.status = to;
+      }
     }
   }
 
@@ -308,7 +321,7 @@ export function projectEvents(events: EventEnvelope[]): ThreadProjection[] {
 // IO: lectura de eventos del directorio del sidecar
 // ---------------------------------------------------------------------------
 
-async function readEventsFromDir(dir: string): Promise<EventEnvelope[]> {
+export async function readEventsFromDir(dir: string): Promise<EventEnvelope[]> {
   let entries: string[];
   try {
     entries = await readdir(dir);
@@ -319,16 +332,26 @@ async function readEventsFromDir(dir: string): Promise<EventEnvelope[]> {
   const results: EventEnvelope[] = [];
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
+    const filePath = path.join(dir, name);
     try {
-      const content = await readFile(path.join(dir, name), 'utf8');
+      const content = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
-      if (parsed?.version !== 2) continue;
-      // Defensa: descartar eventos con id o thread_id que no sean UUID válido
-      if (typeof parsed.id !== 'string' || !isUuid(parsed.id)) continue;
-      if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
+      if (parsed?.version !== 2) {
+        console.warn(`mesh-run: evento descartado (version≠2): ${filePath}`);
+        continue;
+      }
+      // Defensa: descartar eventos con id o thread_id que no sean UUID v4 válido
+      if (typeof parsed.id !== 'string' || !isUuid(parsed.id)) {
+        console.warn(`mesh-run: evento descartado (id inválido): ${filePath}`);
+        continue;
+      }
+      if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) {
+        console.warn(`mesh-run: evento descartado (thread_id inválido): ${filePath}`);
+        continue;
+      }
       results.push(parsed as unknown as EventEnvelope);
     } catch {
-      // fichero ilegible o JSON inválido — se ignora
+      console.warn(`mesh-run: evento descartado (JSON inválido o ilegible): ${filePath}`);
     }
   }
   results.sort(compareEvents);
@@ -392,6 +415,27 @@ export async function reanchorAfterReplace(opts: ReanchorOptions): Promise<void>
   const openThreads = threads.filter(t => t.status === 'open');
 
   if (openThreads.length === 0) return;
+
+  // Crear el directorio y verificar que la ruta real sigue dentro de .ai/review/
+  // para detectar y rechazar symlinks plantados que redirijan escrituras fuera del gitRoot.
+  await mkdir(eventDir, { recursive: true });
+  let realEventDir: string;
+  let realGitRoot: string;
+  try {
+    [realEventDir, realGitRoot] = await Promise.all([
+      realpath(eventDir),
+      realpath(gitRoot),
+    ]);
+  } catch {
+    // realpath falla si los directorios desaparecen entre mkdir y realpath; abortar sin escribir
+    return;
+  }
+  const expectedPrefix = path.join(realGitRoot, '.ai', 'review') + path.sep;
+  if (!realEventDir.startsWith(expectedPrefix)) {
+    throw new Error(
+      `mesh-run: el directorio de eventos apunta fuera de .ai/review (posible symlink plantado): ${realEventDir}`
+    );
+  }
 
   const now = new Date().toISOString();
 

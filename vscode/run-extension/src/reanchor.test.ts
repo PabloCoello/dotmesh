@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile, mkdir, symlink } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
@@ -17,6 +17,7 @@ import {
   firstNonEmptyLineInRange,
   classifyThread,
   projectEvents,
+  readEventsFromDir,
   reanchorAfterReplace,
   type Anchor,
 } from './reanchor.ts';
@@ -25,9 +26,10 @@ import {
 // Helpers de test
 // ---------------------------------------------------------------------------
 
-/** UUIDs fijos para tests (forma válida de UUID). */
-const THREAD_A = 'aaaaaaaa-0000-4000-8000-000000000001';
-const THREAD_B = 'bbbbbbbb-0000-4000-8000-000000000002';
+/** UUIDs fijos para tests — cumplen el patrón v4 estricto (3.ª sección 4xxx, 4.ª [89ab]xxx). */
+const THREAD_A    = 'aaaaaaaa-0000-4000-8000-000000000001';
+const THREAD_B    = 'bbbbbbbb-0000-4000-8000-000000000002';
+const REANCHOR_ID = 'cccccccc-0000-4000-8000-000000000003';
 
 /** Crea un directorio temporal limpio para aislar cada test de IO. */
 async function makeTempDir(): Promise<string> {
@@ -447,6 +449,81 @@ test('projectEvents: thread.status-changed a resolved marca el hilo como resuelt
 });
 
 // ---------------------------------------------------------------------------
+// Tests de proyección round-trip desde ficheros reales (readEventsFromDir)
+// ---------------------------------------------------------------------------
+
+test('round-trip proyección: thread.opened → thread.reanchored actualiza ancla y sigue open', async () => {
+  const dir = await makeTempDir();
+  const anchor1: Anchor = { quote: 'texto original', line_hint: 0, char_offset: 0 };
+  const anchor2: Anchor = { quote: 'texto re-anclado', line_hint: 2, char_offset: 20 };
+
+  // Mismo timestamp en ambos eventos — verificar desempate por tipo (opened < reanchored)
+  const ts = '2026-07-16T10:00:00.000Z';
+
+  // Escribir thread.opened
+  const openedEv = {
+    id: THREAD_A,
+    version: 2,
+    type: 'thread.opened',
+    thread_id: THREAD_A,
+    author: { kind: 'human' },
+    created_at: ts,
+    commit: null,
+    dirty: false,
+    anchor: anchor1,
+    commentType: 'nota',
+    body: 'comentario de prueba',
+  };
+  await writeFile(path.join(dir, `${THREAD_A}.json`), JSON.stringify(openedEv, null, 2) + '\n');
+
+  // Escribir thread.reanchored con el mismo timestamp
+  const reanchoredEv = {
+    id: REANCHOR_ID,
+    version: 2,
+    type: 'thread.reanchored',
+    thread_id: THREAD_A,
+    author: { kind: 'ai', model: 'mesh-run', subagent: 'runner' },
+    created_at: ts,
+    commit: null,
+    dirty: true,
+    anchor: anchor2,
+  };
+  await writeFile(path.join(dir, `${REANCHOR_ID}.json`), JSON.stringify(reanchoredEv, null, 2) + '\n');
+
+  // Leer del disco y proyectar
+  const events = await readEventsFromDir(dir);
+  assert.strictEqual(events.length, 2, 'deben leerse 2 eventos del directorio');
+
+  const threads = projectEvents(events);
+  assert.strictEqual(threads.length, 1);
+  assert.strictEqual(threads[0].status, 'open',
+    'el hilo debe seguir abierto tras el re-anclaje');
+  assert.deepStrictEqual(threads[0].anchor, anchor2,
+    'el desempate de timestamps coloca thread.opened antes que thread.reanchored');
+});
+
+test('readEventsFromDir: descarta eventos con version≠2 y emite console.warn', async () => {
+  const dir = await makeTempDir();
+
+  // Evento V1 (version:1) — debe descartarse
+  const v1Event = { version: 1, id: THREAD_A, thread_id: THREAD_A, type: 'thread.opened' };
+  await writeFile(path.join(dir, `${THREAD_A}.json`), JSON.stringify(v1Event, null, 2) + '\n');
+
+  // Capturar el warn para verificar que se emite (sin suprimir los demás warns del proceso)
+  const warnMessages: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: unknown[]) => warnMessages.push(String(args[0]));
+  try {
+    const events = await readEventsFromDir(dir);
+    assert.strictEqual(events.length, 0, 'el evento V1 debe descartarse');
+    assert.ok(warnMessages.some(m => m.includes('version≠2')),
+      'debe emitirse console.warn mencionando version≠2');
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Tests de integración: reanchorAfterReplace con sistema de ficheros temporal
 // ---------------------------------------------------------------------------
 
@@ -600,6 +677,41 @@ test('reanchorAfterReplace: bloque eliminado (newOutputRange null) → thread.re
   assert.ok(reanchored !== undefined);
   assert.strictEqual(reanchored['detached'], true);
   assert.ok(!('anchor' in reanchored), 'detached no debe tener campo anchor');
+});
+
+test('reanchorAfterReplace: symlink en eventDir fuera del gitRoot → lanza error sin escribir', async () => {
+  const gitRoot = await makeTempDir();
+  // Directorio ajeno al gitRoot que actúa como destino del symlink
+  const outsideTarget = await makeTempDir();
+
+  // Crear la estructura .ai/review/ real dentro del gitRoot
+  const reviewDir = path.join(gitRoot, '.ai', 'review');
+  await mkdir(reviewDir, { recursive: true });
+
+  // Plantar un symlink: gitRoot/.ai/review/doc.md → outsideTarget
+  const symLinkPath = path.join(reviewDir, 'doc.md');
+  await symlink(outsideTarget, symLinkPath);
+
+  // Poner un thread.opened en el target del symlink para que haya hilos abiertos
+  await writeOpenedEvent(outsideTarget, THREAD_A, { quote: 'texto', line_hint: 0, char_offset: 0 });
+
+  // reanchorAfterReplace debe detectar el symlink y lanzar error
+  await assert.rejects(
+    () => reanchorAfterReplace({
+      docFsPath: path.join(gitRoot, 'doc.md'),
+      gitRoot,
+      textBefore: 'texto\nfin\n',
+      textAfter: 'nuevo\nfin\n',
+      previousOutputRange: { startOffset: 0, endOffset: 6 },
+      newOutputRange: { startOffset: 0, endOffset: 6 },
+    }),
+    /symlink/i,
+    'debe lanzar error indicando que se detectó un posible symlink plantado'
+  );
+
+  // No deben haberse escrito eventos nuevos en el target externo
+  const eventsAfter = await readAllEvents(outsideTarget);
+  assert.strictEqual(eventsAfter.length, 1, 'solo el evento inicial; ningún evento nuevo escrito');
 });
 
 // ---------------------------------------------------------------------------
