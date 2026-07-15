@@ -422,8 +422,10 @@ async function runChunkById(
 
   const freshOutput = freshOutputs.find(o => o.chunkId === chunkId);
 
-  // 5. Construir el bloque de salida con el hash del código ACTUAL (snapshot fresco)
-  const currentHash = chunkHash(freshChunk.code);
+  // 5. Construir el bloque de salida con el hash del código EJECUTADO (codeToRun).
+  // Si el usuario editó el chunk durante la ejecución, el hash diferirá del código actual
+  // y stale.ts lo marcará obsoleto correctamente, que es la verdad semántica.
+  const currentHash = chunkHash(codeToRun);
   let blockContent: string;
 
   if (result.error !== null) {
@@ -440,7 +442,10 @@ async function runChunkById(
 
   const newOutputBlock = buildOutputBlock(chunkId, currentHash, blockContent);
 
-  // textBefore y textAfter para reanchorAfterReplace (snapshot fresco antes y después)
+  // textBefore = freshText; textAfter = resultado de replaceOrInsertOutputBlock.
+  // La garantía de coherencia viene de que editor.edit es versionado (devuelve false
+  // si el documento cambió entre getText() y la edición) y de que el reintento
+  // re-parsea y recalcula textAfter sobre el nuevo snapshot antes de llamar a reanchor.
   const textAfter = replaceOrInsertOutputBlock(freshText, freshChunk, freshOutput, newOutputBlock);
 
   // 6. Aplicar la edición en el editor visible
@@ -476,9 +481,8 @@ async function runChunkById(
     }
 
     const retryOutput = retryOutputs.find(o => o.chunkId === chunkId);
-    const retryHash = chunkHash(retryChunk.code);
-    // Mismo blockContent (resultado de la ejecución), hash actualizado al código actual
-    const retryBlock = buildOutputBlock(chunkId, retryHash, blockContent);
+    // Mismo hash que el primer intento: la salida sigue siendo de codeToRun
+    const retryBlock = buildOutputBlock(chunkId, currentHash, blockContent);
 
     editSuccess = await applyOutputEdit(
       editor, document, retryChunk, retryOutput, retryBlock, retryText,
