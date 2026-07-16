@@ -88,6 +88,10 @@ export class KernelManager {
    *   sin esperar a agotar el timeout de 30 s. Nota conocida: si el usuario cancela
    *   el picker de kernel sin seleccionar ninguno, el polling sigue hasta que el
    *   token se cancele (o expire el timeout si no hay token).
+   *
+   * @precondition Las llamadas para el mismo `docUri` deben llegar serializadas.
+   *   extension.ts garantiza esto con su cola por URI. KernelManager no se protege
+   *   internamente contra llamadas concurrentes sobre el mismo documento.
    */
   async getOrStart(
     docUri: vscode.Uri,
@@ -172,6 +176,9 @@ export class KernelManager {
    * Llamado por KernelSessionImpl.execute() cuando getKernel devuelve undefined
    * a mitad de sesión (el acompañante fue cerrado entre ejecuciones).
    * Un único intento: si el nuevo kernel tampoco arranca, lanza.
+   *
+   * @precondition Las llamadas para el mismo `key` deben llegar serializadas.
+   *   KernelManager no se protege internamente contra concurrencia por documento.
    */
   async recreateCompanion(
     key: string,
@@ -387,12 +394,33 @@ class KernelSessionImpl implements KernelSession {
       if (err instanceof vscode.CancellationError) {
         throw err;
       }
-      // Error de ejecución del código del usuario enviado como excepción del iterador.
-      // El gate indica que los tracebacks llegan como items de error (mime ERROR_MIME),
-      // pero algunos contextos de Jupyter los envían como excepción del AsyncIterable.
-      // En ese caso los tratamos igual: devolvemos result.error con el traceback y
-      // conservamos el stdout acumulado antes del error.
-      errorText = extractTraceback(err);
+
+      // Distingue error de ejecución del usuario (devuelve result.error, sin pop-up)
+      // de error de infraestructura (relanza, extension.ts muestra el pop-up).
+      //
+      // Señales que indican error de ejecución del usuario:
+      //   (a) Ya llegó un item con mime ERROR_MIME durante el bucle → errorText != null.
+      //       El iterador puede lanzar igualmente tras entregar el item; lo ignoramos.
+      //   (b) La excepción trae originalError.traceback (array no vacío): algunos
+      //       contextos de Jupyter envían el traceback como excepción en lugar de item.
+      //
+      // Cualquier otra excepción (kernel muerto, WebSocket caído, etc.) es
+      // infraestructura: se relanza para que extension.ts muestre el pop-up y NO
+      // toque el documento con un bloque "# Error" que parecería error de Python.
+      const withMeta =
+        err instanceof Error
+          ? (err as Error & { originalError?: { traceback: string[] } })
+          : undefined;
+
+      if (errorText !== null) {
+        // (a) traceback ya procesado desde el item de mime; el iterador lanzó después.
+      } else if (withMeta?.originalError?.traceback?.length) {
+        // (b) error de ejecución enviado como excepción con originalError.traceback.
+        errorText = withMeta.originalError.traceback.join('\n');
+      } else {
+        // Infraestructura: relanzamos tal cual.
+        throw err;
+      }
     } finally {
       cts.dispose();
     }
@@ -405,24 +433,6 @@ class KernelSessionImpl implements KernelSession {
 // ---------------------------------------------------------------------------
 // Utilidades
 // ---------------------------------------------------------------------------
-
-/**
- * Extrae el traceback de un error arrojado por el iterador de executeCode.
- * Cuando Jupyter envía el error de ejecución como excepción en lugar de como item
- * de mime ERROR_MIME, esta función obtiene el traceback más completo disponible.
- */
-function extractTraceback(err: unknown): string {
-  if (err instanceof Error) {
-    const withMeta = err as Error & {
-      originalError?: { ename: string; evalue: string; traceback: string[] };
-    };
-    if (withMeta.originalError?.traceback?.length) {
-      return withMeta.originalError.traceback.join('\n');
-    }
-    return err.stack ?? `${err.name}: ${err.message}`;
-  }
-  return String(err);
-}
 
 /**
  * Espera ms milisegundos. Si token se cancela antes de que expire el temporizador,
