@@ -327,8 +327,8 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
           retracted: false,
           commit: ev.commit ?? null,
         };
-        // El schema no contempla confidence en message.posted, pero el subagente
-        // reviser puede incluirla como extensión informal en EventEnvelope[key].
+        // confidence es opcional en message.posted según el schema (v2); el subagente
+        // reviser la incluye en hilos verifica/supuesto para indicar su nivel de certeza.
         if (ev.confidence !== undefined) msg.confidence = ev.confidence as 'alta' | 'media' | 'baja';
         proj.messages.push(msg);
         break;

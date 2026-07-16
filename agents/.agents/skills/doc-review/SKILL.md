@@ -106,7 +106,7 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 | Event type | Fold action |
 |---|---|
 | `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
-| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. |
+| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. If the event carries `confidence`, propagates it to the message projection. |
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
 | `thread.status-changed` | Sets `status` to `to` (`"open"` or `"resolved"`). |
@@ -136,12 +136,13 @@ ThreadProjection {
 }
 
 MessageProjection {
-  id         : UUID
-  body       : string
-  author     : Author
-  created_at : ISO timestamp
-  retracted  : boolean
-  commit     : string | null             // SHA of the fix associated with this message; null if none
+  id          : UUID
+  body        : string
+  author      : Author
+  created_at  : ISO timestamp
+  retracted   : boolean
+  commit      : string | null             // SHA of the fix associated with this message; null if none
+  confidence? : "alta" | "media" | "baja" // optional; emitted by the reviser subagent; shown in the review panel next to the author label
 }
 ```
 

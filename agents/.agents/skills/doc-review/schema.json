@@ -41,7 +41,8 @@
         "commit":     { "type": ["string","null"] },
         "dirty":      { "type": "boolean" },
         "body":       { "type": "string", "minLength": 1 },
-        "parent_id":  { "$ref": "#/$defs/uuid" }
+        "parent_id":  { "$ref": "#/$defs/uuid" },
+        "confidence": { "$ref": "#/$defs/confidence" }
       }
     },
     {
