@@ -115,6 +115,11 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
         const thread_id = msg.thread_id;
         Promise.resolve(this._actionHandler(msg))
           .then(() => {
+            // 'reply' y 'edit' no necesitan ACK de éxito: el host responde
+            // con 'open-composer' (que abre el compositor en el webview).
+            // Enviar action-ack aquí haría que el handler de ack del webview
+            // encontrase el compositor ya abierto y lo cerrase de inmediato.
+            if (msg.type === 'reply' || msg.type === 'edit') return;
             this._view?.webview.postMessage({ type: 'action-ack', ok: true, thread_id });
           })
           .catch((err: unknown) => {
