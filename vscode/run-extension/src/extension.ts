@@ -16,6 +16,7 @@ import {
   buildOutputBlock,
   replaceOrInsertOutputBlock,
   outputDeletionRange,
+  legacySeparatorDeletions,
 } from './writer.js';
 import { reanchorAfterReplace } from './reanchor.js';
 
@@ -840,6 +841,45 @@ function resolveChunkTarget(
 }
 
 /**
+ * Normaliza el documento eliminando los `\n` de separación legados entre
+ * cada chunk y su output (línea en blanco del formato antiguo).
+ *
+ * Se encola como primer paso de cada comando de edición/ejecución para que
+ * los bloques no re-ejecutados desde la actualización al formato sin línea
+ * en blanco se normalicen también (sin esa normalización seguirían mostrando
+ * dos │ en el conector). La operación es idempotente: en documentos ya
+ * normalizados no encuentra rangos y retorna sin editar.
+ *
+ * No llama a reanchorAfterReplace: solo borra whitespace, por lo que las
+ * citas de mesh-review siguen resolviendo contra el texto restante.
+ */
+async function normalizeLegacySeparators(document: vscode.TextDocument): Promise<void> {
+  const freshText = document.getText();
+  const deletions = legacySeparatorDeletions(freshText);
+  if (deletions.length === 0) return;
+
+  const editor = getEditorForDoc(document);
+  if (!editor) return;
+
+  // Orden descendente para que las eliminaciones no desplacen los offsets posteriores
+  const deletionsDesc = [...deletions].sort((a, b) => b.startOffset - a.startOffset);
+
+  await editor.edit(
+    editBuilder => {
+      for (const range of deletionsDesc) {
+        editBuilder.delete(
+          new vscode.Range(
+            document.positionAt(range.startOffset),
+            document.positionAt(range.endOffset),
+          ),
+        );
+      }
+    },
+    { undoStopBefore: true, undoStopAfter: true },
+  );
+}
+
+/**
  * Registra los seis comandos de mesh-run declarados en package.json:
  * - mesh-run.runChunk
  * - mesh-run.runUpTo
@@ -863,6 +903,7 @@ function registerCommands(
       const target = resolveChunkTarget(chunkId);
       if (!target) return;
       const resolvedId = target.chunkId;
+      enqueue(target.document.uri, () => normalizeLegacySeparators(target.document));
       enqueue(target.document.uri, () =>
         runChunkById(target.document, resolvedId, kernelManager),
       );
@@ -887,6 +928,7 @@ function registerCommands(
         return;
       }
 
+      enqueue(target.document.uri, () => normalizeLegacySeparators(target.document));
       for (const chunk of chunks.slice(0, idx + 1)) {
         const id = chunk.id;
         enqueue(target.document.uri, () =>
@@ -903,6 +945,7 @@ function registerCommands(
       const target = resolveChunkTarget(chunkId);
       if (!target) return;
       const resolvedId = target.chunkId;
+      enqueue(target.document.uri, () => normalizeLegacySeparators(target.document));
       enqueue(target.document.uri, () =>
         executeClearOutputs(target.document, resolvedId),
       );
@@ -929,6 +972,7 @@ function registerCommands(
         return;
       }
 
+      enqueue(document.uri, () => normalizeLegacySeparators(document));
       for (const chunk of chunks) {
         const chunkId = chunk.id;
         enqueue(document.uri, () => runChunkById(document, chunkId, kernelManager));
@@ -961,6 +1005,7 @@ function registerCommands(
         );
         return;
       }
+      enqueue(document.uri, () => normalizeLegacySeparators(document));
       enqueue(document.uri, () => executeClearOutputs(document));
     }),
   );

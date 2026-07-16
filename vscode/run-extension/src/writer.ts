@@ -1,6 +1,7 @@
 // writer.ts — truncado, construcción y reemplazo de bloques de salida.
 // Funciones puras. Sin importaciones de VS Code ni de Node.
 
+import { parseChunks, parseOutputs } from './parser.ts';
 import type { ParsedChunk, ParsedOutput } from './parser.ts';
 
 const DEFAULT_LIMIT = 50;
@@ -139,4 +140,79 @@ export function replaceOrInsertOutputBlock(
 
   // text[E] === '\n': conservamos ese \n e insertamos el bloque inmediatamente después
   return docText.slice(0, E + 1) + newOutput + '\n' + docText.slice(E + 1);
+}
+
+/**
+ * Devuelve los rangos de los `\n` de separación legados que deben borrarse
+ * para normalizar al formato sin línea en blanco entre chunk y output.
+ *
+ * Condición de detección (deliberadamente estricta: solo la separación que
+ * mesh-run escribió, no cualquier línea en blanco aleatoria):
+ *   output.startOffset === chunk.endOffset + 2
+ *   text[chunk.endOffset + 1] === '\n'
+ *
+ * Esto significa: tras el `\n` propio del chunk (en endOffset), hay
+ * exactamente un `\n` más (la línea en blanco) y a continuación empieza el
+ * bloque de output de ese chunk.
+ *
+ * Solo considera pares únicos: chunk con id no duplicado y exactamente un
+ * output para ese id (igual que adorn.ts para mantener coherencia).
+ *
+ * Los rangos se devuelven en orden de aparición (ascendente); el llamador
+ * debe procesarlos en orden descendente para que las eliminaciones múltiples
+ * no desplacen los offsets posteriores.
+ */
+export function legacySeparatorDeletions(
+  text: string,
+): Array<{ startOffset: number; endOffset: number }> {
+  const chunks = parseChunks(text);
+  const outputs = parseOutputs(text);
+
+  // Detectar ids de chunk duplicados
+  const seenChunkIds = new Set<string>();
+  const duplicateChunkIds = new Set<string>();
+  for (const chunk of chunks) {
+    if (seenChunkIds.has(chunk.id)) {
+      duplicateChunkIds.add(chunk.id);
+    } else {
+      seenChunkIds.add(chunk.id);
+    }
+  }
+
+  // Mapear chunkId → output (solo ids con exactamente un output)
+  const outputByChunkId = new Map<string, ParsedOutput>();
+  const multipleOutputIds = new Set<string>();
+  for (const output of outputs) {
+    if (outputByChunkId.has(output.chunkId)) {
+      multipleOutputIds.add(output.chunkId);
+    } else {
+      outputByChunkId.set(output.chunkId, output);
+    }
+  }
+  for (const id of multipleOutputIds) {
+    outputByChunkId.delete(id);
+  }
+
+  const deletions: Array<{ startOffset: number; endOffset: number }> = [];
+
+  for (const chunk of chunks) {
+    if (duplicateChunkIds.has(chunk.id)) continue;
+    const output = outputByChunkId.get(chunk.id);
+    if (!output) continue;
+    // Detectar la línea en blanco de separación legada:
+    // chunk.endOffset es el \n de cierre del chunk;
+    // chunk.endOffset+1 sería el \n de la línea en blanco;
+    // chunk.endOffset+2 sería el inicio del output.
+    if (
+      output.startOffset === chunk.endOffset + 2 &&
+      text[chunk.endOffset + 1] === '\n'
+    ) {
+      deletions.push({
+        startOffset: chunk.endOffset + 1,
+        endOffset: chunk.endOffset + 2,
+      });
+    }
+  }
+
+  return deletions;
 }

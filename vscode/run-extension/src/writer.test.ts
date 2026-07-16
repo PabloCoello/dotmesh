@@ -8,6 +8,7 @@ import {
   buildOutputBlock,
   replaceOrInsertOutputBlock,
   outputDeletionRange,
+  legacySeparatorDeletions,
   type OutputBlockOptions,
 } from './writer.ts';
 
@@ -428,4 +429,84 @@ test('outputDeletionRange: ciclos repetidos ejecutar → borrar no acumulan lín
   }
 
   assert.strictEqual(text, original);
+});
+
+// ===========================================================================
+// legacySeparatorDeletions
+// ===========================================================================
+
+test('legacySeparatorDeletions: chunk con output y línea en blanco → rango de borrado correcto', () => {
+  // Formato legado: chunk + \n (cierre) + \n (línea en blanco) + output
+  const chunkLine = '```python {#a}\ncode\n```';
+  const outputLine = '```output {#a hash=abc12345}\nresult\n```';
+  const text = chunkLine + '\n\n' + outputLine;
+
+  const deletions = legacySeparatorDeletions(text);
+  assert.strictEqual(deletions.length, 1);
+
+  // El rango debe apuntar exactamente al \n de la línea en blanco
+  const [del] = deletions;
+  assert.strictEqual(text[del.startOffset], '\n', 'debe apuntar al \\n de la línea en blanco');
+  assert.strictEqual(del.endOffset - del.startOffset, 1, 'debe borrar solo 1 carácter');
+
+  // Aplicar el borrado produce el formato nuevo (sin línea en blanco)
+  const normalized = text.slice(0, del.startOffset) + text.slice(del.endOffset);
+  assert.strictEqual(normalized, chunkLine + '\n' + outputLine);
+});
+
+test('legacySeparatorDeletions: chunk con output ya normalizado (sin línea en blanco) → vacío', () => {
+  const text = '```python {#a}\ncode\n```\n```output {#a hash=abc12345}\nresult\n```';
+  const deletions = legacySeparatorDeletions(text);
+  assert.strictEqual(deletions.length, 0);
+});
+
+test('legacySeparatorDeletions: varios pares chunk/output legados → un rango por par', () => {
+  const text = [
+    '```python {#a}\nca\n```',
+    '',
+    '```output {#a hash=aa}\nra\n```',
+    '',
+    '```python {#b}\ncb\n```',
+    '',
+    '```output {#b hash=bb}\nrb\n```',
+  ].join('\n');
+
+  const deletions = legacySeparatorDeletions(text);
+  assert.strictEqual(deletions.length, 2);
+  // Los rangos están en orden ascendente (a antes que b)
+  assert.ok(deletions[0].startOffset < deletions[1].startOffset);
+});
+
+test('legacySeparatorDeletions: id de chunk duplicado → par ignorado', () => {
+  // Dos chunks con el mismo id: ambos se ignoran (emparejamiento ambiguo)
+  const text = [
+    '```python {#a}\ncode1\n```',
+    '',
+    '```python {#a}\ncode2\n```',
+    '',
+    '```output {#a hash=xx}\nresult\n```',
+  ].join('\n');
+
+  const deletions = legacySeparatorDeletions(text);
+  assert.strictEqual(deletions.length, 0, 'id duplicado no debe generar rangos');
+});
+
+test('legacySeparatorDeletions: output no adyacente al chunk (texto entre medias) → ignorado', () => {
+  // Hay más de una línea entre chunk y output: no es el separador legado
+  const text = [
+    '```python {#a}\ncode\n```',
+    '',
+    'texto intermedio',
+    '',
+    '```output {#a hash=xx}\nresult\n```',
+  ].join('\n');
+
+  const deletions = legacySeparatorDeletions(text);
+  assert.strictEqual(deletions.length, 0, 'output no adyacente no debe generar rango');
+});
+
+test('legacySeparatorDeletions: chunk sin output correspondiente → vacío', () => {
+  const text = '```python {#a}\ncode\n```';
+  const deletions = legacySeparatorDeletions(text);
+  assert.strictEqual(deletions.length, 0);
 });
