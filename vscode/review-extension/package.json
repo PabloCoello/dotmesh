@@ -96,8 +96,8 @@
       },
       {
         "command": "mesh-review.previousThread",
-        "key": "ctrl+alt+p",
-        "mac": "alt+cmd+p",
+        "key": "ctrl+alt+b",
+        "mac": "alt+cmd+b",
         "when": "editorTextFocus"
       }
     ],
