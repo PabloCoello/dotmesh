@@ -384,7 +384,15 @@ class KernelSessionImpl implements KernelSession {
         );
         throw err;
       }
-      throw err;
+      if (err instanceof vscode.CancellationError) {
+        throw err;
+      }
+      // Error de ejecución del código del usuario enviado como excepción del iterador.
+      // El gate indica que los tracebacks llegan como items de error (mime ERROR_MIME),
+      // pero algunos contextos de Jupyter los envían como excepción del AsyncIterable.
+      // En ese caso los tratamos igual: devolvemos result.error con el traceback y
+      // conservamos el stdout acumulado antes del error.
+      errorText = extractTraceback(err);
     } finally {
       cts.dispose();
     }
@@ -397,6 +405,24 @@ class KernelSessionImpl implements KernelSession {
 // ---------------------------------------------------------------------------
 // Utilidades
 // ---------------------------------------------------------------------------
+
+/**
+ * Extrae el traceback de un error arrojado por el iterador de executeCode.
+ * Cuando Jupyter envía el error de ejecución como excepción en lugar de como item
+ * de mime ERROR_MIME, esta función obtiene el traceback más completo disponible.
+ */
+function extractTraceback(err: unknown): string {
+  if (err instanceof Error) {
+    const withMeta = err as Error & {
+      originalError?: { ename: string; evalue: string; traceback: string[] };
+    };
+    if (withMeta.originalError?.traceback?.length) {
+      return withMeta.originalError.traceback.join('\n');
+    }
+    return err.stack ?? `${err.name}: ${err.message}`;
+  }
+  return String(err);
+}
 
 /**
  * Espera ms milisegundos. Si token se cancela antes de que expire el temporizador,
