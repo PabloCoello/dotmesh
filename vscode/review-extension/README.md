@@ -16,13 +16,17 @@ Requiere `node` y `code` disponibles en el PATH. El comando compila la extensió
 
 ### Crear un comentario
 
-Selecciona el fragmento de texto a comentar en el editor y pulsa `Ctrl+Alt+Z` (Mac: `Alt+Cmd+Z`). Un QuickPick pide el tipo de comentario y el cuerpo. Para los tipos `verifica` y `supuesto`, un segundo QuickPick pide el nivel de confianza: `alta`, `media` o `baja`.
+Selecciona el fragmento de texto a comentar en el editor y pulsa `Ctrl+Alt+Z` (Mac: `Alt+Cmd+Z`).
+
+Un QuickPick pide el tipo y el cuerpo del comentario.
+
+Para los tipos `verifica` y `supuesto`, un segundo QuickPick pide el nivel de confianza: `alta`, `media` o `baja`.
 
 Tipos disponibles: `edita`, `sugerencia`, `pregunta`, `verifica`, `nota`, `referencia`, `supuesto`.
 
 ### Panel de hilos
 
-El icono de mesh-review en la barra de actividad abre el panel "Hilos". Para el documento activo muestra:
+El icono de mesh-review en la barra de actividad abre el panel `Hilos`. Para el documento activo muestra:
 
 - Los hilos abiertos, con botones de acción (resolver, responder, editar, asignar, diff).
 - La sección "Resueltos (N)", colapsada.
@@ -45,7 +49,7 @@ Al pulsar "Responder" o "Editar" en una tarjeta, aparece un textarea bajo ella. 
 
 ### Asignación
 
-El botón "Asignar" en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección escribe un evento `thread.assigned` en el log.
+El botón `Asignar` en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección escribe un evento `thread.assigned` en el log.
 
 ### Diff por hilo
 
