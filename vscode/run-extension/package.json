@@ -1,0 +1,85 @@
+{
+  "name": "mesh-run",
+  "displayName": "mesh-run",
+  "description": "Ejecutor de chunks de código en documentos Markdown con salida versionable",
+  "version": "0.1.0",
+  "publisher": "pablocoello",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PabloCoello/dotmesh"
+  },
+  "engines": {
+    "vscode": "^1.87.0",
+    "node": ">=22.6.0"
+  },
+  "extensionDependencies": ["ms-toolsai.jupyter"],
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "colors": [
+      {
+        "id": "meshRun.arrowFresh",
+        "description": "Color de flecha y barra para salidas actualizadas",
+        "defaults": { "dark": "#6CB6B0", "light": "#4a9a94", "highContrast": "#6CB6B0" }
+      },
+      {
+        "id": "meshRun.arrowWarn",
+        "description": "Color de flecha y barra para salidas con advertencias (stderr)",
+        "defaults": { "dark": "#E3C58A", "light": "#b08840", "highContrast": "#E3C58A" }
+      },
+      {
+        "id": "meshRun.arrowError",
+        "description": "Color de flecha y barra para salidas con error de ejecución",
+        "defaults": { "dark": "#E59A9A", "light": "#b05050", "highContrast": "#E59A9A" }
+      },
+      {
+        "id": "meshRun.arrowStale",
+        "description": "Color de flecha y barra para salidas desactualizadas",
+        "defaults": { "dark": "#767676", "light": "#767676", "highContrast": "#9e9e9e" }
+      }
+    ],
+    "commands": [
+      {
+        "command": "mesh-run.runChunk",
+        "title": "Mesh Run: Ejecutar chunk"
+      },
+      {
+        "command": "mesh-run.runUpTo",
+        "title": "Mesh Run: Ejecutar hasta aquí"
+      },
+      {
+        "command": "mesh-run.runAll",
+        "title": "Mesh Run: Ejecutar todo"
+      },
+      {
+        "command": "mesh-run.restartKernel",
+        "title": "Mesh Run: Reiniciar kernel"
+      },
+      {
+        "command": "mesh-run.clearChunkOutput",
+        "title": "Mesh Run: Borrar salida del chunk"
+      },
+      {
+        "command": "mesh-run.clearOutputs",
+        "title": "Mesh Run: Borrar todas las salidas"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node build.js",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies",
+    "install-ext": "npm run package && code --install-extension \"$(ls mesh-run-*.vsix | head -1)\" --force",
+    "test": "ls src/*.test.ts 2>/dev/null | xargs -r node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.87.0",
+    "@vscode/jupyter-extension": "^1.1.1",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.4.0"
+  }
+}
