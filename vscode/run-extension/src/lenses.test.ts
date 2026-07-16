@@ -54,8 +54,14 @@ test('computeLensSpecs: con chunks, Ejecutar todo y Borrar todas las salidas apa
   assert.strictEqual(clearAll[0].arguments, undefined);
 });
 
-test('computeLensSpecs: exactamente dos lenses de documento, sin lenses por chunk', () => {
+// ===========================================================================
+// Lenses por chunk
+// ===========================================================================
+
+test('computeLensSpecs: cada chunk tiene Ejecutar anclado a su startOffset con su id', () => {
   const text = [
+    'Intro.',
+    '',
     '```python {#a}',
     'print(1)',
     '```',
@@ -66,32 +72,79 @@ test('computeLensSpecs: exactamente dos lenses de documento, sin lenses por chun
   ].join('\n');
 
   const specs = computeLensSpecs(text);
+  const run = byCommand(specs, 'mesh-run.runChunk');
 
-  // Solo los dos lenses de documento
-  assert.strictEqual(specs.length, 2);
-  assert.ok(specs.every(s => s.offset === 0), 'todos los lenses deben estar en offset 0');
-
-  // No hay lenses por chunk
-  assert.strictEqual(byCommand(specs, 'mesh-run.runChunk').length, 0);
-  assert.strictEqual(byCommand(specs, 'mesh-run.runUpTo').length, 0);
-  assert.strictEqual(byCommand(specs, 'mesh-run.clearChunkOutput').length, 0);
+  assert.strictEqual(run.length, 2);
+  assert.deepStrictEqual(run[0].arguments, ['a']);
+  assert.deepStrictEqual(run[1].arguments, ['b']);
+  assert.strictEqual(run[0].title, '▶ Ejecutar');
+  // El primer chunk empieza tras "Intro.\n\n" = 8 caracteres.
+  assert.strictEqual(run[0].offset, 8);
+  assert.strictEqual(run[1].offset, text.indexOf('```python {#b}'));
 });
 
-test('computeLensSpecs: presencia de bloques de salida no genera lenses adicionales', () => {
+test('computeLensSpecs: Ejecutar hasta aquí aparece en todos los chunks menos el primero', () => {
   const text = [
     '```python {#a}',
     'print(1)',
     '```',
     '',
-    '```output {#a hash=abc12345}',
-    '1',
+    '```python {#b}',
+    'print(2)',
+    '```',
+    '',
+    '```python {#c}',
+    'print(3)',
+    '```',
+  ].join('\n');
+
+  const specs = computeLensSpecs(text);
+  const upTo = byCommand(specs, 'mesh-run.runUpTo');
+
+  assert.strictEqual(upTo.length, 2);
+  assert.deepStrictEqual(upTo[0].arguments, ['b']);
+  assert.deepStrictEqual(upTo[1].arguments, ['c']);
+  assert.strictEqual(upTo[0].title, '▶▶ Ejecutar hasta aquí');
+  assert.strictEqual(upTo[0].offset, text.indexOf('```python {#b}'));
+});
+
+test('computeLensSpecs: Borrar salida solo aparece en chunks con bloque de salida', () => {
+  const text = [
+    '```python {#a}',
+    'print(1)',
+    '```',
+    '',
+    '```python {#b}',
+    'print(2)',
+    '```',
+    '',
+    '```output {#b hash=abc12345}',
+    '2',
+    '```',
+  ].join('\n');
+
+  const specs = computeLensSpecs(text);
+  const clear = byCommand(specs, 'mesh-run.clearChunkOutput');
+
+  assert.strictEqual(clear.length, 1);
+  assert.deepStrictEqual(clear[0].arguments, ['b']);
+  assert.strictEqual(clear[0].title, '✕ Borrar salida');
+  // Anclado al chunk, no al bloque de salida.
+  assert.strictEqual(clear[0].offset, text.indexOf('```python {#b}'));
+});
+
+test('computeLensSpecs: un bloque de salida huérfano (sin chunk) no genera lenses', () => {
+  const text = [
+    '```python {#a}',
+    'print(1)',
+    '```',
+    '',
+    '```output {#fantasma hash=abc12345}',
+    'residuo',
     '```',
   ].join('\n');
 
   const specs = computeLensSpecs(text);
 
-  // Sigue siendo exactamente 2 lenses (el bloque de salida no suma)
-  assert.strictEqual(specs.length, 2);
-  assert.strictEqual(byCommand(specs, 'mesh-run.runAll').length, 1);
-  assert.strictEqual(byCommand(specs, 'mesh-run.clearOutputs').length, 1);
+  assert.strictEqual(byCommand(specs, 'mesh-run.clearChunkOutput').length, 0);
 });
