@@ -46,6 +46,8 @@ export interface KernelSession {
 interface CompanionEntry {
   /** URI del notebook untitled que actúa de acompañante para este documento. */
   companionUri: vscode.Uri;
+  /** URI del documento .md al que pertenece este acompañante (para el lookup inverso). */
+  docUri: vscode.Uri;
 }
 
 const POLL_INTERVAL_MS = 500;
@@ -74,6 +76,17 @@ const COMPANION_CLOSED_MSG =
 export class KernelManager {
   private readonly companions = new Map<string, CompanionEntry>();
   private jupyterApi: Jupyter | undefined;
+
+  /**
+   * Emitido (con undefined = refrescar todo) cuando se crea, recrea o elimina
+   * un acompañante. CompanionDecorationProvider lo conecta a
+   * onDidChangeFileDecorations para refrescar la insignia de la pestaña.
+   * Se emite con undefined en todos los casos (más simple que emitir URIs
+   * individuales; la lista de acompañantes es siempre pequeña).
+   */
+  private readonly _onDidChangeCompanions = new vscode.EventEmitter<vscode.Uri | undefined>();
+  public readonly onDidChangeCompanions: vscode.Event<vscode.Uri | undefined> =
+    this._onDidChangeCompanions.event;
 
   // ---------------------------------------------------------------------------
   // API pública
@@ -113,6 +126,7 @@ export class KernelManager {
         // El usuario cerró la pestaña: el kernel se perdió.
         vscode.window.showInformationMessage(COMPANION_CLOSED_MSG);
         this.companions.delete(key);
+        this._onDidChangeCompanions.fire(undefined);
         // cae al bloque de creación
       } else {
         const kernel = await api.kernels.getKernel(existing.companionUri);
@@ -121,6 +135,7 @@ export class KernelManager {
         }
         // Kernel muerto aunque el notebook sigue abierto (caso borde).
         this.companions.delete(key);
+        this._onDidChangeCompanions.fire(undefined);
       }
     }
 
@@ -128,12 +143,14 @@ export class KernelManager {
     const originalEditor = vscode.window.activeTextEditor;
 
     // Crear nuevo acompañante y esperar a que el kernel arranque.
-    const entry = await this.createCompanion();
-    this.companions.set(key, entry);
+    const companionUri = await this.createCompanion();
+    this.companions.set(key, { companionUri, docUri });
+    this._onDidChangeCompanions.fire(undefined);
 
-    const kernel = await this.pollForKernel(api, entry.companionUri, token);
+    const kernel = await this.pollForKernel(api, companionUri, token);
     if (!kernel) {
       this.companions.delete(key);
+      this._onDidChangeCompanions.fire(undefined);
       throw new Error(
         'mesh-run: el kernel no arrancó en 30 s. ' +
           'Asegúrate de tener Jupyter instalado y de haber seleccionado un kernel ' +
@@ -142,8 +159,8 @@ export class KernelManager {
     }
 
     // Kernel confirmado: ancla el acompañante y devuelve el foco al .md.
-    await this.pinAndRestoreFocus(entry.companionUri, originalEditor);
-    return new KernelSessionImpl(entry.companionUri, api, this, key);
+    await this.pinAndRestoreFocus(companionUri, originalEditor);
+    return new KernelSessionImpl(companionUri, api, this, key);
   }
 
   /**
@@ -157,9 +174,28 @@ export class KernelManager {
   async restart(docUri: vscode.Uri): Promise<void> {
     const key = docUri.toString();
     this.companions.delete(key);
+    this._onDidChangeCompanions.fire(undefined);
     vscode.window.showInformationMessage(
       'mesh-run: kernel reiniciado. La próxima ejecución abrirá un nuevo notebook acompañante.'
     );
+  }
+
+  /**
+   * Devuelve el URI del documento .md cuyo acompañante es el notebook dado,
+   * o undefined si el URI no corresponde a ningún acompañante activo.
+   * Solo lee el Map interno; no introduce concurrencia nueva.
+   *
+   * @precondition Solo lectura: no modifica el estado interno. Puede llamarse
+   *   desde cualquier contexto, incluido FileDecorationProvider.provideFileDecoration.
+   */
+  public getCompanionDoc(companionUri: vscode.Uri): vscode.Uri | undefined {
+    const target = companionUri.toString();
+    for (const entry of this.companions.values()) {
+      if (entry.companionUri.toString() === target) {
+        return entry.docUri;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -169,6 +205,8 @@ export class KernelManager {
    */
   dispose(): void {
     this.companions.clear();
+    this._onDidChangeCompanions.fire(undefined);
+    this._onDidChangeCompanions.dispose();
     this.jupyterApi = undefined;
   }
 
@@ -191,19 +229,24 @@ export class KernelManager {
   ): Promise<vscode.Uri> {
     const originalEditor = vscode.window.activeTextEditor;
     this.companions.delete(key);
+    this._onDidChangeCompanions.fire(undefined);
     const api = await this.getJupyterApi();
-    const entry = await this.createCompanion();
-    this.companions.set(key, entry);
-    const kernel = await this.pollForKernel(api, entry.companionUri, token);
+    // Reconstruir el docUri desde la clave de cadena.
+    const docUri = vscode.Uri.parse(key);
+    const companionUri = await this.createCompanion();
+    this.companions.set(key, { companionUri, docUri });
+    this._onDidChangeCompanions.fire(undefined);
+    const kernel = await this.pollForKernel(api, companionUri, token);
     if (!kernel) {
       this.companions.delete(key);
+      this._onDidChangeCompanions.fire(undefined);
       throw new Error(
         'mesh-run: el kernel no arrancó al recrear el acompañante. ' +
           'Intenta "Mesh Run: Reiniciar kernel" si el problema persiste.'
       );
     }
-    await this.pinAndRestoreFocus(entry.companionUri, originalEditor);
-    return entry.companionUri;
+    await this.pinAndRestoreFocus(companionUri, originalEditor);
+    return companionUri;
   }
 
   // ---------------------------------------------------------------------------
@@ -276,7 +319,7 @@ export class KernelManager {
    * y devuelve false si no hay ninguno (vscode-jupyter, notebookKernelView.ts,
    * getEditorFromContext, líneas 24-40).
    */
-  private async createCompanion(): Promise<CompanionEntry> {
+  private async createCompanion(): Promise<vscode.Uri> {
     const bootstrapCell = new vscode.NotebookCellData(
       vscode.NotebookCellKind.Code,
       '# mesh-run companion\npass',
@@ -300,7 +343,7 @@ export class KernelManager {
       document: notebookDoc.uri,
     });
 
-    return { companionUri: notebookDoc.uri };
+    return notebookDoc.uri;
   }
 
   /**

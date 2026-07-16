@@ -86,6 +86,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const kernelManager = new KernelManager();
   context.subscriptions.push({ dispose: () => kernelManager.dispose() });
 
+  // Decorador de insignia para las pestañas de los notebooks acompañantes.
+  // Se registra después del KernelManager para que el emitter ya exista.
+  context.subscriptions.push(
+    vscode.window.registerFileDecorationProvider(
+      new CompanionDecorationProvider(kernelManager),
+    ),
+  );
+
   registerStaleDecorations(context, staleDecorationType, errorDecorationType);
   registerCodeLens(context);
   registerCommands(context, kernelManager);
@@ -302,6 +310,44 @@ async function applyOutputEdit(
     },
     { undoStopBefore: true, undoStopAfter: true },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Decoraciones de pestaña del acompañante
+// ---------------------------------------------------------------------------
+
+/**
+ * Decora las pestañas de los notebooks acompañantes de mesh-run con una insignia
+ * de dos caracteres que identifica el documento .md al que pertenecen.
+ *
+ * Monograma: las dos primeras letras del basename del .md sin extensión, en
+ * mayúsculas (p. ej. "analisis.md" → "AN"). Se elige este esquema porque es
+ * visible en la anchura estándar del badge (~2 chars), reconocible de un vistazo
+ * y no requiere iconos ni colores de tema adicionales.
+ *
+ * Sin color: no se fuerza ningún ThemeColor para no interferir con la paleta del
+ * tema activo del usuario; el badge de texto es suficiente señal visual.
+ */
+class CompanionDecorationProvider implements vscode.FileDecorationProvider {
+  readonly onDidChangeFileDecorations: vscode.Event<vscode.Uri | undefined>;
+
+  constructor(private readonly manager: KernelManager) {
+    this.onDidChangeFileDecorations = manager.onDidChangeCompanions;
+  }
+
+  provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    const docUri = this.manager.getCompanionDoc(uri);
+    if (!docUri) {
+      return undefined;
+    }
+    // Monograma: primeras 2 letras del basename sin extensión, en mayúsculas.
+    const base = path.basename(docUri.fsPath, path.extname(docUri.fsPath));
+    const badge = base.slice(0, 2).toUpperCase();
+    return {
+      badge,
+      tooltip: `mesh-run: kernel de ${path.basename(docUri.fsPath)}`,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
