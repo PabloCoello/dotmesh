@@ -486,6 +486,52 @@ function registerCodeLens(context: vscode.ExtensionContext): void {
       new ChunkCodeLensProvider(),
     ),
   );
+
+  // HoverProvider: muestra los enlaces de acción cuando el ratón está sobre
+  // la línea de apertura o la de cierre de un chunk. La línea de cierre importa
+  // porque es donde se pinta la barra horizontal cuando el chunk tiene output:
+  // posar el ratón sobre la barra también debe ofrecer las acciones.
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      { language: 'markdown' },
+      {
+        provideHover(document, position) {
+          if (document.languageId !== 'markdown') return undefined;
+          const text = document.getText();
+          const chunks = parseChunks(text);
+          const idsWithOutput = new Set(parseOutputs(text).map(o => o.chunkId));
+          const lineStart = document.offsetAt(new vscode.Position(position.line, 0));
+          const lineEnd = document.offsetAt(new vscode.Position(position.line + 1, 0));
+          // Empareja la línea de apertura (contiene startOffset) o la de cierre
+          // (termina en endOffset, que apunta al \n posterior o a text.length si
+          // el fichero acaba sin salto final — por eso el <= con lineEnd, que VS Code
+          // recorta a fin de documento en la última línea).
+          const chunkIdx = chunks.findIndex(
+            c =>
+              (c.startOffset >= lineStart && c.startOffset < lineEnd) ||
+              (c.endOffset >= lineStart && c.endOffset <= lineEnd),
+          );
+          if (chunkIdx === -1) return undefined;
+          const chunk = chunks[chunkIdx];
+          // Por índice, no por id: con ids duplicados la comparación por id miente.
+          const isFirst = chunkIdx === 0;
+          const hasOutput = idsWithOutput.has(chunk.id);
+          const id = encodeURIComponent(JSON.stringify([chunk.id]));
+          const parts: string[] = [];
+          parts.push(`▶ [Ejecutar](command:mesh-run.runChunk?${id})`);
+          if (!isFirst) {
+            parts.push(`▶▶ [Ejecutar hasta aquí](command:mesh-run.runUpTo?${id})`);
+          }
+          if (hasOutput) {
+            parts.push(`✕ [Borrar salida](command:mesh-run.clearChunkOutput?${id})`);
+          }
+          const md = new vscode.MarkdownString(parts.join(' · '));
+          md.isTrusted = true;
+          return new vscode.Hover(md);
+        },
+      },
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
