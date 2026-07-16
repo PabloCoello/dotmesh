@@ -1,0 +1,19 @@
+{
+  "id": "1a2b3c4d-5e6f-4012-8a2b-3c4d5e6f1a2b",
+  "version": 2,
+  "type": "thread.opened",
+  "thread_id": "2b3c4d5e-6f7a-4123-9b3c-4d5e6f1a2b3c",
+  "author": {
+    "kind": "human"
+  },
+  "created_at": "2026-07-16T08:00:00.000Z",
+  "commit": null,
+  "dirty": false,
+  "anchor": {
+    "quote": "The review process follows a structured flow.",
+    "line_hint": 6,
+    "char_offset": 86
+  },
+  "commentType": "edita",
+  "body": "Añade un ejemplo concreto del flujo."
+}
