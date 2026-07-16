@@ -222,6 +222,7 @@ export class KernelManager {
    */
   dispose(): void {
     this.companions.clear();
+    this.reservedCompanionNames.clear();
     this._onDidChangeCompanions.fire(undefined);
     this._onDidChangeCompanions.dispose();
     this.jupyterApi = undefined;
