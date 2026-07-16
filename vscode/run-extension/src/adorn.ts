@@ -59,6 +59,13 @@ function contentLineOffsets(text: string, output: ParsedOutput): Array<[number, 
 }
 
 // ---------------------------------------------------------------------------
+// Constantes de presentación
+// ---------------------------------------------------------------------------
+
+/** Ancho visual fijo de la barra horizontal (╭ + guiones). Ajustable. */
+const BAR_WIDTH = 20;
+
+// ---------------------------------------------------------------------------
 // API pública
 // ---------------------------------------------------------------------------
 
@@ -118,11 +125,9 @@ export function computeAdornments(
     const cursorInChunk =
       cursorOffset >= chunk.startOffset && cursorOffset <= chunk.endOffset;
 
-    // Longitud de la línea de apertura del chunk (incluye la sangría hasta 3 espacios)
-    const actualOpenLineStart = lineStartOffset(text, chunk.startOffset);
+    // Valla de apertura: localizar el \n para determinar el rango a ocultar
     const openFenceNl = text.indexOf('\n', chunk.startOffset);
     const openFenceLineEnd = openFenceNl === -1 ? text.length : openFenceNl;
-    const openLineLen = openFenceLineEnd - actualOpenLineStart;
 
     // Línea de cierre del chunk
     const closeLineStart = lineStartOffset(text, chunk.endOffset);
@@ -162,14 +167,14 @@ export function computeAdornments(
 
       // Before: barra horizontal con codo curvo en la valla de cierre del chunk.
       // El codo '╭' en el extremo izquierdo indica la unión con la barra vertical
-      // que desciende hacia el bloque de output. El resto son '─' hasta la longitud
-      // de la línea de apertura. Solo se pinta si el cursor no está en el chunk
-      // (cuando está dentro, la valla de cierre está revelada y la barra estorbaría).
+      // que desciende hacia el bloque de output. El resto son '─' hasta BAR_WIDTH.
+      // Solo se pinta si el cursor no está en el chunk (cuando está dentro,
+      // la valla de cierre está revelada y la barra estorbaría).
       if (!cursorInChunk) {
         before.push({
           lineStartOffset: closeLineStart,
           lineEndOffset: closeLineEnd,
-          contentText: '╭' + '─'.repeat(openLineLen - 1),
+          contentText: '╭' + '─'.repeat(BAR_WIDTH - 1),
           state,
         });
       }

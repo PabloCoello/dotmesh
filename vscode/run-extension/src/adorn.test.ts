@@ -324,9 +324,8 @@ test('computeAdornments: output con 0 líneas de contenido → sin before de fle
 // Chunk indentado con un espacio de sangría
 // ---------------------------------------------------------------------------
 
-test('computeAdornments: chunk indentado 1 espacio → longitud de barra incluye el espacio', () => {
-  // Apertura:  ```python {#a}  (con 1 espacio de sangría = 15 chars total)
-  // Cierre:    ``` (sin sangría, pero eso no afecta la longitud de la barra)
+test('computeAdornments: chunk indentado 1 espacio → longitud de barra es BAR_WIDTH (20), no la línea de apertura', () => {
+  // La barra ahora es de ancho fijo; la sangría del chunk no afecta su longitud.
   const indentedChunk = ' ```python {#a}\ncode\n```';
   const text = indentedChunk + '\n\n' + makeOutput('a', '12345678', 'result');
 
@@ -339,16 +338,14 @@ test('computeAdornments: chunk indentado 1 espacio → longitud de barra incluye
 
   const result = computeAdornments(text, chunks, outputs, states, -1);
 
-  // La barra empieza por '╭' y el resto son '─'; longitud = la línea de apertura
   const barBefore = result.before.find(b => b.contentText.startsWith('╭'));
   assert.ok(barBefore, 'debe haber un before de barra horizontal');
 
-  // Longitud de la línea de apertura: ' ```python {#a}' = 15 chars
-  const openLine = ' ```python {#a}';
+  // Longitud fija = BAR_WIDTH = 20
   assert.strictEqual(
     barBefore!.contentText.length,
-    openLine.length,
-    `longitud de barra (${barBefore!.contentText.length}) debe coincidir con la línea de apertura (${openLine.length})`
+    20,
+    `longitud de barra (${barBefore!.contentText.length}) debe ser 20 (BAR_WIDTH)`
   );
   assert.ok(
     barBefore!.contentText.slice(1).split('').every(c => c === '─'),
