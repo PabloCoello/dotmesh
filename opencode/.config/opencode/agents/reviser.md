@@ -63,7 +63,7 @@ Load the `doc-review` skill for the full event vocabulary, schema reference, and
 }
 ```
 
-`confidence` es opcional; inclúyelo para `verifica` y `supuesto`. El panel lo muestra junto a la etiqueta de autor.
+`confidence` is optional; include it for `verifica` and `supuesto`. The panel displays it next to the author label.
 
 Generate a fresh UUID v4 for `id`. Use the current UTC time with milliseconds for `created_at`.
 
