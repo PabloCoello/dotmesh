@@ -124,6 +124,9 @@ export class KernelManager {
       }
     }
 
+    // Captura el editor activo antes de mostrar el acompañante para poder restaurarlo.
+    const originalEditor = vscode.window.activeTextEditor;
+
     // Crear nuevo acompañante y esperar a que el kernel arranque.
     const entry = await this.createCompanion();
     this.companions.set(key, entry);
@@ -138,6 +141,8 @@ export class KernelManager {
       );
     }
 
+    // Kernel confirmado: ancla el acompañante y devuelve el foco al .md.
+    await this.pinAndRestoreFocus(entry.companionUri, originalEditor);
     return new KernelSessionImpl(entry.companionUri, api, this, key);
   }
 
@@ -184,6 +189,7 @@ export class KernelManager {
     key: string,
     token?: vscode.CancellationToken
   ): Promise<vscode.Uri> {
+    const originalEditor = vscode.window.activeTextEditor;
     this.companions.delete(key);
     const api = await this.getJupyterApi();
     const entry = await this.createCompanion();
@@ -196,12 +202,45 @@ export class KernelManager {
           'Intenta "Mesh Run: Reiniciar kernel" si el problema persiste.'
       );
     }
+    await this.pinAndRestoreFocus(entry.companionUri, originalEditor);
     return entry.companionUri;
   }
 
   // ---------------------------------------------------------------------------
   // Privados
   // ---------------------------------------------------------------------------
+
+  /**
+   * Ancla la pestaña del acompañante y devuelve el foco al editor original.
+   *
+   * workbench.action.pinEditor acepta una URI como contexto y resuelve el editor
+   * sin necesidad de que sea el activo (vscode-main editorCommandsContext.ts,
+   * resolveCommandsContext líneas 106-127). Si falla por cualquier razón, se deja
+   * pasar con console.warn: el pin es mejora de UX, no requisito funcional.
+   *
+   * Debe llamarse DESPUÉS de que pollForKernel confirme el kernel, mientras el
+   * acompañante sigue en el editor group (solo se destruye al cerrar la pestaña).
+   */
+  private async pinAndRestoreFocus(
+    companionUri: vscode.Uri,
+    originalEditor: vscode.TextEditor | undefined
+  ): Promise<void> {
+    try {
+      await vscode.commands.executeCommand('workbench.action.pinEditor', companionUri);
+    } catch (e) {
+      console.warn('mesh-run: no se pudo fijar la pestaña del acompañante:', e);
+    }
+    if (originalEditor) {
+      try {
+        await vscode.window.showTextDocument(originalEditor.document, {
+          viewColumn: originalEditor.viewColumn,
+          preserveFocus: false,
+        });
+      } catch (e) {
+        console.warn('mesh-run: no se pudo restaurar el foco al documento original:', e);
+      }
+    }
+  }
 
   /**
    * Comprueba si el notebook acompañante sigue abierto en el workspace.
@@ -250,7 +289,9 @@ export class KernelManager {
 
     // El notebook debe ser visible para que notebook.cell.execute pueda usarlo.
     // preserveFocus: true mantiene el foco en el documento original del usuario.
-    await vscode.window.showNotebookDocument(notebookDoc, { preserveFocus: true });
+    // preview: false evita que VS Code lo trate como pestaña de vista previa reutilizable
+    // (aunque el dirty-at-birth ya lo impide, se hace explícito por claridad).
+    await vscode.window.showNotebookDocument(notebookDoc, { preserveFocus: true, preview: false });
 
     // Ejecuta la celda bootstrap: esto activa el picker de kernel si es la primera
     // vez, y a continuación arranca el kernel dejando userStartedKernel === true.
