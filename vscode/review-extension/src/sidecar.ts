@@ -98,6 +98,8 @@ export interface MessageProjection {
   created_at: string;
   retracted: boolean;
   commit: string | null;  // SHA del fix; null si no hay commit asociado al mensaje
+  /** Nivel de confianza emitido por el reviser en su mensaje (campo informal, no en schema). */
+  confidence?: 'alta' | 'media' | 'baja';
 }
 
 export interface ThreadProjection {
@@ -106,6 +108,7 @@ export interface ThreadProjection {
   anchor: Anchor | { detached: true };
   status: 'open' | 'resolved' | 'detached';
   assignee?: string;
+  assignedAt?: string;  // created_at del último thread.assigned (recencia para --pending)
   confidence?: 'alta' | 'media' | 'baja';
   refs?: Array<{ title: string; url?: string; note?: string }>;
   messages: MessageProjection[];
@@ -128,8 +131,44 @@ export interface BacklogTask {
 }
 
 // ---------------------------------------------------------------------------
+// Constantes de validación
+// ---------------------------------------------------------------------------
+
+/**
+ * Conjunto de valores válidos de `commentType` según el schema de eventos.
+ * Exportado para validar en `project()` y en tests.
+ */
+export const VALID_COMMENT_TYPES: ReadonlySet<string> = new Set<string>([
+  'edita', 'sugerencia', 'pregunta', 'verifica', 'nota', 'referencia', 'supuesto',
+]);
+
+// ---------------------------------------------------------------------------
 // Funciones puras (sin IO de red ni VS Code)
 // ---------------------------------------------------------------------------
+
+/**
+ * Compara dos valores de ancla y devuelve `true` si han cambiado.
+ *
+ * - Ambos `{ detached: true }` → sin cambio (`false`).
+ * - Uno detached y el otro no → cambio (`true`).
+ * - Dos anclas normales → compara `quote`, `line_hint` y `char_offset`.
+ *
+ * Usada en `onDidSaveTextDocument` (P3) para decidir si escribir un evento
+ * `thread.reanchored` para un hilo cuyo ancla en memoria difiere del último
+ * estado persistido en disco.
+ */
+export function anchorChanged(
+  a: Anchor | { detached: true },
+  b: Anchor | { detached: true }
+): boolean {
+  const aDetached = 'detached' in a;
+  const bDetached = 'detached' in b;
+  if (aDetached !== bDetached) return true;
+  if (aDetached && bDetached) return false;
+  const aa = a as Anchor;
+  const bb = b as Anchor;
+  return aa.quote !== bb.quote || aa.line_hint !== bb.line_hint || aa.char_offset !== bb.char_offset;
+}
 
 /** SHA-256 hex de una cadena UTF-8. */
 export function sha256hex(input: string): string {
@@ -139,13 +178,40 @@ export function sha256hex(input: string): string {
 /**
  * Ruta primaria del sidecar: espejo de la ruta relativa del documento.
  * `docs/informe.md` → `<gitRoot>/.ai/review/docs/informe.md.json`
+ *
+ * Guarda de path traversal: usa path.resolve() para detectar tanto rutas que
+ * empiezan por `..` como rutas con `..` embebido (p. ej. `foo/../../bar`) que
+ * también escaparían de `.ai/review/`. La comprobación de contención es la
+ * única defensa fiable frente a estas variantes.
  */
 export function sidecarPathForDoc(docAbsPath: string, gitRoot: string): string {
-  const relative = path.relative(gitRoot, docAbsPath);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  const relative  = path.relative(gitRoot, docAbsPath);
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const resolved  = path.resolve(reviewDir, relative + '.json');
+  if (!resolved.startsWith(reviewDir + path.sep)) {
     throw new Error(`mesh-review: document path escapes git root — ${docAbsPath}`);
   }
-  return path.join(gitRoot, '.ai', 'review', relative + '.json');
+  return resolved;
+}
+
+/**
+ * Construye la ruta del sidecar V1 para un documento relativo al git root.
+ * Valida que la ruta resuelta permanezca dentro de `<gitRoot>/.ai/review/`.
+ * Centraliza la construcción duplicada que antes hacía `migrateLegacyToV2` y
+ * `handleLegacyMigration` en extension.ts.
+ *
+ * Guarda de path traversal: usa path.resolve() para detectar tanto rutas que
+ * empiezan por `..` como rutas con `..` embebido (p. ej. `foo/../../bar`) que
+ * también escaparían de `.ai/review/`. El guard `startsWith('..')` previo fallaba
+ * para estas rutas intermedias.
+ */
+export function buildV1FilePath(gitRoot: string, docRelPath: string): string {
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const resolved  = path.resolve(reviewDir, docRelPath + '.json');
+  if (!resolved.startsWith(reviewDir + path.sep)) {
+    throw new Error(`mesh-review: document path escapes git root — ${docRelPath}`);
+  }
+  return resolved;
 }
 
 /**
@@ -219,6 +285,11 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
     const tid = ev.thread_id;
 
     if (ev.type === 'thread.opened') {
+      // Guarda defensiva: notificar si el tipo no es uno de los 7 valores del schema.
+      // El hilo se proyecta igualmente (typeColor lo maneja con FALLBACK_COLOR).
+      if (!VALID_COMMENT_TYPES.has(ev.commentType as string)) {
+        console.error(`mesh-review: commentType desconocido "${ev.commentType as string}" en hilo ${tid}`);
+      }
       const proj: ThreadProjection = {
         thread_id: tid,
         commentType: ev.commentType as CommentType,
@@ -248,16 +319,21 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
     if (!proj) continue; // defensivo: hilo desconocido, se ignora
 
     switch (ev.type) {
-      case 'message.posted':
-        proj.messages.push({
+      case 'message.posted': {
+        const msg: MessageProjection = {
           id: ev.id,
           body: ev.body as string,
           author: ev.author,
           created_at: ev.created_at,
           retracted: false,
           commit: ev.commit ?? null,
-        });
+        };
+        // confidence es opcional en message.posted según el schema (v2); el subagente
+        // reviser la incluye en hilos verifica/supuesto para indicar su nivel de certeza.
+        if (ev.confidence !== undefined) msg.confidence = ev.confidence as 'alta' | 'media' | 'baja';
+        proj.messages.push(msg);
         break;
+      }
       case 'message.revised': {
         const msg = proj.messages.find(m => m.id === (ev.target_message_id as string));
         if (msg) msg.body = ev.body as string;
@@ -282,6 +358,7 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
         break;
       case 'thread.assigned':
         proj.assignee = ev.agent as string;
+        proj.assignedAt = ev.created_at;
         break;
     }
   }
@@ -490,7 +567,10 @@ export async function ensureFallbackDir(
  * Salta ficheros que no pueden parsearse o cuya version !== 2.
  * Ordena por created_at ascendente; desempate por id lexicográfico.
  */
-export async function readEvents(dir: string): Promise<EventEnvelope[]> {
+export async function readEvents(
+  dir: string,
+  onError?: (file: string, err: unknown) => void
+): Promise<EventEnvelope[]> {
   let entries: string[];
   try {
     entries = await readdir(dir);
@@ -500,8 +580,9 @@ export async function readEvents(dir: string): Promise<EventEnvelope[]> {
   const results: EventEnvelope[] = [];
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
+    const filePath = path.join(dir, name);
     try {
-      const content = await readFile(path.join(dir, name), 'utf8');
+      const content = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
       if (parsed?.version !== 2) continue;
       // Endurecimiento: un evento en disco puede estar malformado (escrito por
@@ -513,8 +594,19 @@ export async function readEvents(dir: string): Promise<EventEnvelope[]> {
       if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
       if ('body' in parsed && typeof parsed.body !== 'string') continue;
       results.push(parsed as unknown as EventEnvelope);
-    } catch {
-      // fichero ilegible o JSON inválido — se ignora
+    } catch (err) {
+      // ENOENT: el fichero desapareció entre readdir y readFile — silencio esperado.
+      // Cualquier otro error (permisos, I/O, JSON inválido) se notifica al llamante:
+      // via onError si se proporcionó, o via console.error como fallback para que
+      // los errores reales no se pierdan en silencio.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        if (onError) {
+          onError(filePath, err);
+        } else {
+          console.error(`mesh-review: error leyendo evento ${filePath}:`, err);
+        }
+      }
     }
   }
   results.sort(compareEvents);
@@ -600,4 +692,102 @@ export async function writeBacklogTask(gitRoot: string, task: BacklogTask): Prom
     JSON.stringify(task, null, 2) + '\n',
     'utf8'
   );
+}
+
+// ---------------------------------------------------------------------------
+// IO V2: escaneo multi-fichero (P6)
+// ---------------------------------------------------------------------------
+
+/** Tope máximo de documentos que escanea scanAllDocs (DA-7). */
+export const SCAN_ALL_DOCS_LIMIT = 50;
+
+/**
+ * Recorre recursivamente el árbol bajo `dir` buscando directorios de eventos:
+ * directorios que contienen ficheros .json directamente (no subdirectorios).
+ *
+ * Un directorio que solo contiene subdirectorios es un componente de ruta
+ * (p. ej. `src/` en la jerarquía `.ai/review/src/foo.ts/`); se recorre en ellos.
+ * Un directorio que contiene al menos un `.json` es un directorio de eventos;
+ * se añade su ruta relativa a `result` y NO se recursa en él.
+ *
+ * La ruta relativa se construye siempre con `/` como separador para ser
+ * independiente del SO (se usa solo como clave lógica, no como ruta del sistema
+ * de ficheros directamente).
+ *
+ * Sin límite propio: el tope lo aplica scanAllDocs.
+ */
+async function collectEventDirs(
+  dir: string,
+  relPath: string,
+  result: string[],
+  maxDepth = 20
+): Promise<void> {
+  // Fix 2: protección contra symlinks circulares o jerarquías anómalamente profundas.
+  if (maxDepth <= 0) return;
+
+  let entries: import('fs').Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // directorio inaccesible — omitir silenciosamente
+  }
+
+  const hasJson = entries.some(e => e.isFile() && e.name.endsWith('.json'));
+  if (hasJson && relPath.length > 0) {
+    // Directorio de eventos encontrado
+    result.push(relPath);
+    return;
+  }
+
+  // Componente de ruta: recursar en subdirectorios
+  const subDirs = entries.filter(e => e.isDirectory());
+  for (const sub of subDirs) {
+    const subRelPath = relPath.length > 0 ? `${relPath}/${sub.name}` : sub.name;
+    await collectEventDirs(path.join(dir, sub.name), subRelPath, result, maxDepth - 1);
+  }
+}
+
+/**
+ * Escanea el árbol `.ai/review/` del repositorio y devuelve las proyecciones de
+ * todos los documentos con eventos V2, con un tope de `SCAN_ALL_DOCS_LIMIT` (50).
+ *
+ * - `docs`: Map cuya clave es la ruta relativa del documento desde el git root
+ *   (separador `/`) y el valor son sus proyecciones.
+ * - `overflow`: número de directorios de eventos adicionales que no se procesaron
+ *   por superar el tope. Permite mostrar un indicador "(+N más)" en la UI.
+ * - Si `.ai/review/` no existe (ENOENT), devuelve mapa vacío sin error.
+ * - Llama a `onError` para errores de IO no-ENOENT en la raíz del árbol.
+ * - No lanza: los errores en subdirectorios individuales se omiten silenciosamente.
+ */
+export async function scanAllDocs(
+  gitRoot: string,
+  onError?: (file: string, err: unknown) => void
+): Promise<{ docs: Map<string, ThreadProjection[]>; overflow: number }> {
+  const reviewBase = path.join(gitRoot, '.ai', 'review');
+
+  const allRelPaths: string[] = [];
+  try {
+    await collectEventDirs(reviewBase, '', allRelPaths);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      onError?.(reviewBase, err);
+    }
+    return { docs: new Map(), overflow: 0 };
+  }
+
+  const overflow = Math.max(0, allRelPaths.length - SCAN_ALL_DOCS_LIMIT);
+  const toProcess = allRelPaths.slice(0, SCAN_ALL_DOCS_LIMIT);
+
+  const docs = new Map<string, ThreadProjection[]>();
+  for (const docRelPath of toProcess) {
+    const eventDirAbs = path.join(reviewBase, docRelPath);
+    try {
+      const events = await readEvents(eventDirAbs, onError);
+      docs.set(docRelPath, project(events));
+    } catch (err) {
+      onError?.(eventDirAbs, err);
+    }
+  }
+
+  return { docs, overflow };
 }

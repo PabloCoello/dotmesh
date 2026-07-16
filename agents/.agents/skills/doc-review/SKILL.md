@@ -7,6 +7,8 @@ description: Reads mesh-review V2 event-sourced review threads and acts on a doc
 
 Review comments for a document are stored as an **append-only event log** produced by the mesh-review V2 workflow. This skill teaches you to locate the event directory, project the current thread state, act on the document, and close each thread by writing new events. The normative schema for every event is `schema.json` in the same directory as this skill.
 
+The `mesh-review` CLI used throughout this skill ships with it at `bin/mesh-review.mjs`, next to this SKILL.md (after stow: `~/.claude/skills/doc-review/bin/mesh-review.mjs`). It is not on PATH — invoke it as `node <skill-dir>/bin/mesh-review.mjs <subcommand> …`.
+
 ---
 
 ## 1. Event-directory location
@@ -106,11 +108,11 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 | Event type | Fold action |
 |---|---|
 | `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
-| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. |
+| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. If the event carries `confidence`, propagates it to the message projection. |
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
 | `thread.status-changed` | Sets `status` to `to` (`"open"` or `"resolved"`). |
-| `thread.reanchored` (has `anchor`) | Replaces `anchor` with the new value. If `status` was `"detached"`, resets it to `"open"`. |
+| `thread.reanchored` (has `anchor`) | Replaces `anchor` with the new value. If `status` was `"detached"`, resets it to `"open"`. The new `anchor.quote` may differ from the original (the extension updates the quote when the human edits the cited text — the quote reflects the text as it was at save time). |
 | `thread.reanchored` (has `detached: true`) | Sets `anchor: { detached: true }`; sets `status: "detached"`. |
 | `thread.assigned` | Sets `assignee` to `agent`. |
 
@@ -136,12 +138,13 @@ ThreadProjection {
 }
 
 MessageProjection {
-  id         : UUID
-  body       : string
-  author     : Author
-  created_at : ISO timestamp
-  retracted  : boolean
-  commit     : string | null             // SHA of the fix associated with this message; null if none
+  id          : UUID
+  body        : string
+  author      : Author
+  created_at  : ISO timestamp
+  retracted   : boolean
+  commit      : string | null             // SHA of the fix associated with this message; null if none
+  confidence? : "alta" | "media" | "baja" // optional; emitted by the reviser subagent; shown in the review panel next to the author label
 }
 ```
 
@@ -152,7 +155,9 @@ Derived fields used by the card UI:
 
 ### Anchor resolution
 
-A thread's `anchor` was captured when the thread opened; the document may have changed since. Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the anchor against the **current** document text:
+A thread's `anchor` was captured when the thread opened; the document may have changed since. If a `thread.reanchored` event is present for a thread, its `anchor` supersedes the original — the extension updates the anchor (including `quote`) whenever the human saves after editing the document. When the human edits text directly inside the quoted range, `thread.reanchored` carries a new `quote` reflecting the text as saved. Always use the most recent `anchor` from the projection.
+
+Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the anchor against the **current** document text:
 
 1. Search for an exact substring match of `anchor.quote`.
 2. **One match** → that is the position. Proceed.
@@ -185,7 +190,7 @@ Seven comment types in two classes:
 
 Check these before touching any file or running any git command:
 
-1. **Worktree must be clean.** Run `git status --porcelain`. If the output is non-empty, stop. Describe the dirty files to the user and do not proceed.
+1. **Worktree clean for files under review.** Run `git diff --name-only HEAD` and verify the document under review does not appear in the output. If other files are modified but the document is clean, you may continue.
 2. **Document must be inside a git repository.** Run `git rev-parse --show-toplevel` from the document's directory. If git fails, stop and inform the user.
 3. **Must not be on the default branch.** Run `git branch --show-current`. Compare with `git symbolic-ref --short refs/remotes/origin/HEAD` (falls back to `git config init.defaultBranch`). If on the default branch, go to §5 before touching any file.
 
@@ -193,12 +198,13 @@ Check these before touching any file or running any git command:
 
 ## 5. Branch management
 
-If the current branch is the default branch, propose a work branch name and wait for the user's confirmation before creating it:
+If the current branch is the default branch, create a work branch before touching any file:
 
 - Derive the name from the document(s) in the pass: one document → its path slug; multiple documents → a short theme that describes them.
 - Prefix with `review/` and append the date: `review/<slug>-<YYYYMMDD>`. Examples: `review/informe-20260714`, `review/auditoria-docs-20260714`.
 - No LLM attribution in the branch name (dotmesh rule).
-- State the proposed name and stop. Wait for the user to confirm or adjust it. Only run `git checkout -b <name>` after explicit confirmation.
+- **If the user has explicitly asked to process comments** (e.g. "procesa los comentarios de `<doc>`", "run a review pass"), run `git checkout -b <name>` directly, without waiting for confirmation.
+- **If the first step of the session was `project` without an order to process** (the user inspected thread state only), state the proposed name and wait for confirmation before running `git checkout -b <name>`.
 
 ---
 
@@ -215,7 +221,7 @@ The two types are not mutually exclusive per-thread, but a full iteration pass o
 
 ### 6.2 Actionable threads with a code change
 
-Process threads with `commentType` in `{edita, sugerencia, pregunta, verifica}` that require a document edit, **serially in ascending `char_offset` order**:
+Process threads with `commentType` in `{edita, sugerencia, pregunta, verifica}` that require a document edit, **serially in descending `char_offset` order (bottom-to-top)**. Start from the thread with the highest `char_offset` and work upward toward the beginning of the document. This prevents earlier edits from displacing the anchors of threads still to be processed.
 
 1. Resolve the anchor against the current buffer (§2 — anchor resolution). If the anchor is unresolvable, skip to §6.4 (conflict).
 2. Apply the edit to the document body.
@@ -251,6 +257,8 @@ After each commit, update the in-memory positions of all remaining threads befor
 - Threads whose anchor text has disappeared: write `thread.reanchored` with `detached: true`.
 - Always resolve anchors against the current buffer, not the original document.
 
+> **Note:** With descending order (§6.2), in-pass re-anchoring almost never fires: edits at lower offsets do not shift anchors at higher offsets that have already been processed. Run `mesh-review reanchor <doc>` at the close of the pass as a final sweep (see §10).
+
 ### 6.7 Propose-then-apply invariant
 
 The `reviser` subagent proposes changes by writing `message.posted` events with `commit: null`. The principal:
@@ -284,12 +292,18 @@ Route open threads to subagents based on `assignee` from `thread.assigned` event
 |---|---|
 | `assignee: "security"` or `verifica` on a security claim | `security` |
 | `assignee: "maths"` or `verifica` on a quantitative/mathematical claim | `maths` |
-| `edita` or `sugerencia` (prose change) | `reviser` |
-| `pregunta` requiring factual research | `editor` |
+| `assignee: "reviser"` | `reviser` |
+| `assignee: "editor"` | `editor` |
+| `edita` or `sugerencia` (prose change, no assignee) | `reviser` |
+| `pregunta` requiring factual research (no assignee) | `editor` |
 | `nota`, `referencia`, `supuesto` (annotations) | principal |
 | No assignee, no clear signal | principal |
 
+**Inline context for fan-out.** When delegating a thread to a subagent, the principal extracts ±20 lines of the document surrounding `anchor.char_offset` and includes them verbatim in the delegation prompt. The subagent uses this extract as its primary source for understanding the anchored text; it re-reads the full document or event directory only if the inline extract is insufficient or absent.
+
 The dotmesh subagent roster: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`.
+
+> The human can assign a thread directly from the mesh-review VS Code extension (button "Asignar" on open thread cards). The extension writes a `thread.assigned` event with `agent` set to one of the four assignable values: `security`, `maths`, `reviser`, `editor`.
 
 ---
 
@@ -315,7 +329,36 @@ Use `Commit: <sha>` when the thread produced a commit (including the "already do
 
 ---
 
-## 10. Tool requirements
+## 10. Re-anchoring ownership
+
+Two actors update thread anchors independently; their events compose without conflict:
+
+- **Agent (end of pass):** Run `mesh-review reanchor <doc>` after closing the pass. The CLI re-resolves all open-thread anchors against the current document text and emits `thread.reanchored` events for any that have shifted or disappeared.
+- **Extension (human save):** When the human saves the document after editing, the VS Code extension re-resolves open anchors against the saved text and persists any changes as `thread.reanchored` events.
+
+Duplicate `thread.reanchored` events for the same thread are innocuous: the projection fold processes events in `created_at` order, so the last event wins.
+
+---
+
+## 11. Fix event checklist
+
+`readEvents` silently discards any event that fails one of these predicates. Emit events that pass all three or they will not appear in the projection:
+
+| Discard condition | Effect |
+|---|---|
+| `version !== 2` | File predates V2 or was written incorrectly; the entire file is skipped. |
+| `id` or `thread_id` is not a UUID v4 | Field missing, not a string, or wrong format; the event is ignored. |
+| `body` is present but not a string | Type mismatch (`null`, number, or object); the event is ignored. |
+
+For the badge and diff to work correctly in the VS Code extension, a fix `message.posted` must also satisfy:
+
+- `author.kind: "ai"` — marks the message as an AI fix (drives the badge label and author pill).
+- `commit` is a hex SHA of 7–40 characters resolvable by `git rev-parse` — the extension calls `git rev-parse` to validate; an unresolvable SHA silently disables the diff button.
+- The message is not retracted — a retracted fix (a `message.retracted` event referencing its `id`) is excluded from `fixCommit` computation, hiding the badge and diff.
+
+---
+
+## 12. Tool requirements
 
 This skill uses only standard file and shell operations:
 

@@ -6,6 +6,7 @@
  */
 
 import type { ThreadProjection } from './sidecar';
+import { isUuid, VALID_COMMENT_TYPES } from './sidecar.ts';
 import {
   formatTimestamp,
   escapeHtml,
@@ -18,6 +19,18 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
+ * ACK que el provider posta de vuelta al webview tras completar una acción.
+ * El webview lo usa para re-habilitar el botón y mostrar errores inline.
+ * No forma parte de WebviewActionMessage (fluye en dirección opuesta).
+ */
+export type WebviewAckMessage = {
+  type: 'action-ack';
+  ok: boolean;
+  error?: string;
+  thread_id: string;
+};
+
+/**
  * Mensajes de acción que el webview envía al provider.
  * El slice 4 (extension.ts) registra el handler con setActionHandler.
  *
@@ -25,11 +38,33 @@ import {
  * y para que isWebviewActionMessage esté junto al tipo que valida.
  */
 export type WebviewActionMessage =
-  | { type: 'reply';   thread_id: string }
-  | { type: 'resolve'; thread_id: string }
-  | { type: 'edit';    thread_id: string; message_id: string }
-  | { type: 'retract'; thread_id: string; message_id: string }
-  | { type: 'diff';    thread_id: string; mode: 'last' | 'range' };
+  | { type: 'reply';         thread_id: string }
+  | { type: 'resolve';       thread_id: string }
+  | { type: 'edit';          thread_id: string; message_id: string }
+  | { type: 'retract';       thread_id: string; message_id: string }
+  | { type: 'diff';          thread_id: string; mode: 'last' | 'range' }
+  | { type: 'reply-submit';  thread_id: string; body: string }
+  | { type: 'edit-submit';   thread_id: string; message_id: string; body: string }
+  | { type: 'assign';        thread_id: string }
+  | { type: 'jump-doc';      thread_id: string; doc_path: string };
+
+/**
+ * Valida que una ruta de documento sea relativa y sin segmentos de traversal.
+ *
+ * Reglas:
+ * - No vacía.
+ * - No absoluta (ni Unix `/…` ni Windows `C:\…`).
+ * - Sin segmentos `..` (separador `/` o `\`).
+ *
+ * El host (extension.ts) aplica además una comprobación de contención con
+ * `path.relative` antes de abrir el documento.
+ */
+function isRelativeSafePath(p: unknown): p is string {
+  if (typeof p !== 'string' || p.length === 0) return false;
+  if (p.startsWith('/') || /^[A-Za-z]:/.test(p)) return false;
+  const segments = p.split(/[/\\]/);
+  return !segments.some(seg => seg === '..');
+}
 
 /**
  * Valida en runtime que un mensaje del webview es una acción bien formada.
@@ -39,12 +74,15 @@ export type WebviewActionMessage =
  * - thread_id: string no vacío en los cinco tipos.
  * - message_id: string no vacío en edit/retract.
  * - mode: literal 'last' | 'range' en diff (no se interpola en comandos de shell).
+ * - doc_path: ruta relativa sin traversal en jump-doc.
  */
 export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessage {
   if (typeof msg !== 'object' || msg === null) return false;
   const m = msg as Record<string, unknown>;
-  const hasThread = typeof m.thread_id === 'string' && m.thread_id.length > 0;
-  const hasMessage = typeof m.message_id === 'string' && m.message_id.length > 0;
+  // thread_id y message_id deben ser UUIDs canónicos: rechaza cadenas arbitrarias
+  // y valores manipulados del webview (p. ej. traversal: «../../.ssh/evil»).
+  const hasThread  = typeof m.thread_id  === 'string' && isUuid(m.thread_id);
+  const hasMessage = typeof m.message_id === 'string' && isUuid(m.message_id);
   switch (m.type) {
     case 'reply':
     case 'resolve':
@@ -54,6 +92,16 @@ export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessag
       return hasThread && hasMessage;
     case 'diff':
       return hasThread && (m.mode === 'last' || m.mode === 'range');
+    case 'reply-submit':
+      // body es texto libre del usuario: no vacío, no solo espacios, y ≤ 10 000 chars.
+      return hasThread && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
+    case 'edit-submit':
+      return hasThread && hasMessage && typeof m.body === 'string' && m.body.trim() !== '' && m.body.length <= 10_000;
+    case 'assign':
+      return hasThread;
+    case 'jump-doc':
+      // doc_path: ruta relativa segura; la contención definitiva se valida en el host.
+      return hasThread && isRelativeSafePath(m.doc_path);
     default:
       return false;
   }
@@ -69,6 +117,8 @@ export interface CardMessage {
   authorLabel: string; // "humano" | author.name | "subagent · model" | model | "modelo desconocido"
   dateLabel: string;   // formatTimestamp(created_at)
   body: string;        // texto sin escapar; escapeHtml se aplica en buildCardsHtml
+  /** Nivel de confianza emitido por el reviser en su mensaje (campo informal en el evento). */
+  confidence?: 'alta' | 'media' | 'baja';
 }
 
 /** Modelo de vista de un hilo completo para su representación como tarjeta. */
@@ -81,6 +131,8 @@ export interface CardViewModel {
   messages: CardMessage[]; // solo mensajes no retractados
   fixCommit: string | null;   // SHA del último message.posted de IA con commit !== null
   openCommit: string | null;  // openedCommit del hilo (base para rango acumulado)
+  confidence?: 'alta' | 'media' | 'baja'; // P5: nivel de confianza (verifica/supuesto)
+  assignee?: string;                       // P5: subagente asignado al hilo
 }
 
 // ---------------------------------------------------------------------------
@@ -114,14 +166,16 @@ export function buildCardViewModels(
           ? ([m.author.subagent, m.author.model].filter(Boolean).join(' · ') || 'modelo desconocido')
           : (m.author.name ?? 'humano');
         const dateLabel = formatTimestamp(m.created_at, locale ?? 'es-ES', timeZone);
-        return { id: m.id, authorLabel, dateLabel, body: m.body };
+        const msg: CardMessage = { id: m.id, authorLabel, dateLabel, body: m.body };
+        if (m.confidence !== undefined) msg.confidence = m.confidence;
+        return msg;
       });
 
     const lastAiFix = thread.messages
       .filter(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null)
       .at(-1);
 
-    return {
+    const card: CardViewModel = {
       thread_id: thread.thread_id,
       commentType: thread.commentType,
       lineLabel,
@@ -131,6 +185,9 @@ export function buildCardViewModels(
       fixCommit: lastAiFix?.commit ?? null,
       openCommit: thread.openedCommit,
     };
+    if (thread.confidence !== undefined) card.confidence = thread.confidence;
+    if (thread.assignee   !== undefined) card.assignee   = thread.assignee;
+    return card;
   });
 }
 
@@ -157,6 +214,35 @@ export function partitionCardsByStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Icono SVG para el botón de diff
+// ---------------------------------------------------------------------------
+
+/**
+ * SVG inline del codicon `git-compare` de VS Code (16×16, `fill="currentColor"`).
+ *
+ * Elección de vía: el webview tiene `localResourceRoots: []` por defecto, lo que
+ * impide cargar la fuente de codicones (@vscode/codicons) como recurso local sin
+ * abrir `localResourceRoots`. Cargar la fuente desde un CDN no es posible porque
+ * la CSP no tiene `font-src`. La alternativa más simple y sin tocar el CSP es
+ * incrustar el SVG directamente en el HTML del botón como contenido inline, que
+ * los navegadores y los webviews de VS Code interpretan sin restricción de política.
+ *
+ * Fuente del path: @vscode/codicons dist/codicon.svg (symbol id="git-compare").
+ */
+const DIFF_ICON_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" ` +
+  `fill="currentColor" aria-hidden="true">` +
+  `<path fill-rule="evenodd" clip-rule="evenodd" d="M7.389 12.99l-1.27-1.27.67-.7 2.13 2.13v.7l-2.13 ` +
+  `2.13-.71-.71L7.349 14h-1.85a2.49 2.49 0 01-2.5-2.5V5.95a2.59 2.59 0 01-1.27-.68 2.52 2.52 0 01-.54-2.73A2.5 ` +
+  `2.5 0 013.499 1a2.45 2.45 0 011 .19 2.48 2.48 0 011.35 1.35c.133.317.197.658.19 1a2.5 2.5 0 01-2 2.45v5.5a1.5 ` +
+  `1.5 0 001.5 1.5h1.85zm-4.68-8.25a1.5 1.5 0 002.08-2.08 1.55 1.55 0 00-.68-.56 1.49 1.49 0 00-.86-.08 ` +
+  `1.49 1.49 0 00-1.18 1.18 1.49 1.49 0 00.08.86c.117.277.311.513.56.68zm10.33 6.3c.48.098.922.335 1.27.68a2.51 ` +
+  `2.51 0 01.31 3.159 2.5 2.5 0 11-3.47-3.468c.269-.182.571-.308.89-.37V5.49a1.5 1.5 0 00-1.5-1.5h-1.85l1.27 ` +
+  `1.27-.71.71-2.13-2.13v-.7l2.13-2.13.71.71-1.27 1.27h1.85a2.49 2.49 0 012.5 2.5v5.55zm-.351 3.943a1.5 1.5 0 ` +
+  `001.1-2.322 1.55 1.55 0 00-.68-.56 1.49 1.49 0 00-.859-.08 1.49 1.49 0 00-1.18 1.18 1.49 1.49 0 00.08.86 ` +
+  `1.5 1.5 0 001.539.922z"/></svg>`;
+
+// ---------------------------------------------------------------------------
 // buildCardsHtml
 // ---------------------------------------------------------------------------
 
@@ -176,11 +262,19 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
   // data-diff-mode rastrea el toggle last↔range en el webview; el SHA se resuelve
   // en extension.ts desde las proyecciones del event log, nunca desde el DOM.
   const diffBtnHtml = (withActions && card.fixCommit !== null)
-    ? `<button class="action-btn" data-action="diff" data-thread-id="${tid}" data-diff-mode="last">⟷</button>`
+    ? `<button class="action-btn" data-action="diff" data-thread-id="${tid}" data-diff-mode="last">${DIFF_ICON_SVG}</button>`
     : '';
 
   const cardActionsHtml = withActions
-    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="assign" data-thread-id="${tid}">⊕</button><button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    : '';
+
+  // Etiquetas opcionales de confianza y asignado: escapadas y con clase semántica
+  const confidenceHtml = card.confidence !== undefined
+    ? ` <span class="card-confidence card-confidence-${escapeHtml(card.confidence)}">${escapeHtml(card.confidence)}</span>`
+    : '';
+  const assigneeHtml = card.assignee !== undefined
+    ? ` <span class="card-assignee">${escapeHtml(card.assignee)}</span>`
     : '';
 
   const messagesHtml = card.messages.map(msg => {
@@ -188,16 +282,21 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
     const msgActionsHtml = withActions
       ? `\n        <span class="msg-actions"><button class="action-btn" data-action="edit" data-thread-id="${tid}" data-message-id="${mid}">✎</button><button class="action-btn" data-action="retract" data-thread-id="${tid}" data-message-id="${mid}">⊘</button></span>`
       : '';
+    // Banda de confianza del reviser: se muestra junto al label de autor si el mensaje la lleva.
+    // Reutiliza las clases CSS card-confidence-* introducidas en la fase 6 para la confianza de hilo.
+    const msgConfidenceHtml = msg.confidence !== undefined
+      ? ` <span class="card-confidence card-confidence-${escapeHtml(msg.confidence)}">${escapeHtml(msg.confidence)}</span>`
+      : '';
     return `<div class="card-message" data-message-id="${mid}">
         <div class="card-body">${escapeHtml(msg.body)}</div>
-        <div class="card-meta">── ${escapeHtml(msg.authorLabel)} · ${escapeHtml(msg.dateLabel)}</div>${msgActionsHtml}
+        <div class="card-meta">── ${escapeHtml(msg.authorLabel)}${msgConfidenceHtml} · ${escapeHtml(msg.dateLabel)}</div>${msgActionsHtml}
       </div>`;
   }).join('\n      ');
 
   return `<div class="card" data-thread-id="${tid}" data-has-anchor="${card.hasAnchor}">
       <div class="card-header">
         <span class="bullet bullet-${escapeHtml(card.commentType)}">●</span>
-        <span class="card-type">${escapeHtml(card.commentType)}</span>
+        <span class="card-type">${escapeHtml(card.commentType)}</span>${confidenceHtml}${assigneeHtml}
         <span class="card-line">${escapeHtml(card.lineLabel)}</span>${cardActionsHtml}
       </div>
       <div class="card-messages">
@@ -206,19 +305,92 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
 }
 
 /**
+ * Genera el HTML de la sección multi-fichero "Repositorio (N)" al pie del panel.
+ *
+ * - Devuelve cadena vacía si `allDocs` está vacío y `overflow` es 0.
+ * - Sección `<details data-section="all-docs">` colapsada por defecto.
+ * - N = total de hilos abiertos en el mapa (no el número de documentos).
+ * - Cada documento aparece como grupo con nombre de fichero y recuento.
+ * - Cada hilo en el grupo tiene un botón con data-action="jump-doc",
+ *   data-thread-id y data-doc-path; el clic envía el mensaje al host.
+ * - overflow > 0: añade una nota "(+N más)" al final de la sección.
+ * - Toda interpolación de datos pasa por escapeHtml.
+ */
+export function buildAllDocsHtml(
+  allDocs: Map<string, CardViewModel[]>,
+  overflow = 0
+): string {
+  // Fix 6: si no hay hilos visibles no renderizar la sección, aunque haya overflow;
+  // una sección con 0 entradas concretas no aporta información útil.
+  let totalThreads = 0;
+  for (const cards of allDocs.values()) totalThreads += cards.length;
+  if (totalThreads === 0) return '';
+
+  // Fix 4: orden estable — alfabético por ruta relativa (localeCompare),
+  // independientemente del orden que devuelva readdir en el sistema de ficheros.
+  const sortedEntries = [...allDocs.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  const groups: string[] = [];
+  for (const [docPath, cards] of sortedEntries) {
+    if (cards.length === 0) continue;
+    const escapedPath = escapeHtml(docPath);
+    // Cabecera del grupo: solo el nombre de fichero; la ruta completa va en data-doc-path.
+    const segments = docPath.split(/[/\\]/);
+    const displayName = escapeHtml(segments[segments.length - 1] ?? docPath);
+    const threads = cards.map(card => {
+      const tid  = escapeHtml(card.thread_id);
+      // Fix 5: la clase CSS sale de la lista blanca VALID_COMMENT_TYPES para evitar
+      // inyección de clases arbitrarias desde un commentType manipulado en disco.
+      // El texto visible usa el valor escapado sin restricción de lista blanca.
+      const rawType     = card.commentType;
+      const safeClass   = VALID_COMMENT_TYPES.has(rawType) ? escapeHtml(rawType) : 'nota';
+      const displayType = escapeHtml(rawType);
+      const line = escapeHtml(card.lineLabel);
+      return `<button class="all-doc-thread action-btn" data-action="jump-doc" data-thread-id="${tid}" data-doc-path="${escapedPath}"><span class="bullet bullet-${safeClass}">●</span> ${displayType} · ${line}</button>`;
+    }).join('\n');
+    groups.push(
+      `<div class="all-doc-group">\n` +
+      `<div class="all-doc-title">${displayName} (${cards.length})</div>\n` +
+      threads + '\n' +
+      `</div>`
+    );
+  }
+
+  const overflowHtml = overflow > 0
+    ? `\n<div class="all-doc-overflow">(+${overflow} más)</div>`
+    : '';
+
+  return (
+    `<details data-section="all-docs" class="section-collapsed">\n` +
+    `<summary class="section-header">Repositorio (${totalThreads})</summary>\n` +
+    groups.join('\n') +
+    overflowHtml + '\n' +
+    `</details>`
+  );
+}
+
+/**
  * Genera el fragmento HTML con todas las tarjetas de hilo, particionadas por estado.
  *
  * - Hilos abiertos: lista plana (sin agrupar por tipo), con botones de acción.
  * - Hilos resueltos: sección <details data-section="resolved"> colapsada por defecto.
  * - Hilos desanclados: sección <details data-section="detached"> colapsada por defecto.
+ * - Sección multi-fichero: `<details data-section="all-docs">` al final si `allDocs`
+ *   tiene entradas (generada con buildAllDocsHtml).
  * - Omite la sección completa si su cubo está vacío.
  * - Sin atributos style inline (requisito de CSP con nonce).
  */
-export function buildCardsHtml(cards: CardViewModel[]): string {
+export function buildCardsHtml(
+  cards: CardViewModel[],
+  allDocs?: Map<string, CardViewModel[]>,
+  overflow?: number
+): string {
   const { open, resolved, detached } = partitionCardsByStatus(cards);
+  const allDocsHtml = buildAllDocsHtml(allDocs ?? new Map(), overflow ?? 0);
 
   if (open.length === 0 && resolved.length === 0 && detached.length === 0) {
-    return '<p class="empty">Sin comentarios en este documento.</p>';
+    const emptyMsg = '<p class="empty">Sin comentarios en este documento.</p>';
+    return allDocsHtml ? emptyMsg + '\n' + allDocsHtml : emptyMsg;
   }
 
   const parts: string[] = [];
@@ -250,7 +422,96 @@ export function buildCardsHtml(cards: CardViewModel[]): string {
     );
   }
 
+  // Sección multi-fichero (P6)
+  if (allDocsHtml) parts.push(allDocsHtml);
+
   return parts.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// computeUnseenCount — badge de respuestas IA nuevas (P1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cuenta los mensajes de autor IA no retractados cuyo `id` no está en `seen`.
+ * Función pura: no modifica `seen`, sin IO, testeable con node:test.
+ *
+ * Un mensaje se considera "visto" cuando su `id` aparece en el Set `seen`,
+ * que se persiste en `workspaceState` y se actualiza en extension.ts al
+ * mostrar el panel (DA-1).
+ */
+export function computeUnseenCount(
+  projections: ThreadProjection[],
+  seen: Set<string>
+): number {
+  let count = 0;
+  for (const thread of projections) {
+    for (const msg of thread.messages) {
+      if (!msg.retracted && msg.author.kind === 'ai' && !seen.has(msg.id)) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// pickNextThread — navegación por teclado entre hilos (P2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Selecciona el siguiente o anterior hilo abierto con ancla, en orden de
+ * `char_offset`, respecto a la posición del cursor en el documento activo.
+ *
+ * Función pura: sin IO ni dependencias de VS Code.
+ *
+ * - Filtra hilos con `status === 'open'` y `'line_hint' in anchor`.
+ * - Ordena por `anchor.char_offset` ascendente. En caso de empate de
+ *   `char_offset`, se preserva el orden del array de proyecciones de entrada
+ *   (el sort de V8 es estable).
+ * - `currentOffset`: posición del cursor (offset en caracteres del documento).
+ * - `direction: 'next'`: el primer hilo cuyo `char_offset` es **estrictamente
+ *   mayor** que `currentOffset`. Si el cursor está exactamente sobre el
+ *   `char_offset` de un hilo, ese hilo se omite y se salta al siguiente (mismo
+ *   comportamiento que F8 de diagnósticos de VS Code). Si no hay ninguno y
+ *   `cyclic: true`, devuelve el primero.
+ * - `direction: 'prev'`: el último hilo cuyo `char_offset` es **estrictamente
+ *   menor** que `currentOffset`. Si el cursor está exactamente sobre el
+ *   `char_offset` de un hilo, ese hilo se omite. Si no hay ninguno y
+ *   `cyclic: true`, devuelve el último.
+ * - Lista vacía o sin candidatos no cíclicos → null.
+ */
+export function pickNextThread(
+  projections: ThreadProjection[],
+  currentOffset: number,
+  direction: 'next' | 'prev',
+  cyclic: boolean
+): ThreadProjection | null {
+  // Filtrar y ordenar por char_offset
+  const candidates = projections
+    .filter(t => t.status === 'open' && 'line_hint' in t.anchor)
+    .sort((a, b) => {
+      const offA = (a.anchor as { char_offset: number }).char_offset;
+      const offB = (b.anchor as { char_offset: number }).char_offset;
+      return offA - offB;
+    });
+
+  if (candidates.length === 0) return null;
+
+  if (direction === 'next') {
+    const found = candidates.find(
+      t => (t.anchor as { char_offset: number }).char_offset > currentOffset
+    );
+    if (found) return found;
+    return cyclic ? candidates[0] : null;
+  } else {
+    // 'prev': el último con char_offset estrictamente menor que currentOffset
+    const found = [...candidates]
+      .reverse()
+      .find(t => (t.anchor as { char_offset: number }).char_offset < currentOffset);
+    if (found) return found;
+    return cyclic ? candidates[candidates.length - 1] : null;
+  }
 }
 
 // ---------------------------------------------------------------------------

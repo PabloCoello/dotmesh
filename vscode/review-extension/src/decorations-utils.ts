@@ -130,6 +130,31 @@ export function formatTimestamp(
 }
 
 /**
+ * Escapa los caracteres especiales de Markdown para uso seguro en MarkdownString.
+ *
+ * Se aplica a valores leídos del disco que se interpolan en MarkdownString con
+ * supportHtml = true (p. ej. commentType). Aunque los siete valores reconocidos
+ * del schema no contienen metacaracteres, un evento con un tipo desconocido podría
+ * traer `*`, `_`, `` ` ``, `[`, `]`, `(`, `)`, `#`, `~` o `\`, que activarían
+ * formato Markdown o podrían inyectar contenido adicional en el tooltip.
+ *
+ * Orden obligatorio: `\` primero para no doble-escapar los demás.
+ */
+export function escapeMd(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_')
+    .replace(/`/g, '\\`')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/#/g, '\\#')
+    .replace(/~/g, '\\~');
+}
+
+/**
  * Escapa los caracteres HTML especiales de una cadena de texto de usuario.
  * Se aplica antes de interpolar contenido libre (body, agent) en el markdown
  * del hover para evitar que el saneador de VS Code elimine texto legítimo
@@ -185,7 +210,7 @@ export function buildHoverMessage(
   const separator = `<span style="color:${color};">${'─'.repeat(40)}</span>`;
 
   const agentSuffix = comment.agent ? ` · ${escapeHtml(comment.agent)}` : '';
-  const header = `${bullet} **${comment.type}**${agentSuffix}`;
+  const header = `${bullet} **${escapeMd(comment.type)}**${agentSuffix}`;
 
   const footer = `<span style="color:#9e9e9e;">Creado: ${formatTimestamp(comment.created_at, locale, timeZone)}</span>`;
 
@@ -223,7 +248,7 @@ export function buildThreadHover(
   const separator = `<span style="color:${color};">${'─'.repeat(40)}</span>`;
 
   const assigneeSuffix = thread.assignee ? ` · ${escapeHtml(thread.assignee)}` : '';
-  const header = `${bullet} **${thread.commentType}**${assigneeSuffix}`;
+  const header = `${bullet} **${escapeMd(thread.commentType)}**${assigneeSuffix}`;
 
   const activeMessages = thread.messages.filter(m => !m.retracted);
 

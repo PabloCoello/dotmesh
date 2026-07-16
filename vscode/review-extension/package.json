@@ -69,6 +69,16 @@
         "command": "mesh-review.jumpToComment",
         "title": "Ir al hilo",
         "icon": "$(arrow-right)"
+      },
+      {
+        "command": "mesh-review.nextThread",
+        "title": "Mesh Review: Siguiente hilo",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "mesh-review.previousThread",
+        "title": "Mesh Review: Hilo anterior",
+        "icon": "$(arrow-up)"
       }
     ],
     "keybindings": [
@@ -77,15 +87,43 @@
         "key": "ctrl+alt+z",
         "mac": "alt+cmd+z",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "mesh-review.nextThread",
+        "key": "ctrl+alt+n",
+        "mac": "alt+cmd+n",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mesh-review.previousThread",
+        "key": "ctrl+alt+p",
+        "mac": "alt+cmd+p",
+        "when": "editorTextFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "mesh-review",
+      "properties": {
+        "mesh-review.badge.toast": {
+          "type": "boolean",
+          "default": false,
+          "description": "Muestra una notificación cuando llegan respuestas IA nuevas (badge solo por defecto)."
+        },
+        "mesh-review.navigation.cyclic": {
+          "type": "boolean",
+          "default": true,
+          "description": "La navegación entre hilos cicla al llegar al último o al primero."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node build.js",
+    "check": "tsc --noEmit",
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts src/diff-utils.test.ts src/cli/cli.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
