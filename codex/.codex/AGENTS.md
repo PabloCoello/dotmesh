@@ -99,7 +99,7 @@ Helper passes — invoked by a persona, not a stance you switch into:
 | `security` | Audit secrets, permissions, dependencies, external input, auth, storage and logs. Apply `security-and-hardening`; return `CLEAR` only when no issue is found. Commit gate, not per-slice. |
 | `editor` | Review a prose draft for markdown format, clarity, structure and voice. Flag by severity; do not rewrite. |
 | `maths` | Verify formulas or symbolic reasoning with a suitable local tool. Persist nothing unless the user asks. |
-| `reviser` | Read a review thread (all events for a `thread_id`) and the surrounding document context around the anchor; propose a reply and/or a concrete edit as a `message.posted` event in `.ai/review/<doc-path>/`. Write scoped to `.ai/review/` only — never edit the document body. Coordinated by the principal in parallel fan-out. Load the `doc-review` skill. |
+| `reviser` | Read a review thread (all events for a `thread_id`) and the surrounding document context around the anchor; propose a reply and/or a concrete edit as a `message.posted` event in `.ai/review/<doc-path>/`. Write scoped to `.ai/review/` only — never edit the document body. Coordinated by the principal in parallel fan-out. Load the `doc-review` skill. El campo `confidence` (`alta|media|baja`) es opcional en el evento `message.posted`; inclúyelo para tipos `verifica` y `supuesto`. Usa el extracto inline que proporciona el principal como primera fuente; relee disco solo si el contexto es insuficiente. |
 
 Divergent exploration (the old `debate` mode) now lives in the `grilling` /
 `idea-refine` skills and the `maker` persona; documentation updates (the old

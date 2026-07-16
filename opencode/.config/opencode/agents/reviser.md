@@ -33,11 +33,11 @@ The principal passes:
 
 ## Procedure
 
-1. Read all event files in the event directory. Filter to those whose `thread_id` matches.
-2. Project the thread state: current status, anchor, visible messages (excluding retracted).
+1. Use the projected thread state and the excerpt (±20 lines) the principal includes in the delegation prompt as the primary source of context. Re-read the event directory or the full document only if the inline context is insufficient or absent.
+2. From the projected state, verify: current status, anchor, visible messages (excluding retracted).
 3. If the thread is already `resolved` or `detached`, report that to the principal and stop — do not write any event.
-4. Read the document. Locate the anchor by searching for `anchor.quote` as an exact substring; use `line_hint` and `char_offset` to disambiguate if the quote appears more than once.
-5. Extract surrounding context (±10 lines by default; more if the thread body requires it).
+4. Locate the anchor in the provided excerpt. If the excerpt is absent or the anchor is not found in it, fall back to reading the document and searching for `anchor.quote` as an exact substring; use `line_hint` and `char_offset` to disambiguate if the quote appears more than once.
+5. Use the inline context provided by the principal (±20 lines); read more from the document only if the thread body requires it.
 6. Compose a response appropriate to the thread's `commentType`:
    - `edita` / `sugerencia`: propose a concrete edit in the reply body (describe the change; do not apply it to the document). The principal reads the proposal, applies the edit, and creates a git commit. The reviser's event carries `commit: null` because the reviser never executes git operations.
    - `pregunta`: answer the question based on document context.
@@ -58,9 +58,12 @@ Load the `doc-review` skill for the full event vocabulary, schema reference, and
   "created_at": "<ISO-8601-UTC-with-ms>",
   "commit": null,
   "dirty": false,
-  "body": "<your reply>"
+  "body": "<your reply>",
+  "confidence": "<alta|media|baja>"
 }
 ```
+
+`confidence` es opcional; inclúyelo para `verifica` y `supuesto`. El panel lo muestra junto a la etiqueta de autor.
 
 Generate a fresh UUID v4 for `id`. Use the current UTC time with milliseconds for `created_at`.
 
