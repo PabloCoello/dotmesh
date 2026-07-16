@@ -60,29 +60,16 @@ export function buildOutputBlock(
 }
 
 /**
- * Inserta o reemplaza el bloque de salida en docText.
- *
- * - Si existingOutput está definido: reemplaza exactamente el rango
- *   [existingOutput.startOffset, existingOutput.endOffset) por newOutput.
- *   El texto fuera de ese rango no cambia en ningún carácter.
- *
- * - Si existingOutput es undefined: inserta newOutput tras chunk.endOffset
- *   con una línea en blanco de separación entre el chunk y el bloque.
- *   chunk.endOffset apunta al \n que sigue a la línea de cierre del chunk,
- *   o a docText.length si el chunk cierra el fichero sin \n final.
- */
-/**
  * Rango a borrar para eliminar un bloque de salida sin dejar residuo.
  *
  * Es la inversa de la inserción de replaceOrInsertOutputBlock: además del
- * bloque [startOffset, endOffset), consume el \n que termina su última línea
- * y uno de los dos \n anteriores (la línea en blanco de separación que la
- * inserción añadió encima). Borrar solo el rango del bloque dejaría esos dos
- * saltos huérfanos y acumularía una línea en blanco por cada ciclo
- * ejecutar → borrar.
+ * bloque [startOffset, endOffset), consume el \n que termina su última línea.
+ * Si además hay una línea en blanco inmediatamente anterior (documentos legados
+ * con la separación antigua), también la consume. Borrar solo el rango del
+ * bloque dejaría esos saltos huérfanos y acumularía líneas en blanco por cada
+ * ciclo ejecutar → borrar.
  *
- * En bloques escritos a mano sin línea en blanco encima solo se consume el
- * \n final, sin tocar la línea anterior.
+ * En bloques sin línea en blanco encima solo se consume el \n final.
  */
 export function outputDeletionRange(
   docText: string,
@@ -107,6 +94,19 @@ export function outputDeletionRange(
   return { startOffset, endOffset };
 }
 
+/**
+ * Inserta o reemplaza el bloque de salida en docText.
+ *
+ * - Si existingOutput está definido: reemplaza el bloque anterior por newOutput.
+ *   Si el bloque legado tenía una línea en blanco de separación encima
+ *   (`\n\n` antes de startOffset), la consume para normalizar al formato
+ *   actual (una sola línea entre chunk y output).
+ *
+ * - Si existingOutput es undefined: inserta newOutput directamente tras el
+ *   cierre del chunk, sin línea en blanco de separación.
+ *   chunk.endOffset apunta al \n que sigue a la línea de cierre del chunk,
+ *   o a docText.length si el chunk cierra el fichero sin \n final.
+ */
 export function replaceOrInsertOutputBlock(
   docText: string,
   chunk: ParsedChunk,
@@ -114,8 +114,17 @@ export function replaceOrInsertOutputBlock(
   newOutput: string
 ): string {
   if (existingOutput !== undefined) {
+    // Reemplazo: si hay línea en blanco legada encima, retroceder 1 para consumirla
+    let start = existingOutput.startOffset;
+    if (
+      start >= 2 &&
+      docText[start - 1] === '\n' &&
+      docText[start - 2] === '\n'
+    ) {
+      start--;
+    }
     return (
-      docText.slice(0, existingOutput.startOffset) +
+      docText.slice(0, start) +
       newOutput +
       docText.slice(existingOutput.endOffset)
     );
@@ -124,10 +133,10 @@ export function replaceOrInsertOutputBlock(
   // Inserción: chunk.endOffset apunta al \n de cierre o al EOF
   const E = chunk.endOffset;
   if (E >= docText.length) {
-    // El chunk cierra el fichero sin \n: añadimos los dos saltos antes del bloque
-    return docText + '\n\n' + newOutput + '\n';
+    // El chunk cierra el fichero sin \n: un solo salto antes del bloque y uno tras él
+    return docText + '\n' + newOutput + '\n';
   }
 
-  // text[E] === '\n': conservamos ese \n, añadimos la línea en blanco y el bloque
-  return docText.slice(0, E + 1) + '\n' + newOutput + '\n' + docText.slice(E + 1);
+  // text[E] === '\n': conservamos ese \n e insertamos el bloque inmediatamente después
+  return docText.slice(0, E + 1) + newOutput + '\n' + docText.slice(E + 1);
 }

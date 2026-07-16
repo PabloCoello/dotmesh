@@ -151,8 +151,7 @@ test('buildOutputBlock + parseOutputs round-trip con warn/seq/up', () => {
 // replaceOrInsertOutputBlock — inserción sin output previo
 // ===========================================================================
 
-test('replaceOrInsertOutputBlock: inserta el bloque tras el chunk con línea en blanco', () => {
-  // Chunk ocupa "```python {#foo}\ncode\n```", cierra en posición 25 (\n)
+test('replaceOrInsertOutputBlock: inserta el bloque directamente tras el chunk, sin línea en blanco', () => {
   const docText = '```python {#foo}\ncode\n```\nnext line\n';
   const chunks = parseChunks(docText);
   assert.strictEqual(chunks.length, 1);
@@ -160,14 +159,14 @@ test('replaceOrInsertOutputBlock: inserta el bloque tras el chunk con línea en 
   const block = buildOutputBlock('foo', 'abcd1234', 'result');
   const result = replaceOrInsertOutputBlock(docText, chunks[0], undefined, block);
 
-  // El texto antes del punto de inserción no cambia
-  const insertionPoint = chunks[0].endOffset + 1; // tras el \n de cierre
-  assert.strictEqual(result.slice(0, insertionPoint), docText.slice(0, insertionPoint));
+  // El texto hasta el \n de cierre del chunk no cambia
+  const E = chunks[0].endOffset; // offset del \n de cierre
+  assert.strictEqual(result.slice(0, E + 1), docText.slice(0, E + 1));
 
-  // El bloque aparece en el resultado
-  assert.ok(result.includes(block));
+  // El bloque aparece inmediatamente después del \n de cierre (sin línea en blanco)
+  assert.strictEqual(result.slice(E + 1, E + 1 + block.length), block);
 
-  // El texto después del bloque contiene lo que venía tras el chunk
+  // El texto original que seguía al chunk sigue presente
   assert.ok(result.includes('next line'));
 });
 
@@ -186,7 +185,7 @@ test('replaceOrInsertOutputBlock: inserción produce documento parseable', () =>
   assert.strictEqual(outputs[0].content, 'result');
 });
 
-test('replaceOrInsertOutputBlock: inserción en EOF sin \\n final', () => {
+test('replaceOrInsertOutputBlock: inserción en EOF sin \\n final — un solo salto antes del bloque', () => {
   const docText = '```python {#foo}\ncode\n```';
   const chunks = parseChunks(docText);
   assert.strictEqual(chunks[0].endOffset, docText.length); // EOF sin \n
@@ -194,8 +193,9 @@ test('replaceOrInsertOutputBlock: inserción en EOF sin \\n final', () => {
   const block = buildOutputBlock('foo', 'abcd1234', 'out');
   const result = replaceOrInsertOutputBlock(docText, chunks[0], undefined, block);
 
-  // Empieza con el texto original
-  assert.ok(result.startsWith(docText + '\n\n'));
+  // Un solo \n separa el chunk del bloque (no dos)
+  assert.ok(result.startsWith(docText + '\n'));
+  assert.ok(!result.startsWith(docText + '\n\n'));
   // Es parseable
   const outputs = parseOutputs(result);
   assert.strictEqual(outputs.length, 1);
@@ -206,7 +206,8 @@ test('replaceOrInsertOutputBlock: inserción en EOF sin \\n final', () => {
 // replaceOrInsertOutputBlock — reemplazo con output previo
 // ===========================================================================
 
-test('replaceOrInsertOutputBlock: reemplaza el bloque existente', () => {
+test('replaceOrInsertOutputBlock: reemplaza el bloque existente y consume la línea en blanco legada', () => {
+  // Documento legado: línea en blanco entre chunk y output (formato antiguo)
   const docText = [
     '```python {#foo}',
     'code',
@@ -227,23 +228,49 @@ test('replaceOrInsertOutputBlock: reemplaza el bloque existente', () => {
   const newBlock = buildOutputBlock('foo', 'newnewne', 'new result');
   const result = replaceOrInsertOutputBlock(docText, chunks[0], outputs[0], newBlock);
 
-  // El texto antes del bloque de salida no cambia
-  assert.strictEqual(
-    result.slice(0, outputs[0].startOffset),
-    docText.slice(0, outputs[0].startOffset)
-  );
+  // El texto antes de la línea en blanco separadora no cambia
+  // (la línea en blanco está en outputs[0].startOffset - 1)
+  const beforeBlank = outputs[0].startOffset - 1;
+  assert.strictEqual(result.slice(0, beforeBlank), docText.slice(0, beforeBlank));
 
-  // El texto después del bloque no cambia
-  assert.strictEqual(
-    result.slice(outputs[0].startOffset + newBlock.length),
-    docText.slice(outputs[0].endOffset)
-  );
+  // El nuevo bloque ocupa la posición donde antes estaba la línea en blanco + bloque viejo
+  assert.strictEqual(result.slice(beforeBlank, beforeBlank + newBlock.length), newBlock);
 
-  // El nuevo bloque está en su lugar
+  // El texto después del bloque viejo no cambia
+  assert.strictEqual(result.slice(beforeBlank + newBlock.length), docText.slice(outputs[0].endOffset));
+});
+
+test('replaceOrInsertOutputBlock: reemplazo sin línea en blanco legada — rango exacto sin consumo', () => {
+  // Documento ya en formato nuevo (sin línea en blanco entre chunk y output)
+  const docText = [
+    '```python {#foo}',
+    'code',
+    '```',
+    '```output {#foo hash=oldoldol}',
+    'old result',
+    '```',
+    'rest',
+  ].join('\n');
+
+  const chunks = parseChunks(docText);
+  const outputs = parseOutputs(docText);
+  assert.strictEqual(chunks.length, 1);
+  assert.strictEqual(outputs.length, 1);
+
+  const newBlock = buildOutputBlock('foo', 'newnewne', 'new result');
+  const result = replaceOrInsertOutputBlock(docText, chunks[0], outputs[0], newBlock);
+
+  // Sin línea en blanco: el texto antes del bloque no cambia
+  assert.strictEqual(result.slice(0, outputs[0].startOffset), docText.slice(0, outputs[0].startOffset));
+
+  // El nuevo bloque está en su lugar exacto
   assert.strictEqual(
     result.slice(outputs[0].startOffset, outputs[0].startOffset + newBlock.length),
     newBlock
   );
+
+  // El texto después del bloque viejo no cambia
+  assert.strictEqual(result.slice(outputs[0].startOffset + newBlock.length), docText.slice(outputs[0].endOffset));
 });
 
 test('replaceOrInsertOutputBlock: reemplazo — el texto "rest" al final no cambia', () => {

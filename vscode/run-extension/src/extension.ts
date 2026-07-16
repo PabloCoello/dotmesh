@@ -392,23 +392,31 @@ async function applyOutputEdit(
   return editor.edit(
     editBuilder => {
       if (existingOutput !== undefined) {
-        // Reemplazo: sustituir exactamente el rango del bloque anterior
+        // Reemplazo: si hay línea en blanco legada encima, retroceder 1 para consumirla
+        let start = existingOutput.startOffset;
+        if (
+          start >= 2 &&
+          baseText[start - 1] === '\n' &&
+          baseText[start - 2] === '\n'
+        ) {
+          start--;
+        }
         editBuilder.replace(
           new vscode.Range(
-            document.positionAt(existingOutput.startOffset),
+            document.positionAt(start),
             document.positionAt(existingOutput.endOffset),
           ),
           newOutputBlock,
         );
       } else {
-        // Inserción: justo después del cierre del chunk
+        // Inserción: directamente tras el cierre del chunk, sin línea en blanco
         const E = chunk.endOffset;
         if (E >= baseText.length) {
-          // El chunk cierra el fichero sin \n final: añadir dos saltos al final
-          editBuilder.insert(document.positionAt(E), '\n\n' + newOutputBlock + '\n');
+          // El chunk cierra el fichero sin \n final: un salto antes y uno tras el bloque
+          editBuilder.insert(document.positionAt(E), '\n' + newOutputBlock + '\n');
         } else {
-          // text[E] === '\n': conservar ese \n e insertar la línea en blanco + bloque
-          editBuilder.insert(document.positionAt(E + 1), '\n' + newOutputBlock + '\n');
+          // text[E] === '\n': conservar ese \n e insertar el bloque a continuación
+          editBuilder.insert(document.positionAt(E + 1), newOutputBlock + '\n');
         }
       }
     },
