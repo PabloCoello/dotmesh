@@ -678,7 +678,13 @@ async function navigateThread(
     .getConfiguration('mesh-review')
     .get<boolean>('navigation.cyclic', true);
 
-  const currentOffset = editor.document.offsetAt(editor.selection.active);
+  // 'next' avanza desde el final de la selección actual; 'prev' retrocede desde
+  // el inicio. Usar siempre selection.active (= fin de cita tras nextThread)
+  // para 'prev' haría que pickNextThread encontrase el mismo hilo de vuelta
+  // (su char_offset < active es siempre cierto), sin avance visible.
+  const refPosition =
+    direction === 'prev' ? editor.selection.start : editor.selection.end;
+  const currentOffset = editor.document.offsetAt(refPosition);
   const target = pickNextThread(
     cardsProvider.projections,
     currentOffset,

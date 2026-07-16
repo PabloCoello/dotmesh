@@ -39,7 +39,7 @@ El icono de mesh-review en la barra de actividad abre el panel `Hilos`. Para el 
 |---|---|---|
 | Crear comentario | `Ctrl+Alt+Z` | `Alt+Cmd+Z` |
 | Siguiente hilo | `Ctrl+Alt+N` | `Alt+Cmd+N` |
-| Hilo anterior | `Ctrl+Alt+B` | `Alt+Cmd+B` |
+| Hilo anterior | `Ctrl+Alt+P` | `Alt+Cmd+P` |
 
 Los comandos de navegación saltan al ancla del siguiente o anterior hilo abierto en el documento activo, ordenados por posición en el texto.
 

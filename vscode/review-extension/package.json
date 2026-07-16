@@ -96,8 +96,8 @@
       },
       {
         "command": "mesh-review.previousThread",
-        "key": "ctrl+alt+b",
-        "mac": "alt+cmd+b",
+        "key": "ctrl+alt+p",
+        "mac": "alt+cmd+p",
         "when": "editorTextFocus"
       }
     ],
@@ -119,6 +119,7 @@
   },
   "scripts": {
     "build": "node build.js",
+    "check": "tsc --noEmit",
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
