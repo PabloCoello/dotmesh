@@ -133,6 +133,31 @@ test('computeLensSpecs: Borrar salida solo aparece en chunks con bloque de salid
   assert.strictEqual(clear[0].offset, text.indexOf('```python {#b}'));
 });
 
+// ===========================================================================
+// Lens de reinicio de kernel (offset 0, solo con chunks)
+// ===========================================================================
+
+test('computeLensSpecs: con chunks, Reiniciar kernel aparece una vez en offset 0 sin argumentos', () => {
+  const text = [
+    '```python {#a}',
+    'print(1)',
+    '```',
+  ].join('\n');
+
+  const specs = computeLensSpecs(text);
+  const restart = byCommand(specs, 'mesh-run.restartKernel');
+
+  assert.strictEqual(restart.length, 1);
+  assert.strictEqual(restart[0].offset, 0);
+  assert.strictEqual(restart[0].title, '⟲ Reiniciar kernel');
+  assert.strictEqual(restart[0].arguments, undefined);
+});
+
+test('computeLensSpecs: sin chunks, el lens de reinicio no aparece', () => {
+  const specs = computeLensSpecs('Solo prosa, sin chunks.');
+  assert.strictEqual(byCommand(specs, 'mesh-run.restartKernel').length, 0);
+});
+
 test('computeLensSpecs: un bloque de salida huérfano (sin chunk) no genera lenses', () => {
   const text = [
     '```python {#a}',

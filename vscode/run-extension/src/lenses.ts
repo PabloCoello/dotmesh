@@ -31,6 +31,7 @@ export function computeLensSpecs(text: string): LensSpec[] {
   const specs: LensSpec[] = [
     { offset: 0, title: '▶ Ejecutar todo', command: 'mesh-run.runAll' },
     { offset: 0, title: '✕ Borrar todas las salidas', command: 'mesh-run.clearOutputs' },
+    { offset: 0, title: '⟲ Reiniciar kernel', command: 'mesh-run.restartKernel' },
   ];
 
   chunks.forEach((chunk, index) => {

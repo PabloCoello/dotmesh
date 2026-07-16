@@ -55,7 +55,8 @@
       },
       {
         "command": "mesh-run.restartKernel",
-        "title": "Mesh Run: Reiniciar kernel"
+        "title": "Mesh Run: Reiniciar kernel",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "mesh-run.clearChunkOutput",
@@ -64,8 +65,29 @@
       {
         "command": "mesh-run.clearOutputs",
         "title": "Mesh Run: Borrar todas las salidas"
+      },
+      {
+        "command": "mesh-run.insertChunk",
+        "title": "Mesh Run: Insertar chunk"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "mesh-run.insertChunk",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "when": "editorTextFocus && editorLangId == markdown && !findInputFocussed && !replaceInputFocussed"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mesh-run.restartKernel",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "node build.js",

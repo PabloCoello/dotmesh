@@ -11,6 +11,7 @@ import { parseChunks, parseOutputs } from './parser.js';
 import type { ParsedChunk, ParsedOutput } from './parser.js';
 import { chunkHash } from './hash.js';
 import { computeLensSpecs } from './lenses.js';
+import { generateChunkId, resolveChunkInsertionOffset } from './chunks.js';
 import {
   truncateOutput,
   buildOutputBlock,
@@ -880,13 +881,14 @@ async function normalizeLegacySeparators(document: vscode.TextDocument): Promise
 }
 
 /**
- * Registra los seis comandos de mesh-run declarados en package.json:
+ * Registra los siete comandos de mesh-run declarados en package.json:
  * - mesh-run.runChunk
  * - mesh-run.runUpTo
  * - mesh-run.runAll
  * - mesh-run.restartKernel
  * - mesh-run.clearChunkOutput
  * - mesh-run.clearOutputs
+ * - mesh-run.insertChunk
  *
  * Todos los comandos de ejecución y edición se encolan por URI de documento
  * para serializar las operaciones y evitar conflictos de edición concurrente.
@@ -1007,6 +1009,62 @@ function registerCommands(
       }
       enqueue(document.uri, () => normalizeLegacySeparators(document));
       enqueue(document.uri, () => executeClearOutputs(document));
+    }),
+  );
+
+  // mesh-run.insertChunk
+  // Inserta un nuevo chunk de Python con ID único tras la línea del cursor
+  // (o tras el cierre de la valla si el cursor está dentro de una valla
+  // existente). El cursor queda en la línea en blanco interior del chunk.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mesh-run.insertChunk', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== 'markdown') return;
+
+      const document = editor.document;
+      const text = document.getText();
+      const chunks = parseChunks(text);
+      const outputs = parseOutputs(text);
+      const allFences = [...chunks, ...outputs];
+      const cursorOffset = document.offsetAt(editor.selection.active);
+
+      // Calcular el offset de inserción con la función pura de chunks.ts
+      const insertOffset = resolveChunkInsertionOffset(text, cursorOffset, allFences);
+
+      // Si la valla del cursor termina en EOF sin \n final, el primer \n del
+      // texto insertado solo cierra esa línea de cierre: hace falta un segundo
+      // para abrir línea nueva. En el resto de casos insertOffset apunta a un
+      // \n existente y basta con uno.
+      const insideFence = allFences.some(
+        f => cursorOffset >= f.startOffset && cursorOffset <= f.endOffset,
+      );
+      const prefixLen = (insideFence && insertOffset >= text.length) ? 2 : 1;
+
+      const id = generateChunkId(chunks.map(c => c.id));
+      const openingFence = `\`\`\`python {#${id}}`;
+      const insertText = '\n'.repeat(prefixLen) + `${openingFence}\n\n\`\`\``;
+
+      const insertPos = document.positionAt(insertOffset);
+
+      const success = await editor.edit(
+        editBuilder => {
+          editBuilder.replace(new vscode.Range(insertPos, insertPos), insertText);
+        },
+        { undoStopBefore: true, undoStopAfter: true },
+      );
+
+      if (!success) {
+        vscode.window.showWarningMessage('mesh-run: no se pudo insertar el chunk.');
+        return;
+      }
+
+      // Posicionar el cursor en la línea en blanco interior del nuevo chunk.
+      // Offset en el documento tras la edición:
+      //   insertOffset + prefixLen (saltos previos) + openingFence.length + 1 (\n de apertura)
+      const cursorLineOffset = insertOffset + prefixLen + openingFence.length + 1;
+      const newCursorPos = document.positionAt(cursorLineOffset);
+      editor.selection = new vscode.Selection(newCursorPos, newCursorPos);
+      editor.revealRange(new vscode.Range(newCursorPos, newCursorPos));
     }),
   );
 }
