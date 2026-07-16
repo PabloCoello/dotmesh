@@ -13,6 +13,10 @@
  */
 
 import { getGitRoot, isUuid, utcTimestampMs, type EventEnvelope } from '../../sidecar.ts';
+
+// ---------------------------------------------------------------------------
+// Interno: guarda de path traversal idéntica a sidecar.ts/writeEvent
+// ---------------------------------------------------------------------------
 import * as path from 'node:path';
 import { mkdir, writeFile, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -76,10 +80,19 @@ export async function runEmit(argv: string[]): Promise<void> {
 
 /**
  * Escribe un evento en el directorio dado de forma atómica (tmp+rename).
- * El fichero temporal lleva extensión `.tmp.json` para que readEvents
- * (que filtra por `.json`) no lo procese a medias.
+ *
+ * Guarda de path traversal: el id se usa como nombre de fichero (`<id>.json`).
+ * Se rechaza cualquier id que no sea UUID v4 para impedir que un id malicioso
+ * (p. ej. `../../.ssh/evil`) escape del directorio de eventos — mismo patrón
+ * que `writeEvent` en sidecar.ts.
+ *
+ * El fichero temporal lleva extensión `.json.tmp` para que readEvents
+ * (que filtra por `.endsWith('.json')`) no lo procese a medias.
  */
 export async function emitEvent(eventDir: string, event: EventEnvelope): Promise<void> {
+  if (!isUuid(event.id)) {
+    throw new Error(`mesh-review: id de evento inválido (no es UUID): ${event.id}`);
+  }
   await mkdir(eventDir, { recursive: true });
   const final = path.join(eventDir, `${event.id}.json`);
   const tmp = `${final}.tmp`;

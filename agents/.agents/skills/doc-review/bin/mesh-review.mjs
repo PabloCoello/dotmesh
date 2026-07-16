@@ -173,6 +173,10 @@ async function runProject(argv) {
     process.exit(1);
   }
   const docRelPath = path2.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
   const eventDir = path2.join(gitRoot, ".ai", "review", docRelPath);
   const events = await readEvents(eventDir);
   let threads = project(events);
@@ -217,6 +221,10 @@ async function runEmit(argv) {
     process.exit(1);
   }
   const docRelPath = path3.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
   const eventDir = path3.join(gitRoot, ".ai", "review", docRelPath);
   const id = randomUUID();
   const created_at = utcTimestampMs();
@@ -251,6 +259,9 @@ async function runEmit(argv) {
 `);
 }
 async function emitEvent(eventDir, event) {
+  if (!isUuid(event.id)) {
+    throw new Error(`mesh-review: id de evento inv\xE1lido (no es UUID): ${event.id}`);
+  }
   await mkdir2(eventDir, { recursive: true });
   const final = path3.join(eventDir, `${event.id}.json`);
   const tmp = `${final}.tmp`;
