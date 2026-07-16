@@ -7,6 +7,7 @@ import {
   truncateOutput,
   buildOutputBlock,
   replaceOrInsertOutputBlock,
+  outputDeletionRange,
 } from './writer.ts';
 
 // ===========================================================================
@@ -295,4 +296,74 @@ test('round-trip: truncateOutput + buildOutputBlock → parseable', () => {
   const outputs = parseOutputs(doc);
   assert.strictEqual(outputs.length, 1);
   assert.strictEqual(outputs[0].content, output);
+});
+
+// ===========================================================================
+// outputDeletionRange — inversa de la inserción (bug: líneas en blanco
+// acumuladas por cada ciclo ejecutar → borrar salida)
+// ===========================================================================
+
+test('outputDeletionRange: ejecutar y borrar devuelve el documento original (bloque en medio)', () => {
+  const original = '```python {#a}\nprint(1)\n```\n\n## Título';
+  const chunk = parseChunks(original)[0];
+  const withBlock = replaceOrInsertOutputBlock(
+    original, chunk, undefined, buildOutputBlock('a', 'abc12345', '1'),
+  );
+
+  const output = parseOutputs(withBlock)[0];
+  const { startOffset, endOffset } = outputDeletionRange(withBlock, output);
+  const cleared = withBlock.slice(0, startOffset) + withBlock.slice(endOffset);
+
+  assert.strictEqual(cleared, original);
+});
+
+test('outputDeletionRange: chunk que cierra el fichero — borrar deja el original más un \\n final', () => {
+  const original = '```python {#a}\nprint(1)\n```';
+  const chunk = parseChunks(original)[0];
+  const withBlock = replaceOrInsertOutputBlock(
+    original, chunk, undefined, buildOutputBlock('a', 'abc12345', '1'),
+  );
+
+  const output = parseOutputs(withBlock)[0];
+  const { startOffset, endOffset } = outputDeletionRange(withBlock, output);
+  const cleared = withBlock.slice(0, startOffset) + withBlock.slice(endOffset);
+
+  assert.strictEqual(cleared, original + '\n');
+});
+
+test('outputDeletionRange: sin línea en blanco encima solo consume el \\n final del bloque', () => {
+  const text = '## t\n```output {#a hash=abc12345}\n1\n```\n## u';
+  const output = parseOutputs(text)[0];
+
+  const { startOffset, endOffset } = outputDeletionRange(text, output);
+  const cleared = text.slice(0, startOffset) + text.slice(endOffset);
+
+  assert.strictEqual(cleared, '## t\n## u');
+});
+
+test('outputDeletionRange: bloque que es todo el fichero sin \\n final — borra el fichero entero', () => {
+  const text = '```output {#a hash=abc12345}\n1\n```';
+  const output = parseOutputs(text)[0];
+
+  const { startOffset, endOffset } = outputDeletionRange(text, output);
+
+  assert.strictEqual(startOffset, 0);
+  assert.strictEqual(endOffset, text.length);
+});
+
+test('outputDeletionRange: ciclos repetidos ejecutar → borrar no acumulan líneas en blanco', () => {
+  const original = '```python {#a}\nprint(1)\n```\n\n## Título';
+  let text = original;
+
+  for (let i = 0; i < 3; i++) {
+    const chunk = parseChunks(text)[0];
+    text = replaceOrInsertOutputBlock(
+      text, chunk, undefined, buildOutputBlock('a', 'abc12345', String(i)),
+    );
+    const output = parseOutputs(text)[0];
+    const { startOffset, endOffset } = outputDeletionRange(text, output);
+    text = text.slice(0, startOffset) + text.slice(endOffset);
+  }
+
+  assert.strictEqual(text, original);
 });

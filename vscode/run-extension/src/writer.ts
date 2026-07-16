@@ -52,6 +52,42 @@ export function buildOutputBlock(
  *   chunk.endOffset apunta al \n que sigue a la línea de cierre del chunk,
  *   o a docText.length si el chunk cierra el fichero sin \n final.
  */
+/**
+ * Rango a borrar para eliminar un bloque de salida sin dejar residuo.
+ *
+ * Es la inversa de la inserción de replaceOrInsertOutputBlock: además del
+ * bloque [startOffset, endOffset), consume el \n que termina su última línea
+ * y uno de los dos \n anteriores (la línea en blanco de separación que la
+ * inserción añadió encima). Borrar solo el rango del bloque dejaría esos dos
+ * saltos huérfanos y acumularía una línea en blanco por cada ciclo
+ * ejecutar → borrar.
+ *
+ * En bloques escritos a mano sin línea en blanco encima solo se consume el
+ * \n final, sin tocar la línea anterior.
+ */
+export function outputDeletionRange(
+  docText: string,
+  output: Pick<ParsedOutput, 'startOffset' | 'endOffset'>,
+): { startOffset: number; endOffset: number } {
+  let { startOffset, endOffset } = output;
+
+  // \n que termina la línea de cierre del bloque (ausente si el bloque es EOF)
+  if (endOffset < docText.length && docText[endOffset] === '\n') {
+    endOffset++;
+  }
+
+  // Línea en blanco inmediatamente anterior: consumir uno de los dos \n
+  if (
+    startOffset >= 2 &&
+    docText[startOffset - 1] === '\n' &&
+    docText[startOffset - 2] === '\n'
+  ) {
+    startOffset--;
+  }
+
+  return { startOffset, endOffset };
+}
+
 export function replaceOrInsertOutputBlock(
   docText: string,
   chunk: ParsedChunk,

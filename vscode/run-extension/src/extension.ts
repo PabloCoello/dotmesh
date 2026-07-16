@@ -9,7 +9,12 @@ import { parseChunks, parseOutputs } from './parser.js';
 import type { ParsedChunk, ParsedOutput } from './parser.js';
 import { chunkHash } from './hash.js';
 import { computeLensSpecs } from './lenses.js';
-import { truncateOutput, buildOutputBlock, replaceOrInsertOutputBlock } from './writer.js';
+import {
+  truncateOutput,
+  buildOutputBlock,
+  replaceOrInsertOutputBlock,
+  outputDeletionRange,
+} from './writer.js';
 import { reanchorAfterReplace } from './reanchor.js';
 
 const execFileAsync = promisify(execFile);
@@ -604,17 +609,23 @@ async function executeClearOutputs(
     return;
   }
 
-  // Ordenar descendente para que las eliminaciones múltiples en un solo edit
-  // no desplacen los offsets de los bloques siguientes (procesan del final al inicio)
-  const sortedDesc = [...outputs].sort((a, b) => b.startOffset - a.startOffset);
+  // Rango ampliado por bloque (bloque + línea en blanco superior + \n final):
+  // la inversa exacta de la inserción. Borrar solo [startOffset, endOffset)
+  // dejaría los dos \n que la inserción añadió y acumularía una línea en
+  // blanco por cada ciclo ejecutar → borrar.
+  // Orden descendente para que las eliminaciones múltiples en un solo edit
+  // no desplacen los offsets de los bloques siguientes (procesan del final al inicio).
+  const deletionsDesc = outputs
+    .map(o => outputDeletionRange(freshText, o))
+    .sort((a, b) => b.startOffset - a.startOffset);
 
   const editSuccess = await editor.edit(
     editBuilder => {
-      for (const output of sortedDesc) {
+      for (const range of deletionsDesc) {
         editBuilder.delete(
           new vscode.Range(
-            document.positionAt(output.startOffset),
-            document.positionAt(output.endOffset),
+            document.positionAt(range.startOffset),
+            document.positionAt(range.endOffset),
           ),
         );
       }
@@ -629,11 +640,11 @@ async function executeClearOutputs(
     return;
   }
 
-  // Calcular textAfter eliminando los bloques en orden descendente
+  // Calcular textAfter eliminando los mismos rangos en orden descendente
   // (las eliminaciones desde el final no afectan a los offsets de los bloques anteriores)
   let textAfter = freshText;
-  for (const output of sortedDesc) {
-    textAfter = textAfter.slice(0, output.startOffset) + textAfter.slice(output.endOffset);
+  for (const range of deletionsDesc) {
+    textAfter = textAfter.slice(0, range.startOffset) + textAfter.slice(range.endOffset);
   }
 
   // Re-anclaje por cada bloque eliminado (newOutputRange null = bloque desaparecido).
