@@ -8,6 +8,7 @@ import {
   buildOutputBlock,
   replaceOrInsertOutputBlock,
   outputDeletionRange,
+  type OutputBlockOptions,
 } from './writer.ts';
 
 // ===========================================================================
@@ -110,6 +111,40 @@ test('buildOutputBlock: output con múltiples líneas', () => {
 test('buildOutputBlock: output vacío genera bloque con cuerpo vacío', () => {
   const block = buildOutputBlock('baz', '00000000', '');
   assert.strictEqual(block, '```output {#baz hash=00000000}\n\n```');
+});
+
+// ===========================================================================
+// buildOutputBlock — atributos opcionales (warn, seq, up)
+// ===========================================================================
+
+test('buildOutputBlock: con warn=true, seq y up produce la valla correcta', () => {
+  const block = buildOutputBlock('id', 'hash1234', 'out', { warn: true, seq: 3, up: 'e3b0c442' });
+  assert.strictEqual(
+    block,
+    '```output {#id hash=hash1234 warn=1 seq=3 up=e3b0c442}\nout\n```'
+  );
+});
+
+test('buildOutputBlock: sin options el resultado es idéntico al formato sin atributos (sin regresión)', () => {
+  const withoutOpts = buildOutputBlock('foo', 'abcd1234', 'hello world');
+  const withUndefined = buildOutputBlock('foo', 'abcd1234', 'hello world', undefined);
+  const expected = '```output {#foo hash=abcd1234}\nhello world\n```';
+  assert.strictEqual(withoutOpts, expected);
+  assert.strictEqual(withUndefined, expected);
+});
+
+test('buildOutputBlock + parseOutputs round-trip con warn/seq/up', () => {
+  const block = buildOutputBlock('myid', 'abcd1234', 'content', { warn: true, seq: 7, up: 'e3b0c442' });
+  const doc = block + '\n';
+  const outputs = parseOutputs(doc);
+
+  assert.strictEqual(outputs.length, 1);
+  assert.strictEqual(outputs[0].chunkId, 'myid');
+  assert.strictEqual(outputs[0].hash, 'abcd1234');
+  assert.strictEqual(outputs[0].content, 'content');
+  assert.strictEqual(outputs[0].warn, true);
+  assert.strictEqual(outputs[0].seq, 7);
+  assert.strictEqual(outputs[0].up, 'e3b0c442');
 });
 
 // ===========================================================================

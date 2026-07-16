@@ -26,18 +26,37 @@ export function truncateOutput(lines: string[], limit: number): string {
 }
 
 /**
+ * Atributos opcionales que buildOutputBlock añade al info string.
+ * Solo se escriben los campos con valor definido.
+ */
+export interface OutputBlockOptions {
+  warn?: boolean;
+  seq?: number;
+  up?: string;
+}
+
+/**
  * Construye el bloque de salida completo (sin \n final):
  *
- *   ```output {#chunkId hash=XXXXXXXX}
+ *   ```output {#chunkId hash=XXXXXXXX [warn=1] [seq=N] [up=H]}
  *   ...output...
  *   ```
+ *
+ * Los atributos opcionales se añaden al final del info string en el orden
+ * warn, seq, up. Solo se escriben los que tienen valor definido.
  */
 export function buildOutputBlock(
   chunkId: string,
   hash: string,
-  output: string
+  output: string,
+  options?: OutputBlockOptions
 ): string {
-  return `\`\`\`output {#${chunkId} hash=${hash}}\n${output}\n\`\`\``;
+  let info = `\`\`\`output {#${chunkId} hash=${hash}`;
+  if (options?.warn === true) info += ' warn=1';
+  if (options?.seq !== undefined) info += ` seq=${options.seq}`;
+  if (options?.up !== undefined) info += ` up=${options.up}`;
+  info += '}';
+  return `${info}\n${output}\n\`\`\``;
 }
 
 /**
