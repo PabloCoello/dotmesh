@@ -8,6 +8,7 @@ import type { ExecutionResult } from './kernel.js';
 import { parseChunks, parseOutputs } from './parser.js';
 import type { ParsedChunk, ParsedOutput } from './parser.js';
 import { chunkHash } from './hash.js';
+import { computeLensSpecs } from './lenses.js';
 import { truncateOutput, buildOutputBlock, replaceOrInsertOutputBlock } from './writer.js';
 import { reanchorAfterReplace } from './reanchor.js';
 
@@ -355,39 +356,23 @@ class CompanionDecorationProvider implements vscode.FileDecorationProvider {
 // ---------------------------------------------------------------------------
 
 /**
- * Proporciona dos CodeLens sobre la línea de apertura de cada chunk:
- * - "▶ Ejecutar" → mesh-run.runChunk con el chunkId del chunk.
- * - "▶ Ejecutar todo" → mesh-run.runAll (sin argumentos).
+ * CodeLens de mesh-run, calculados por el módulo puro lenses.ts:
+ * - Documento (offset 0, una sola vez): "Ejecutar todo" y "Borrar todas las salidas".
+ * - Chunk: "Ejecutar", "Ejecutar hasta aquí" (salvo en el primero) y
+ *   "Borrar salida" (solo si el chunk tiene bloque de salida).
  */
 class ChunkCodeLensProvider implements vscode.CodeLensProvider {
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     if (document.languageId !== 'markdown') return [];
 
-    const text = document.getText();
-    const chunks = parseChunks(text);
-    const lenses: vscode.CodeLens[] = [];
-
-    for (const chunk of chunks) {
-      const pos = document.positionAt(chunk.startOffset);
-      const range = new vscode.Range(pos, pos);
-
-      lenses.push(
-        new vscode.CodeLens(range, {
-          title: '▶ Ejecutar',
-          command: 'mesh-run.runChunk',
-          arguments: [chunk.id],
-        }),
-      );
-
-      lenses.push(
-        new vscode.CodeLens(range, {
-          title: '▶ Ejecutar todo',
-          command: 'mesh-run.runAll',
-        }),
-      );
-    }
-
-    return lenses;
+    return computeLensSpecs(document.getText()).map(spec => {
+      const pos = document.positionAt(spec.offset);
+      return new vscode.CodeLens(new vscode.Range(pos, pos), {
+        title: spec.title,
+        command: spec.command,
+        arguments: spec.arguments,
+      });
+    });
   }
 }
 
@@ -586,15 +571,28 @@ async function runChunkById(
 }
 
 // ---------------------------------------------------------------------------
-// clearOutputs — eliminar todos los bloques de salida en una sola operación
+// clearOutputs — eliminar bloques de salida en una sola operación
 // ---------------------------------------------------------------------------
 
-async function executeClearOutputs(document: vscode.TextDocument): Promise<void> {
+/**
+ * Elimina bloques de salida del documento en una sola edición.
+ * Sin `onlyChunkId` elimina todos los bloques; con él, solo el de ese chunk.
+ */
+async function executeClearOutputs(
+  document: vscode.TextDocument,
+  onlyChunkId?: string,
+): Promise<void> {
   const freshText = document.getText();
-  const outputs = parseOutputs(freshText);
+  const outputs = parseOutputs(freshText).filter(
+    o => onlyChunkId === undefined || o.chunkId === onlyChunkId,
+  );
 
   if (outputs.length === 0) {
-    vscode.window.showInformationMessage('mesh-run: no hay bloques de salida que limpiar.');
+    vscode.window.showInformationMessage(
+      onlyChunkId === undefined
+        ? 'mesh-run: no hay bloques de salida que borrar.'
+        : `mesh-run: el chunk «${onlyChunkId}» no tiene bloque de salida.`,
+    );
     return;
   }
 
@@ -665,10 +663,47 @@ async function executeClearOutputs(document: vscode.TextDocument): Promise<void>
 // ---------------------------------------------------------------------------
 
 /**
- * Registra los cuatro comandos de mesh-run declarados en package.json:
+ * Resuelve el documento markdown activo y el chunk objetivo de un comando:
+ * el chunkId llega como argumento desde el CodeLens, o se busca bajo el
+ * cursor si el comando se invocó desde la paleta. Muestra el aviso
+ * pertinente y devuelve undefined si no hay objetivo.
+ */
+function resolveChunkTarget(
+  chunkId?: string,
+): { document: vscode.TextDocument; chunkId: string } | undefined {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== 'markdown') {
+    vscode.window.showWarningMessage(
+      'mesh-run: abre un documento Markdown para usar este comando.',
+    );
+    return undefined;
+  }
+
+  const document = editor.document;
+  if (chunkId) {
+    return { document, chunkId };
+  }
+
+  const cursorOffset = document.offsetAt(editor.selection.active);
+  const chunkUnderCursor = parseChunks(document.getText()).find(
+    c => cursorOffset >= c.startOffset && cursorOffset <= c.endOffset,
+  );
+  if (!chunkUnderCursor) {
+    vscode.window.showWarningMessage(
+      'mesh-run: coloca el cursor dentro de un chunk.',
+    );
+    return undefined;
+  }
+  return { document, chunkId: chunkUnderCursor.id };
+}
+
+/**
+ * Registra los seis comandos de mesh-run declarados en package.json:
  * - mesh-run.runChunk
+ * - mesh-run.runUpTo
  * - mesh-run.runAll
  * - mesh-run.restartKernel
+ * - mesh-run.clearChunkOutput
  * - mesh-run.clearOutputs
  *
  * Todos los comandos de ejecución y edición se encolan por URI de documento
@@ -683,36 +718,52 @@ function registerCommands(
   // Invocado desde paleta sin argumento: busca el chunk bajo el cursor.
   context.subscriptions.push(
     vscode.commands.registerCommand('mesh-run.runChunk', async (chunkId?: string) => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== 'markdown') {
-        vscode.window.showWarningMessage(
-          'mesh-run: abre un documento Markdown para ejecutar un chunk.',
+      const target = resolveChunkTarget(chunkId);
+      if (!target) return;
+      const resolvedId = target.chunkId;
+      enqueue(target.document.uri, () =>
+        runChunkById(target.document, resolvedId, kernelManager),
+      );
+    }),
+  );
+
+  // mesh-run.runUpTo
+  // Encola en orden todos los chunks desde el principio del documento hasta
+  // el chunk objetivo incluido. Con ids duplicados, el objetivo es la primera
+  // aparición; runChunkById detecta el duplicado por chunk y avisa.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mesh-run.runUpTo', async (chunkId?: string) => {
+      const target = resolveChunkTarget(chunkId);
+      if (!target) return;
+
+      const chunks = parseChunks(target.document.getText());
+      const idx = chunks.findIndex(c => c.id === target.chunkId);
+      if (idx === -1) {
+        vscode.window.showInformationMessage(
+          `mesh-run: el chunk «${target.chunkId}» ya no existe en el documento.`,
         );
         return;
       }
 
-      const document = editor.document;
-      let targetId = chunkId;
-
-      if (!targetId) {
-        // Invocado desde paleta sin argumento: chunk bajo el cursor
-        const cursorOffset = document.offsetAt(editor.selection.active);
-        const chunks = parseChunks(document.getText());
-        const chunkUnderCursor = chunks.find(
-          c => cursorOffset >= c.startOffset && cursorOffset <= c.endOffset,
+      for (const chunk of chunks.slice(0, idx + 1)) {
+        const id = chunk.id;
+        enqueue(target.document.uri, () =>
+          runChunkById(target.document, id, kernelManager),
         );
-        if (!chunkUnderCursor) {
-          vscode.window.showWarningMessage(
-            'mesh-run: coloca el cursor dentro de un chunk para ejecutarlo.',
-          );
-          return;
-        }
-        targetId = chunkUnderCursor.id;
       }
+    }),
+  );
 
-      // Capturar targetId en cierre para evitar que una reasignación posterior lo cambie
-      const resolvedId = targetId;
-      enqueue(document.uri, () => runChunkById(document, resolvedId, kernelManager));
+  // mesh-run.clearChunkOutput
+  // Elimina solo el bloque de salida del chunk objetivo.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('mesh-run.clearChunkOutput', async (chunkId?: string) => {
+      const target = resolveChunkTarget(chunkId);
+      if (!target) return;
+      const resolvedId = target.chunkId;
+      enqueue(target.document.uri, () =>
+        executeClearOutputs(target.document, resolvedId),
+      );
     }),
   );
 

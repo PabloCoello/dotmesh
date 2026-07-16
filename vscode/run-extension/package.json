@@ -24,6 +24,10 @@
         "title": "Mesh Run: Ejecutar chunk"
       },
       {
+        "command": "mesh-run.runUpTo",
+        "title": "Mesh Run: Ejecutar hasta aquí"
+      },
+      {
         "command": "mesh-run.runAll",
         "title": "Mesh Run: Ejecutar todo"
       },
@@ -32,8 +36,12 @@
         "title": "Mesh Run: Reiniciar kernel"
       },
       {
+        "command": "mesh-run.clearChunkOutput",
+        "title": "Mesh Run: Borrar salida del chunk"
+      },
+      {
         "command": "mesh-run.clearOutputs",
-        "title": "Mesh Run: Limpiar salidas"
+        "title": "Mesh Run: Borrar todas las salidas"
       }
     ]
   },
