@@ -15,6 +15,15 @@ var VALID_COMMENT_TYPES = /* @__PURE__ */ new Set([
   "referencia",
   "supuesto"
 ]);
+function anchorChanged(a, b) {
+  const aDetached = "detached" in a;
+  const bDetached = "detached" in b;
+  if (aDetached !== bDetached) return true;
+  if (aDetached && bDetached) return false;
+  const aa = a;
+  const bb = b;
+  return aa.quote !== bb.quote || aa.line_hint !== bb.line_hint || aa.char_offset !== bb.char_offset;
+}
 function utcTimestampMs() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
@@ -294,6 +303,140 @@ function parseKvPairs(pairs) {
   return result;
 }
 
+// src/cli/commands/reanchor.ts
+import { readFile as readFile2 } from "node:fs/promises";
+import { randomUUID as randomUUID2 } from "node:crypto";
+import * as path4 from "node:path";
+
+// src/anchor.ts
+var ANCHOR_UNCERTAINTY_THRESHOLD = 200;
+function createAnchor(text, startOffset, endOffset) {
+  const quote = text.slice(startOffset, endOffset);
+  const textBefore = text.slice(0, startOffset);
+  const line_hint = textBefore.split("\n").length - 1;
+  return { quote, line_hint, char_offset: startOffset };
+}
+function resolveAnchor(text, anchor) {
+  const { quote, char_offset } = anchor;
+  if (!quote) return null;
+  const occurrences = [];
+  let searchFrom = 0;
+  while (searchFrom <= text.length) {
+    const idx = text.indexOf(quote, searchFrom);
+    if (idx === -1) break;
+    occurrences.push(idx);
+    searchFrom = idx + quote.length;
+  }
+  if (occurrences.length === 0) return null;
+  let best = occurrences[0];
+  let bestDist = Math.abs(occurrences[0] - char_offset);
+  for (let i = 1; i < occurrences.length; i++) {
+    const dist = Math.abs(occurrences[i] - char_offset);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = occurrences[i];
+    }
+  }
+  const result = {
+    startOffset: best,
+    endOffset: best + quote.length
+  };
+  if (bestDist > ANCHOR_UNCERTAINTY_THRESHOLD) {
+    result.uncertain = true;
+  }
+  return result;
+}
+
+// src/cli/commands/reanchor.ts
+async function runReanchor(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage();
+    return;
+  }
+  const [docArg] = argv;
+  const docAbs = path4.resolve(docArg);
+  const gitRoot = await getGitRoot(path4.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const docRelPath = path4.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const eventDir = path4.join(gitRoot, ".ai", "review", docRelPath);
+  let text;
+  try {
+    text = await readFile2(docAbs, "utf8");
+  } catch {
+    process.stderr.write(`mesh-review: no se puede leer el documento: ${docAbs}
+`);
+    process.exit(1);
+  }
+  const events = await readEvents(eventDir);
+  const threads = project(events);
+  const count = await reanchorThreads(text, threads, eventDir);
+  process.stderr.write(`mesh-review reanchor: ${count} evento(s) emitido(s)
+`);
+}
+async function reanchorThreads(text, threads, eventDir) {
+  let count = 0;
+  for (const thread of threads) {
+    if (thread.status === "resolved" || thread.status === "detached") continue;
+    if ("detached" in thread.anchor) continue;
+    const stored = thread.anchor;
+    const resolved = resolveAnchor(text, stored);
+    let ev;
+    if (resolved === null) {
+      ev = {
+        id: randomUUID2(),
+        version: 2,
+        type: "thread.reanchored",
+        thread_id: thread.thread_id,
+        author: { kind: "ai", model: "mesh-review-cli" },
+        created_at: utcTimestampMs(),
+        commit: null,
+        dirty: false,
+        detached: true
+      };
+    } else {
+      const newAnchor = createAnchor(text, resolved.startOffset, resolved.endOffset);
+      if (!anchorChanged(stored, newAnchor)) continue;
+      ev = {
+        id: randomUUID2(),
+        version: 2,
+        type: "thread.reanchored",
+        thread_id: thread.thread_id,
+        author: { kind: "ai", model: "mesh-review-cli" },
+        created_at: utcTimestampMs(),
+        commit: null,
+        dirty: false,
+        anchor: newAnchor
+      };
+    }
+    await emitEvent(eventDir, ev);
+    count++;
+  }
+  return count;
+}
+function printUsage() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review reanchor <doc>",
+      "",
+      "Re-resuelve las anclas de los hilos abiertos del documento contra su",
+      "texto actual y emite thread.reanchored para los que han cambiado.",
+      "",
+      "Opciones:",
+      "  --help   Muestra este mensaje",
+      "",
+      "Ejemplo:",
+      "  mesh-review reanchor docs/SPEC.md"
+    ].join("\n") + "\n"
+  );
+}
+
 // src/cli/main.ts
 async function main(argv = process.argv.slice(2)) {
   const [subcommand, ...rest] = argv;
@@ -304,13 +447,16 @@ async function main(argv = process.argv.slice(2)) {
     case "emit":
       await runEmit(rest);
       break;
+    case "reanchor":
+      await runReanchor(rest);
+      break;
     default:
-      printUsage();
+      printUsage2();
       if (subcommand !== void 0) process.exit(1);
       break;
   }
 }
-function printUsage() {
+function printUsage2() {
   process.stderr.write(
     [
       "Uso: mesh-review <subcomando> [argumentos]",
@@ -318,10 +464,12 @@ function printUsage() {
       "Subcomandos:",
       "  project [--pending] <doc>         Proyecta los hilos abiertos del documento",
       "  emit <doc> <tipo> [clave=valor\u2026]  Emite un evento de revisi\xF3n para el documento",
+      "  reanchor <doc>                    Re-resuelve anclas y emite thread.reanchored",
       "",
       "Ejemplos:",
       "  mesh-review project --pending docs/SPEC.md",
-      '  mesh-review emit docs/SPEC.md message.posted thread_id=<uuid> body="correcci\xF3n" commit=null'
+      '  mesh-review emit docs/SPEC.md message.posted thread_id=<uuid> body="correcci\xF3n" commit=null',
+      "  mesh-review reanchor docs/SPEC.md"
     ].join("\n") + "\n"
   );
 }

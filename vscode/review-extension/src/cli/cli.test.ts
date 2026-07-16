@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
 import { isPending } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
+import { reanchorThreads } from './commands/reanchor.ts';
 import { writeFile } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
@@ -388,6 +389,144 @@ test('roundtrip: evento emitido reaparece en la proyección de project', async (
     const events2 = await readEvents(dir);
     const threads2 = project(events2);
     assert.strictEqual(isPending(threads2[0]), true, 'pending tras respuesta humana');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// reanchor
+// ---------------------------------------------------------------------------
+
+/**
+ * Crea un evento thread.opened con el ancla dada y lo emite en `dir`.
+ * Devuelve el thread_id.
+ */
+async function makeOpenedWithAnchor(
+  dir: string,
+  quote: string,
+  charOffset: number,
+  lineHint = 0
+): Promise<string> {
+  const tid = randomUUID();
+  const ev: EventEnvelope = {
+    id: randomUUID(),
+    version: 2,
+    type: 'thread.opened',
+    thread_id: tid,
+    author: { kind: 'human' },
+    created_at: utcTimestampMs(),
+    commit: null,
+    dirty: false,
+    anchor: { quote, line_hint: lineHint, char_offset: charOffset },
+    commentType: 'edita',
+    body: 'Comentario de prueba',
+  };
+  await emitEvent(dir, ev);
+  return tid;
+}
+
+test('reanchor: ancla desplazada → emite thread.reanchored con nueva ancla', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reanchor-disp-'));
+  try {
+    // Ancla original apunta al inicio del documento
+    await makeOpenedWithAnchor(dir, 'texto ancla', 0, 0);
+
+    // Texto actual: la cita se ha desplazado (hay un prefijo de 14 chars)
+    const prefijo = 'prefijo nuevo\n'; // 14 chars: 7 (prefijo) + 1 (espacio) + 5 (nuevo) + 1 (\n)
+    const text = `${prefijo}texto ancla\nfin`;
+
+    const events = await readEvents(dir);
+    const threads = project(events);
+    assert.strictEqual(threads.length, 1, '1 hilo');
+
+    const count = await reanchorThreads(text, threads, dir);
+    assert.strictEqual(count, 1, 'emite 1 evento');
+
+    // La proyección posterior refleja el nuevo char_offset
+    const events2 = await readEvents(dir);
+    const threads2 = project(events2);
+    const anchor = threads2[0].anchor;
+    assert.ok(!('detached' in anchor), 'ancla no está detached');
+    assert.strictEqual((anchor as { char_offset: number }).char_offset, prefijo.length,
+      `char_offset actualizado a ${prefijo.length}`);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('reanchor: texto eliminado → emite thread.reanchored con detached:true', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reanchor-del-'));
+  try {
+    await makeOpenedWithAnchor(dir, 'texto que ya no existe', 0, 0);
+
+    const text = 'contenido completamente diferente sin la cita';
+
+    const events = await readEvents(dir);
+    const threads = project(events);
+
+    const count = await reanchorThreads(text, threads, dir);
+    assert.strictEqual(count, 1, 'emite 1 evento');
+
+    // La proyección posterior refleja el estado detached
+    const events2 = await readEvents(dir);
+    const threads2 = project(events2);
+    assert.ok('detached' in threads2[0].anchor, 'ancla marcada como detached');
+    assert.strictEqual(threads2[0].status, 'detached', 'status es detached');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('reanchor: hilo resolved → no emite nada', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reanchor-res-'));
+  try {
+    const tid = await makeOpenedWithAnchor(dir, 'texto ancla', 0, 0);
+
+    // Resolver el hilo
+    const resolvedEv: EventEnvelope = {
+      id: randomUUID(),
+      version: 2,
+      type: 'thread.status-changed',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: utcTimestampMs(),
+      commit: null,
+      dirty: false,
+      to: 'resolved',
+    };
+    await emitEvent(dir, resolvedEv);
+
+    const events = await readEvents(dir);
+    const threads = project(events);
+    assert.strictEqual(threads[0].status, 'resolved', 'hilo está resolved');
+
+    // El texto ha cambiado, pero como el hilo está resolved no se emite nada
+    const text = 'texto ancla ha sido desplazado a otra posición';
+    const count = await reanchorThreads(text, threads, dir);
+    assert.strictEqual(count, 0, 'no emite eventos para hilos resolved');
+
+    // El número de eventos en el dir sigue siendo 2 (opened + status-changed)
+    const eventsPost = await readEvents(dir);
+    assert.strictEqual(eventsPost.length, 2, 'no se añadieron eventos nuevos');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('reanchor: ancla sin desplazar → no emite nada', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reanchor-nodis-'));
+  try {
+    // Ancla al inicio; el texto la contiene exactamente en offset 0
+    await makeOpenedWithAnchor(dir, 'texto ancla', 0, 0);
+
+    const text = 'texto ancla seguido de más contenido';
+
+    const events = await readEvents(dir);
+    const threads = project(events);
+
+    const count = await reanchorThreads(text, threads, dir);
+    assert.strictEqual(count, 0, 'no emite eventos cuando el ancla no ha cambiado');
   } finally {
     await rm(dir, { recursive: true });
   }
