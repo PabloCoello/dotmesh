@@ -98,6 +98,8 @@ export interface MessageProjection {
   created_at: string;
   retracted: boolean;
   commit: string | null;  // SHA del fix; null si no hay commit asociado al mensaje
+  /** Nivel de confianza emitido por el reviser en su mensaje (campo informal, no en schema). */
+  confidence?: 'alta' | 'media' | 'baja';
 }
 
 export interface ThreadProjection {
@@ -316,16 +318,21 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
     if (!proj) continue; // defensivo: hilo desconocido, se ignora
 
     switch (ev.type) {
-      case 'message.posted':
-        proj.messages.push({
+      case 'message.posted': {
+        const msg: MessageProjection = {
           id: ev.id,
           body: ev.body as string,
           author: ev.author,
           created_at: ev.created_at,
           retracted: false,
           commit: ev.commit ?? null,
-        });
+        };
+        // El schema no contempla confidence en message.posted, pero el subagente
+        // reviser puede incluirla como extensión informal en EventEnvelope[key].
+        if (ev.confidence !== undefined) msg.confidence = ev.confidence as 'alta' | 'media' | 'baja';
+        proj.messages.push(msg);
         break;
+      }
       case 'message.revised': {
         const msg = proj.messages.find(m => m.id === (ev.target_message_id as string));
         if (msg) msg.body = ev.body as string;

@@ -117,6 +117,8 @@ export interface CardMessage {
   authorLabel: string; // "humano" | author.name | "subagent · model" | model | "modelo desconocido"
   dateLabel: string;   // formatTimestamp(created_at)
   body: string;        // texto sin escapar; escapeHtml se aplica en buildCardsHtml
+  /** Nivel de confianza emitido por el reviser en su mensaje (campo informal en el evento). */
+  confidence?: 'alta' | 'media' | 'baja';
 }
 
 /** Modelo de vista de un hilo completo para su representación como tarjeta. */
@@ -164,7 +166,9 @@ export function buildCardViewModels(
           ? ([m.author.subagent, m.author.model].filter(Boolean).join(' · ') || 'modelo desconocido')
           : (m.author.name ?? 'humano');
         const dateLabel = formatTimestamp(m.created_at, locale ?? 'es-ES', timeZone);
-        return { id: m.id, authorLabel, dateLabel, body: m.body };
+        const msg: CardMessage = { id: m.id, authorLabel, dateLabel, body: m.body };
+        if (m.confidence !== undefined) msg.confidence = m.confidence;
+        return msg;
       });
 
     const lastAiFix = thread.messages
@@ -249,9 +253,14 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
     const msgActionsHtml = withActions
       ? `\n        <span class="msg-actions"><button class="action-btn" data-action="edit" data-thread-id="${tid}" data-message-id="${mid}">✎</button><button class="action-btn" data-action="retract" data-thread-id="${tid}" data-message-id="${mid}">⊘</button></span>`
       : '';
+    // Banda de confianza del reviser: se muestra junto al label de autor si el mensaje la lleva.
+    // Reutiliza las clases CSS card-confidence-* introducidas en la fase 6 para la confianza de hilo.
+    const msgConfidenceHtml = msg.confidence !== undefined
+      ? ` <span class="card-confidence card-confidence-${escapeHtml(msg.confidence)}">${escapeHtml(msg.confidence)}</span>`
+      : '';
     return `<div class="card-message" data-message-id="${mid}">
         <div class="card-body">${escapeHtml(msg.body)}</div>
-        <div class="card-meta">── ${escapeHtml(msg.authorLabel)} · ${escapeHtml(msg.dateLabel)}</div>${msgActionsHtml}
+        <div class="card-meta">── ${escapeHtml(msg.authorLabel)}${msgConfidenceHtml} · ${escapeHtml(msg.dateLabel)}</div>${msgActionsHtml}
       </div>`;
   }).join('\n      ');
 

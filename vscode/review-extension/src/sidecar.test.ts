@@ -1504,3 +1504,36 @@ test('scanAllDocs salta en silencio el evento corrupto y procesa los demás docu
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Fase 9.1 — confidence del reviser en MessageProjection
+// ---------------------------------------------------------------------------
+
+test('project propaga confidence de message.posted al MessageProjection', () => {
+  const tid = '29292929-2929-4292-8929-292929292929';
+  const opened = makeOpened({ id: tid, thread_id: tid });
+  const posted: EventEnvelope = {
+    id: '3a3a3a3a-3a3a-4a3a-8a3a-3a3a3a3a3a3a',
+    version: 2, type: 'message.posted', thread_id: tid,
+    author: { kind: 'ai', model: 'claude-sonnet', subagent: 'reviser' },
+    created_at: '2026-07-16T10:00:01.000Z',
+    commit: null, dirty: false, body: 'análisis completado',
+    confidence: 'alta',
+  } as unknown as EventEnvelope;
+  const result = project([opened, posted]);
+  assert.strictEqual(result[0].messages[1].confidence, 'alta');
+});
+
+test('project no fija confidence en MessageProjection cuando el evento no la trae', () => {
+  const tid = '4b4b4b4b-4b4b-4b4b-8b4b-4b4b4b4b4b4b';
+  const opened = makeOpened({ id: tid, thread_id: tid });
+  const posted: EventEnvelope = {
+    id: '5c5c5c5c-5c5c-4c5c-8c5c-5c5c5c5c5c5c',
+    version: 2, type: 'message.posted', thread_id: tid,
+    author: { kind: 'ai', model: 'claude-sonnet' },
+    created_at: '2026-07-16T10:00:01.000Z',
+    commit: null, dirty: false, body: 'sin confianza',
+  } as unknown as EventEnvelope;
+  const result = project([opened, posted]);
+  assert.strictEqual(result[0].messages[1].confidence, undefined);
+});

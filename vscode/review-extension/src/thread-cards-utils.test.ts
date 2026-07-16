@@ -28,7 +28,7 @@ import type { ThreadProjection, MessageProjection } from './sidecar.ts';
 function makeMsg(
   overrides: Pick<MessageProjection, 'id' | 'body'> & Partial<MessageProjection>
 ): MessageProjection {
-  return {
+  const msg: MessageProjection = {
     id:         overrides.id,
     body:       overrides.body,
     author:     overrides.author ?? { kind: 'human' },
@@ -36,6 +36,8 @@ function makeMsg(
     retracted:  overrides.retracted ?? false,
     commit:     overrides.commit ?? null,
   };
+  if (overrides.confidence !== undefined) msg.confidence = overrides.confidence;
+  return msg;
 }
 
 function makeThread(
@@ -1477,3 +1479,96 @@ test('buildCardsHtml vacío con allDocs muestra mensaje vacío y sección all-do
   assert.ok(html.includes('Sin comentarios'), 'debe incluir el mensaje de vacío');
   assert.ok(html.includes('data-section="all-docs"'), 'también debe incluir la sección all-docs');
 });
+
+// ---------------------------------------------------------------------------
+// Fase 9.1 — banda de confianza del reviser en la meta del mensaje
+// ---------------------------------------------------------------------------
+
+test('buildCardViewModels propaga confidence del mensaje IA al CardMessage', () => {
+  const thread = makeThread({
+    commentType: 'verifica',
+    messages: [
+      makeMsg({
+        id: 'm1', body: 'análisis del reviser',
+        author: { kind: 'ai', model: 'claude-sonnet', subagent: 'reviser' },
+        confidence: 'media',
+      }),
+    ],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.strictEqual(card.messages[0].confidence, 'media');
+});
+
+test('buildCardViewModels no propaga confidence cuando el mensaje no la trae', () => {
+  const thread = makeThread({
+    commentType: 'nota',
+    messages: [
+      makeMsg({ id: 'm1', body: 'sin confianza', author: { kind: 'ai', model: 'claude-sonnet' } }),
+    ],
+  });
+  const [card] = buildCardViewModels([thread]);
+  assert.strictEqual(card.messages[0].confidence, undefined);
+});
+
+test('buildCardsHtml muestra banda de confianza en la meta del mensaje IA que la lleva', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'verifica',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages: [
+      { id: 'm1', authorLabel: 'reviser · claude-sonnet', dateLabel: '16 jul', body: 'ok', confidence: 'alta' },
+    ],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('card-confidence-alta'), 'debe incluir la clase de confianza alta del mensaje');
+  assert.ok(html.includes('card-confidence'), 'debe incluir la clase base card-confidence');
+});
+
+test('buildCardsHtml no muestra banda de confianza en mensajes sin confidence', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages: [
+      { id: 'm1', authorLabel: 'humano', dateLabel: '16 jul', body: 'ok' },
+    ],
+  };
+  const html = buildCardsHtml([card]);
+  // La tarjeta puede tener card-confidence por el thread-level confidence; aquí no hay.
+  // Verificamos más estrictamente que el meta del mensaje no tiene card-confidence.
+  // El meta del mensaje tiene clase card-meta, buscamos que no haya card-confidence DENTRO de un msg.
+  // Usamos la ausencia total como proxy (no hay confidence de hilo tampoco).
+  assert.ok(!html.includes('card-confidence'), 'no debe incluir card-confidence cuando no hay confianza en el mensaje ni en el hilo');
+});
+
+test('buildCardsHtml escapa el valor de confidence del mensaje (defensa en profundidad)', () => {
+  // Aunque el campo solo puede ser 'alta'|'media'|'baja', un valor manipulado
+  // en disco podría venir como cadena arbitraria; escapeHtml lo neutraliza.
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages: [
+      {
+        id: 'm1', authorLabel: 'reviser · claude-sonnet', dateLabel: '16 jul', body: 'ok',
+        confidence: '<script>' as unknown as 'alta',
+      },
+    ],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('<script>'), 'el valor de confidence no debe aparecer sin escapar');
+  assert.ok(html.includes('&lt;script&gt;'), 'el valor de confidence debe estar HTML-escapado');
+});
+
