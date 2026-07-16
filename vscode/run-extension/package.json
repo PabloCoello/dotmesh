@@ -18,6 +18,28 @@
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
+    "colors": [
+      {
+        "id": "meshRun.arrowFresh",
+        "description": "Color de flecha y barra para salidas actualizadas",
+        "defaults": { "dark": "#6CB6B0", "light": "#4a9a94", "highContrast": "#6CB6B0" }
+      },
+      {
+        "id": "meshRun.arrowWarn",
+        "description": "Color de flecha y barra para salidas con advertencias (stderr)",
+        "defaults": { "dark": "#E3C58A", "light": "#b08840", "highContrast": "#E3C58A" }
+      },
+      {
+        "id": "meshRun.arrowError",
+        "description": "Color de flecha y barra para salidas con error de ejecución",
+        "defaults": { "dark": "#E59A9A", "light": "#b05050", "highContrast": "#E59A9A" }
+      },
+      {
+        "id": "meshRun.arrowStale",
+        "description": "Color de flecha y barra para salidas desactualizadas",
+        "defaults": { "dark": "#767676", "light": "#767676", "highContrast": "#9e9e9e" }
+      }
+    ],
     "commands": [
       {
         "command": "mesh-run.runChunk",
