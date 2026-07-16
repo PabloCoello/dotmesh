@@ -110,7 +110,7 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
 | `thread.status-changed` | Sets `status` to `to` (`"open"` or `"resolved"`). |
-| `thread.reanchored` (has `anchor`) | Replaces `anchor` with the new value. If `status` was `"detached"`, resets it to `"open"`. |
+| `thread.reanchored` (has `anchor`) | Replaces `anchor` with the new value. If `status` was `"detached"`, resets it to `"open"`. The new `anchor.quote` may differ from the original (the extension updates the quote when the human edits the cited text — the quote reflects the text as it was at save time). |
 | `thread.reanchored` (has `detached: true`) | Sets `anchor: { detached: true }`; sets `status: "detached"`. |
 | `thread.assigned` | Sets `assignee` to `agent`. |
 
@@ -153,7 +153,9 @@ Derived fields used by the card UI:
 
 ### Anchor resolution
 
-A thread's `anchor` was captured when the thread opened; the document may have changed since. Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the anchor against the **current** document text:
+A thread's `anchor` was captured when the thread opened; the document may have changed since. If a `thread.reanchored` event is present for a thread, its `anchor` supersedes the original — the extension updates the anchor (including `quote`) whenever the human saves after editing the document. When the human edits text directly inside the quoted range, `thread.reanchored` carries a new `quote` reflecting the text as saved. Always use the most recent `anchor` from the projection.
+
+Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the anchor against the **current** document text:
 
 1. Search for an exact substring match of `anchor.quote`.
 2. **One match** → that is the position. Proceed.
