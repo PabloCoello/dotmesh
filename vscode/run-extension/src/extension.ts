@@ -3,6 +3,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
 import { computeOutputStates } from './stale.js';
+import type { OutputState } from './stale.js';
+import { computeAdornments } from './adorn.js';
 import { KernelManager } from './kernel.js';
 import type { ExecutionResult } from './kernel.js';
 import { parseChunks, parseOutputs } from './parser.js';
@@ -65,28 +67,47 @@ function enqueue(docUri: vscode.Uri, task: () => Promise<void>): void {
  *   context y los recursos compartidos como parámetros.
  */
 export function activate(context: vscode.ExtensionContext): void {
-  // Decoration types — creados una vez, reutilizados en todos los editores.
+  // Seis tipos de decoración — creados una vez, reutilizados en todos los editores.
   // Se usan ThemeColor para respetar el tema activo; nunca colores hardcodeados.
-  const staleDecorationType = vscode.window.createTextEditorDecorationType({
-    // Borde izquierdo de advertencia
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: new vscode.ThemeColor('editorWarning.foreground'),
-    overviewRulerColor: new vscode.ThemeColor('editorWarning.foreground'),
+
+  // Colapsa el texto visualmente (CSS inyectado vía textDecoration).
+  // Truco consolidado que usan extensiones como Inline Fold.
+  const concealDecorationType = vscode.window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+  });
+
+  const rulerFreshType = vscode.window.createTextEditorDecorationType({
+    overviewRulerColor: new vscode.ThemeColor('meshRun.arrowFresh'),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
   });
 
-  const errorDecorationType = vscode.window.createTextEditorDecorationType({
-    // Borde izquierdo de error
-    borderWidth: '0 0 0 3px',
-    borderStyle: 'solid',
-    borderColor: new vscode.ThemeColor('editorError.foreground'),
-    overviewRulerColor: new vscode.ThemeColor('editorError.foreground'),
+  const rulerWarnType = vscode.window.createTextEditorDecorationType({
+    overviewRulerColor: new vscode.ThemeColor('meshRun.arrowWarn'),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
   });
+
+  const rulerErrorType = vscode.window.createTextEditorDecorationType({
+    overviewRulerColor: new vscode.ThemeColor('meshRun.arrowError'),
+    overviewRulerLane: vscode.OverviewRulerLane.Left,
+  });
+
+  const rulerStaleType = vscode.window.createTextEditorDecorationType({
+    overviewRulerColor: new vscode.ThemeColor('meshRun.arrowStale'),
+    overviewRulerLane: vscode.OverviewRulerLane.Left,
+  });
+
+  // Sin propiedades fijas; todo va por instancia (renderOptions.before).
+  const beforeRenderType = vscode.window.createTextEditorDecorationType({});
 
   // Registrar en subscriptions garantiza dispose al desactivar la extensión
-  context.subscriptions.push(staleDecorationType, errorDecorationType);
+  context.subscriptions.push(
+    concealDecorationType,
+    rulerFreshType,
+    rulerWarnType,
+    rulerErrorType,
+    rulerStaleType,
+    beforeRenderType,
+  );
 
   // KernelManager — una instancia compartida por todos los comandos
   const kernelManager = new KernelManager();
@@ -100,7 +121,15 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  registerStaleDecorations(context, staleDecorationType, errorDecorationType);
+  registerStaleDecorations(
+    context,
+    concealDecorationType,
+    rulerFreshType,
+    rulerWarnType,
+    rulerErrorType,
+    rulerStaleType,
+    beforeRenderType,
+  );
   registerCodeLens(context);
   registerCommands(context, kernelManager);
 }
@@ -115,73 +144,125 @@ export function deactivate(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Registra los listeners que mantienen las decoraciones de stale/error
- * actualizadas en los editores markdown abiertos.
+ * Registra los listeners que mantienen las decoraciones actualizadas en los
+ * editores markdown abiertos.
  *
  * Debounce de 150 ms sobre onDidChangeTextDocument para no parsear en cada
- * pulsación de tecla individual, cumpliendo el criterio de < 500 ms.
- * onDidChangeActiveTextEditor aplica inmediatamente (no hay texto en vuelo).
+ * pulsación de tecla individual. onDidChangeActiveTextEditor aplica
+ * inmediatamente. onDidChangeTextEditorSelection usa debounce de 50 ms para
+ * recalcular las decoraciones de conceal/before al mover el cursor.
  */
 function registerStaleDecorations(
   context: vscode.ExtensionContext,
-  staleDecorationType: vscode.TextEditorDecorationType,
-  errorDecorationType: vscode.TextEditorDecorationType,
+  concealDecorationType: vscode.TextEditorDecorationType,
+  rulerFreshType: vscode.TextEditorDecorationType,
+  rulerWarnType: vscode.TextEditorDecorationType,
+  rulerErrorType: vscode.TextEditorDecorationType,
+  rulerStaleType: vscode.TextEditorDecorationType,
+  beforeRenderType: vscode.TextEditorDecorationType,
 ): void {
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let selectionDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const stateToToken: Record<OutputState, string> = {
+    fresh: 'meshRun.arrowFresh',
+    warn:  'meshRun.arrowWarn',
+    error: 'meshRun.arrowError',
+    stale: 'meshRun.arrowStale',
+  };
 
   /**
-   * Recalcula y pinta las decoraciones en el editor dado.
+   * Recalcula y pinta las seis decoraciones en el editor dado.
    * Solo actúa en documentos markdown; limpia las decoraciones en cualquier
    * otro tipo de documento para no dejar rastros si el usuario cambia de
    * fichero dentro del mismo grupo de editor.
+   *
+   * getText() y positionAt() son operaciones síncronas sobre el mismo
+   * TextDocument. Toda esta función es síncrona (sin await).
    */
   function applyDecorations(editor: vscode.TextEditor): void {
     const doc = editor.document;
 
     if (doc.languageId !== 'markdown') {
       // Limpiar por si el usuario abría antes un markdown en el mismo panel
-      editor.setDecorations(staleDecorationType, []);
-      editor.setDecorations(errorDecorationType, []);
+      editor.setDecorations(concealDecorationType, []);
+      editor.setDecorations(rulerFreshType, []);
+      editor.setDecorations(rulerWarnType, []);
+      editor.setDecorations(rulerErrorType, []);
+      editor.setDecorations(rulerStaleType, []);
+      editor.setDecorations(beforeRenderType, []);
       return;
     }
 
-    // getText() y positionAt() son operaciones síncronas sobre el mismo
-    // TextDocument. Toda esta función es síncrona (sin await), por lo que el
-    // motor de JavaScript garantiza que el documento no puede cambiar entre
-    // doc.getText() y doc.positionAt(): ambas operaciones ven exactamente el
-    // mismo snapshot. No se requiere validación defensiva de offsets ni clamps.
     const text = doc.getText();
+    const chunks = parseChunks(text);
+    const outputs = parseOutputs(text);
     const states = computeOutputStates(text);
 
-    const staleRanges: vscode.Range[] = [];
-    const errorRanges: vscode.Range[] = [];
+    // Agrupar estados por tipo de ruler
+    const rulerFreshRanges: vscode.Range[] = [];
+    const rulerWarnRanges: vscode.Range[] = [];
+    const rulerErrorRanges: vscode.Range[] = [];
+    const rulerStaleRanges: vscode.Range[] = [];
 
     for (const { startOffset, endOffset, state } of states) {
-      if (state === 'fresh') continue;
       const range = new vscode.Range(
         doc.positionAt(startOffset),
         doc.positionAt(endOffset),
       );
-      if (state === 'stale') {
-        staleRanges.push(range);
-      } else {
-        errorRanges.push(range);
-      }
+      if (state === 'fresh') rulerFreshRanges.push(range);
+      else if (state === 'warn') rulerWarnRanges.push(range);
+      else if (state === 'error') rulerErrorRanges.push(range);
+      else rulerStaleRanges.push(range);
     }
 
-    editor.setDecorations(staleDecorationType, staleRanges);
-    editor.setDecorations(errorDecorationType, errorRanges);
+    editor.setDecorations(rulerFreshType, rulerFreshRanges);
+    editor.setDecorations(rulerWarnType, rulerWarnRanges);
+    editor.setDecorations(rulerErrorType, rulerErrorRanges);
+    editor.setDecorations(rulerStaleType, rulerStaleRanges);
+
+    // Cursor activo (offset en el documento)
+    const cursorOffset = doc.offsetAt(editor.selections[0].active);
+
+    // Adornos de ocultación y before
+    const adornResult = computeAdornments(text, chunks, outputs, states, cursorOffset);
+
+    // Conceal: vallas de chunk y output a hacer invisibles
+    const concealRanges = adornResult.conceal.map(spec =>
+      new vscode.Range(
+        doc.positionAt(spec.startOffset),
+        doc.positionAt(spec.endOffset),
+      )
+    );
+    editor.setDecorations(concealDecorationType, concealRanges);
+
+    // Before: barra, │ y flecha con color por estado, aplicados por instancia
+    const beforeDecorations = adornResult.before.map(spec => ({
+      range: new vscode.Range(
+        doc.positionAt(spec.lineStartOffset),
+        doc.positionAt(spec.lineEndOffset),
+      ),
+      renderOptions: {
+        before: {
+          contentText: spec.contentText,
+          color: new vscode.ThemeColor(stateToToken[spec.state]),
+        },
+      },
+    }));
+    editor.setDecorations(beforeRenderType, beforeDecorations);
   }
 
-  /** Programa applyDecorations con debounce de 150 ms. */
+  /**
+   * Programa applyDecorations con debounce de 150 ms.
+   * Cancela también el timer de selección (50 ms) para evitar dos disparos.
+   */
   function scheduleDecorations(editor: vscode.TextEditor): void {
-    // clearTimeout(undefined) es un no-op en JavaScript; la guarda es redundante.
     clearTimeout(debounceTimer);
+    clearTimeout(selectionDebounceTimer);
+    selectionDebounceTimer = undefined;
     debounceTimer = setTimeout(() => {
       debounceTimer = undefined;
       // El editor puede haber sido cerrado mientras el timer estaba pendiente.
-      // vscode.window.visibleTextEditors incluye todos los grupos; si el editor
-      // ya no está ahí, setDecorations sobre él sería un comportamiento indefinido.
       if (!vscode.window.visibleTextEditors.includes(editor)) return;
       applyDecorations(editor);
     }, 150);
@@ -199,7 +280,7 @@ function registerStaleDecorations(
     }),
   );
 
-  // Al modificar el documento activo: debounce para absorber pulsaciones
+  // Al modificar el documento activo: debounce 150 ms para absorber pulsaciones
   // de teclas consecutivas.
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument(event => {
@@ -210,11 +291,28 @@ function registerStaleDecorations(
     }),
   );
 
-  // Liberar el timer si la extensión se desactiva mientras hay uno pendiente
+  // Al mover el cursor: debounce 50 ms para recalcular conceal/before
+  // (los rulers no cambian por movimiento del cursor).
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection(event => {
+      const editor = event.textEditor;
+      if (editor.document.languageId !== 'markdown') return;
+      clearTimeout(selectionDebounceTimer);
+      selectionDebounceTimer = setTimeout(() => {
+        selectionDebounceTimer = undefined;
+        if (!vscode.window.visibleTextEditors.includes(editor)) return;
+        applyDecorations(editor);
+      }, 50);
+    }),
+  );
+
+  // Liberar los timers si la extensión se desactiva mientras hay alguno pendiente
   context.subscriptions.push({
     dispose: () => {
       clearTimeout(debounceTimer);
       debounceTimer = undefined;
+      clearTimeout(selectionDebounceTimer);
+      selectionDebounceTimer = undefined;
     },
   });
 
