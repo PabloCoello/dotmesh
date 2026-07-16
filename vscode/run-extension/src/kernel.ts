@@ -20,7 +20,7 @@
 
 import * as vscode from 'vscode';
 import type { Jupyter, Kernel } from '@vscode/jupyter-extension';
-import { splitOutputLines } from './lines.js';
+import { splitOutputLines, stripAnsi } from './lines.js';
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -352,22 +352,25 @@ class KernelSessionImpl implements KernelSession {
         //   Outputs con items vacíos — no hay contenido que acumular.
         for (const item of output.items) {
           if (item.mime === STDOUT_MIME) {
-            outputText += textDecoder.decode(item.data);
+            // stripAnsi: print() con colores (colorama, rich, etc.) contaminaría el bloque.
+            outputText += stripAnsi(textDecoder.decode(item.data));
           } else if (item.mime === STDERR_MIME) {
-            outputText += textDecoder.decode(item.data);
+            outputText += stripAnsi(textDecoder.decode(item.data));
           } else if (item.mime === ERROR_MIME) {
-            // Traceback crudo (con códigos ANSI) disponible en originalError.traceback.
-            // El JSON del item contiene {name, message, stack} donde stack es el
-            // traceback unido por '\n' (helpers.ts línea 545).
+            // Los tracebacks de Jupyter llevan códigos ANSI (ESC[31m, ESC[36m, etc.).
+            // stripAnsi los elimina antes de escribir en el documento Markdown.
             if (meta?.originalError?.traceback?.length) {
-              errorText = meta.originalError.traceback.join('\n');
+              errorText = stripAnsi(meta.originalError.traceback.join('\n'));
             } else {
+              // Fallback: data = JSON {name, message, stack} (stack = traceback unido por '\n').
               const parsed = JSON.parse(textDecoder.decode(item.data)) as {
                 name: string;
                 message: string;
                 stack?: string;
               };
-              errorText = parsed.stack ?? `${parsed.name}: ${parsed.message}`;
+              errorText = stripAnsi(
+                parsed.stack ?? `${parsed.name}: ${parsed.message}`
+              );
             }
           } else if (
             meta?.outputType === 'execute_result' &&
@@ -375,7 +378,7 @@ class KernelSessionImpl implements KernelSession {
           ) {
             // Repr del último valor evaluado. display_data puede tener text/plain
             // pero con outputType 'display_data', no 'execute_result'; se ignora.
-            lastValueRepr = textDecoder.decode(item.data);
+            lastValueRepr = stripAnsi(textDecoder.decode(item.data));
           }
         }
       }
@@ -416,7 +419,7 @@ class KernelSessionImpl implements KernelSession {
         // (a) traceback ya procesado desde el item de mime; el iterador lanzó después.
       } else if (withMeta?.originalError?.traceback?.length) {
         // (b) error de ejecución enviado como excepción con originalError.traceback.
-        errorText = withMeta.originalError.traceback.join('\n');
+        errorText = stripAnsi(withMeta.originalError.traceback.join('\n'));
       } else {
         // Infraestructura: relanzamos tal cual.
         throw err;
