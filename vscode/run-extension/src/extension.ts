@@ -526,7 +526,13 @@ function registerCodeLens(context: vscode.ExtensionContext): void {
             parts.push(`✕ [Borrar salida](command:mesh-run.clearChunkOutput?${id})`);
           }
           const md = new vscode.MarkdownString(parts.join(' · '));
-          md.isTrusted = true;
+          md.isTrusted = {
+            enabledCommands: [
+              'mesh-run.runChunk',
+              'mesh-run.runUpTo',
+              'mesh-run.clearChunkOutput',
+            ],
+          };
           return new vscode.Hover(md);
         },
       },
