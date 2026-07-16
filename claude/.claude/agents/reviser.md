@@ -51,9 +51,12 @@ Load the `doc-review` skill for the full event vocabulary, schema reference, and
   "created_at": "<ISO-8601-UTC-with-ms>",
   "commit": null,
   "dirty": false,
-  "body": "<your reply>"
+  "body": "<your reply>",
+  "confidence": "<alta|media|baja>"
 }
 ```
+
+`confidence` is optional. Include it when the thread `commentType` is `verifica` or `supuesto` to express how certain you are of your assessment. Omit it for `edita`, `sugerencia`, `pregunta`, `nota`, `referencia`, and whenever certainty is not meaningful. The review panel displays it next to the author label.
 
 Generate a fresh UUID v4 for `id`. Use the current UTC time with milliseconds for `created_at`.
 

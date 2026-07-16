@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat, chmod, writeFile, mkdir, readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, rm, stat, chmod, writeFile, mkdir, readFile, readdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 
@@ -24,6 +24,12 @@ import {
   detectLegacy,
   ensureBacklogDir,
   writeBacklogTask,
+  buildV1FilePath,
+  VALID_COMMENT_TYPES,
+  anchorChanged,
+  scanAllDocs,
+  SCAN_ALL_DOCS_LIMIT,
+  type Anchor,
   type Sidecar,
   type EventEnvelope,
   type BacklogTask,
@@ -989,4 +995,545 @@ test('project rellena commit null en message.posted sin SHA', () => {
   } as unknown as EventEnvelope;
   const result = project([opened, posted]);
   assert.strictEqual(result[0].messages[1].commit, null);
+});
+
+// ---------------------------------------------------------------------------
+// F5-a — VALID_COMMENT_TYPES y guarda de commentType en project()
+// ---------------------------------------------------------------------------
+
+test('VALID_COMMENT_TYPES contiene los 7 tipos del schema y no contiene desconocido', () => {
+  const expected = ['edita', 'sugerencia', 'pregunta', 'verifica', 'nota', 'referencia', 'supuesto'];
+  for (const t of expected) {
+    assert.ok(VALID_COMMENT_TYPES.has(t), `${t} debe estar en VALID_COMMENT_TYPES`);
+  }
+  assert.ok(!VALID_COMMENT_TYPES.has('desconocido'), 'desconocido no debe estar en VALID_COMMENT_TYPES');
+  assert.strictEqual(VALID_COMMENT_TYPES.size, 7, 'debe haber exactamente 7 tipos');
+});
+
+test('project() con commentType desconocido no lanza y devuelve el hilo con ese valor', () => {
+  const tid = 'f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0';
+  const ev = makeOpened({ id: tid, thread_id: tid, commentType: 'desconocido' });
+  // No debe lanzar aunque el tipo no sea válido
+  const result = project([ev]);
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].thread_id, tid);
+  assert.strictEqual(result[0].commentType as string, 'desconocido');
+});
+
+// ---------------------------------------------------------------------------
+// F2 — buildV1FilePath: helper centralizado con validación de contención
+// ---------------------------------------------------------------------------
+
+test('buildV1FilePath devuelve la ruta correcta para un docRelPath normal', () => {
+  assert.strictEqual(
+    buildV1FilePath('/Users/user/project', 'docs/informe.md'),
+    '/Users/user/project/.ai/review/docs/informe.md.json'
+  );
+});
+
+test('buildV1FilePath lanza si docRelPath empieza por ..', () => {
+  assert.throws(
+    () => buildV1FilePath('/project', '../evil/doc.md'),
+    /mesh-review: document path escapes/
+  );
+});
+
+test('buildV1FilePath lanza si docRelPath es absoluto', () => {
+  assert.throws(
+    () => buildV1FilePath('/project', '/absolute/path.md'),
+    /mesh-review: document path escapes/
+  );
+});
+
+test('buildV1FilePath lanza si docRelPath usa .. embebido (foo/../../bar) para escapar de .ai/review/', () => {
+  // 'foo/../../bar' no empieza por '..' pero path.resolve lo normaliza a
+  // <gitRoot>/.ai/bar.json, que queda fuera de <gitRoot>/.ai/review/.
+  assert.throws(
+    () => buildV1FilePath('/project', 'foo/../../bar'),
+    /mesh-review: document path escapes/
+  );
+});
+
+// ---------------------------------------------------------------------------
+// F1 — readEvents con onError: distingue ENOENT de errores reales
+// ---------------------------------------------------------------------------
+
+test('readEvents sin onError no lanza cuando un fichero no puede parsearse (compatibilidad)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-compat-'));
+  try {
+    await writeFile(join(dir, 'malformed.json'), 'esto no es json válido', 'utf8');
+    // Sin onError debe devolver [] sin lanzar
+    const result = await readEvents(dir);
+    assert.deepStrictEqual(result, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents con onError llama al callback cuando el fichero es ilegible por permisos (no ENOENT)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-perms-'));
+  const filePath = join(dir, 'locked.json');
+  try {
+    const tid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0099';
+    const ev = makeOpened({ id: tid, thread_id: tid });
+    await writeFile(filePath, JSON.stringify(ev), 'utf8');
+    await chmod(filePath, 0o000); // quita todos los permisos → EACCES
+
+    const errors: Array<{ file: string; err: unknown }> = [];
+    const result = await readEvents(dir, (file, err) => errors.push({ file, err }));
+
+    assert.deepStrictEqual(result, []);
+    assert.strictEqual(errors.length, 1, 'debe haber exactamente un error reportado');
+    assert.ok(errors[0].file.endsWith('locked.json'), 'el fichero reportado debe ser locked.json');
+
+    await chmod(filePath, 0o644); // restaurar para que rm funcione
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents con onError no llama al callback cuando el fichero no existe (ENOENT)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-enoent-'));
+  try {
+    // Symlink apuntando a un fichero inexistente: readdir lo ve (.json),
+    // readFile falla con ENOENT porque el destino no existe.
+    await symlink(join(dir, 'nonexistent-target.json'), join(dir, 'dangling.json'));
+
+    const errors: Array<{ file: string; err: unknown }> = [];
+    const result = await readEvents(dir, (file, err) => errors.push({ file, err }));
+
+    assert.deepStrictEqual(result, []);
+    assert.strictEqual(errors.length, 0, 'ENOENT no debe llamar a onError');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// anchorChanged
+// ---------------------------------------------------------------------------
+
+test('anchorChanged devuelve false si quote, line_hint y char_offset son iguales', () => {
+  const a: Anchor = { quote: 'texto de prueba', line_hint: 5, char_offset: 100 };
+  const b: Anchor = { quote: 'texto de prueba', line_hint: 5, char_offset: 100 };
+  assert.strictEqual(anchorChanged(a, b), false);
+});
+
+test('anchorChanged devuelve true si char_offset cambia', () => {
+  const a: Anchor = { quote: 'texto', line_hint: 3, char_offset: 100 };
+  const b: Anchor = { quote: 'texto', line_hint: 3, char_offset: 108 };
+  assert.strictEqual(anchorChanged(a, b), true);
+});
+
+test('anchorChanged devuelve true si line_hint cambia', () => {
+  const a: Anchor = { quote: 'texto', line_hint: 3, char_offset: 100 };
+  const b: Anchor = { quote: 'texto', line_hint: 4, char_offset: 100 };
+  assert.strictEqual(anchorChanged(a, b), true);
+});
+
+test('anchorChanged devuelve true si quote cambia', () => {
+  const a: Anchor = { quote: 'texto original', line_hint: 3, char_offset: 100 };
+  const b: Anchor = { quote: 'texto distinto', line_hint: 3, char_offset: 100 };
+  assert.strictEqual(anchorChanged(a, b), true);
+});
+
+test('anchorChanged devuelve true si el primer argumento es detached y el segundo no', () => {
+  const anclado: Anchor = { quote: 'texto', line_hint: 2, char_offset: 50 };
+  const desanclado = { detached: true as const };
+  assert.strictEqual(anchorChanged(desanclado, anclado), true);
+});
+
+test('anchorChanged devuelve true si el segundo argumento es detached y el primero no', () => {
+  const anclado: Anchor = { quote: 'texto', line_hint: 2, char_offset: 50 };
+  const desanclado = { detached: true as const };
+  assert.strictEqual(anchorChanged(anclado, desanclado), true);
+});
+
+test('anchorChanged devuelve false si ambos son detached', () => {
+  const a = { detached: true as const };
+  const b = { detached: true as const };
+  assert.strictEqual(anchorChanged(a, b), false);
+});
+
+// ---------------------------------------------------------------------------
+// Ciclo de ida y vuelta de thread.reanchored (contrato extensión → skill)
+// Fija que writeEvent + readEvents + project reproduzca correctamente ambas
+// variantes del evento: con anchor nuevo y con detached:true.
+// ---------------------------------------------------------------------------
+
+test('thread.reanchored variante anchor: writeEvent→readEvents→project refleja el ancla nueva', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-reanchor-anchor-'));
+  try {
+    const threadId = 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1';
+    const openedId  = 'b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2';
+    const reanchorId = 'c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3';
+
+    const opened: EventEnvelope = {
+      id: openedId, version: 2, type: 'thread.opened', thread_id: threadId,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto original', line_hint: 0, char_offset: 5 },
+      commentType: 'nota', body: 'comentario de prueba',
+    };
+
+    const reanchored: EventEnvelope = {
+      id: reanchorId, version: 2, type: 'thread.reanchored', thread_id: threadId,
+      author: { kind: 'human', name: 'test-user' },
+      created_at: '2026-07-16T10:01:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto original', line_hint: 3, char_offset: 120 },
+    };
+
+    await writeEvent(dir, opened);
+    await writeEvent(dir, reanchored);
+
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    const proj = projections[0];
+
+    // La proyección debe reflejar el ancla nueva del thread.reanchored
+    assert.ok(!('detached' in proj.anchor), 'el ancla no debe ser detached');
+    const anchor = proj.anchor as Anchor;
+    assert.strictEqual(anchor.char_offset, 120, 'char_offset actualizado');
+    assert.strictEqual(anchor.line_hint, 3, 'line_hint actualizado');
+    assert.strictEqual(anchor.quote, 'texto original', 'quote preservada');
+    assert.strictEqual(proj.status, 'open', 'el hilo sigue abierto tras reanclado');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('thread.reanchored variante detached: writeEvent→readEvents→project refleja estado desanclado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-reanchor-detached-'));
+  try {
+    const threadId  = 'd4d4d4d4-d4d4-4d4d-8d4d-d4d4d4d4d4d4';
+    const openedId  = 'e5e5e5e5-e5e5-4e5e-8e5e-e5e5e5e5e5e5';
+    const reanchorId = 'f6f6f6f6-f6f6-4f6f-8f6f-f6f6f6f6f6f6';
+
+    const opened: EventEnvelope = {
+      id: openedId, version: 2, type: 'thread.opened', thread_id: threadId,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto a desanclar', line_hint: 1, char_offset: 20 },
+      commentType: 'edita', body: 'hilo que perderá su ancla',
+    };
+
+    const reanchored: EventEnvelope = {
+      id: reanchorId, version: 2, type: 'thread.reanchored', thread_id: threadId,
+      author: { kind: 'human', name: 'test-user' },
+      created_at: '2026-07-16T10:01:00.000Z',
+      commit: null, dirty: false,
+      detached: true,
+    };
+
+    await writeEvent(dir, opened);
+    await writeEvent(dir, reanchored);
+
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    const proj = projections[0];
+
+    assert.ok('detached' in proj.anchor, 'el ancla debe ser { detached: true }');
+    assert.strictEqual(proj.status, 'detached', 'el estado del hilo debe ser detached');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// P5 — ciclos de ida y vuelta: thread.opened con confidence + thread.assigned
+// Fija que writeEvent + readEvents + project reproduzca los campos opcionales
+// confidence (thread.opened) y agent (thread.assigned) correctamente.
+// ---------------------------------------------------------------------------
+
+test('thread.opened con confidence: writeEvent→readEvents→project refleja la confianza', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-confidence-'));
+  try {
+    const tid = 'e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1';
+    const opened: EventEnvelope = {
+      id: tid, version: 2, type: 'thread.opened', thread_id: tid,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T11:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto de prueba', line_hint: 5, char_offset: 50 },
+      commentType: 'verifica', body: 'comprueba la afirmación',
+      confidence: 'alta',
+    };
+
+    await writeEvent(dir, opened);
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    assert.strictEqual(projections[0].confidence, 'alta', 'confidence debe propagarse tras el ciclo completo');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('thread.assigned: writeEvent→readEvents→project refleja el agente asignado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-assigned-'));
+  try {
+    const tid = 'f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2';
+    const eid = 'a3a3a3a3-a3a3-4a3a-8a3a-a3a3a3a3a3a3';
+
+    const opened: EventEnvelope = {
+      id: tid, version: 2, type: 'thread.opened', thread_id: tid,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T11:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'texto asignado', line_hint: 2, char_offset: 10 },
+      commentType: 'edita', body: 'tarea para el revisor',
+    };
+
+    const assigned: EventEnvelope = {
+      id: eid, version: 2, type: 'thread.assigned', thread_id: tid,
+      author: { kind: 'human' },
+      created_at: '2026-07-16T11:01:00.000Z',
+      commit: null, dirty: false,
+      agent: 'security',
+    };
+
+    await writeEvent(dir, opened);
+    await writeEvent(dir, assigned);
+
+    const events = await readEvents(dir);
+    const projections = project(events);
+
+    assert.strictEqual(projections.length, 1);
+    assert.strictEqual(projections[0].assignee, 'security', 'assignee debe propagarse tras el ciclo completo');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// P6 — scanAllDocs: escaneo multi-fichero del workspace
+// ---------------------------------------------------------------------------
+
+/** Escribe un evento thread.opened mínimo en el directorio de eventos dado. */
+async function writeMinimalEvent(eventDir: string, threadId: string): Promise<void> {
+  await mkdir(eventDir, { recursive: true });
+  const ev: EventEnvelope = {
+    id: randomUUID(),
+    version: 2,
+    type: 'thread.opened',
+    thread_id: threadId,
+    author: { kind: 'human' },
+    created_at: '2026-07-16T10:00:00.000Z',
+    commit: null,
+    dirty: false,
+    commentType: 'nota',
+    anchor: { quote: 'texto', line_hint: 0, char_offset: 0 },
+    body: 'comentario',
+  };
+  await writeFile(join(eventDir, `${ev.id}.json`), JSON.stringify(ev, null, 2) + '\n', 'utf8');
+}
+
+import { randomUUID } from 'node:crypto';
+
+test('scanAllDocs con directorio .ai/review/ inexistente devuelve mapa vacío', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const result = await scanAllDocs(root);
+    assert.strictEqual(result.docs.size, 0, 'docs debe estar vacío');
+    assert.strictEqual(result.overflow, 0, 'overflow debe ser 0');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs con dos subdirectorios devuelve Map con dos entradas', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const tid1 = randomUUID();
+    const tid2 = randomUUID();
+    // Doc: README.md → eventDir: .ai/review/README.md/
+    await writeMinimalEvent(join(root, '.ai', 'review', 'README.md'), tid1);
+    // Doc: src/foo.ts → eventDir: .ai/review/src/foo.ts/
+    await writeMinimalEvent(join(root, '.ai', 'review', 'src', 'foo.ts'), tid2);
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, 2, 'debe devolver 2 entradas');
+    assert.strictEqual(result.overflow, 0, 'no debe haber overflow');
+    assert.ok(result.docs.has('README.md'),  'debe incluir README.md');
+    assert.ok(result.docs.has('src/foo.ts'), 'debe incluir src/foo.ts');
+
+    // Las proyecciones del primer doc deben tener un hilo
+    const readmeProj = result.docs.get('README.md');
+    assert.ok(Array.isArray(readmeProj), 'las proyecciones de README.md deben ser array');
+    assert.strictEqual(readmeProj!.length, 1, 'README.md debe tener 1 hilo');
+    assert.strictEqual(readmeProj![0].thread_id, tid1, 'el thread_id debe coincidir');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs respeta el tope de SCAN_ALL_DOCS_LIMIT documentos', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    // Crea SCAN_ALL_DOCS_LIMIT + 5 documentos
+    const total = SCAN_ALL_DOCS_LIMIT + 5;
+    for (let i = 0; i < total; i++) {
+      const docName = `doc${String(i).padStart(3, '0')}.md`;
+      await writeMinimalEvent(join(root, '.ai', 'review', docName), randomUUID());
+    }
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, SCAN_ALL_DOCS_LIMIT, `docs no debe superar el tope (${SCAN_ALL_DOCS_LIMIT})`);
+    assert.strictEqual(result.overflow, 5, 'overflow debe ser 5');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs solo incluye hilos abiertos del documento escaneado', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const openId    = randomUUID();
+    const resolvedId = randomUUID();
+    const eventDir  = join(root, '.ai', 'review', 'doc.md');
+    await mkdir(eventDir, { recursive: true });
+
+    // Hilo abierto
+    const evOpen: EventEnvelope = {
+      id: randomUUID(), version: 2, type: 'thread.opened',
+      thread_id: openId, author: { kind: 'human' },
+      created_at: '2026-07-16T10:00:00.000Z', commit: null, dirty: false,
+      commentType: 'nota', anchor: { quote: 'a', line_hint: 0, char_offset: 0 }, body: 'ok',
+    };
+    // Hilo que se resuelve
+    const evResOpen: EventEnvelope = {
+      id: randomUUID(), version: 2, type: 'thread.opened',
+      thread_id: resolvedId, author: { kind: 'human' },
+      created_at: '2026-07-16T10:01:00.000Z', commit: null, dirty: false,
+      commentType: 'nota', anchor: { quote: 'b', line_hint: 1, char_offset: 5 }, body: 'ok',
+    };
+    const evResolve: EventEnvelope = {
+      id: randomUUID(), version: 2, type: 'thread.status-changed',
+      thread_id: resolvedId, author: { kind: 'human' },
+      created_at: '2026-07-16T10:02:00.000Z', commit: null, dirty: false,
+      to: 'resolved',
+    };
+    await writeFile(join(eventDir, `${evOpen.id}.json`),    JSON.stringify(evOpen, null, 2) + '\n', 'utf8');
+    await writeFile(join(eventDir, `${evResOpen.id}.json`), JSON.stringify(evResOpen, null, 2) + '\n', 'utf8');
+    await writeFile(join(eventDir, `${evResolve.id}.json`), JSON.stringify(evResolve, null, 2) + '\n', 'utf8');
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, 1, 'debe haber 1 doc');
+    const projections = result.docs.get('doc.md');
+    assert.ok(projections, 'debe tener proyecciones para doc.md');
+    assert.strictEqual(projections!.length, 2, 'debe tener 2 hilos (abierto y resuelto)');
+    // project() devuelve todos los hilos, la sección multi-fichero filtra los abiertos
+    const open = projections!.filter(p => p.status === 'open');
+    assert.strictEqual(open.length, 1, 'solo 1 hilo abierto');
+    assert.strictEqual(open[0].thread_id, openId, 'el hilo abierto es el correcto');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs no recursa más allá de 20 niveles de profundidad (fix 2)', async () => {
+  // collectEventDirs para cuando maxDepth <= 0: una jerarquía de 22 niveles
+  // no debe encontrar el directorio de eventos que está en el nivel 21.
+  const root = await mkdtemp(join(tmpdir(), 'mesh-depth-'));
+  try {
+    // Construye: .ai/review/a/b/c/.../doc.md/ (21 componentes bajo .ai/review/)
+    // Con maxDepth=20 el walker se detiene y NO alcanza el directorio de eventos.
+    let deepDir = join(root, '.ai', 'review');
+    for (let i = 0; i < 21; i++) {
+      deepDir = join(deepDir, `lvl${i}`);
+    }
+    await mkdir(deepDir, { recursive: true });
+    await writeFile(join(deepDir, `${randomUUID()}.json`), '{}', 'utf8');
+
+    const result = await scanAllDocs(root);
+
+    assert.strictEqual(result.docs.size, 0, 'no debe encontrar docs más allá de 20 niveles');
+    assert.strictEqual(result.overflow, 0, 'no debe haber overflow');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('scanAllDocs salta en silencio el evento corrupto y procesa los demás documentos (fix 7)', async () => {
+  // Documenta el comportamiento actual de readEvents: un fichero .json inválido en el
+  // directorio de eventos de un documento se descarta silenciosamente (parse error
+  // capturado internamente); el documento puede aparecer en el mapa con 0 proyecciones
+  // si todos sus eventos eran inválidos. El resto de documentos se procesan con normalidad.
+  const root = await mkdtemp(join(tmpdir(), 'mesh-scan-'));
+  try {
+    const validId = randomUUID();
+
+    // Doc válido: un evento bien formado
+    await writeMinimalEvent(join(root, '.ai', 'review', 'valid.md'), validId);
+
+    // Doc corrupto: fichero JSON inválido en su directorio de eventos
+    const corruptEventDir = join(root, '.ai', 'review', 'corrupt.md');
+    await mkdir(corruptEventDir, { recursive: true });
+    await writeFile(join(corruptEventDir, `${randomUUID()}.json`), 'esto no es json', 'utf8');
+
+    const errors: Array<{ file: string; err: unknown }> = [];
+    const result = await scanAllDocs(root, (file, err) => errors.push({ file, err }));
+
+    // El documento válido se proyecta correctamente
+    assert.ok(result.docs.has('valid.md'), 'el documento válido debe aparecer en el mapa');
+    const proj = result.docs.get('valid.md');
+    assert.ok(Array.isArray(proj) && proj.length === 1, 'valid.md debe tener 1 proyección');
+    assert.strictEqual(proj![0].thread_id, validId, 'el thread_id debe coincidir');
+
+    // El doc corrupto puede estar en el mapa (readEvents retorna []) pero con 0 proyecciones:
+    // el evento inválido fue descartado silenciosamente por readEvents.
+    if (result.docs.has('corrupt.md')) {
+      const corruptProj = result.docs.get('corrupt.md');
+      assert.ok(Array.isArray(corruptProj) && corruptProj.length === 0,
+        'el documento corrupto debe tener 0 proyecciones (el evento inválido se descartó)');
+    }
+    // scanAllDocs no lanza incluso con JSON inválido en disco
+    assert.strictEqual(result.overflow, 0, 'no debe haber overflow');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Fase 9.1 — confidence del reviser en MessageProjection
+// ---------------------------------------------------------------------------
+
+test('project propaga confidence de message.posted al MessageProjection', () => {
+  const tid = '29292929-2929-4292-8929-292929292929';
+  const opened = makeOpened({ id: tid, thread_id: tid });
+  const posted: EventEnvelope = {
+    id: '3a3a3a3a-3a3a-4a3a-8a3a-3a3a3a3a3a3a',
+    version: 2, type: 'message.posted', thread_id: tid,
+    author: { kind: 'ai', model: 'claude-sonnet', subagent: 'reviser' },
+    created_at: '2026-07-16T10:00:01.000Z',
+    commit: null, dirty: false, body: 'análisis completado',
+    confidence: 'alta',
+  } as unknown as EventEnvelope;
+  const result = project([opened, posted]);
+  assert.strictEqual(result[0].messages[1].confidence, 'alta');
+});
+
+test('project no fija confidence en MessageProjection cuando el evento no la trae', () => {
+  const tid = '4b4b4b4b-4b4b-4b4b-8b4b-4b4b4b4b4b4b';
+  const opened = makeOpened({ id: tid, thread_id: tid });
+  const posted: EventEnvelope = {
+    id: '5c5c5c5c-5c5c-4c5c-8c5c-5c5c5c5c5c5c',
+    version: 2, type: 'message.posted', thread_id: tid,
+    author: { kind: 'ai', model: 'claude-sonnet' },
+    created_at: '2026-07-16T10:00:01.000Z',
+    commit: null, dirty: false, body: 'sin confianza',
+  } as unknown as EventEnvelope;
+  const result = project([opened, posted]);
+  assert.strictEqual(result[0].messages[1].confidence, undefined);
 });

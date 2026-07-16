@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildThreadHover } from './decorations-utils.ts';
+import { buildThreadHover, escapeMd, buildHoverMessage } from './decorations-utils.ts';
 import type { ThreadProjection, MessageProjection } from './sidecar.ts';
 
 // ---------------------------------------------------------------------------
@@ -301,4 +301,44 @@ test('buildThreadHover pone la meta-línea del mensaje IA con su subagente', () 
   });
   const result = buildThreadHover(thread, 'es-ES', 'UTC');
   assert.ok(result.includes('── reviser · '), `Meta-línea IA esperada, obtenido:\n${result}`);
+});
+
+// ---------------------------------------------------------------------------
+// sec#2 — escapeMd y protección de commentType contra inyección de Markdown
+// ---------------------------------------------------------------------------
+
+test('escapeMd escapa los metacaracteres de Markdown: * _ ` [ ] ( ) # ~ \\', () => {
+  assert.strictEqual(escapeMd('*negrita*'),  '\\*negrita\\*');
+  assert.strictEqual(escapeMd('_cursiva_'),  '\\_cursiva\\_');
+  assert.strictEqual(escapeMd('`código`'),   '\\`código\\`');
+  assert.strictEqual(escapeMd('[link](url)'), '\\[link\\]\\(url\\)');
+  assert.strictEqual(escapeMd('# cabecera'), '\\# cabecera');
+  assert.strictEqual(escapeMd('~tachado~'),  '\\~tachado\\~');
+  assert.strictEqual(escapeMd('a\\b'),       'a\\\\b');
+});
+
+test('escapeMd no altera un commentType normal (sin metacaracteres)', () => {
+  assert.strictEqual(escapeMd('nota'),      'nota');
+  assert.strictEqual(escapeMd('sugerencia'), 'sugerencia');
+});
+
+test('buildThreadHover escapa commentType con metacaracteres de Markdown', () => {
+  const thread = makeThread({
+    commentType: '*inyeccion*' as any,
+    messages: [makeMsg({ id: 'm1', body: 'cuerpo' })],
+  });
+  const result = buildThreadHover(thread, 'es-ES', 'UTC');
+  // El tipo no debe aparecer crudo como metacaracter activo en la cabecera
+  assert.ok(result.includes('\\*inyeccion\\*'), `Debe salir escapado, obtenido:\n${result}`);
+});
+
+test('buildHoverMessage escapa comment.type con metacaracteres de Markdown', () => {
+  const comment = {
+    type: '_inyeccion_' as any,
+    agent: undefined,
+    body: 'cuerpo',
+    created_at: '2026-07-15T10:00:00Z',
+  };
+  const result = buildHoverMessage(comment, 'es-ES', 'UTC');
+  assert.ok(result.includes('\\_inyeccion\\_'), `Debe salir escapado, obtenido:\n${result}`);
 });

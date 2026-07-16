@@ -106,11 +106,11 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 | Event type | Fold action |
 |---|---|
 | `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
-| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. |
+| `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. If the event carries `confidence`, propagates it to the message projection. |
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
 | `thread.status-changed` | Sets `status` to `to` (`"open"` or `"resolved"`). |
-| `thread.reanchored` (has `anchor`) | Replaces `anchor` with the new value. If `status` was `"detached"`, resets it to `"open"`. |
+| `thread.reanchored` (has `anchor`) | Replaces `anchor` with the new value. If `status` was `"detached"`, resets it to `"open"`. The new `anchor.quote` may differ from the original (the extension updates the quote when the human edits the cited text — the quote reflects the text as it was at save time). |
 | `thread.reanchored` (has `detached: true`) | Sets `anchor: { detached: true }`; sets `status: "detached"`. |
 | `thread.assigned` | Sets `assignee` to `agent`. |
 
@@ -136,12 +136,13 @@ ThreadProjection {
 }
 
 MessageProjection {
-  id         : UUID
-  body       : string
-  author     : Author
-  created_at : ISO timestamp
-  retracted  : boolean
-  commit     : string | null             // SHA of the fix associated with this message; null if none
+  id          : UUID
+  body        : string
+  author      : Author
+  created_at  : ISO timestamp
+  retracted   : boolean
+  commit      : string | null             // SHA of the fix associated with this message; null if none
+  confidence? : "alta" | "media" | "baja" // optional; emitted by the reviser subagent; shown in the review panel next to the author label
 }
 ```
 
@@ -152,7 +153,9 @@ Derived fields used by the card UI:
 
 ### Anchor resolution
 
-A thread's `anchor` was captured when the thread opened; the document may have changed since. Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the anchor against the **current** document text:
+A thread's `anchor` was captured when the thread opened; the document may have changed since. If a `thread.reanchored` event is present for a thread, its `anchor` supersedes the original — the extension updates the anchor (including `quote`) whenever the human saves after editing the document. When the human edits text directly inside the quoted range, `thread.reanchored` carries a new `quote` reflecting the text as saved. Always use the most recent `anchor` from the projection.
+
+Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the anchor against the **current** document text:
 
 1. Search for an exact substring match of `anchor.quote`.
 2. **One match** → that is the position. Proceed.
@@ -284,12 +287,16 @@ Route open threads to subagents based on `assignee` from `thread.assigned` event
 |---|---|
 | `assignee: "security"` or `verifica` on a security claim | `security` |
 | `assignee: "maths"` or `verifica` on a quantitative/mathematical claim | `maths` |
-| `edita` or `sugerencia` (prose change) | `reviser` |
-| `pregunta` requiring factual research | `editor` |
+| `assignee: "reviser"` | `reviser` |
+| `assignee: "editor"` | `editor` |
+| `edita` or `sugerencia` (prose change, no assignee) | `reviser` |
+| `pregunta` requiring factual research (no assignee) | `editor` |
 | `nota`, `referencia`, `supuesto` (annotations) | principal |
 | No assignee, no clear signal | principal |
 
 The dotmesh subagent roster: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`.
+
+> The human can assign a thread directly from the mesh-review VS Code extension (button "Asignar" on open thread cards). The extension writes a `thread.assigned` event with `agent` set to one of the four assignable values: `security`, `maths`, `reviser`, `editor`.
 
 ---
 
