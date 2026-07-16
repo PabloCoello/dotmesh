@@ -2,7 +2,8 @@
  * kernel.ts — integración con ms-toolsai.jupyter para mesh-run
  *
  * Usa el truco del notebook acompañante: por cada documento .md se crea/reutiliza
- * un notebook untitled (tipo "jupyter-notebook"). El notebook se muestra brevemente
+ * un notebook untitled con nombre derivado del .md ("analisis.md" → pestaña
+ * "analisis.ipynb"; ver companion.ts). El notebook se muestra brevemente
  * (showNotebookDocument con preserveFocus: true), se ejecuta una celda bootstrap
  * (notebook.cell.execute), lo que deja userStartedKernel === true en la extensión
  * Jupyter, y desde ahí kernels.getKernel(companionUri) + executeCode(code, token)
@@ -19,8 +20,10 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import type { Jupyter, Kernel } from '@vscode/jupyter-extension';
 import { splitOutputLines, stripAnsi } from './lines.js';
+import { companionFileName } from './companion.js';
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -143,7 +146,7 @@ export class KernelManager {
     const originalEditor = vscode.window.activeTextEditor;
 
     // Crear nuevo acompañante y esperar a que el kernel arranque.
-    const companionUri = await this.createCompanion();
+    const companionUri = await this.createCompanion(docUri);
     this.companions.set(key, { companionUri, docUri });
     this._onDidChangeCompanions.fire(undefined);
 
@@ -233,7 +236,7 @@ export class KernelManager {
     const api = await this.getJupyterApi();
     // Reconstruir el docUri desde la clave de cadena.
     const docUri = vscode.Uri.parse(key);
-    const companionUri = await this.createCompanion();
+    const companionUri = await this.createCompanion(docUri);
     this.companions.set(key, { companionUri, docUri });
     this._onDidChangeCompanions.fire(undefined);
     const kernel = await this.pollForKernel(api, companionUri, token);
@@ -311,29 +314,64 @@ export class KernelManager {
   }
 
   /**
-   * Crea un notebook untitled, lo muestra brevemente y ejecuta la celda bootstrap.
-   * Esto es lo que deja userStartedKernel === true en la extensión Jupyter.
+   * Crea el notebook acompañante untitled con nombre derivado del .md
+   * ("analisis.md" → pestaña "analisis.ipynb"), lo muestra brevemente y
+   * ejecuta la celda bootstrap. Esto es lo que deja userStartedKernel === true
+   * en la extensión Jupyter.
+   *
+   * El untitled con nombre se abre con openNotebookDocument(uri): el scheme
+   * 'untitled' está contemplado en $tryOpenNotebook (vscode-main,
+   * mainThreadNotebookDocuments.ts líneas 156-170) y el viewType se infiere
+   * del patrón *.ipynb → jupyter-notebook (notebookEditorModelResolverServiceImpl.ts,
+   * validateResourceViewType, líneas 205-230). El documento abre VACÍO: la
+   * celda bootstrap se inserta después con NotebookEdit, lo que además lo deja
+   * dirty (mismo efecto que el antiguo dirty-at-birth con NotebookData: la
+   * pestaña no es reutilizable como preview y pide confirmación al cerrar).
+   *
+   * openNotebookDocument(uri) devuelve el documento YA ABIERTO si la URI
+   * coincide; companionFileName desambigua con sufijo -N contra los untitled
+   * abiertos para que un restart o dos .md homónimos no compartan acompañante.
    *
    * showNotebookDocument (preserveFocus: true) es obligatorio antes de
    * notebook.cell.execute: el comando resuelve el editor desde los panes visibles
    * y devuelve false si no hay ninguno (vscode-jupyter, notebookKernelView.ts,
    * getEditorFromContext, líneas 24-40).
    */
-  private async createCompanion(): Promise<vscode.Uri> {
+  private async createCompanion(docUri: vscode.Uri): Promise<vscode.Uri> {
+    const taken = new Set(
+      vscode.workspace.notebookDocuments
+        .filter(nd => nd.uri.scheme === 'untitled')
+        .map(nd => path.posix.basename(nd.uri.path))
+    );
+    const name = companionFileName(path.posix.basename(docUri.path), taken);
+    const notebookDoc = await vscode.workspace.openNotebookDocument(
+      vscode.Uri.from({ scheme: 'untitled', path: name })
+    );
+
     const bootstrapCell = new vscode.NotebookCellData(
       vscode.NotebookCellKind.Code,
       '# mesh-run companion\npass',
       'python'
     );
-    const notebookDoc = await vscode.workspace.openNotebookDocument(
-      'jupyter-notebook',
-      new vscode.NotebookData([bootstrapCell])
-    );
+    // replaceCells sobre todo el rango: deja exactamente la celda bootstrap
+    // tanto si el untitled abre vacío como si abre con una celda por defecto.
+    const edit = new vscode.WorkspaceEdit();
+    edit.set(notebookDoc.uri, [
+      vscode.NotebookEdit.replaceCells(
+        new vscode.NotebookRange(0, notebookDoc.cellCount),
+        [bootstrapCell]
+      ),
+    ]);
+    if (!(await vscode.workspace.applyEdit(edit))) {
+      throw new Error(
+        'mesh-run: no se pudo insertar la celda bootstrap en el notebook acompañante.'
+      );
+    }
 
     // El notebook debe ser visible para que notebook.cell.execute pueda usarlo.
     // preserveFocus: true mantiene el foco en el documento original del usuario.
     // preview: false evita que VS Code lo trate como pestaña de vista previa reutilizable
-    // (aunque el dirty-at-birth ya lo impide, se hace explícito por claridad).
+    // (aunque el dirty tras insertar la celda ya lo impide, se hace explícito por claridad).
     await vscode.window.showNotebookDocument(notebookDoc, { preserveFocus: true, preview: false });
 
     // Ejecuta la celda bootstrap: esto activa el picker de kernel si es la primera
