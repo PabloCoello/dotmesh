@@ -36,6 +36,8 @@ export interface ExecutionResult {
   repr: string | null;
   /** Traceback completo si hubo error de ejecución, o null. */
   error: string | null;
+  /** true si llegó al menos un item con STDERR_MIME durante la ejecución. */
+  hadStderr: boolean;
 }
 
 export interface KernelSession {
@@ -473,6 +475,7 @@ class KernelSessionImpl implements KernelSession {
     let outputText = '';
     let lastValueRepr: string | null = null;
     let errorText: string | null = null;
+    let hadStderr = false;
 
     const cts = new vscode.CancellationTokenSource();
     try {
@@ -502,6 +505,7 @@ class KernelSessionImpl implements KernelSession {
             // stripAnsi: print() con colores (colorama, rich, etc.) contaminaría el bloque.
             outputText += stripAnsi(textDecoder.decode(item.data));
           } else if (item.mime === STDERR_MIME) {
+            hadStderr = true;
             outputText += stripAnsi(textDecoder.decode(item.data));
           } else if (item.mime === ERROR_MIME) {
             // Los tracebacks de Jupyter llevan códigos ANSI (ESC[31m, ESC[36m, etc.).
@@ -576,7 +580,7 @@ class KernelSessionImpl implements KernelSession {
     }
 
     const stdout = splitOutputLines(outputText);
-    return { stdout, repr: lastValueRepr, error: errorText };
+    return { stdout, repr: lastValueRepr, error: errorText, hadStderr };
   }
 }
 
