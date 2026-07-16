@@ -81,6 +81,22 @@ You edit document prose (`.md`, `.qmd`, `.tex`, `.bib`) and write events to `.ai
 
 Tasks outside session scope are persisted in `.ai/backlog/<task_id>.json` and listed in section 4.
 
+## Batching
+
+Before fan-out, group actionable threads whose `char_offset` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
+
+When delegating to the reviser, include ±20 lines of the document surrounding each thread's `anchor.char_offset` verbatim in the delegation prompt. The reviser uses this extract as its primary source; it re-reads the full document or event directory only if the extract is insufficient or absent.
+
+## Modo vigilante
+
+OpenCode does not expose a `/loop` command. Run the watchful review cycle manually:
+
+1. At the start of a session (or after each human save), execute `mesh-review project --pending <doc>`.
+2. If pending threads are returned, process them (Batching → Fan-out → Apply).
+3. If `--pending` returns an empty list, there is nothing to process; check again at the next natural pause in editing.
+
+This is the degraded equivalent of the Claude+herdr loop: the interval is driven by human action rather than an automatic timer. For documents under active review, run step 1 once per editing session or whenever you return to the document.
+
 ## Skills
 
 - Always load `anti-ai-style`.

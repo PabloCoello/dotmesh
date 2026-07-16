@@ -55,6 +55,25 @@ You edit document prose (`.md`, `.qmd`, `.tex`, `.bib`) and write events to `.ai
 
 Tasks outside session scope are persisted in `.ai/backlog/<task_id>.json` and listed in section 4.
 
+## Batching
+
+Before fan-out, group actionable threads whose `char_offset` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
+
+When delegating to the reviser, include ±20 lines of the document surrounding each thread's `anchor.char_offset` verbatim in the delegation prompt. The reviser uses this extract as its primary source; it re-reads the full document or event directory only if the extract is insufficient or absent.
+
+## Modo vigilante
+
+In a herdr session (`HERDR_ENV=1`), run the review cycle on a dynamic loop using `/loop`:
+
+1. Execute `mesh-review project --pending <doc>` in a dedicated pane.
+2. If pending threads are returned, process them (Batching → Fan-out → Apply) and wait for the next trigger.
+3. If `--pending` returns an empty list, increase the loop interval (double it up to a ceiling of 10 minutes).
+4. On the next iteration, return to step 1.
+
+Load the `herdr` skill before splitting panes or running long processes in sibling panes; the skill owns pane orchestration inside herdr.
+
+Outside herdr: run `mesh-review project --pending <doc>` manually at the start of each session and after each human save. There is no automatic interval; periodic manual invocation is the equivalent of the loop.
+
 ## Skills
 
 - Always load `anti-ai-style`.
