@@ -634,7 +634,22 @@ async function runChunkById(
     blockContent = truncateOutput(lines, freshChunk.truncate ?? 50);
   }
 
-  const newOutputBlock = buildOutputBlock(chunkId, currentHash, blockContent);
+  // Calcular seq, up y warn sobre el snapshot fresco.
+  // seq: siempre mayor que cualquier seq existente → detecta re-ejecuciones aguas arriba.
+  // up: hash de los hashes de los predecesores → detecta cambios aguas arriba.
+  // warn: la ejecución emitió stderr sin excepción.
+  const existingSeqs = freshOutputs.map(o => o.seq ?? 0);
+  const nextSeq = Math.max(0, ...existingSeqs) + 1;
+  const chunkIdx = freshChunks.findIndex(c => c.id === chunkId);
+  const predecessors = freshChunks.slice(0, chunkIdx);
+  const up = chunkHash(predecessors.map(c => chunkHash(c.code)).join('\n'));
+  const warnFlag = result.hadStderr && result.error === null;
+
+  const newOutputBlock = buildOutputBlock(chunkId, currentHash, blockContent, {
+    warn: warnFlag || undefined,
+    seq: nextSeq,
+    up,
+  });
 
   // textBefore = freshText; textAfter = resultado de replaceOrInsertOutputBlock.
   // La garantía de coherencia viene de que editor.edit es versionado (devuelve false
@@ -675,8 +690,18 @@ async function runChunkById(
     }
 
     const retryOutput = retryOutputs.find(o => o.chunkId === chunkId);
-    // Mismo hash que el primer intento: la salida sigue siendo de codeToRun
-    const retryBlock = buildOutputBlock(chunkId, currentHash, blockContent);
+    // Mismo hash que el primer intento: la salida sigue siendo de codeToRun.
+    // Recalcular seq y up sobre el snapshot del reintento.
+    const retryExistingSeqs = retryOutputs.map(o => o.seq ?? 0);
+    const retryNextSeq = Math.max(0, ...retryExistingSeqs) + 1;
+    const retryChunkIdx = retryChunks.findIndex(c => c.id === chunkId);
+    const retryPredecessors = retryChunks.slice(0, retryChunkIdx);
+    const retryUp = chunkHash(retryPredecessors.map(c => chunkHash(c.code)).join('\n'));
+    const retryBlock = buildOutputBlock(chunkId, currentHash, blockContent, {
+      warn: warnFlag || undefined,
+      seq: retryNextSeq,
+      up: retryUp,
+    });
 
     editSuccess = await applyOutputEdit(
       editor, document, retryChunk, retryOutput, retryBlock, retryText,
