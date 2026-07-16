@@ -24,6 +24,9 @@ export interface ParsedOutput {
   content: string;
   startOffset: number;
   endOffset: number;
+  warn?: boolean;   // true si la valla contiene warn=1
+  seq?: number;     // valor de seq=N en la valla
+  up?: string;      // valor de up=H en la valla
 }
 
 // ---------------------------------------------------------------------------
@@ -174,13 +177,22 @@ export function parseOutputs(text: string): ParsedOutput[] {
     const hash = attrs.get('hash');
     if (!hash) continue;
 
-    results.push({
+    const warn = attrs.get('warn') === '1' ? true : undefined;
+    const seqStr = attrs.get('seq');
+    const seq = seqStr !== undefined ? parseInt(seqStr, 10) : undefined;
+    const up = attrs.get('up');
+
+    const output: ParsedOutput = {
       chunkId,
       hash,
       content: contentLines.join('\n'),
       startOffset,
       endOffset,
-    });
+    };
+    if (warn !== undefined) output.warn = warn;
+    if (seq !== undefined) output.seq = seq;
+    if (up !== undefined) output.up = up;
+    results.push(output);
   }
 
   return results;
