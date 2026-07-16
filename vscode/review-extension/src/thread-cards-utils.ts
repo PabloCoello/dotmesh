@@ -214,6 +214,35 @@ export function partitionCardsByStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Icono SVG para el botón de diff
+// ---------------------------------------------------------------------------
+
+/**
+ * SVG inline del codicon `git-compare` de VS Code (16×16, `fill="currentColor"`).
+ *
+ * Elección de vía: el webview tiene `localResourceRoots: []` por defecto, lo que
+ * impide cargar la fuente de codicones (@vscode/codicons) como recurso local sin
+ * abrir `localResourceRoots`. Cargar la fuente desde un CDN no es posible porque
+ * la CSP no tiene `font-src`. La alternativa más simple y sin tocar el CSP es
+ * incrustar el SVG directamente en el HTML del botón como contenido inline, que
+ * los navegadores y los webviews de VS Code interpretan sin restricción de política.
+ *
+ * Fuente del path: @vscode/codicons dist/codicon.svg (symbol id="git-compare").
+ */
+const DIFF_ICON_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" ` +
+  `fill="currentColor" aria-hidden="true">` +
+  `<path fill-rule="evenodd" clip-rule="evenodd" d="M7.389 12.99l-1.27-1.27.67-.7 2.13 2.13v.7l-2.13 ` +
+  `2.13-.71-.71L7.349 14h-1.85a2.49 2.49 0 01-2.5-2.5V5.95a2.59 2.59 0 01-1.27-.68 2.52 2.52 0 01-.54-2.73A2.5 ` +
+  `2.5 0 013.499 1a2.45 2.45 0 011 .19 2.48 2.48 0 011.35 1.35c.133.317.197.658.19 1a2.5 2.5 0 01-2 2.45v5.5a1.5 ` +
+  `1.5 0 001.5 1.5h1.85zm-4.68-8.25a1.5 1.5 0 002.08-2.08 1.55 1.55 0 00-.68-.56 1.49 1.49 0 00-.86-.08 ` +
+  `1.49 1.49 0 00-1.18 1.18 1.49 1.49 0 00.08.86c.117.277.311.513.56.68zm10.33 6.3c.48.098.922.335 1.27.68a2.51 ` +
+  `2.51 0 01.31 3.159 2.5 2.5 0 11-3.47-3.468c.269-.182.571-.308.89-.37V5.49a1.5 1.5 0 00-1.5-1.5h-1.85l1.27 ` +
+  `1.27-.71.71-2.13-2.13v-.7l2.13-2.13.71.71-1.27 1.27h1.85a2.49 2.49 0 012.5 2.5v5.55zm-.351 3.943a1.5 1.5 0 ` +
+  `001.1-2.322 1.55 1.55 0 00-.68-.56 1.49 1.49 0 00-.859-.08 1.49 1.49 0 00-1.18 1.18 1.49 1.49 0 00.08.86 ` +
+  `1.5 1.5 0 001.539.922z"/></svg>`;
+
+// ---------------------------------------------------------------------------
 // buildCardsHtml
 // ---------------------------------------------------------------------------
 
@@ -233,7 +262,7 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
   // data-diff-mode rastrea el toggle last↔range en el webview; el SHA se resuelve
   // en extension.ts desde las proyecciones del event log, nunca desde el DOM.
   const diffBtnHtml = (withActions && card.fixCommit !== null)
-    ? `<button class="action-btn" data-action="diff" data-thread-id="${tid}" data-diff-mode="last">⟷</button>`
+    ? `<button class="action-btn" data-action="diff" data-thread-id="${tid}" data-diff-mode="last">${DIFF_ICON_SVG}</button>`
     : '';
 
   const cardActionsHtml = withActions

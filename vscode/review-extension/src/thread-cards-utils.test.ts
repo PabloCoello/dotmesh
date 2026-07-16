@@ -1572,3 +1572,56 @@ test('buildCardsHtml escapa el valor de confidence del mensaje (defensa en profu
   assert.ok(html.includes('&lt;script&gt;'), 'el valor de confidence debe estar HTML-escapado');
 });
 
+// ---------------------------------------------------------------------------
+// Fase 9.2 — botón diff con SVG inline en lugar del glifo ⟷
+// ---------------------------------------------------------------------------
+
+test('buildCardsHtml botón diff no contiene el glifo ⟷', () => {
+  const card: CardViewModel = {
+    thread_id:   'diff-svg',
+    commentType: 'edita',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   'abc1234',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '16 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('⟷'), 'el botón diff no debe contener el glifo ⟷');
+});
+
+test('buildCardsHtml botón diff contiene SVG inline con el icono git-compare', () => {
+  const card: CardViewModel = {
+    thread_id:   'diff-svg2',
+    commentType: 'edita',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   'abc5678',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '16 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('<svg'), 'el botón diff debe contener un SVG inline');
+  assert.ok(html.includes('viewBox="0 0 16 16"'), 'el SVG debe tener viewBox de 16×16');
+});
+
+test('buildCardsHtml SVG del botón diff no requiere carga de fuente externa (inline completo)', () => {
+  // El SVG no debe referenciar recursos externos (xlink:href, src, url()) que
+  // requieran apertura de localResourceRoots o cambios en la CSP.
+  const card: CardViewModel = {
+    thread_id:   'diff-svg3',
+    commentType: 'edita',
+    lineLabel:   'L1',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   'def9012',
+    openCommit:  null,
+    messages:    [{ id: 'm1', authorLabel: 'humano', dateLabel: '16 jul', body: 'ok' }],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('xlink:href'), 'el SVG inline no debe usar xlink:href');
+  assert.ok(!html.includes('src='), 'el SVG inline no debe referenciar recursos externos');
+});
+
