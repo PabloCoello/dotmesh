@@ -5,7 +5,7 @@
 # Casos:
 #   control    — 0 hilos pendientes → 0 eventos nuevos
 #   tratamiento — 2 hilos pendientes → ≥1 evento nuevo + respuesta con secciones
-set -e
+set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Rutas
@@ -52,10 +52,12 @@ echo "  mesh-review: $MESH_REVIEW"
 # Cleanup
 # ---------------------------------------------------------------------------
 CLEANUP_DIRS=()
+CLAUDE_STDERR=$(mktemp)
 cleanup() {
   for d in "${CLEANUP_DIRS[@]}"; do
     [ -d "$d" ] && rm -rf "$d"
   done
+  rm -f "$CLAUDE_STDERR"
 }
 trap cleanup EXIT
 
@@ -129,25 +131,28 @@ run_claude_scribe() {
 
   set +e
   # Prompt via stdin para evitar que --add-dir (variádico) lo consuma como directorio
+  # NOTA: --dangerously-skip-permissions desactiva los diálogos de permisos de
+  # Claude Code y --add-dir no es un sandbox de SO. El riesgo se acepta porque
+  # el prompt es mínimo y las rutas apuntan al directorio temporal.
   raw_response=$(cd "$workdir" && echo "$prompt" | timeout 600 claude -p \
     --output-format json \
     --dangerously-skip-permissions \
     --settings '{"outputStyle":"scribe"}' \
     --add-dir "$workdir" \
-    2>/tmp/claude-scribe-stderr.txt)
+    2>"$CLAUDE_STDERR")
   claude_exit=$?
   set -e
 
   if [ "$claude_exit" -eq 124 ]; then
     echo "" >&2
     echo "  !! claude -p agotó el timeout (600s). Stderr:" >&2
-    cat /tmp/claude-scribe-stderr.txt >&2
+    cat "$CLAUDE_STDERR" >&2
     return 1
   fi
   if [ "$claude_exit" -ne 0 ]; then
     echo "" >&2
     echo "  !! claude -p terminó con código $claude_exit. Stderr:" >&2
-    cat /tmp/claude-scribe-stderr.txt >&2
+    cat "$CLAUDE_STDERR" >&2
     return 1
   fi
 
@@ -210,14 +215,17 @@ WORK_TRAT="$TMPWORK"
 
 # Pre-verificación con CLI
 pending_json=$(node "$MESH_REVIEW" project --pending "$WORK_TRAT/doc.md")
-count_pending=$(echo "$pending_json" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+count_pending=$(echo "$pending_json" | node -e "
+const d = require('fs').readFileSync('/dev/stdin', 'utf8');
+process.stdout.write(String(JSON.parse(d).length) + '\n');
+")
 if [ "$count_pending" = "2" ]; then
   pass "pre-check: project --pending retorna $count_pending hilos"
 else
   fail "pre-check: project --pending retorna $count_pending (esperado 2)"
 fi
 
-events_before=$(ls "$WORK_TRAT/.ai/review/doc.md/"*.json 2>/dev/null | wc -l | tr -d ' ')
+events_before=$(find "$WORK_TRAT/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
 echo "  Eventos antes de claude: $events_before"
 
 PROMPT_TRAT=$(build_prompt "$MESH_REVIEW" "$WORK_TRAT/doc.md")
@@ -231,7 +239,7 @@ else
 fi
 
 # Verificar ≥1 evento nuevo
-events_after=$(ls "$WORK_TRAT/.ai/review/doc.md/"*.json 2>/dev/null | wc -l | tr -d ' ')
+events_after=$(find "$WORK_TRAT/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
 new_events=$((events_after - events_before))
 echo "  Eventos después de claude: $events_after (nuevos: $new_events)"
 
@@ -287,7 +295,7 @@ else
   fail "pre-check: project --pending retorna $pending_ctrl (esperado [])"
 fi
 
-events_before_ctrl=$(ls "$WORK_CTRL/.ai/review/doc.md/"*.json 2>/dev/null | wc -l | tr -d ' ')
+events_before_ctrl=$(find "$WORK_CTRL/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
 echo "  Eventos antes de claude: $events_before_ctrl"
 
 PROMPT_CTRL=$(build_prompt "$MESH_REVIEW" "$WORK_CTRL/doc.md")
@@ -300,7 +308,7 @@ else
   fail "control: claude -p falló o agotó el timeout"
 fi
 
-events_after_ctrl=$(ls "$WORK_CTRL/.ai/review/doc.md/"*.json 2>/dev/null | wc -l | tr -d ' ')
+events_after_ctrl=$(find "$WORK_CTRL/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
 new_events_ctrl=$((events_after_ctrl - events_before_ctrl))
 echo "  Eventos después de claude: $events_after_ctrl (nuevos: $new_events_ctrl)"
 

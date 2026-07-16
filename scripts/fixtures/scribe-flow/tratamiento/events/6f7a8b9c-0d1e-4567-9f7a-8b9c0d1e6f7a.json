@@ -12,7 +12,7 @@
   "anchor": {
     "quote": "The process has proven effective in practice.",
     "line_hint": 14,
-    "char_offset": 230
+    "char_offset": 231
   },
   "commentType": "sugerencia",
   "body": "Sugiere añadir una métrica concreta que respalde esta afirmación (por ejemplo: porcentaje de defectos detectados)."

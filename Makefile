@@ -30,7 +30,7 @@ help:
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
-	@echo "  make test-scribe-flow - Arnés headless scribe (requiere ANTHROPIC_API_KEY)"
+	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
