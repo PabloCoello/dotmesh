@@ -5,7 +5,7 @@
 import { parseChunks, parseOutputs } from './parser.ts';
 import { chunkHash } from './hash.ts';
 
-export type OutputState = 'stale' | 'error' | 'fresh';
+export type OutputState = 'fresh' | 'warn' | 'error' | 'stale';
 
 export interface OutputStateResult {
   chunkId: string;
@@ -16,50 +16,39 @@ export interface OutputStateResult {
 
 /**
  * Prefijo que identifica un bloque de salida que contiene un error de ejecución.
- * Debe coincidir con lo que la Tarea 5 escribe en runChunk cuando
+ * Debe coincidir con lo que extension.ts escribe en runChunk cuando
  * ExecutionResult.error no es null.
  */
 const ERROR_PREFIX = '# Error\n';
 
 /**
- * Compara el hash actual del código de cada chunk con el hash almacenado en
- * su bloque de salida y decide el estado de cada bloque.
+ * Calcula el estado de cada bloque de salida en el documento.
  *
- * Reglas de precedencia (en orden de prioridad):
+ * Precedencia (mayor a menor): stale > error > warn > fresh.
  *
- * 1. 'stale'  — el chunkId aparece en dos o más chunks del documento.
- *    El emparejamiento es ambiguo: no se puede saber a qué versión del
- *    código corresponde el output ni cuál de los chunks generó el error.
- *    Se marca conservadoramente como 'stale' en lugar de intentar una
- *    comparación de hash o detección de error que carecería de sentido.
+ * Un output es 'stale' si cumple cualquiera de (se evalúan en orden,
+ * el primero que se cumple gana):
+ *   1. Su chunkId aparece en más de un chunk (id duplicado).
+ *   2. No hay chunk con ese chunkId (output huérfano).
+ *   3. El hash del código actual del chunk difiere del hash almacenado.
+ *   4. output.up es undefined (output escrito antes de llevar seguimiento upstream).
+ *   5. output.up !== upstreamHash(chunkPos): código aguas arriba modificado,
+ *      chunk nuevo insertado o chunk eliminado.
+ *   6. output.seq es undefined (output escrito antes de llevar numeración).
+ *   7. Algún output de chunk con índice < chunkPos tiene seq > output.seq:
+ *      un chunk aguas arriba fue re-ejecutado después de este output.
  *
- * 2. 'error'  — el contenido del bloque empieza por '# Error\n'.
- *    Se aplica incluso si el hash coincide (el código no ha cambiado desde
- *    que falló; la salida sigue siendo un error). Se aplica también si el
- *    hash difiere (el código fue editado tras el error). En ambos casos el
- *    estado más accionable para el usuario es saber que hay un error.
- *
- * 3. 'stale'  — el hash almacenado difiere del hash del código actual, O
- *    el output no tiene chunk correspondiente (output huérfano: el chunk
- *    que lo generó ya no existe en el documento y no se puede verificar
- *    si el output sigue siendo válido).
- *
- * 4. 'fresh'  — el hash coincide y el bloque no tiene prefijo de error.
- *
- * Comportamiento con múltiples outputs para el mismo chunkId:
- * Cada bloque de output se evalúa de forma independiente según las reglas
- * anteriores. Tener varios outputs referenciando el mismo chunk es un error
- * del usuario, pero la función los procesa todos sin descartar ninguno.
- * El orden de los resultados refleja el orden de aparición de los outputs
- * en el documento.
+ * Si no es 'stale':
+ *   8. 'error'  si el contenido empieza por '# Error\n'.
+ *   9. 'warn'   si output.warn === true.
+ *   10. 'fresh' en cualquier otro caso.
  */
 export function computeOutputStates(text: string): OutputStateResult[] {
   const chunks = parseChunks(text);
   const outputs = parseOutputs(text);
 
   // Detectar chunkIds duplicados entre chunks. Un id que aparece en dos o
-  // más bloques de código crea un emparejamiento ambiguo: los outputs de ese
-  // id se marcarán 'stale' sin intentar comparar hashes.
+  // más bloques de código crea un emparejamiento ambiguo.
   const seenChunkIds = new Set<string>();
   const duplicateChunkIds = new Set<string>();
   for (const chunk of chunks) {
@@ -70,11 +59,39 @@ export function computeOutputStates(text: string): OutputStateResult[] {
     }
   }
 
-  // Índice chunkId → hash actual del código fuente del chunk (solo para ids únicos)
+  // chunkId → hash actual del código (solo ids únicos)
   const chunkHashMap = new Map<string, string>();
   for (const chunk of chunks) {
     if (!duplicateChunkIds.has(chunk.id)) {
       chunkHashMap.set(chunk.id, chunkHash(chunk.code));
+    }
+  }
+
+  // chunkId → posición (índice base 0) en la lista de chunks (solo ids únicos)
+  const chunkPosMap = new Map<string, number>();
+  for (let i = 0; i < chunks.length; i++) {
+    if (!duplicateChunkIds.has(chunks[i].id)) {
+      chunkPosMap.set(chunks[i].id, i);
+    }
+  }
+
+  // Hash upstream por posición:
+  //   upstreamHashes[i] = chunkHash de la concatenación con '\n' de los
+  //   chunkHash(code) de los i predecesores (chunks.slice(0, i)).
+  //   Para i=0 (sin predecesores): join da '', chunkHash('') = 'e3b0c442'.
+  const upstreamHashes: string[] = chunks.map((_, i) =>
+    chunkHash(chunks.slice(0, i).map(c => chunkHash(c.code)).join('\n'))
+  );
+
+  // (chunkPos, seq) de todos los outputs con seq definido y chunkId no duplicado,
+  // necesario para la condición 7 (re-ejecución de chunk aguas arriba).
+  const outputPositionSeqs: Array<{ pos: number; seq: number }> = [];
+  for (const o of outputs) {
+    if (!duplicateChunkIds.has(o.chunkId) && o.seq !== undefined) {
+      const pos = chunkPosMap.get(o.chunkId);
+      if (pos !== undefined) {
+        outputPositionSeqs.push({ pos, seq: o.seq });
+      }
     }
   }
 
@@ -83,22 +100,38 @@ export function computeOutputStates(text: string): OutputStateResult[] {
   for (const output of outputs) {
     let state: OutputState;
 
+    // Regla 1: id de chunk duplicado → emparejamiento ambiguo
     if (duplicateChunkIds.has(output.chunkId)) {
-      // Regla 1: id de chunk duplicado → emparejamiento ambiguo
       state = 'stale';
+    // Regla 2: chunk no existe en el documento (output huérfano)
+    } else if (!chunkHashMap.has(output.chunkId)) {
+      state = 'stale';
+    // Regla 3: hash del código actual distinto al almacenado en la valla
+    } else if (chunkHashMap.get(output.chunkId) !== output.hash) {
+      state = 'stale';
+    // Regla 4: up ausente (output sin seguimiento upstream)
+    } else if (output.up === undefined) {
+      state = 'stale';
+    // Regla 5: up no coincide con el hash upstream real del chunk
+    } else if (output.up !== upstreamHashes[chunkPosMap.get(output.chunkId)!]) {
+      state = 'stale';
+    // Regla 6: seq ausente (output sin numeración de ejecución)
+    } else if (output.seq === undefined) {
+      state = 'stale';
+    // Regla 7: algún chunk aguas arriba fue re-ejecutado después de este output
+    } else if (outputPositionSeqs.some(
+      item => item.pos < chunkPosMap.get(output.chunkId)! && item.seq > output.seq!
+    )) {
+      state = 'stale';
+    // Regla 8: prefijo de error de ejecución
     } else if (output.content.startsWith(ERROR_PREFIX)) {
-      // Regla 2: el prefijo de error tiene precedencia sobre hash stale
       state = 'error';
+    // Regla 9: la ejecución emitió stderr sin excepción
+    } else if (output.warn === true) {
+      state = 'warn';
+    // Regla 10: output actualizado y sin anomalías
     } else {
-      const currentHash = chunkHashMap.get(output.chunkId);
-      if (currentHash === undefined) {
-        // Output huérfano: el chunk ya no existe en el documento
-        state = 'stale';
-      } else if (currentHash !== output.hash) {
-        state = 'stale';
-      } else {
-        state = 'fresh';
-      }
+      state = 'fresh';
     }
 
     results.push({

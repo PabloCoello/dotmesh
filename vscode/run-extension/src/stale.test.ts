@@ -13,9 +13,18 @@ function makeChunk(id: string, code: string): string {
   return `\`\`\`python {#${id}}\n${code}\n\`\`\``;
 }
 
-/** Construye un bloque output válido. */
-function makeOutput(id: string, hash: string, content: string): string {
-  return `\`\`\`output {#${id} hash=${hash}}\n${content}\n\`\`\``;
+/** Construye un bloque output válido con atributos opcionales. */
+function makeOutput(
+  id: string,
+  hash: string,
+  content: string,
+  opts?: { warn?: boolean; seq?: number; up?: string }
+): string {
+  let attrs = `hash=${hash}`;
+  if (opts?.warn === true) attrs += ' warn=1';
+  if (opts?.seq !== undefined) attrs += ` seq=${opts.seq}`;
+  if (opts?.up !== undefined) attrs += ` up=${opts.up}`;
+  return `\`\`\`output {#${id} ${attrs}}\n${content}\n\`\`\``;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +51,8 @@ test('computeOutputStates: chunk sin output → []', () => {
 test('computeOutputStates: hash coincidente, sin prefijo de error → fresh', () => {
   const code = 'x = 1\nprint(x)';
   const hash = chunkHash(code);
-  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, '1')}\n`;
+  // Primer chunk (pos 0): up correcto = chunkHash('') = 'e3b0c442'
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, '1', { up: 'e3b0c442', seq: 1 })}\n`;
 
   const states = computeOutputStates(doc);
   assert.strictEqual(states.length, 1);
@@ -85,16 +95,17 @@ test('computeOutputStates: contenido con prefijo "# Error\\n" y hash coincidente
   const code = 'raise ValueError("oops")';
   const hash = chunkHash(code);
   const errorContent = '# Error\nTraceback (most recent call last):\n  ...\nValueError: oops';
-  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, errorContent)}\n`;
+  // up y seq correctos: sin ellos el output sería stale antes de llegar a la regla 8
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, errorContent, { up: 'e3b0c442', seq: 1 })}\n`;
 
   const states = computeOutputStates(doc);
   assert.strictEqual(states.length, 1);
   assert.strictEqual(states[0].state, 'error');
 });
 
-test('computeOutputStates: prefijo "# Error\\n" con hash diferente → error (error precede a stale)', () => {
+test('computeOutputStates: prefijo "# Error\\n" con hash diferente → stale (stale precede a error)', () => {
   // El código fue editado después del error: el hash ya no coincide.
-  // Error sigue teniendo precedencia sobre stale.
+  // Nueva precedencia: stale > error — un output desactualizado no es fiable.
   const originalCode = 'raise ValueError("v1")';
   const editedCode = 'raise RuntimeError("v2")';
   const staleHash = chunkHash(originalCode); // hash del momento en que se guardó el error
@@ -103,7 +114,7 @@ test('computeOutputStates: prefijo "# Error\\n" con hash diferente → error (er
 
   const states = computeOutputStates(doc);
   assert.strictEqual(states.length, 1);
-  assert.strictEqual(states[0].state, 'error');
+  assert.strictEqual(states[0].state, 'stale');
 });
 
 // ---------------------------------------------------------------------------
@@ -122,18 +133,22 @@ test('computeOutputStates: múltiples bloques → cada uno recibe su estado corr
   const errorHash = chunkHash(errorCode);
   const errorContent = '# Error\nValueError';
 
+  // Chunks en orden: fresh (pos 0), stale (pos 1), err (pos 2).
+  // up para err = chunkHash(chunkHash(freshCode) + '\n' + chunkHash(staleCurrentCode))
+  const upForErr = chunkHash(chunkHash(freshCode) + '\n' + chunkHash(staleCurrentCode));
+
   const doc = [
     makeChunk('fresh', freshCode),
     '',
-    makeOutput('fresh', freshHash, 'a'),
+    makeOutput('fresh', freshHash, 'a', { up: 'e3b0c442', seq: 1 }),
     '',
     makeChunk('stale', staleCurrentCode),
     '',
-    makeOutput('stale', staleOldHash, 'b'),
+    makeOutput('stale', staleOldHash, 'b'), // hash incorrecto → stale en regla 3
     '',
     makeChunk('err', errorCode),
     '',
-    makeOutput('err', errorHash, errorContent),
+    makeOutput('err', errorHash, errorContent, { up: upForErr, seq: 3 }),
     '',
   ].join('\n');
 
@@ -206,9 +221,9 @@ test('computeOutputStates: dos outputs con el mismo chunkId reciben estado indep
   const doc = [
     makeChunk('c1', code),
     '',
-    makeOutput('c1', currentHash, 'a'), // hash coincide → fresh
+    makeOutput('c1', currentHash, 'a', { up: 'e3b0c442', seq: 1 }), // hash coincide → fresh
     '',
-    makeOutput('c1', oldHash, 'old'),   // hash obsoleto → stale
+    makeOutput('c1', oldHash, 'old'),   // hash obsoleto → stale (regla 3)
     '',
   ].join('\n');
 
@@ -217,6 +232,154 @@ test('computeOutputStates: dos outputs con el mismo chunkId reciben estado indep
   // Orden de aparición en el documento
   assert.strictEqual(states[0].state, 'fresh');
   assert.strictEqual(states[1].state, 'stale');
+});
+
+// ---------------------------------------------------------------------------
+// Offsets
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Estado 'warn'
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: warn=true, hash correcto, up correcto, seq correcto → warn', () => {
+  const code = 'x = 1';
+  const hash = chunkHash(code);
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, 'result', { warn: true, up: 'e3b0c442', seq: 1 })}\n`;
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'warn');
+});
+
+// ---------------------------------------------------------------------------
+// Condición 4: up ausente → stale
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: output con up ausente → stale', () => {
+  const code = 'x = 1';
+  const hash = chunkHash(code);
+  // seq presente pero up ausente
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, 'result', { seq: 1 })}\n`;
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'stale');
+});
+
+// ---------------------------------------------------------------------------
+// Condición 5: up incorrecto → stale
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: output con up incorrecto (código upstream modificado) → stale', () => {
+  const code = 'x = 1';
+  const hash = chunkHash(code);
+  // up correcto sería 'e3b0c442' (primer chunk, sin predecesores)
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, 'result', { up: 'deadbeef', seq: 1 })}\n`;
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'stale');
+});
+
+// ---------------------------------------------------------------------------
+// Condición 6: seq ausente → stale
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: output con seq ausente → stale', () => {
+  const code = 'x = 1';
+  const hash = chunkHash(code);
+  // up presente pero seq ausente
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, 'result', { up: 'e3b0c442' })}\n`;
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'stale');
+});
+
+// ---------------------------------------------------------------------------
+// Condición 7: re-ejecución aguas arriba → stale / no-stale por seq
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: chunk upstream re-ejecutado después (seq mayor aguas arriba) → stale', () => {
+  const codeA = 'a = 1';
+  const codeB = 'b = 2';
+  const hashA = chunkHash(codeA);
+  const hashB = chunkHash(codeB);
+  // a en pos 0, b en pos 1
+  const upB = chunkHash(chunkHash(codeA)); // upstreamHashes[1]
+
+  const doc = [
+    makeChunk('a', codeA),
+    '',
+    makeOutput('a', hashA, 'ra', { up: 'e3b0c442', seq: 2 }), // a re-ejecutado (seq=2)
+    '',
+    makeChunk('b', codeB),
+    '',
+    makeOutput('b', hashB, 'rb', { up: upB, seq: 1 }),         // b ejecutado antes (seq=1)
+    '',
+  ].join('\n');
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 2);
+  const byId = Object.fromEntries(states.map(s => [s.chunkId, s.state]));
+  assert.strictEqual(byId['a'], 'fresh');
+  assert.strictEqual(byId['b'], 'stale'); // a (upstream) tiene seq mayor
+});
+
+test('computeOutputStates: seq upstream menor que seq propio → b no es stale por seq', () => {
+  const codeA = 'a = 1';
+  const codeB = 'b = 2';
+  const hashA = chunkHash(codeA);
+  const hashB = chunkHash(codeB);
+  const upB = chunkHash(chunkHash(codeA));
+
+  const doc = [
+    makeChunk('a', codeA),
+    '',
+    makeOutput('a', hashA, 'ra', { up: 'e3b0c442', seq: 2 }), // a seq=2
+    '',
+    makeChunk('b', codeB),
+    '',
+    makeOutput('b', hashB, 'rb', { up: upB, seq: 3 }),         // b seq=3 (ejecutado después de a)
+    '',
+  ].join('\n');
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 2);
+  const byId = Object.fromEntries(states.map(s => [s.chunkId, s.state]));
+  assert.strictEqual(byId['a'], 'fresh');
+  assert.strictEqual(byId['b'], 'fresh'); // a.seq (2) no es > b.seq (3) → no stale
+});
+
+// ---------------------------------------------------------------------------
+// Primer chunk: up correcto = chunkHash('') = 'e3b0c442'
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: primer chunk con up="e3b0c442" (hash de cadena vacía) → up correcto, no stale', () => {
+  const code = 'x = 1';
+  const hash = chunkHash(code);
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, 'result', { up: 'e3b0c442', seq: 1 })}\n`;
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'fresh');
+});
+
+// ---------------------------------------------------------------------------
+// Stale gana sobre error (nueva precedencia)
+// ---------------------------------------------------------------------------
+
+test('computeOutputStates: output de error con up incorrecto → stale (stale precede a error)', () => {
+  const code = 'raise ValueError()';
+  const hash = chunkHash(code);
+  const errorContent = '# Error\nTraceback...\nValueError';
+  // up incorrecto: correcto sería 'e3b0c442'
+  const doc = `${makeChunk('c1', code)}\n\n${makeOutput('c1', hash, errorContent, { up: 'wrongup00', seq: 1 })}\n`;
+
+  const states = computeOutputStates(doc);
+  assert.strictEqual(states.length, 1);
+  assert.strictEqual(states[0].state, 'stale'); // stale gana sobre error
 });
 
 // ---------------------------------------------------------------------------
