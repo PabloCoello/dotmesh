@@ -160,14 +160,16 @@ export function computeAdornments(
       conceal.push({ startOffset: output.startOffset, endOffset: outOpenLineEnd });
       conceal.push({ startOffset: outCloseLineStart, endOffset: outCloseLineEnd });
 
-      // Before: barra horizontal en la valla de cierre del chunk
-      // Solo si el cursor tampoco está en el chunk (cuando el cursor está dentro,
-      // la valla de cierre está revelada y la barra estorbaría)
+      // Before: barra horizontal con codo curvo en la valla de cierre del chunk.
+      // El codo '╭' en el extremo izquierdo indica la unión con la barra vertical
+      // que desciende hacia el bloque de output. El resto son '─' hasta la longitud
+      // de la línea de apertura. Solo se pinta si el cursor no está en el chunk
+      // (cuando está dentro, la valla de cierre está revelada y la barra estorbaría).
       if (!cursorInChunk) {
         before.push({
           lineStartOffset: closeLineStart,
           lineEndOffset: closeLineEnd,
-          contentText: '─'.repeat(openLineLen),
+          contentText: '╭' + '─'.repeat(openLineLen - 1),
           state,
         });
       }
@@ -195,14 +197,18 @@ export function computeAdornments(
         state,
       });
 
-      // Before: líneas de contenido del output
+      // Before: líneas de contenido del output.
+      // La primera lleva la flecha '╰─▶ ' (el espacio final es nbsp U+00A0).
+      // Las de continuación llevan cuatro nbsp '    '.
+      // VS Code colapsa los espacios normales en el render del `before`,
+      // lo que hace que solo la primera línea aparezca indentada; nbsp evita ese colapso.
       const contentLines = contentLineOffsets(text, output);
       for (let i = 0; i < contentLines.length; i++) {
         const [lStart, lEnd] = contentLines[i];
         before.push({
           lineStartOffset: lStart,
           lineEndOffset: lEnd,
-          contentText: i === 0 ? '╰─▶ ' : '    ',
+          contentText: i === 0 ? '╰─▶ ' : '    ',
           state,
         });
       }

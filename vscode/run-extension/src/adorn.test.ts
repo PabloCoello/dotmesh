@@ -5,6 +5,12 @@ import { computeAdornments, type AdornResult } from './adorn.ts';
 import { parseChunks, parseOutputs } from './parser.ts';
 import type { OutputStateResult } from './stale.ts';
 
+// Espacio de no separación (U+00A0) — adorn.ts lo usa en lugar del espacio
+// normal porque VS Code colapsa los espacios normales en el render del `before`.
+const NBSP = ' ';
+const ARROW = '╰─▶' + NBSP;     // texto de la primera línea de contenido
+const CONT4 = NBSP.repeat(4);    // texto de las líneas de continuación
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -131,10 +137,13 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + before c
 
   const [barBefore, blankBefore, openBefore, contentBefore] = result.before;
 
-  // Barra horizontal en la línea de cierre del chunk
+  // Barra horizontal en la línea de cierre del chunk: codo ╭ + guiones ─
   assert.strictEqual(barBefore.lineEndOffset, chunk.endOffset, 'barra: lineEndOffset = chunk.endOffset');
-  assert.ok(barBefore.contentText.startsWith('─'), 'contentText de barra empieza por ─');
-  assert.ok(barBefore.contentText.split('').every(c => c === '─'), 'barra solo contiene ─');
+  assert.ok(barBefore.contentText.startsWith('╭'), 'contentText de barra empieza por ╭');
+  assert.ok(
+    barBefore.contentText.slice(1).split('').every(c => c === '─'),
+    'el resto de la barra solo contiene ─'
+  );
   assert.strictEqual(barBefore.state, 'fresh');
 
   // Línea en blanco → '│'
@@ -146,8 +155,8 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + before c
   assert.strictEqual(openBefore.contentText, '│');
   assert.strictEqual(openBefore.state, 'fresh');
 
-  // Primera línea de contenido → '╰─▶ '
-  assert.strictEqual(contentBefore.contentText, '╰─▶ ');
+  // Primera línea de contenido → '╰─▶ '
+  assert.strictEqual(contentBefore.contentText, '╰─▶ ');
   assert.strictEqual(contentBefore.state, 'fresh');
 });
 
@@ -188,10 +197,10 @@ test('computeAdornments: cursor dentro del chunk → vallas del chunk no en conc
   // Los adornos del output permanecen
   const hasBlank = result.before.some(b => b.contentText === '│' && b.lineStartOffset < outputs[0].startOffset);
   const hasOpen = result.before.some(b => b.contentText === '│' && b.lineStartOffset === outputs[0].startOffset);
-  const hasArrow = result.before.some(b => b.contentText === '╰─▶ ');
+  const hasArrow = result.before.some(b => b.contentText === '╰─▶ ');
   assert.ok(hasBlank, 'debe haber │ en la línea en blanco');
   assert.ok(hasOpen, 'debe haber │ en la apertura del output');
-  assert.ok(hasArrow, 'debe haber ╰─▶  en la primera línea de contenido');
+  assert.ok(hasArrow, 'debe haber ╰─▶  en la primera línea de contenido');
 });
 
 // ---------------------------------------------------------------------------
@@ -263,7 +272,7 @@ test('computeAdornments: output sin línea en blanco → no │ en posición int
 // Chunk con 3 líneas de contenido en el output
 // ---------------------------------------------------------------------------
 
-test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda y tercera \'    \'', () => {
+test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda y tercera 4 nbsp', () => {
   const text = [
     makeChunk('a', 'code'),
     '',
@@ -276,13 +285,13 @@ test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda 
 
   const result = computeAdornments(text, chunks, outputs, states, -1);
 
-  // Befores: barra + │ (blank) + │ (open) + ╰─▶  + '    ' + '    '
+  // Befores: barra + │ (blank) + │ (open) + ╰─▶  + '    ' + '    '
   assert.strictEqual(result.before.length, 6, `esperados 6 befores, obtenidos ${result.before.length}`);
 
   const contentBefores = result.before.slice(3); // los 3 últimos son líneas de contenido
-  assert.strictEqual(contentBefores[0].contentText, '╰─▶ ');
-  assert.strictEqual(contentBefores[1].contentText, '    ');
-  assert.strictEqual(contentBefores[2].contentText, '    ');
+  assert.strictEqual(contentBefores[0].contentText, '╰─▶ ');
+  assert.strictEqual(contentBefores[1].contentText, CONT4);
+  assert.strictEqual(contentBefores[2].contentText, CONT4);
 });
 
 // ---------------------------------------------------------------------------
@@ -306,7 +315,7 @@ test('computeAdornments: output con 0 líneas de contenido → sin before de fle
 
   // Befores: barra + │ (blank) + │ (open) — sin flecha
   assert.strictEqual(result.before.length, 3, `esperados 3 befores, obtenidos ${result.before.length}`);
-  const arrowBefore = result.before.find(b => b.contentText === '╰─▶ ');
+  const arrowBefore = result.before.find(b => b.contentText === '╰─▶ ');
   assert.strictEqual(arrowBefore, undefined, 'no debe haber before de flecha con output vacío');
 });
 
@@ -329,8 +338,8 @@ test('computeAdornments: chunk indentado 1 espacio → longitud de barra incluye
 
   const result = computeAdornments(text, chunks, outputs, states, -1);
 
-  // La barra debe tener longitud = longitud de la línea de apertura incluyendo el espacio
-  const barBefore = result.before.find(b => b.contentText.startsWith('─'));
+  // La barra empieza por '╭' y el resto son '─'; longitud = la línea de apertura
+  const barBefore = result.before.find(b => b.contentText.startsWith('╭'));
   assert.ok(barBefore, 'debe haber un before de barra horizontal');
 
   // Longitud de la línea de apertura: ' ```python {#a}' = 15 chars
@@ -341,7 +350,7 @@ test('computeAdornments: chunk indentado 1 espacio → longitud de barra incluye
     `longitud de barra (${barBefore!.contentText.length}) debe coincidir con la línea de apertura (${openLine.length})`
   );
   assert.ok(
-    barBefore!.contentText.split('').every(c => c === '─'),
-    'la barra solo debe contener el carácter ─'
+    barBefore!.contentText.slice(1).split('').every(c => c === '─'),
+    'el resto de la barra (tras el codo ╭) solo debe contener el carácter ─'
   );
 });
