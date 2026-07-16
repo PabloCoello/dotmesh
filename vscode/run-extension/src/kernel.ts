@@ -81,6 +81,20 @@ export class KernelManager {
   private jupyterApi: Jupyter | undefined;
 
   /**
+   * Nombres de acompañante reservados por creaciones aún en vuelo.
+   *
+   * Cierra una carrera: la cola de extension.ts serializa por documento, pero
+   * dos documentos DISTINTOS con el mismo basename pueden entrar en
+   * createCompanion a la vez. Sin reserva, ambos capturarían el mismo snapshot
+   * de notebookDocuments (el acompañante del primero aún no existe), elegirían
+   * el mismo nombre y openNotebookDocument devolvería al segundo el notebook
+   * del primero: dos documentos compartiendo kernel. La elección y la reserva
+   * del nombre son síncronas (sin await entre medias), lo que hace imposible
+   * esa colisión.
+   */
+  private readonly reservedCompanionNames = new Set<string>();
+
+  /**
    * Emitido (con undefined = refrescar todo) cuando se crea, recrea o elimina
    * un acompañante. CompanionDecorationProvider lo conecta a
    * onDidChangeFileDecorations para refrescar la insignia de la pestaña.
@@ -338,50 +352,60 @@ export class KernelManager {
    * getEditorFromContext, líneas 24-40).
    */
   private async createCompanion(docUri: vscode.Uri): Promise<vscode.Uri> {
-    const taken = new Set(
-      vscode.workspace.notebookDocuments
+    // Elección y reserva del nombre en un solo tramo síncrono (ver
+    // reservedCompanionNames). El finally libera la reserva cuando el
+    // acompañante ya figura en notebookDocuments (o si la creación falló).
+    const taken = new Set([
+      ...vscode.workspace.notebookDocuments
         .filter(nd => nd.uri.scheme === 'untitled')
-        .map(nd => path.posix.basename(nd.uri.path))
-    );
-    const name = companionFileName(path.posix.basename(docUri.path), taken);
-    const notebookDoc = await vscode.workspace.openNotebookDocument(
-      vscode.Uri.from({ scheme: 'untitled', path: name })
-    );
-
-    const bootstrapCell = new vscode.NotebookCellData(
-      vscode.NotebookCellKind.Code,
-      '# mesh-run companion\npass',
-      'python'
-    );
-    // replaceCells sobre todo el rango: deja exactamente la celda bootstrap
-    // tanto si el untitled abre vacío como si abre con una celda por defecto.
-    const edit = new vscode.WorkspaceEdit();
-    edit.set(notebookDoc.uri, [
-      vscode.NotebookEdit.replaceCells(
-        new vscode.NotebookRange(0, notebookDoc.cellCount),
-        [bootstrapCell]
-      ),
+        .map(nd => path.posix.basename(nd.uri.path)),
+      ...this.reservedCompanionNames,
     ]);
-    if (!(await vscode.workspace.applyEdit(edit))) {
-      throw new Error(
-        'mesh-run: no se pudo insertar la celda bootstrap en el notebook acompañante.'
+    const name = companionFileName(path.posix.basename(docUri.path), taken);
+    this.reservedCompanionNames.add(name);
+
+    try {
+      const notebookDoc = await vscode.workspace.openNotebookDocument(
+        vscode.Uri.from({ scheme: 'untitled', path: name })
       );
+
+      const bootstrapCell = new vscode.NotebookCellData(
+        vscode.NotebookCellKind.Code,
+        '# mesh-run companion\npass',
+        'python'
+      );
+      // replaceCells sobre todo el rango: deja exactamente la celda bootstrap
+      // tanto si el untitled abre vacío como si abre con una celda por defecto.
+      const edit = new vscode.WorkspaceEdit();
+      edit.set(notebookDoc.uri, [
+        vscode.NotebookEdit.replaceCells(
+          new vscode.NotebookRange(0, notebookDoc.cellCount),
+          [bootstrapCell]
+        ),
+      ]);
+      if (!(await vscode.workspace.applyEdit(edit))) {
+        throw new Error(
+          'mesh-run: no se pudo insertar la celda bootstrap en el notebook acompañante.'
+        );
+      }
+
+      // El notebook debe ser visible para que notebook.cell.execute pueda usarlo.
+      // preserveFocus: true mantiene el foco en el documento original del usuario.
+      // preview: false evita que VS Code lo trate como pestaña de vista previa reutilizable
+      // (aunque el dirty tras insertar la celda ya lo impide, se hace explícito por claridad).
+      await vscode.window.showNotebookDocument(notebookDoc, { preserveFocus: true, preview: false });
+
+      // Ejecuta la celda bootstrap: esto activa el picker de kernel si es la primera
+      // vez, y a continuación arranca el kernel dejando userStartedKernel === true.
+      await vscode.commands.executeCommand('notebook.cell.execute', {
+        ranges: [{ start: 0, end: 1 }],
+        document: notebookDoc.uri,
+      });
+
+      return notebookDoc.uri;
+    } finally {
+      this.reservedCompanionNames.delete(name);
     }
-
-    // El notebook debe ser visible para que notebook.cell.execute pueda usarlo.
-    // preserveFocus: true mantiene el foco en el documento original del usuario.
-    // preview: false evita que VS Code lo trate como pestaña de vista previa reutilizable
-    // (aunque el dirty tras insertar la celda ya lo impide, se hace explícito por claridad).
-    await vscode.window.showNotebookDocument(notebookDoc, { preserveFocus: true, preview: false });
-
-    // Ejecuta la celda bootstrap: esto activa el picker de kernel si es la primera
-    // vez, y a continuación arranca el kernel dejando userStartedKernel === true.
-    await vscode.commands.executeCommand('notebook.cell.execute', {
-      ranges: [{ start: 0, end: 1 }],
-      document: notebookDoc.uri,
-    });
-
-    return notebookDoc.uri;
   }
 
   /**
