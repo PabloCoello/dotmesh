@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAnchor, resolveAnchor, ANCHOR_UNCERTAINTY_THRESHOLD, type Anchor } from './anchor.ts';
+import { createAnchor, resolveAnchor, shiftAnchorRange, ANCHOR_UNCERTAINTY_THRESHOLD, type Anchor } from './anchor.ts';
 
 // ---------------------------------------------------------------------------
 // createAnchor
@@ -209,6 +209,128 @@ test('resolveAnchor SÍ marca uncertain cuando bestDist === ANCHOR_UNCERTAINTY_T
   assert.ok(result !== null);
   assert.strictEqual(result.startOffset, 0);
   assert.strictEqual(result.uncertain, true, 'bestDist===201 debe marcar uncertain');
+});
+
+// ---------------------------------------------------------------------------
+// shiftAnchorRange
+// ---------------------------------------------------------------------------
+
+// Helpers para construir contentChanges
+function ins(offset: number, text: string) {
+  return { rangeOffset: offset, rangeLength: 0, text };
+}
+function del(offset: number, length: number) {
+  return { rangeOffset: offset, rangeLength: length, text: '' };
+}
+function rep(offset: number, length: number, text: string) {
+  return { rangeOffset: offset, rangeLength: length, text };
+}
+
+test('shiftAnchorRange — inserción antes del rango desplaza start y end', () => {
+  // Rango [10, 20]; insertar 3 chars en offset 5 → rango se mueve a [13, 23]
+  const result = shiftAnchorRange(10, 20, [ins(5, 'abc')]);
+  assert.deepStrictEqual(result, { start: 13, end: 23 });
+});
+
+test('shiftAnchorRange — inserción después del rango no tiene efecto', () => {
+  const result = shiftAnchorRange(10, 20, [ins(25, 'abc')]);
+  assert.deepStrictEqual(result, { start: 10, end: 20 });
+});
+
+test('shiftAnchorRange — inserción exactamente en el extremo final no tiene efecto', () => {
+  // changeStart = end = 20 → "después del rango"
+  const result = shiftAnchorRange(10, 20, [ins(20, 'x')]);
+  assert.deepStrictEqual(result, { start: 10, end: 20 });
+});
+
+test('shiftAnchorRange — inserción exactamente en el extremo inicial desplaza el rango', () => {
+  // changeEnd = start = 10 → "antes del rango"
+  const result = shiftAnchorRange(10, 20, [ins(10, 'x')]);
+  assert.deepStrictEqual(result, { start: 11, end: 21 });
+});
+
+test('shiftAnchorRange — inserción dentro del rango expande end', () => {
+  // Rango [10, 20]; insertar 3 chars en offset 15 (dentro) → end = 23
+  const result = shiftAnchorRange(10, 20, [ins(15, 'abc')]);
+  assert.deepStrictEqual(result, { start: 10, end: 23 });
+});
+
+test('shiftAnchorRange — borrado completamente dentro del rango contrae end', () => {
+  // Rango [10, 20]; borrar 4 chars desde offset 12 → end = 16
+  const result = shiftAnchorRange(10, 20, [del(12, 4)]);
+  assert.deepStrictEqual(result, { start: 10, end: 16 });
+});
+
+test('shiftAnchorRange — borrado de todo el contenido del rango devuelve null', () => {
+  // Rango [10, 20]; borrar offset 10 len 10 → end colapsa a start → null
+  const result = shiftAnchorRange(10, 20, [del(10, 10)]);
+  assert.strictEqual(result, null);
+});
+
+test('shiftAnchorRange — borrado antes del rango desplaza hacia atrás', () => {
+  // Rango [10, 20]; borrar 3 chars en offset 5 → rango [7, 17]
+  const result = shiftAnchorRange(10, 20, [del(5, 3)]);
+  assert.deepStrictEqual(result, { start: 7, end: 17 });
+});
+
+test('shiftAnchorRange — solapamiento inicio devuelve null', () => {
+  // Rango [10, 20]; borrado [8, 13] solapa el inicio del rango
+  const result = shiftAnchorRange(10, 20, [del(8, 5)]);
+  assert.strictEqual(result, null);
+});
+
+test('shiftAnchorRange — solapamiento fin devuelve null', () => {
+  // Rango [10, 20]; borrado [15, 23] solapa el fin del rango
+  const result = shiftAnchorRange(10, 20, [del(15, 8)]);
+  assert.strictEqual(result, null);
+});
+
+test('shiftAnchorRange — envolvimiento completo devuelve null', () => {
+  // Rango [10, 20]; borrado [5, 25] envuelve todo el rango
+  const result = shiftAnchorRange(10, 20, [del(5, 20)]);
+  assert.strictEqual(result, null);
+});
+
+test('shiftAnchorRange — reemplazo contenido dentro del rango ajusta end', () => {
+  // Rango [10, 20]; reemplazar [12, 14] (2 chars) por "ABCDE" (5 chars) → delta = +3 → end = 23
+  const result = shiftAnchorRange(10, 20, [rep(12, 2, 'ABCDE')]);
+  assert.deepStrictEqual(result, { start: 10, end: 23 });
+});
+
+test('shiftAnchorRange — múltiples cambios (end→inicio) se aplican correctamente', () => {
+  // Rango [10, 20]
+  // contentChanges ordenados fin→inicio como los provee VS Code:
+  //   1. Insertar 2 chars en offset 25 → "después" → sin efecto
+  //   2. Insertar 3 chars en offset 15 → "dentro" → end = 23
+  //   3. Insertar 2 chars en offset 5  → "antes" → start = 12, end = 25
+  const changes = [ins(25, 'ZZ'), ins(15, 'abc'), ins(5, 'de')];
+  const result = shiftAnchorRange(10, 20, changes);
+  assert.deepStrictEqual(result, { start: 12, end: 25 });
+});
+
+test('shiftAnchorRange — Enter en medio del rango expande correctamente', () => {
+  // Simula pulsar Enter dentro del texto citado: insertar '\n' en offset 15
+  // Rango [10, 20] → end = 21
+  const result = shiftAnchorRange(10, 20, [ins(15, '\n')]);
+  assert.deepStrictEqual(result, { start: 10, end: 21 });
+});
+
+test('shiftAnchorRange — borrado parcial que deja rango de 1 char es válido', () => {
+  // Rango [10, 20]; borrar 9 chars desde offset 11 → end = 11, start = 10 → 1 char válido
+  const result = shiftAnchorRange(10, 20, [del(11, 9)]);
+  assert.deepStrictEqual(result, { start: 10, end: 11 });
+});
+
+test('shiftAnchorRange — sin cambios devuelve el rango original', () => {
+  const result = shiftAnchorRange(10, 20, []);
+  assert.deepStrictEqual(result, { start: 10, end: 20 });
+});
+
+test('shiftAnchorRange — cambio inmediatamente antes (changeEnd === start) desplaza', () => {
+  // changeEnd = start = 10 es "antes" → desplazar
+  const result = shiftAnchorRange(10, 20, [rep(8, 2, 'XXXXX')]);
+  // delta = 5 - 2 = 3; changeEnd = 8+2=10 = start → "antes"
+  assert.deepStrictEqual(result, { start: 13, end: 23 });
 });
 
 test('resolveAnchor funciona tras pequeñas ediciones que desplazan el texto', () => {

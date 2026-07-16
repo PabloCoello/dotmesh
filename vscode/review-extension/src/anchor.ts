@@ -1,9 +1,9 @@
 /**
- * anchor.ts — resolución de anclas por cita textual.
+ * anchor.ts — resolución y seguimiento de anclas textuales.
  *
- * Funciones puras sobre strings. Sin importaciones de VS Code ni de Node.
- * La capa VS Code (extension.ts) convierte vscode.Range ↔ offsets de carácter
- * y llama a estas funciones.
+ * Funciones puras sobre strings y offsets. Sin importaciones de VS Code ni de
+ * Node. La capa VS Code (extension.ts) convierte vscode.Range ↔ offsets de
+ * carácter y llama a estas funciones.
  */
 
 export interface Anchor {
@@ -93,4 +93,62 @@ export function resolveAnchor(
     result.uncertain = true;
   }
   return result;
+}
+
+/**
+ * Desplaza un rango `{start, end}` aplicando los `contentChanges` de VS Code
+ * en el orden en que los provee (de fin a inicio del documento). Solo aritmética
+ * de offsets: no requiere el texto completo del documento.
+ *
+ * Casos:
+ *   - Cambio completamente antes del rango (`changeEnd <= start`):
+ *     desplaza start y end por delta = text.length − rangeLength.
+ *   - Cambio completamente después del rango (`changeStart >= end`):
+ *     sin efecto.
+ *   - Cambio contenido dentro del rango (`changeStart ∈ [start,end]` y
+ *     `changeEnd ∈ [start,end]`): ajusta end por delta. Si el rango queda
+ *     colapsado (end ≤ start tras el delta), el ancla se destruye → null.
+ *   - Cualquier otro caso (solapamiento parcial o envolvimiento total):
+ *     el ancla queda destruida → null.
+ *
+ * @param rangeStart   Offset de inicio del rango anclado (inclusive).
+ * @param rangeEnd     Offset de fin del rango anclado (exclusive).
+ * @param contentChanges  Array de cambios tal como lo provee VS Code en
+ *   `TextDocumentChangeEvent.contentChanges` (orden fin→inicio del doc).
+ * @returns  El rango desplazado, o `null` si el ancla fue destruida.
+ */
+export function shiftAnchorRange(
+  rangeStart: number,
+  rangeEnd: number,
+  contentChanges: ReadonlyArray<{
+    rangeOffset: number;
+    rangeLength: number;
+    text: string;
+  }>
+): { start: number; end: number } | null {
+  let start = rangeStart;
+  let end = rangeEnd;
+
+  for (const change of contentChanges) {
+    const changeStart = change.rangeOffset;
+    const changeEnd = change.rangeOffset + change.rangeLength;
+    const delta = change.text.length - change.rangeLength;
+
+    if (changeEnd <= start) {
+      // Antes del rango: desplazar ambos extremos
+      start += delta;
+      end += delta;
+    } else if (changeStart >= end) {
+      // Después del rango: sin efecto
+    } else if (changeStart >= start && changeEnd <= end) {
+      // Contenido dentro del rango: ajustar solo end
+      end += delta;
+      if (end <= start) return null; // rango colapsado por borrado interno
+    } else {
+      // Solapamiento parcial o envolvimiento: ancla destruida
+      return null;
+    }
+  }
+
+  return { start, end };
 }
