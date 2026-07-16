@@ -179,7 +179,10 @@ export function parseOutputs(text: string): ParsedOutput[] {
 
     const warn = attrs.get('warn') === '1' ? true : undefined;
     const seqStr = attrs.get('seq');
-    const seq = seqStr !== undefined ? parseInt(seqStr, 10) : undefined;
+    const seqParsed = seqStr !== undefined ? parseInt(seqStr, 10) : undefined;
+    // NaN escaparía a la regla «seq ausente → stale» y cegaría la comparación
+    // de seq aguas arriba (NaN > x y x > NaN son ambos false).
+    const seq = seqParsed !== undefined && !Number.isNaN(seqParsed) ? seqParsed : undefined;
     const up = attrs.get('up');
 
     const output: ParsedOutput = {

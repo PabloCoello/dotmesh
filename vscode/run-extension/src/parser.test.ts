@@ -334,6 +334,14 @@ test('parseOutputs: bloque sin warn/seq/up → campos ausentes (undefined)', () 
   assert.strictEqual(outputs[0].up, undefined);
 });
 
+test('parseOutputs: seq no numérico → campo ausente (undefined), nunca NaN', () => {
+  const text = '```output {#myid hash=abc12345 seq=basura}\ncontent\n```';
+  const outputs = parseOutputs(text);
+
+  assert.strictEqual(outputs.length, 1);
+  assert.strictEqual(outputs[0].seq, undefined);
+});
+
 test('text.slice(startOffset, endOffset) reconstruye el bloque de output sin \n final', () => {
   const text = 'Intro\n```output {#myid hash=abc12345}\ncontent\n```\nOutro';
   const outputs = parseOutputs(text);
