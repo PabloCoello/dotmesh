@@ -342,6 +342,14 @@ test('parseOutputs: seq no numérico → campo ausente (undefined), nunca NaN', 
   assert.strictEqual(outputs[0].seq, undefined);
 });
 
+test('parseOutputs: seq=0 es un valor válido, no se confunde con ausencia', () => {
+  const text = '```output {#myid hash=abc12345 seq=0}\ncontent\n```';
+  const outputs = parseOutputs(text);
+
+  assert.strictEqual(outputs.length, 1);
+  assert.strictEqual(outputs[0].seq, 0);
+});
+
 test('text.slice(startOffset, endOffset) reconstruye el bloque de output sin \n final', () => {
   const text = 'Intro\n```output {#myid hash=abc12345}\ncontent\n```\nOutro';
   const outputs = parseOutputs(text);
