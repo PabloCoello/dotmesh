@@ -58,6 +58,11 @@ const STDOUT_MIME = vscode.NotebookCellOutputItem.stdout('').mime;
 const STDERR_MIME = vscode.NotebookCellOutputItem.stderr('').mime;
 const ERROR_MIME = vscode.NotebookCellOutputItem.error(new Error()).mime;
 
+// Mensaje reutilizado en getOrStart y en execute() al detectar companion cerrado.
+const COMPANION_CLOSED_MSG =
+  'mesh-run: el notebook acompañante fue cerrado; ' +
+  'el estado del kernel se ha perdido. Recreando...';
+
 // ---------------------------------------------------------------------------
 // KernelManager
 // ---------------------------------------------------------------------------
@@ -76,8 +81,7 @@ export class KernelManager {
 
   /**
    * Devuelve (o crea) una sesión de kernel para el documento dado.
-   * Si el kernel del acompañante ya no está vivo (la pestaña fue cerrada),
-   * crea un nuevo acompañante automáticamente.
+   * Si el acompañante fue cerrado entre llamadas, lo recrea automáticamente.
    *
    * @param token Token de cancelación opcional. Si se cancela durante el arranque
    *   del kernel (fase de polling), se lanza vscode.CancellationError inmediatamente
@@ -101,13 +105,19 @@ export class KernelManager {
     const existing = this.companions.get(key);
 
     if (existing) {
-      const kernel = await api.kernels.getKernel(existing.companionUri);
-      if (kernel) {
-        // El acompañante sigue vivo: reutilizamos.
-        return new KernelSessionImpl(existing.companionUri, api);
+      if (!this.isCompanionOpen(existing.companionUri)) {
+        // El usuario cerró la pestaña: el kernel se perdió.
+        vscode.window.showInformationMessage(COMPANION_CLOSED_MSG);
+        this.companions.delete(key);
+        // cae al bloque de creación
+      } else {
+        const kernel = await api.kernels.getKernel(existing.companionUri);
+        if (kernel) {
+          return new KernelSessionImpl(existing.companionUri, api, this, key);
+        }
+        // Kernel muerto aunque el notebook sigue abierto (caso borde).
+        this.companions.delete(key);
       }
-      // El kernel murió (notebook acompañante cerrado); eliminamos la entrada stale.
-      this.companions.delete(key);
     }
 
     // Crear nuevo acompañante y esperar a que el kernel arranque.
@@ -124,7 +134,7 @@ export class KernelManager {
       );
     }
 
-    return new KernelSessionImpl(entry.companionUri, api);
+    return new KernelSessionImpl(entry.companionUri, api, this, key);
   }
 
   /**
@@ -154,8 +164,48 @@ export class KernelManager {
   }
 
   // ---------------------------------------------------------------------------
-  // Internos
+  // Internos (accesibles desde KernelSessionImpl para la recuperación)
   // ---------------------------------------------------------------------------
+
+  /**
+   * Elimina la entrada del Map, crea un nuevo acompañante y espera al kernel.
+   * Llamado por KernelSessionImpl.execute() cuando getKernel devuelve undefined
+   * a mitad de sesión (el acompañante fue cerrado entre ejecuciones).
+   * Un único intento: si el nuevo kernel tampoco arranca, lanza.
+   */
+  async recreateCompanion(
+    key: string,
+    token?: vscode.CancellationToken
+  ): Promise<vscode.Uri> {
+    this.companions.delete(key);
+    const api = await this.getJupyterApi();
+    const entry = await this.createCompanion();
+    this.companions.set(key, entry);
+    const kernel = await this.pollForKernel(api, entry.companionUri, token);
+    if (!kernel) {
+      this.companions.delete(key);
+      throw new Error(
+        'mesh-run: el kernel no arrancó al recrear el acompañante. ' +
+          'Intenta "Mesh Run: Reiniciar kernel" si el problema persiste.'
+      );
+    }
+    return entry.companionUri;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Privados
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Comprueba si el notebook acompañante sigue abierto en el workspace.
+   * vscode.workspace.notebookDocuments solo contiene los documentos actualmente
+   * abiertos; un notebook cerrado desaparece de esta lista.
+   */
+  private isCompanionOpen(companionUri: vscode.Uri): boolean {
+    return vscode.workspace.notebookDocuments.some(
+      nd => nd.uri.toString() === companionUri.toString()
+    );
+  }
 
   private async getJupyterApi(): Promise<Jupyter> {
     if (!this.jupyterApi) {
@@ -239,19 +289,27 @@ export class KernelManager {
 
 class KernelSessionImpl implements KernelSession {
   constructor(
-    private readonly companionUri: vscode.Uri,
-    private readonly api: Jupyter
+    /** Mutable: se actualiza cuando execute() recrea el acompañante. */
+    private companionUri: vscode.Uri,
+    private readonly api: Jupyter,
+    private readonly manager: KernelManager,
+    private readonly docKey: string
   ) {}
 
   async execute(code: string): Promise<ExecutionResult> {
-    // Re-obtener el kernel en cada ejecución: el acompañante puede haber sido
-    // cerrado entre llamadas (reinicio, cierre manual de la pestaña).
-    const kernel = await this.api.kernels.getKernel(this.companionUri);
+    // Re-obtener el kernel en cada ejecución: detecta si el acompañante fue cerrado
+    // entre llamadas y lo recrea (un único intento, sin bucle).
+    let kernel = await this.api.kernels.getKernel(this.companionUri);
     if (!kernel) {
-      throw new Error(
-        'mesh-run: el kernel ya no está disponible (el notebook acompañante fue cerrado). ' +
-          'Usa "Mesh Run: Reiniciar kernel" para arrancar uno nuevo.'
-      );
+      vscode.window.showInformationMessage(COMPANION_CLOSED_MSG);
+      this.companionUri = await this.manager.recreateCompanion(this.docKey);
+      kernel = await this.api.kernels.getKernel(this.companionUri);
+      if (!kernel) {
+        throw new Error(
+          'mesh-run: el kernel no está disponible tras recrear el acompañante. ' +
+            'Intenta "Mesh Run: Reiniciar kernel" si el problema persiste.'
+        );
+      }
     }
 
     const textDecoder = new TextDecoder();
