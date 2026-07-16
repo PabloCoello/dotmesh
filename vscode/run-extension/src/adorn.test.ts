@@ -190,8 +190,9 @@ test('computeAdornments: cursor dentro del chunk → vallas del chunk no en conc
     );
   }
 
-  // Sin barra horizontal (cursor en chunk): solo línea en blanco, apertura, contenido
-  const barBefore = result.before.find(b => b.contentText.startsWith('─'));
+  // Sin barra horizontal (cursor en chunk): solo línea en blanco, apertura, contenido.
+  // Las barras ahora empiezan por '╭'; buscar por ese carácter para no pasar vacuosamente.
+  const barBefore = result.before.find(b => b.contentText.startsWith('╭'));
   assert.strictEqual(barBefore, undefined, 'la barra horizontal no debe aparecer con cursor en chunk');
 
   // Los adornos del output permanecen
