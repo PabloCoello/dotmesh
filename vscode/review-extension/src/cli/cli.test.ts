@@ -3,7 +3,8 @@
  *
  * Cubre:
  *   - Proyección sobre fixture V2 (project + readEvents).
- *   - isPending: los tres casos accionables y el caso de exclusión.
+ *   - isPending: exclusión por último mensaje IA (con o sin commit), iteración
+ *     humana y reactivación por asignación posterior.
  *   - emit message.posted produce un fichero que readEvents no descarta.
  *   - Roundtrip emit → project: el evento emitido reaparece en la proyección.
  */
@@ -52,6 +53,20 @@ function makeAiFix(threadId: string, sha: string, offset = 1000): EventEnvelope 
     commit: sha,
     dirty: false,
     body: 'Corrección aplicada.',
+  };
+}
+
+function makeAiReply(threadId: string, offset = 1000): EventEnvelope {
+  return {
+    id: randomUUID(),
+    version: 2,
+    type: 'message.posted',
+    thread_id: threadId,
+    author: { kind: 'ai', model: 'claude-sonnet-4-6' },
+    created_at: new Date(Date.now() + offset).toISOString(),
+    commit: null,
+    dirty: false,
+    body: 'Respuesta en el hilo, sin edición del documento.',
   };
 }
 
@@ -109,41 +124,30 @@ test('project devuelve la proyección correcta de un fixture V2', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// isPending — caso (a): sin fix IA previo
+// isPending — regla base: accionable salvo que el último no retractado sea IA
 // ---------------------------------------------------------------------------
 
-test('isPending (a): hilo abierto sin fix IA → accionable', () => {
+test('isPending: hilo abierto solo con el comentario humano → accionable', () => {
   const tid = randomUUID();
   const openedEv = makeOpened(tid);
   const [thread] = project([openedEv]);
   assert.ok(thread, 'hilo proyectado existe');
-  assert.strictEqual(isPending(thread), true, 'sin fix IA → pending');
+  assert.strictEqual(isPending(thread), true, 'último no retractado es humano → pending');
 });
 
-test('isPending (a): hilo abierto con mensaje IA sin commit (no es fix) → accionable', () => {
+test('isPending: respuesta IA sin commit descarga el hilo → no accionable', () => {
   const tid = randomUUID();
   const openedEv = makeOpened(tid, 0);
-  // Mensaje IA pero sin commit → no es un "fix IA"
-  const aiNoFix: EventEnvelope = {
-    id: randomUUID(),
-    version: 2,
-    type: 'message.posted',
-    thread_id: tid,
-    author: { kind: 'ai', model: 'test-model' },
-    created_at: new Date(Date.now() + 1000).toISOString(),
-    commit: null,  // no commit → no es fix
-    dirty: false,
-    body: 'Pregunta de aclaración.',
-  };
-  const [thread] = project([openedEv, aiNoFix]);
-  assert.strictEqual(isPending(thread), true, 'sin fix IA (commit=null) → pending');
+  const aiReplyEv = makeAiReply(tid, 1000);
+  const [thread] = project([openedEv, aiReplyEv]);
+  assert.strictEqual(isPending(thread), false, 'último no retractado es IA (commit=null) → NOT pending');
 });
 
 // ---------------------------------------------------------------------------
-// isPending — caso (b): iteración §7
+// isPending — iteración §7: el humano reactiva respondiendo
 // ---------------------------------------------------------------------------
 
-test('isPending (b): humano respondió después del fix IA → accionable', () => {
+test('isPending (iteración): humano respondió después del fix IA → accionable', () => {
   const tid = randomUUID();
   const openedEv = makeOpened(tid, 0);
   const aiFixEv = makeAiFix(tid, 'abc1234', 1000);
@@ -152,22 +156,39 @@ test('isPending (b): humano respondió después del fix IA → accionable', () =
   assert.strictEqual(isPending(thread), true, 'humano tras fix IA → pending');
 });
 
+test('isPending (iteración): humano respondió después de una respuesta IA sin commit → accionable', () => {
+  const tid = randomUUID();
+  const openedEv = makeOpened(tid, 0);
+  const aiReplyEv = makeAiReply(tid, 1000);
+  const humanReplyEv = makeHumanReply(tid, 2000);
+  const [thread] = project([openedEv, aiReplyEv, humanReplyEv]);
+  assert.strictEqual(isPending(thread), true, 'humano tras respuesta IA → pending');
+});
+
 // ---------------------------------------------------------------------------
-// isPending — caso (c): asignación tras último mensaje IA
+// isPending — asignación: reactiva solo si es posterior al último mensaje IA
 // ---------------------------------------------------------------------------
 
-test('isPending (c): asignado y último mensaje es IA → accionable', () => {
+test('isPending (asignación): thread.assigned posterior al último mensaje IA → accionable', () => {
   const tid = randomUUID();
   const openedEv = makeOpened(tid, 0);
   const aiFixEv = makeAiFix(tid, 'abc1234', 1000);
-  // Asignación tras el fix IA
   const assignedEv = makeAssigned(tid, 'reviser', 2000);
   const [thread] = project([openedEv, aiFixEv, assignedEv]);
-  // Último mensaje no retractado sigue siendo el fix IA
   const lastNonRetracted = thread.messages.filter(m => !m.retracted).at(-1);
   assert.strictEqual(lastNonRetracted?.author.kind, 'ai', 'último mensaje es IA');
-  assert.ok(thread.assignee, 'hilo tiene assignee');
-  assert.strictEqual(isPending(thread), true, 'asignado + último IA → pending');
+  assert.ok(thread.assignedAt, 'la proyección guarda assignedAt');
+  assert.strictEqual(isPending(thread), true, 'asignación posterior al mensaje IA → pending');
+});
+
+test('isPending (asignación): respuesta IA posterior a la asignación → no accionable', () => {
+  const tid = randomUUID();
+  const openedEv = makeOpened(tid, 0);
+  const aiFixEv = makeAiFix(tid, 'abc1234', 1000);
+  const assignedEv = makeAssigned(tid, 'reviser', 2000);
+  const aiReplyEv = makeAiReply(tid, 3000);
+  const [thread] = project([openedEv, aiFixEv, assignedEv, aiReplyEv]);
+  assert.strictEqual(isPending(thread), false, 'el asignado ya respondió → NOT pending');
 });
 
 // ---------------------------------------------------------------------------
@@ -184,6 +205,24 @@ test('isPending exclusión: último no retractado es IA (sin asignación) → no
   const lastNonRetracted = thread.messages.filter(m => !m.retracted).at(-1);
   assert.strictEqual(lastNonRetracted?.author.kind, 'ai', 'último mensaje es IA');
   assert.strictEqual(isPending(thread), false, 'último IA sin asignación → NOT pending');
+});
+
+test('isPending exclusión: todos los mensajes retractados → no accionable', () => {
+  const tid = randomUUID();
+  const openedEv = makeOpened(tid, 0);
+  const retractEv: EventEnvelope = {
+    id: randomUUID(),
+    version: 2,
+    type: 'message.retracted',
+    thread_id: tid,
+    author: { kind: 'human' },
+    created_at: new Date(Date.now() + 1000).toISOString(),
+    commit: null,
+    dirty: false,
+    target_message_id: openedEv.id,
+  };
+  const [thread] = project([openedEv, retractEv]);
+  assert.strictEqual(isPending(thread), false, 'sin mensajes vivos → NOT pending');
 });
 
 test('isPending exclusión: hilo resuelto → no accionable', () => {

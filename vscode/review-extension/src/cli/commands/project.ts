@@ -50,49 +50,20 @@ export async function runProject(argv: string[]): Promise<void> {
 /**
  * Determina si un hilo abierto es accionable ahora mismo.
  *
- * Función pura sobre `ThreadProjection`. Implementa la unión de tres casos:
- *   (a) Pase inicial: no existe ningún `message.posted` con author.kind==="ai" y commit!==null.
- *   (b) Iteración (§7): fix IA presente, último mensaje no retractado es humano y posterior
- *       al último fix IA.
- *   (c) Asignación: tiene `assignee` y el último mensaje no retractado es de autor IA (el
- *       agente fue asignado tras la última respuesta de la IA).
- *
- * Un hilo queda excluido solo cuando su último mensaje no retractado es de autor IA y no
- * se aplica el caso (c).
+ * Función pura sobre `ThreadProjection`. Regla: un hilo abierto es accionable
+ * salvo que su último mensaje no retractado sea de autor IA (con o sin commit:
+ * una respuesta en el hilo descarga igual que un fix). Una asignación
+ * (`thread.assigned`) posterior a ese mensaje IA lo reactiva. El humano
+ * reactiva respondiendo (iteración §7) o reasignando; un hilo sin mensajes
+ * vivos no es accionable.
  */
 export function isPending(thread: ThreadProjection): boolean {
   if (thread.status !== 'open') return false;
 
-  const nonRetracted = thread.messages.filter(m => !m.retracted);
-  const lastMsg = nonRetracted.at(-1);
-  const lastIsAi = lastMsg?.author.kind === 'ai';
+  const lastMsg = thread.messages.filter(m => !m.retracted).at(-1);
+  if (!lastMsg) return false;
+  if (lastMsg.author.kind !== 'ai') return true;
 
-  // (a) Pase inicial: ningún mensaje IA con commit !== null
-  const hasAiFix = thread.messages.some(
-    m => !m.retracted && m.author.kind === 'ai' && m.commit !== null
-  );
-  if (!hasAiFix) return true;
-
-  // (b) Iteración §7: último no retractado es humano y posterior al último fix IA
-  const lastAiFix = [...thread.messages]
-    .reverse()
-    .find(m => !m.retracted && m.author.kind === 'ai' && m.commit !== null);
-  if (
-    lastMsg &&
-    !lastIsAi &&
-    lastAiFix &&
-    Date.parse(lastMsg.created_at) > Date.parse(lastAiFix.created_at)
-  ) {
-    return true;
-  }
-
-  // (c) Asignación posterior al último mensaje IA.
-  // Aproximación defensiva: ThreadProjection no expone el timestamp de
-  // thread.assigned, así que "assignee presente + último mensaje IA" se trata
-  // como accionable aunque no sepamos si la asignación es posterior al fix.
-  if (thread.assignee && lastIsAi) {
-    return true;
-  }
-
-  return false;
+  return thread.assignedAt !== undefined &&
+    Date.parse(thread.assignedAt) > Date.parse(lastMsg.created_at);
 }

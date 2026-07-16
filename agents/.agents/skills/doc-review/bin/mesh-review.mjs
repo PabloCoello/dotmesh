@@ -113,6 +113,7 @@ function project(events) {
         break;
       case "thread.assigned":
         proj.assignee = ev.agent;
+        proj.assignedAt = ev.created_at;
         break;
     }
   }
@@ -196,21 +197,10 @@ async function runProject(argv) {
 }
 function isPending(thread) {
   if (thread.status !== "open") return false;
-  const nonRetracted = thread.messages.filter((m) => !m.retracted);
-  const lastMsg = nonRetracted.at(-1);
-  const lastIsAi = lastMsg?.author.kind === "ai";
-  const hasAiFix = thread.messages.some(
-    (m) => !m.retracted && m.author.kind === "ai" && m.commit !== null
-  );
-  if (!hasAiFix) return true;
-  const lastAiFix = [...thread.messages].reverse().find((m) => !m.retracted && m.author.kind === "ai" && m.commit !== null);
-  if (lastMsg && !lastIsAi && lastAiFix && Date.parse(lastMsg.created_at) > Date.parse(lastAiFix.created_at)) {
-    return true;
-  }
-  if (thread.assignee && lastIsAi) {
-    return true;
-  }
-  return false;
+  const lastMsg = thread.messages.filter((m) => !m.retracted).at(-1);
+  if (!lastMsg) return false;
+  if (lastMsg.author.kind !== "ai") return true;
+  return thread.assignedAt !== void 0 && Date.parse(thread.assignedAt) > Date.parse(lastMsg.created_at);
 }
 
 // src/cli/commands/emit.ts
