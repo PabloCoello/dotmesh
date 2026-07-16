@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
 import { isPending } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
+import { writeFile } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
 // Helpers de fixtures
@@ -282,6 +283,36 @@ test('parseKvPairs: dot notation para objetos anidados', () => {
 test('parseKvPairs: string ordinario', () => {
   const result = parseKvPairs(['body=Texto de prueba']);
   assert.strictEqual(result.body, 'Texto de prueba');
+});
+
+// ---------------------------------------------------------------------------
+// readEvents ignora ficheros .json.tmp (escritura atómica en curso)
+// ---------------------------------------------------------------------------
+
+test('readEvents ignora ficheros <uuid>.json.tmp con contenido de evento válido', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-tmp-'));
+  try {
+    const id = randomUUID();
+    const tid = randomUUID();
+    const event: EventEnvelope = {
+      id,
+      version: 2,
+      type: 'message.posted',
+      thread_id: tid,
+      author: { kind: 'ai', model: 'test-model' },
+      created_at: utcTimestampMs(),
+      commit: 'abc1234',
+      dirty: false,
+      body: 'Contenido válido, pero en fichero .json.tmp',
+    };
+    // Escribir directamente como .json.tmp (como hace emit durante la escritura atómica)
+    await writeFile(join(dir, `${id}.json.tmp`), JSON.stringify(event, null, 2) + '\n', 'utf8');
+
+    const events = await readEvents(dir);
+    assert.strictEqual(events.length, 0, 'readEvents no procesa ficheros .json.tmp');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -86,7 +86,10 @@ export function isPending(thread: ThreadProjection): boolean {
     return true;
   }
 
-  // (c) Asignación posterior al último mensaje IA
+  // (c) Asignación posterior al último mensaje IA.
+  // Aproximación defensiva: ThreadProjection no expone el timestamp de
+  // thread.assigned, así que "assignee presente + último mensaje IA" se trata
+  // como accionable aunque no sepamos si la asignación es posterior al fix.
   if (thread.assignee && lastIsAi) {
     return true;
   }
