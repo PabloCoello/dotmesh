@@ -108,6 +108,7 @@ export interface ThreadProjection {
   anchor: Anchor | { detached: true };
   status: 'open' | 'resolved' | 'detached';
   assignee?: string;
+  assignedAt?: string;  // created_at del último thread.assigned (recencia para --pending)
   confidence?: 'alta' | 'media' | 'baja';
   refs?: Array<{ title: string; url?: string; note?: string }>;
   messages: MessageProjection[];
@@ -357,6 +358,7 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
         break;
       case 'thread.assigned':
         proj.assignee = ev.agent as string;
+        proj.assignedAt = ev.created_at;
         break;
     }
   }

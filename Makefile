@@ -1,4 +1,4 @@
-.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install seed-claude-settings gnome-rice gnome-unrice health clean
+.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install cli-build seed-claude-settings gnome-rice gnome-unrice health clean test-scribe-flow
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
@@ -23,12 +23,14 @@ help:
 	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; macOS: no-op, va por stow)"
 	@echo "  make review-build   - Compila la extensión mesh-review"
 	@echo "  make review-install - Instala mesh-review en VS Code (requiere node y code)"
+	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
+	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
@@ -94,6 +96,10 @@ vscode-install:
 
 review-build:
 	@echo "→ build mesh-review"
+	@(cd vscode/review-extension && npm run build)
+
+cli-build:
+	@echo "→ build mesh-review CLI"
 	@(cd vscode/review-extension && npm run build)
 
 review-install:
@@ -172,6 +178,10 @@ health:
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.config/starship.toml" ] && [ -e "$$HOME/.config/starship.toml" ] && echo "  ok  symlink ~/.config/starship.toml" || echo "  --  ~/.config/starship.toml no es symlink al repo (corre 'make stow')"
+
+test-scribe-flow:
+	@echo "→ arnés headless scribe"
+	@bash scripts/test-scribe-flow.sh
 
 clean:
 	@rm -rf ~/dotfiles-backup/*

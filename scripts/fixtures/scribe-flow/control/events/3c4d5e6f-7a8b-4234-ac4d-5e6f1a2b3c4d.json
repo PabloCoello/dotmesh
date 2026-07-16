@@ -1,0 +1,13 @@
+{
+  "id": "3c4d5e6f-7a8b-4234-ac4d-5e6f1a2b3c4d",
+  "version": 2,
+  "type": "thread.status-changed",
+  "thread_id": "2b3c4d5e-6f7a-4123-9b3c-4d5e6f1a2b3c",
+  "author": {
+    "kind": "human"
+  },
+  "created_at": "2026-07-16T09:00:00.000Z",
+  "commit": null,
+  "dirty": false,
+  "to": "resolved"
+}

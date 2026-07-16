@@ -135,6 +135,14 @@ ten-agent setup went unused. Keep this 2 + 6 shape in sync across
 `claude/.claude/{output-styles,agents}/`, `opencode/.config/opencode/agents/`
 and `codex/.codex/AGENTS.md`.
 
+### Continuous review with scribe
+
+Inside a herdr session (`HERDR_ENV=1`), `scribe` runs as a watcher: open a dedicated pane and drive `/loop` at a dynamic interval over `mesh-review project --pending <doc>`. Each iteration either finds work — and the full Batching → Fan-out → Apply cycle runs — or finds nothing and doubles the interval (ceiling: 10 minutes). Load the `herdr` skill before splitting panes; it owns pane orchestration.
+
+`project --pending` returns the actionable subset of open threads: a thread is pending while its last non-retracted message is not from an AI author (initial pass, human iteration), or when a `thread.assigned` event is more recent than that last AI message. An AI reply without a commit discharges a thread the same way a fix does; the human reactivates it by replying or re-assigning. The full `project` output (all open threads) is unchanged. The CLI lives at `agents/.agents/skills/doc-review/bin/mesh-review.mjs`; the `scribe` output style (`claude/.claude/output-styles/scribe.md`, section "Modo vigilante") describes the cycle in detail.
+
+**OpenCode and Codex** have no `/loop` equivalent. Run `mesh-review project --pending <doc>` manually at the start of each session and after each human save. Full parity with the Claude + herdr watcher does not exist for these tools — this is intentional, consistent with the parity table below.
+
 ## Three-agent parity
 
 This repo aims for functional parity between OpenCode, Claude Code and Codex so the user can switch between them in the same project without changing their workflow. Codex cannot mirror OpenCode's agent files directly, so it carries the same workflow vocabulary in `codex/.codex/AGENTS.md`.
