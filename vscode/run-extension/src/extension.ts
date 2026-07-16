@@ -1031,7 +1031,10 @@ function registerCommands(
       // Calcular el offset de inserción con la función pura de chunks.ts
       const insertOffset = resolveChunkInsertionOffset(text, cursorOffset, allFences);
 
-      // Detectar caso EOF dentro de valla para añadir \n extra de separación
+      // Si la valla del cursor termina en EOF sin \n final, el primer \n del
+      // texto insertado solo cierra esa línea de cierre: hace falta un segundo
+      // para abrir línea nueva. En el resto de casos insertOffset apunta a un
+      // \n existente y basta con uno.
       const insideFence = allFences.some(
         f => cursorOffset >= f.startOffset && cursorOffset <= f.endOffset,
       );

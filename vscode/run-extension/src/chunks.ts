@@ -20,12 +20,16 @@ export function generateChunkId(existingIds: readonly string[]): string {
 /**
  * Devuelve el offset en `text` donde se debe insertar el nuevo chunk.
  *
- * - Si cursorOffset cae dentro de algún rango de `fences` (extremos incluidos):
- *   inserta tras la línea de cierre de esa valla:
- *   endOffset + 1 si endOffset < text.length (apunta al \n tras el cierre),
- *   o text.length si el cierre es la última línea sin \n final (EOF).
- * - Si no: inserta al final de la línea del cursor, es decir, en la posición
- *   del \n que termina esa línea, o text.length si es la última línea sin \n.
+ * El offset devuelto es siempre «el final de la línea de inserción»: la
+ * posición del \n que la termina, o text.length si es la última línea sin \n.
+ * El texto insertado debe empezar por \n para abrir línea nueva; insertar
+ * ANTES del \n existente garantiza que la valla de cierre del chunk nuevo
+ * conserva un salto de línea detrás y no se fusiona con la línea siguiente.
+ *
+ * - Si cursorOffset cae dentro de algún rango de `fences` (extremos
+ *   incluidos): la línea de inserción es la línea de cierre de esa valla
+ *   (endOffset apunta a su \n, o a text.length en EOF; ver parser.ts).
+ * - Si no: la línea de inserción es la línea del cursor.
  */
 export function resolveChunkInsertionOffset(
   text: string,
@@ -37,9 +41,7 @@ export function resolveChunkInsertionOffset(
   );
 
   if (enclosing) {
-    return enclosing.endOffset < text.length
-      ? enclosing.endOffset + 1
-      : text.length;
+    return enclosing.endOffset;
   }
 
   const nlIdx = text.indexOf('\n', cursorOffset);

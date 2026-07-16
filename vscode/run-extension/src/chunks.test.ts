@@ -51,7 +51,7 @@ test('resolveChunkInsertionOffset: cursor fuera de valla en la última línea si
   assert.strictEqual(offset, text.length);
 });
 
-test('resolveChunkInsertionOffset: cursor dentro de valla → endOffset + 1', () => {
+test('resolveChunkInsertionOffset: cursor dentro de valla → endOffset (el \\n tras el cierre)', () => {
   // Simula una valla de offset 5 a 20 (endOffset = posición del \n tras cierre)
   // cursorOffset = 10 (dentro de la valla)
   const text = '     ```python {#a}\ncode\n```\nresto';
@@ -61,7 +61,9 @@ test('resolveChunkInsertionOffset: cursor dentro de valla → endOffset + 1', ()
   const offset = resolveChunkInsertionOffset(text, 10, [
     { startOffset: 5, endOffset: fenceEndOffset },
   ]);
-  assert.strictEqual(offset, fenceEndOffset + 1);
+  // Insertar EN el \n (no después) conserva el salto tras la valla de cierre
+  // del chunk nuevo; +1 la fusionaría con la línea siguiente («```resto»).
+  assert.strictEqual(offset, fenceEndOffset);
 });
 
 test('resolveChunkInsertionOffset: cursor dentro de valla en EOF → text.length', () => {
@@ -72,4 +74,24 @@ test('resolveChunkInsertionOffset: cursor dentro de valla en EOF → text.length
     { startOffset: 6, endOffset },
   ]);
   assert.strictEqual(offset, text.length);
+});
+
+test('resolveChunkInsertionOffset: cursor exactamente en startOffset → dentro de la valla', () => {
+  // cursor sobre el primer backtick de la apertura
+  const text = '```python {#a}\ncode\n```\nresto';
+  const endOffset = text.indexOf('\nresto'); // \n tras la línea de cierre
+  const offset = resolveChunkInsertionOffset(text, 0, [
+    { startOffset: 0, endOffset },
+  ]);
+  assert.strictEqual(offset, endOffset);
+});
+
+test('resolveChunkInsertionOffset: cursor exactamente en endOffset → dentro de la valla', () => {
+  // cursor sobre el \n que sigue a la línea de cierre (extremo incluido)
+  const text = '```python {#a}\ncode\n```\nresto';
+  const endOffset = text.indexOf('\nresto');
+  const offset = resolveChunkInsertionOffset(text, endOffset, [
+    { startOffset: 0, endOffset },
+  ]);
+  assert.strictEqual(offset, endOffset);
 });
