@@ -36,6 +36,8 @@ import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
 import { buildCardViewModels, computeUnseenCount, pickNextThread } from './thread-cards-utils';
 import { buildDiffTitle, isMeshReviewDiffTabLabel } from './diff-utils';
+import { getScribeTerminal, launchScribeTerminal, ensureScribeTerminal, sendToScribe } from './scribe-bridge';
+import { buildLaunchCommand, buildSendAllPrompt, buildFocusPrompt } from './scribe-bridge-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -1117,6 +1119,29 @@ export function activate(context: vscode.ExtensionContext): void {
           }
           break;
         }
+        case 'scribe-focus': {
+          // Valida que el hilo siga abierto en las proyecciones del host.
+          // thread_id ya fue validado como UUID por isWebviewActionMessage.
+          const focusThread = cardsProvider.projections.find(t => t.thread_id === msg.thread_id);
+          if (!focusThread || focusThread.status !== 'open') {
+            vscode.window.showInformationMessage('mesh-review: el hilo ya no está abierto.');
+            break;
+          }
+          if (!_currentGitRoot) {
+            vscode.window.showInformationMessage('mesh-review: no hay documento activo en un repositorio git.');
+            break;
+          }
+          const focusRelPath = path.relative(_currentGitRoot, docUri.fsPath);
+          const focusDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
+          const { terminal: focusTerminal, isNew: focusIsNew } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
+          focusTerminal.show();
+          if (focusIsNew) await new Promise(r => setTimeout(r, focusDelayMs));
+          const focusLineLabel = 'line_hint' in focusThread.anchor
+            ? `L${(focusThread.anchor as { line_hint: number }).line_hint + 1}`
+            : '(desanclado)';
+          sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+          break;
+        }
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1413,6 +1438,46 @@ export function activate(context: vscode.ExtensionContext): void {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`mesh-review: error al navegar al hilo anterior — ${msg}`);
       }
+    }),
+
+    // --- Launch Scribe ---
+    // Busca el terminal scribe existente o crea uno nuevo. Si ya existe, lo revela
+    // sin relanzar claude. El cwd usa _currentGitRoot si está disponible.
+    vscode.commands.registerCommand('mesh-review.launchScribe', () => {
+      const existing = getScribeTerminal();
+      if (existing) {
+        existing.show();
+        return;
+      }
+      const cwd = _currentGitRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const terminal = launchScribeTerminal(cwd ?? '', buildLaunchCommand('scribe'));
+      terminal.show();
+    }),
+
+    // --- Scribe All ---
+    // Envía a la sesión scribe el prompt de "procesa todos los hilos pendientes"
+    // del documento activo. Valida docUri, git root y existencia de hilos abiertos.
+    vscode.commands.registerCommand('mesh-review.scribeAll', async () => {
+      const scribeDocUri = cardsProvider.docUri;
+      if (!scribeDocUri) {
+        vscode.window.showInformationMessage('mesh-review: abre un documento antes de enviar a scribe.');
+        return;
+      }
+      if (!_currentGitRoot) {
+        vscode.window.showErrorMessage('mesh-review: el documento no está en un repositorio git.');
+        return;
+      }
+      const openCount = cardsProvider.projections.filter(p => p.status === 'open').length;
+      if (openCount === 0) {
+        vscode.window.showInformationMessage('mesh-review: sin hilos abiertos en este documento.');
+        return;
+      }
+      const scribeRelPath = path.relative(_currentGitRoot, scribeDocUri.fsPath);
+      const scribeDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
+      const { terminal: scribeTerminal, isNew: scribeIsNew } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
+      scribeTerminal.show();
+      if (scribeIsNew) await new Promise(r => setTimeout(r, scribeDelayMs));
+      sendToScribe(scribeTerminal, buildSendAllPrompt(scribeRelPath));
     })
   );
 }
