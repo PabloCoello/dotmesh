@@ -246,6 +246,20 @@ const DIFF_ICON_SVG =
   `001.1-2.322 1.55 1.55 0 00-.68-.56 1.49 1.49 0 00-.859-.08 1.49 1.49 0 00-1.18 1.18 1.49 1.49 0 00.08.86 ` +
   `1.5 1.5 0 001.539.922z"/></svg>`;
 
+/**
+ * SVG inline de una estrella de cuatro puntas (16×16, `fill="currentColor"`).
+ *
+ * Se usa como icono del botón "Enviar a scribe" en las tarjetas de hilo abiertas.
+ * Misma estrategia que DIFF_ICON_SVG: SVG inline para respetar la CSP del webview
+ * (default-src 'none' sin font-src ni img-src).
+ *
+ * Forma: estrella tipo sparkle de cuatro ramas, centrada en (8,8) en 16×16.
+ */
+const SCRIBE_ICON_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" ` +
+  `fill="currentColor" aria-hidden="true">` +
+  `<path d="M8 1l1.5 5.5L15 8l-5.5 1.5L8 15l-1.5-5.5L1 8l5.5-1.5z"/></svg>`;
+
 // ---------------------------------------------------------------------------
 // buildCardsHtml
 // ---------------------------------------------------------------------------
@@ -270,7 +284,7 @@ function buildCardHtml(card: CardViewModel, withActions: boolean): string {
     : '';
 
   const cardActionsHtml = withActions
-    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="assign" data-thread-id="${tid}">⊕</button><button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button></span>`
+    ? `\n        <span class="card-actions">${diffBtnHtml}<button class="action-btn" data-action="assign" data-thread-id="${tid}">⊕</button><button class="action-btn" data-action="reply" data-thread-id="${tid}">↩</button><button class="action-btn" data-action="resolve" data-thread-id="${tid}">✓</button><button class="action-btn" data-action="scribe-focus" data-thread-id="${tid}" title="Enviar a scribe">${SCRIBE_ICON_SVG}</button></span>`
     : '';
 
   // Etiquetas opcionales de confianza y asignado: escapadas y con clase semántica

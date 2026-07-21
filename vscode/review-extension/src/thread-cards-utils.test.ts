@@ -1645,3 +1645,53 @@ test('isWebviewActionMessage rechaza scribe-focus con thread_id vacío', () => {
   assert.ok(!isWebviewActionMessage({ type: 'scribe-focus', thread_id: '' }));
 });
 
+// ---------------------------------------------------------------------------
+// Fase 4 — scribe-focus: botón en tarjetas abiertas, ausente en cerradas
+// ---------------------------------------------------------------------------
+
+test('buildCardsHtml hilo abierto incluye botón data-action="scribe-focus"', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'edita',
+    lineLabel:   'L5',
+    hasAnchor:   true,
+    status:      'open',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(html.includes('data-action="scribe-focus"'), 'hilo abierto debe incluir el botón scribe-focus');
+  assert.ok(html.includes(`data-thread-id="${TID}"`), 'el botón debe incluir el thread_id correcto');
+});
+
+test('buildCardsHtml hilo resuelto no incluye data-action="scribe-focus"', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   'L3',
+    hasAnchor:   true,
+    status:      'resolved',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="scribe-focus"'), 'hilo resuelto no debe tener botón scribe-focus');
+});
+
+test('buildCardsHtml hilo desanclado no incluye data-action="scribe-focus"', () => {
+  const card: CardViewModel = {
+    thread_id:   TID,
+    commentType: 'nota',
+    lineLabel:   '(desanclado)',
+    hasAnchor:   false,
+    status:      'detached',
+    fixCommit:   null,
+    openCommit:  null,
+    messages:    [],
+  };
+  const html = buildCardsHtml([card]);
+  assert.ok(!html.includes('data-action="scribe-focus"'), 'hilo desanclado no debe tener botón scribe-focus');
+});
+
