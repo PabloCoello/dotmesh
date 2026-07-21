@@ -1128,7 +1128,7 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           }
           if (!_currentGitRoot) {
-            vscode.window.showInformationMessage('mesh-review: no hay documento activo en un repositorio git.');
+            vscode.window.showErrorMessage('mesh-review: el documento no está en un repositorio git.');
             break;
           }
           const focusRelPath = path.relative(_currentGitRoot, docUri.fsPath);
