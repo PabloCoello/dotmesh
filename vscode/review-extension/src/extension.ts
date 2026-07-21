@@ -1139,8 +1139,9 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           }
           const focusDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
-          const { terminal: focusTerminal, isNew: focusIsNew } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
+          const { terminal: focusTerminal, isNew: focusIsNew, ready: focusReady } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
           focusTerminal.show();
+          await focusReady;
           if (focusIsNew) await new Promise(r => setTimeout(r, focusDelayMs));
           // typeof en runtime, no solo `in`: un line_hint no numérico procedente
           // de un evento corrupto no debe concatenarse en la etiqueta.
@@ -1452,15 +1453,16 @@ export function activate(context: vscode.ExtensionContext): void {
     // --- Launch Scribe ---
     // Busca el terminal scribe existente o crea uno nuevo. Si ya existe, lo revela
     // sin relanzar claude. El cwd usa _currentGitRoot si está disponible.
-    vscode.commands.registerCommand('mesh-review.launchScribe', () => {
+    vscode.commands.registerCommand('mesh-review.launchScribe', async () => {
       const existing = getScribeTerminal();
       if (existing) {
         existing.show();
         return;
       }
       const cwd = _currentGitRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      const terminal = launchScribeTerminal(cwd ?? '', buildLaunchCommand('scribe'));
+      const { terminal, ready } = launchScribeTerminal(cwd ?? '', buildLaunchCommand('scribe'));
       terminal.show();
+      await ready;
     }),
 
     // --- Scribe All ---
@@ -1488,8 +1490,9 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const scribeDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
-      const { terminal: scribeTerminal, isNew: scribeIsNew } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
+      const { terminal: scribeTerminal, isNew: scribeIsNew, ready: scribeReady } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
       scribeTerminal.show();
+      await scribeReady;
       if (scribeIsNew) await new Promise(r => setTimeout(r, scribeDelayMs));
       sendToScribe(scribeTerminal, buildSendAllPrompt(scribeRelPath));
     })

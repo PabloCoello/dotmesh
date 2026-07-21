@@ -10,11 +10,15 @@
     "url": "https://github.com/PabloCoello/dotmesh"
   },
   "engines": {
-    "vscode": "^1.75.0",
+    "vscode": "^1.93.0",
     "node": ">=22.6.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -156,7 +160,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.75.0",
+    "@types/vscode": "^1.93.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.4.0"
