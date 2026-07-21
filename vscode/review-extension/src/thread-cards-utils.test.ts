@@ -1625,3 +1625,23 @@ test('buildCardsHtml SVG del botón diff no requiere carga de fuente externa (in
   assert.ok(!html.includes('src='), 'el SVG inline no debe referenciar recursos externos');
 });
 
+// ---------------------------------------------------------------------------
+// Fase 1 — scribe-focus: tipo nuevo en WebviewActionMessage
+// ---------------------------------------------------------------------------
+
+test('isWebviewActionMessage acepta scribe-focus con thread_id UUID canónico', () => {
+  assert.ok(isWebviewActionMessage({ type: 'scribe-focus', thread_id: TID }));
+});
+
+test('isWebviewActionMessage rechaza scribe-focus con thread_id que no es UUID', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'scribe-focus', thread_id: 'texto-arbitrario' }));
+});
+
+test('isWebviewActionMessage rechaza scribe-focus sin thread_id (campo ausente)', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'scribe-focus' }));
+});
+
+test('isWebviewActionMessage rechaza scribe-focus con thread_id vacío', () => {
+  assert.ok(!isWebviewActionMessage({ type: 'scribe-focus', thread_id: '' }));
+});
+

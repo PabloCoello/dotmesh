@@ -46,7 +46,8 @@ export type WebviewActionMessage =
   | { type: 'reply-submit';  thread_id: string; body: string }
   | { type: 'edit-submit';   thread_id: string; message_id: string; body: string }
   | { type: 'assign';        thread_id: string }
-  | { type: 'jump-doc';      thread_id: string; doc_path: string };
+  | { type: 'jump-doc';      thread_id: string; doc_path: string }
+  | { type: 'scribe-focus';  thread_id: string };
 
 /**
  * Valida que una ruta de documento sea relativa y sin segmentos de traversal.
@@ -102,6 +103,9 @@ export function isWebviewActionMessage(msg: unknown): msg is WebviewActionMessag
     case 'jump-doc':
       // doc_path: ruta relativa segura; la contención definitiva se valida en el host.
       return hasThread && isRelativeSafePath(m.doc_path);
+    case 'scribe-focus':
+      // thread_id debe ser UUID canónico; ningún otro campo se acepta del webview.
+      return hasThread;
     default:
       return false;
   }
