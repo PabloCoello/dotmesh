@@ -7,10 +7,15 @@
 # (nunca push). Al salir, si está limpio se borra; si tiene trabajo, lo
 # conserva.
 #
+# Con `claude --style <persona>` (p. ej. maker, scribe) la instancia arranca
+# con ese output style vía `--settings '{"outputStyle":…}'`, sin persistir
+# nada: el settings.json compartido no se toca y las demás instancias no se
+# ven afectadas. Combinable con --isolate.
+#
 # Si el repo tiene `.claude-session-init.sh` ejecutable en la raíz, se
 # ejecuta tras crear el worktree (hook por repo: agora ids, docker-compose,
-# direnv, etc.). El flag `--isolate` se consume y no se reenvía al binario.
-# Compatible con bash y zsh.
+# direnv, etc.). Los flags `--isolate` y `--style` se consumen y no se
+# reenvían al binario. Compatible con bash y zsh.
 #
 # Cada sesión registra un lockfile en
 #   ${XDG_RUNTIME_DIR:-$HOME/.cache}/dotmesh/sessions/<session_id>.lock
@@ -151,17 +156,38 @@ function claude() {
         return 127
     fi
 
-    local isolate=0
+    local isolate=0 style="" expect_style=0
     local -a args
     args=()
     local arg
     for arg in "$@"; do
-        if [[ "$arg" == "--isolate" ]]; then
+        if (( expect_style )); then
+            style=$arg
+            expect_style=0
+        elif [[ "$arg" == "--isolate" ]]; then
             isolate=1
+        elif [[ "$arg" == "--style" ]]; then
+            expect_style=1
+        elif [[ "$arg" == --style=* ]]; then
+            style=${arg#--style=}
         else
             args+=("$arg")
         fi
     done
+    if (( expect_style )); then
+        echo "⚠️  --style requiere un valor (p. ej. --style scribe)" >&2
+        return 2
+    fi
+    # Un --settings explícito del usuario tras el inyectado gana. El nombre se
+    # restringe a slug para no construir JSON malformado; que la persona exista
+    # no se valida: claude avisa si el output style no existe.
+    if [[ -n "$style" ]]; then
+        if [[ "$style" == *[^a-zA-Z0-9._-]* ]]; then
+            echo "⚠️  --style: nombre inválido '${style}' (solo [a-zA-Z0-9._-])" >&2
+            return 2
+        fi
+        args=(--settings "{\"outputStyle\":\"${style}\"}" "${args[@]}")
+    fi
 
     if (( ! isolate )); then
         command claude "${args[@]}"
