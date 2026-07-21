@@ -143,6 +143,7 @@ export function launchScribeTerminal(
     if (hasIntegration) {
       await waitForQuietShell(terminal);
       const shellIntegration = terminal.shellIntegration;
+      if (terminal.exitStatus !== undefined) return; // cerrado durante el asentamiento
       if (shellIntegration) {
         shellIntegration.executeCommand(command);
         return;
@@ -150,6 +151,7 @@ export function launchScribeTerminal(
     } else {
       await delay(NO_INTEGRATION_FALLBACK_MS);
     }
+    if (terminal.exitStatus !== undefined) return; // sendText sobre un terminal disposed lanza
     terminal.sendText(command, true);
   })();
   return { terminal, ready };
@@ -190,7 +192,14 @@ export function ensureScribeTerminal(
  *
  * Añadir la nueva línea final es necesario para que la TUI de Claude Code
  * interprete el mensaje como entrada completa.
+ *
+ * Contrato: el caller garantiza que el lanzamiento ya ocurrió (`await ready`)
+ * y que la TUI tuvo tiempo de arrancar (launchDelayMs si el terminal es nuevo).
+ * sendText es la vía correcta hacia la TUI: executeCommand está pensado para
+ * shells en prompt y podría interrumpir el proceso en primer plano. Si el
+ * terminal se cerró entre medias, no-op (sendText sobre un disposed lanza).
  */
 export function sendToScribe(terminal: vscode.Terminal, text: string): void {
+  if (terminal.exitStatus !== undefined) return;
   terminal.sendText(text, true);
 }
