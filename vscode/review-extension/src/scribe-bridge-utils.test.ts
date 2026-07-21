@@ -130,3 +130,16 @@ test('buildFocusPrompt colapsa caracteres de control en lineLabel', () => {
   const prompt = buildFocusPrompt('docs/informe.md', UUID, 'edita', 'L42\ninyección');
   assert.ok(!prompt.includes('\n'), 'el prompt debe seguir siendo una sola línea');
 });
+
+test('buildFocusPrompt entrecomilla lineLabel para neutralizar separadores de comandos', () => {
+  const prompt = buildFocusPrompt('docs/informe.md', UUID, 'edita', 'L42; rm -rf ~ #');
+  assert.ok(
+    prompt.includes(`'L42; rm -rf ~ #'`),
+    'un lineLabel inesperado debe quedar inerte dentro de comillas simples'
+  );
+});
+
+test('buildFocusPrompt elimina caracteres de control C1 (CSI) de los valores', () => {
+  const prompt = buildFocusPrompt('docs/informe.md', UUID, 'edita', 'L42\x9b31m');
+  assert.ok(!prompt.includes('\x9b'), 'los caracteres C1 no deben llegar al terminal');
+});

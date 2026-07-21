@@ -27,10 +27,12 @@ const VALID_STYLE_RE = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * Colapsa caracteres de control (incluidos saltos de línea) a espacios.
- * Mantiene el invariante "una sola línea" aunque el valor venga corrupto.
+ * Cubre C0, DEL y C1 (\x80-\x9f): los terminales VTE interpretan C1 como
+ * secuencias de escape (p. ej. CSI \x9b). Mantiene el invariante "una sola
+ * línea" aunque el valor venga corrupto.
  */
 function toSingleLine(value: string): string {
-  return value.replace(/[\x00-\x1f\x7f]+/g, ' ').trim();
+  return value.replace(/[\x00-\x1f\x7f\x80-\x9f]+/g, ' ').trim();
 }
 
 /**
@@ -113,6 +115,9 @@ export function buildFocusPrompt(
   const doc = shellQuote(toSingleLine(docRelPath));
   const tid = toSingleLine(thread_id);
   const type = VALID_COMMENT_TYPES.has(commentType) ? commentType : FALLBACK_COMMENT_LABEL;
-  const line = toSingleLine(lineLabel);
+  // lineLabel también va entrecomillado: si un valor inesperado cruzara el
+  // boundary del host, un `;` dentro de los paréntesis del prompt sería un
+  // separador de comandos en una shell viva.
+  const line = shellQuote(toSingleLine(lineLabel));
   return `Céntrate única y exclusivamente en el hilo ${tid} (${type} en ${line}). No proceses ningún otro hilo. Para el contexto ejecuta: mesh-review project ${doc}`;
 }

@@ -1132,12 +1132,21 @@ export function activate(context: vscode.ExtensionContext): void {
             break;
           }
           const focusRelPath = path.relative(_currentGitRoot, docUri.fsPath);
+          // Misma guarda de traversal que jump-doc: el prompt nunca debe
+          // apuntar a un .ai/review/ fuera del repositorio.
+          if (focusRelPath.startsWith('..') || path.isAbsolute(focusRelPath)) {
+            vscode.window.showErrorMessage('mesh-review: el documento está fuera del repositorio git.');
+            break;
+          }
           const focusDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
           const { terminal: focusTerminal, isNew: focusIsNew } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
           focusTerminal.show();
           if (focusIsNew) await new Promise(r => setTimeout(r, focusDelayMs));
-          const focusLineLabel = 'line_hint' in focusThread.anchor
-            ? `L${(focusThread.anchor as { line_hint: number }).line_hint + 1}`
+          // typeof en runtime, no solo `in`: un line_hint no numérico procedente
+          // de un evento corrupto no debe concatenarse en la etiqueta.
+          const focusHint = (focusThread.anchor as { line_hint?: unknown }).line_hint;
+          const focusLineLabel = typeof focusHint === 'number' && Number.isFinite(focusHint)
+            ? `L${focusHint + 1}`
             : '(desanclado)';
           sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
           break;
@@ -1473,6 +1482,11 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const scribeRelPath = path.relative(_currentGitRoot, scribeDocUri.fsPath);
+      // Misma guarda de traversal que jump-doc y scribe-focus.
+      if (scribeRelPath.startsWith('..') || path.isAbsolute(scribeRelPath)) {
+        vscode.window.showErrorMessage('mesh-review: el documento está fuera del repositorio git.');
+        return;
+      }
       const scribeDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
       const { terminal: scribeTerminal, isNew: scribeIsNew } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
       scribeTerminal.show();
