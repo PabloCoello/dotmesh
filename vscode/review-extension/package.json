@@ -79,8 +79,32 @@
         "command": "mesh-review.previousThread",
         "title": "Mesh Review: Hilo anterior",
         "icon": "$(arrow-up)"
+      },
+      {
+        "command": "mesh-review.launchScribe",
+        "title": "Lanzar scribe",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "mesh-review.scribeAll",
+        "title": "Enviar todos a scribe",
+        "icon": "$(comment-discussion)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "mesh-review.launchScribe",
+          "when": "view == meshReviewCards",
+          "group": "navigation"
+        },
+        {
+          "command": "mesh-review.scribeAll",
+          "when": "view == meshReviewCards",
+          "group": "navigation"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "mesh-review.addComment",
@@ -113,6 +137,11 @@
           "type": "boolean",
           "default": true,
           "description": "La navegación entre hilos cicla al llegar al último o al primero."
+        },
+        "mesh-review.scribe.launchDelayMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Milisegundos de espera tras crear la sesión scribe antes de enviar el primer prompt. Permite que la TUI de Claude Code arranque antes de recibir texto."
         }
       }
     }
