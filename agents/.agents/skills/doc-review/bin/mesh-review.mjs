@@ -487,8 +487,21 @@ async function runFix(argv) {
     process.stderr.write("mesh-review fix: se requieren <doc> y <thread_id>\n");
     process.exit(1);
   }
+  if (alreadyDone !== void 0 && !/^[0-9a-f]{7,40}$/i.test(alreadyDone)) {
+    process.stderr.write(
+      `mesh-review fix: --already-done debe ser un SHA hex de 7\u201340 caracteres: ${alreadyDone}
+`
+    );
+    process.exit(1);
+  }
+  if (commitMsg !== void 0 && alreadyDone !== void 0) {
+    process.stderr.write(
+      "mesh-review fix: -m y --already-done son mutuamente excluyentes\n"
+    );
+    process.exit(1);
+  }
   if (!commitMsg && alreadyDone === void 0) {
-    process.stderr.write("mesh-review fix: se requiere -m <commit-msg>\n");
+    process.stderr.write("mesh-review fix: se requiere -m <commit-msg> (o --already-done <sha>)\n");
     process.exit(1);
   }
   if (body === void 0) {
@@ -498,6 +511,13 @@ async function runFix(argv) {
   if (!isUuid(threadId)) {
     process.stderr.write(`mesh-review fix: thread_id no es un UUID v\xE1lido: ${threadId}
 `);
+    process.exit(1);
+  }
+  if (confidence !== void 0 && !["alta", "media", "baja"].includes(confidence)) {
+    process.stderr.write(
+      `mesh-review fix: --confidence debe ser alta, media o baja: ${confidence}
+`
+    );
     process.exit(1);
   }
   const docAbs = path5.resolve(doc);
@@ -606,18 +626,21 @@ async function resolveCommit({
 function printUsage2() {
   process.stderr.write(
     [
-      "Uso: mesh-review fix <doc> <thread_id> -m <commit-msg> --body <respuesta>",
-      "                    [--reanchor] [--already-done <sha>]",
-      "                    [--model <id>] [--confidence alta|media|baja]",
+      "Uso: mesh-review fix <doc> <thread_id>",
+      "         (-m <commit-msg> | --already-done <sha>)",
+      "         --body <respuesta>",
+      "         [--reanchor] [--model <id>] [--confidence alta|media|baja]",
       "",
       "Crea un commit del documento con pathspec expl\xEDcito, captura el SHA corto",
       'y emite un evento message.posted con author.kind="ai" y ese commit.',
+      "Con --already-done se omite el commit y se usa el SHA suministrado.",
+      "-m y --already-done son mutuamente excluyentes.",
       "",
       "Opciones:",
       "  -m <msg>             Mensaje del commit (obligatorio sin --already-done)",
+      "  --already-done <sha> SHA hex (7-40 chars) a usar en lugar de crear un commit",
       "  --body <texto>       Cuerpo del mensaje IA en el hilo (obligatorio)",
       "  --reanchor           Re-resuelve anclas tras el commit",
-      "  --already-done <sha> Usa este SHA en lugar de crear un commit nuevo",
       "  --model <id>         Identificador del modelo (por defecto: mesh-review-cli)",
       "  --confidence <nivel> Nivel de confianza: alta, media o baja",
       "  --help               Muestra este mensaje",
@@ -626,8 +649,9 @@ function printUsage2() {
       "  stdout: UUID del evento message.posted escrito",
       "  stderr: SHA corto del commit (nuevo o --already-done)",
       "",
-      "Ejemplo:",
-      '  mesh-review fix docs/SPEC.md <uuid> -m "fix(spec): corrige p\xE1rrafo" --body "Correcci\xF3n aplicada"'
+      "Ejemplos:",
+      '  mesh-review fix docs/SPEC.md <uuid> -m "fix(spec): corrige p\xE1rrafo" --body "Correcci\xF3n aplicada"',
+      '  mesh-review fix docs/SPEC.md <uuid> --already-done abc1234 --body "Correcci\xF3n aplicada en commit previo"'
     ].join("\n") + "\n"
   );
 }
