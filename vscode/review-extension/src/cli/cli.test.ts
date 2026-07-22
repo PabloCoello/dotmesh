@@ -752,3 +752,114 @@ test('fix: --confidence alta → el campo aparece en el evento emitido', async (
     await cleanup();
   }
 });
+
+test('fix: --model <id> → aparece como author.model en el evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runFix([
+      docAbs, tid,
+      '--already-done', 'abc1234',
+      '--body', 'Corrección aplicada',
+      '--model', 'claude-opus-4',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const author = events[0].author as { kind: string; model?: string };
+    assert.strictEqual(author.model, 'claude-opus-4', 'author.model coincide con --model');
+  } finally {
+    await cleanup();
+  }
+});
+
+// Helper: intercepts process.exit so the test process does not actually exit.
+// Returns the captured exit code (undefined if runFix resolved normally).
+async function captureExit(fn: () => Promise<void>): Promise<number | undefined> {
+  let capturedExitCode: number | undefined;
+  const origExit = process.exit;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (process as any).exit = (code?: number) => {
+    capturedExitCode = code ?? 0;
+    throw new Error(`process.exit:${capturedExitCode}`);
+  };
+  try {
+    await fn();
+  } catch (e) {
+    if (!(e instanceof Error && e.message.startsWith('process.exit:'))) throw e;
+  } finally {
+    process.exit = origExit;
+  }
+  return capturedExitCode;
+}
+
+test('fix: --already-done con SHA malformado → exit 1, sin evento emitido', async () => {
+  // Uses a real git repo so the git-root check succeeds; the failure must come
+  // from the SHA format validation, not from the repo lookup.
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '--already-done', 'no-es-sha!!', '--body', 'Resuelto'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: -m y --already-done juntos → exit 1, sin evento emitido', async () => {
+  // Uses a real git repo so the git-root check succeeds; the failure must come
+  // from the mutual-exclusion guard, not from the repo lookup.
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--already-done', 'abc1234', '--body', 'Resuelto'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --confidence con valor inválido → exit 1, sin evento emitido', async () => {
+  // Uses a real git repo with a staged file so the confidence validation is the
+  // only thing that can cause an early exit.
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--body', 'Corrección', '--confidence', 'high'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
