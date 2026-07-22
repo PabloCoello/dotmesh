@@ -433,6 +433,205 @@ function printUsage() {
   );
 }
 
+// src/cli/commands/fix.ts
+import { readFile as readFile3 } from "node:fs/promises";
+import { execFile as execFile2 } from "node:child_process";
+import { promisify as promisify2 } from "node:util";
+import { randomUUID as randomUUID3 } from "node:crypto";
+import * as path5 from "node:path";
+var execFileAsync2 = promisify2(execFile2);
+function parseArgs(argv) {
+  const positional = [];
+  let commitMsg;
+  let body;
+  let reanchor = false;
+  let alreadyDone;
+  let model;
+  let confidence;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "-m") {
+      commitMsg = argv[++i];
+    } else if (arg === "--body") {
+      body = argv[++i];
+    } else if (arg === "--reanchor") {
+      reanchor = true;
+    } else if (arg === "--already-done") {
+      alreadyDone = argv[++i];
+    } else if (arg === "--model") {
+      model = argv[++i];
+    } else if (arg === "--confidence") {
+      confidence = argv[++i];
+    } else if (!arg.startsWith("-")) {
+      positional.push(arg);
+    }
+  }
+  return {
+    doc: positional[0],
+    threadId: positional[1],
+    commitMsg,
+    body,
+    reanchor,
+    alreadyDone,
+    model,
+    confidence
+  };
+}
+async function runFix(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage2();
+    return;
+  }
+  const { doc, threadId, commitMsg, body, reanchor, alreadyDone, model, confidence } = parseArgs(argv);
+  if (!doc || !threadId) {
+    process.stderr.write("mesh-review fix: se requieren <doc> y <thread_id>\n");
+    process.exit(1);
+  }
+  if (!commitMsg && alreadyDone === void 0) {
+    process.stderr.write("mesh-review fix: se requiere -m <commit-msg>\n");
+    process.exit(1);
+  }
+  if (body === void 0) {
+    process.stderr.write("mesh-review fix: se requiere --body <respuesta>\n");
+    process.exit(1);
+  }
+  if (!isUuid(threadId)) {
+    process.stderr.write(`mesh-review fix: thread_id no es un UUID v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  const docAbs = path5.resolve(doc);
+  const gitRoot = await getGitRoot(path5.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const docRelPath = path5.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const eventDir = path5.join(gitRoot, ".ai", "review", docRelPath);
+  const sha = await resolveCommit({ gitRoot, docAbs, commitMsg, alreadyDone });
+  const ev = {
+    id: randomUUID3(),
+    version: 2,
+    type: "message.posted",
+    thread_id: threadId,
+    author: { kind: "ai", model: model ?? "mesh-review-cli" },
+    created_at: utcTimestampMs(),
+    commit: sha,
+    dirty: false,
+    body
+  };
+  if (confidence !== void 0) {
+    ev.confidence = confidence;
+  }
+  await emitEvent(eventDir, ev);
+  if (reanchor) {
+    let text;
+    try {
+      text = await readFile3(docAbs, "utf8");
+    } catch {
+      process.stderr.write(`mesh-review fix: no se puede leer el documento para reanchor: ${docAbs}
+`);
+      process.exit(1);
+    }
+    const events = await readEvents(eventDir);
+    const threads = project(events);
+    await reanchorThreads(text, threads, eventDir);
+  }
+  process.stdout.write(`${ev.id}
+`);
+  process.stderr.write(`${sha}
+`);
+}
+async function resolveCommit({
+  gitRoot,
+  docAbs,
+  commitMsg,
+  alreadyDone
+}) {
+  if (alreadyDone !== void 0) {
+    return alreadyDone;
+  }
+  let statusOut;
+  try {
+    const result = await execFileAsync2(
+      "git",
+      ["status", "--porcelain", "--", docAbs],
+      { cwd: gitRoot }
+    );
+    statusOut = result.stdout;
+  } catch (err) {
+    process.stderr.write(
+      `mesh-review fix: error al verificar el estado git: ${err instanceof Error ? err.message : String(err)}
+`
+    );
+    process.exit(1);
+  }
+  if (!statusOut.trim()) {
+    process.stderr.write(
+      `mesh-review fix: el documento no tiene cambios pendientes en el worktree: ${path5.relative(gitRoot, docAbs)}
+`
+    );
+    process.exit(1);
+  }
+  try {
+    await execFileAsync2(
+      "git",
+      ["commit", "-m", commitMsg, "--", docAbs],
+      { cwd: gitRoot }
+    );
+  } catch (err) {
+    process.stderr.write(
+      `mesh-review fix: error en git commit: ${err instanceof Error ? err.message : String(err)}
+`
+    );
+    process.exit(1);
+  }
+  let shaOut;
+  try {
+    const result = await execFileAsync2("git", ["rev-parse", "--short", "HEAD"], { cwd: gitRoot });
+    shaOut = result.stdout;
+  } catch (err) {
+    process.stderr.write(
+      `mesh-review fix: error al capturar el SHA: ${err instanceof Error ? err.message : String(err)}
+`
+    );
+    process.exit(1);
+  }
+  return shaOut.trim();
+}
+function printUsage2() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review fix <doc> <thread_id> -m <commit-msg> --body <respuesta>",
+      "                    [--reanchor] [--already-done <sha>]",
+      "                    [--model <id>] [--confidence alta|media|baja]",
+      "",
+      "Crea un commit del documento con pathspec expl\xEDcito, captura el SHA corto",
+      'y emite un evento message.posted con author.kind="ai" y ese commit.',
+      "",
+      "Opciones:",
+      "  -m <msg>             Mensaje del commit (obligatorio sin --already-done)",
+      "  --body <texto>       Cuerpo del mensaje IA en el hilo (obligatorio)",
+      "  --reanchor           Re-resuelve anclas tras el commit",
+      "  --already-done <sha> Usa este SHA en lugar de crear un commit nuevo",
+      "  --model <id>         Identificador del modelo (por defecto: mesh-review-cli)",
+      "  --confidence <nivel> Nivel de confianza: alta, media o baja",
+      "  --help               Muestra este mensaje",
+      "",
+      "Salida:",
+      "  stdout: UUID del evento message.posted escrito",
+      "  stderr: SHA corto del commit (nuevo o --already-done)",
+      "",
+      "Ejemplo:",
+      '  mesh-review fix docs/SPEC.md <uuid> -m "fix(spec): corrige p\xE1rrafo" --body "Correcci\xF3n aplicada"'
+    ].join("\n") + "\n"
+  );
+}
+
 // src/cli/main.ts
 async function main(argv = process.argv.slice(2)) {
   const [subcommand, ...rest] = argv;
@@ -446,13 +645,16 @@ async function main(argv = process.argv.slice(2)) {
     case "reanchor":
       await runReanchor(rest);
       break;
+    case "fix":
+      await runFix(rest);
+      break;
     default:
-      printUsage2();
+      printUsage3();
       if (subcommand !== void 0) process.exit(1);
       break;
   }
 }
-function printUsage2() {
+function printUsage3() {
   process.stderr.write(
     [
       "Uso: mesh-review <subcomando> [argumentos]",
@@ -461,11 +663,14 @@ function printUsage2() {
       "  project [--pending] <doc>         Proyecta los hilos abiertos del documento",
       "  emit <doc> <tipo> [clave=valor\u2026]  Emite un evento de revisi\xF3n para el documento",
       "  reanchor <doc>                    Re-resuelve anclas y emite thread.reanchored",
+      "  fix <doc> <thread_id> -m <msg> --body <texto>",
+      "                                    Commit + evento message.posted en una llamada",
       "",
       "Ejemplos:",
       "  mesh-review project --pending docs/SPEC.md",
       '  mesh-review emit docs/SPEC.md message.posted thread_id=<uuid> body="correcci\xF3n" commit=null',
-      "  mesh-review reanchor docs/SPEC.md"
+      "  mesh-review reanchor docs/SPEC.md",
+      '  mesh-review fix docs/SPEC.md <uuid> -m "fix(spec): corrige p\xE1rrafo" --body "Aplicado"'
     ].join("\n") + "\n"
   );
 }
