@@ -199,19 +199,29 @@ export function ensureScribeTerminal(
 // sendToScribe
 // ---------------------------------------------------------------------------
 
+/** Pausa entre el texto y el Enter para que la pty no los funda en un chunk. */
+const SUBMIT_KEY_DELAY_MS = 200;
+
 /**
- * Envía un texto a la sesión scribe usando sendText con addNewLine=true.
+ * Envía un texto a la sesión scribe y lo confirma con un Enter separado.
  *
- * Añadir la nueva línea final es necesario para que la TUI de Claude Code
- * interprete el mensaje como entrada completa.
+ * La TUI de Claude Code trata el texto que llega junto a su salto de línea
+ * (el addNewLine de sendText) como un pegado: lo inserta en el cajetín sin
+ * enviarlo. Para que lo envíe, el Enter tiene que llegar como pulsación
+ * independiente: texto sin salto, pausa breve (si no, la pty puede fundir
+ * ambos writes en un solo chunk y volvemos al caso pegado) y `\r` aparte.
  *
  * Contrato: el caller garantiza que el lanzamiento ya ocurrió (`await ready`)
  * y que la TUI tuvo tiempo de arrancar (launchDelayMs si el terminal es nuevo).
  * sendText es la vía correcta hacia la TUI: executeCommand está pensado para
  * shells en prompt y podría interrumpir el proceso en primer plano. Si el
- * terminal se cerró entre medias, no-op (sendText sobre un disposed lanza).
+ * terminal se cierra entre medias, no-op (sendText sobre un disposed lanza);
+ * se comprueba antes de cada write porque la pausa deja una ventana abierta.
  */
-export function sendToScribe(terminal: vscode.Terminal, text: string): void {
+export async function sendToScribe(terminal: vscode.Terminal, text: string): Promise<void> {
   if (terminal.exitStatus !== undefined) return;
-  terminal.sendText(text, true);
+  terminal.sendText(text, false);
+  await delay(SUBMIT_KEY_DELAY_MS);
+  if (terminal.exitStatus !== undefined) return;
+  terminal.sendText('\r', false);
 }

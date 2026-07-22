@@ -1149,7 +1149,7 @@ export function activate(context: vscode.ExtensionContext): void {
           const focusLineLabel = typeof focusHint === 'number' && Number.isFinite(focusHint)
             ? `L${focusHint + 1}`
             : '(desanclado)';
-          sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+          await sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
           break;
         }
       }
@@ -1494,7 +1494,7 @@ export function activate(context: vscode.ExtensionContext): void {
       scribeTerminal.show();
       await scribeReady;
       if (scribeIsNew) await new Promise(r => setTimeout(r, scribeDelayMs));
-      sendToScribe(scribeTerminal, buildSendAllPrompt(scribeRelPath));
+      await sendToScribe(scribeTerminal, buildSendAllPrompt(scribeRelPath));
     })
   );
 }
