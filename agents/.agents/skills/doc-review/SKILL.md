@@ -194,6 +194,8 @@ Check these before touching any file or running any git command:
 2. **Document must be inside a git repository.** Run `git rev-parse --show-toplevel` from the document's directory. If git fails, stop and inform the user.
 3. **Must not be on the default branch.** Run `git branch --show-current`. Compare with `git symbolic-ref --short refs/remotes/origin/HEAD` (falls back to `git config init.defaultBranch`). If on the default branch, go to §5 before touching any file.
 
+Run all three checks once per session at the start of the pass. In watchful-mode iterations, re-run only check 1 (worktree cleanliness for the document under review) before each commit. Checks 2 and 3 do not change between iterations.
+
 ---
 
 ## 5. Branch management
@@ -225,10 +227,8 @@ Process threads with `commentType` in `{edita, sugerencia, pregunta, verifica}` 
 
 1. Resolve the anchor against the current buffer (§2 — anchor resolution). If the anchor is unresolvable, skip to §6.4 (conflict).
 2. Apply the edit to the document body.
-3. Run `git commit -m "<type>(<short-anchor>): <description>"` including only the reviewed file. No LLM attribution in the commit message.
-4. Capture the short SHA: `git rev-parse --short HEAD`.
-5. Write a `message.posted` event with `commit = SHA` and `author.kind = "ai"`. Do **not** write `thread.status-changed`.
-6. Re-anchor any threads displaced by this edit (§6.5).
+3. Run `node <skill-dir>/bin/mesh-review.mjs fix <doc> <thread_id> -m "<type>(<short-anchor>): <description>" --body "<reply>"`. The command commits the document with an explicit pathspec, captures the short SHA, and writes the `message.posted` event. No LLM attribution in the commit message.
+4. Re-anchor any threads displaced by this edit (§6.6).
 
 ### 6.3 Annotations
 
@@ -248,6 +248,8 @@ If a thread requests a change already applied by an earlier thread in this pass:
 - Write a `message.posted` identifying the earlier commit: e.g. "resuelto junto con `<sha>`".
 - Set `commit = <sha>` of that earlier commit (not a new commit). The card UI uses this SHA to show the relevant diff.
 - Do not create a new commit. Do not resolve the thread.
+
+Run `node <skill-dir>/bin/mesh-review.mjs fix <doc> <thread_id> --already-done <sha> --body "resolved alongside <sha>"` to emit the event pointing to the earlier commit without creating a new one.
 
 ### 6.6 Re-anchoring between edits
 
@@ -270,6 +272,8 @@ The `reviser` subagent proposes changes by writing `message.posted` events with 
 
 The `reviser` never touches the document body and never runs git commands. The commit is always the principal's step, executed after applying the proposal.
 
+When the pass operates in fast-path mode (1 or 2 actionable threads, no fan-out — see §8), propose-then-apply collapses into a single apply-and-report step: the principal applies the edit directly, then calls `mesh-review fix`, without a prior reviser delegation. The invariant that only the principal edits the document body still holds; there is no subagent involved.
+
 ---
 
 ## 7. Iteration detection
@@ -285,6 +289,8 @@ When all open threads meet this criterion, the pass is an iteration pass. The pr
 ---
 
 ## 8. Routing
+
+**Fast-path condition.** If the number of actionable threads (commentType in {edita, sugerencia, pregunta, verifica}) is ≤ 2, the principal resolves them directly without delegating to subagents. With 3 or more actionable threads, use fan-out per the table below.
 
 Route open threads to subagents based on `assignee` from `thread.assigned` events (most recent wins), or fall back to the `commentType` and content of `messages[0]`:
 
@@ -320,6 +326,8 @@ Every review session produces a structured response with five parts:
 | 5 | **Preguntas** | always | Open questions for the human that are blocking or significantly affect the review. May be an empty list. |
 
 Sections 1, 2, and 5 are always present. Sections 3 and 4 appear only when they have content.
+
+**Compact response (1–2 threads processed).** Deliver the per-thread log line defined in this section plus one closing sentence. The 5-part structure applies when 3 or more threads are processed, or on explicit request.
 
 After processing each thread, emit a one-line log entry:
 
@@ -376,5 +384,6 @@ This skill uses only standard file and shell operations:
 | SHA-256 of path string | `printf '%s' '<path>' \| sha256sum \| awk '{print $1}'` |
 | UTC timestamp (with ms) | `date -u +"%Y-%m-%dT%H:%M:%S.000Z"` or language runtime equivalent |
 | Write backlog task | file write to `<git-root>/.ai/backlog/<id>.json` |
+| Commit a single reviewed file and emit fix event | `mesh-review fix <doc> <thread_id> -m <msg> --body <reply> [--reanchor] [--already-done <sha>] [--model <id>] [--confidence ...]` |
 
 No VS Code extension API, no agent-specific API, and no network access are required. The skill works identically in Claude Code, OpenCode, Codex, or any other agent with file access.
