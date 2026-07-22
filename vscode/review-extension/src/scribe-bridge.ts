@@ -38,6 +38,15 @@ export function getScribeTerminal(): vscode.Terminal | undefined {
 // integration está lista, interrumpiendo con ^C el proceso en primer plano
 // si claude ya arrancó). Por eso el lanzamiento espera a que la shell
 // integration aparezca y a una ventana sin ejecuciones antes de teclear.
+//
+// La ventana de silencio no basta contra la activación de venv de Python:
+// resolver el entorno puede tardar varios segundos, así que su `source …`
+// llega cuando claude ya corre y cae en la TUI como primer prompt. La defensa
+// principal es crear el terminal con hideFromUser: tanto ms-python.python
+// como ms-python.vscode-python-envs saltan la autoactivación de terminales
+// creados así (shouldSkipTerminalActivation comprueba creationOptions), y los
+// callers hacen show() inmediato, con lo que el terminal se ve igual que antes.
+// El asentamiento se mantiene como red para otras inyecciones de arranque.
 
 /** Tiempo máximo de espera a que aparezca la shell integration del terminal. */
 const SHELL_INTEGRATION_TIMEOUT_MS = 3000;
@@ -135,7 +144,10 @@ export function launchScribeTerminal(
   cwd: string,
   command: string
 ): { terminal: vscode.Terminal; ready: Promise<void> } {
-  const options: vscode.TerminalOptions = { name: SCRIBE_TERMINAL_NAME };
+  // hideFromUser excluye el terminal de la autoactivación de venv de las
+  // extensiones de Python (ver nota de asentamiento). Los callers hacen
+  // show() nada más crear, así que nunca queda oculto de verdad.
+  const options: vscode.TerminalOptions = { name: SCRIBE_TERMINAL_NAME, hideFromUser: true };
   if (cwd) options.cwd = cwd;
   const terminal = vscode.window.createTerminal(options);
   const ready = (async () => {
