@@ -10,11 +10,15 @@
     "url": "https://github.com/PabloCoello/dotmesh"
   },
   "engines": {
-    "vscode": "^1.75.0",
+    "vscode": "^1.93.0",
     "node": ">=22.6.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -79,8 +83,32 @@
         "command": "mesh-review.previousThread",
         "title": "Mesh Review: Hilo anterior",
         "icon": "$(arrow-up)"
+      },
+      {
+        "command": "mesh-review.launchScribe",
+        "title": "Lanzar scribe",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "mesh-review.scribeAll",
+        "title": "Enviar todos a scribe",
+        "icon": "$(comment-discussion)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "mesh-review.launchScribe",
+          "when": "view == meshReviewCards",
+          "group": "navigation"
+        },
+        {
+          "command": "mesh-review.scribeAll",
+          "when": "view == meshReviewCards",
+          "group": "navigation"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "mesh-review.addComment",
@@ -113,6 +141,11 @@
           "type": "boolean",
           "default": true,
           "description": "La navegación entre hilos cicla al llegar al último o al primero."
+        },
+        "mesh-review.scribe.launchDelayMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Milisegundos de espera tras crear la sesión scribe antes de enviar el primer prompt. Permite que la TUI de Claude Code arranque antes de recibir texto."
         }
       }
     }
@@ -123,11 +156,11 @@
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts src/diff-utils.test.ts src/cli/cli.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts src/diff-utils.test.ts src/cli/cli.test.ts src/scribe-bridge-utils.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.75.0",
+    "@types/vscode": "^1.93.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.4.0"

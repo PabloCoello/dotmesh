@@ -704,6 +704,44 @@ test('readEvents devuelve eventos ordenados por created_at asc, desempate por id
   }
 });
 
+test('readEvents descarta un evento con line_hint no numérico', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-badhint-'));
+  try {
+    const bad = {
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0007',
+      version: 2, type: 'thread.opened', thread_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0007',
+      author: { kind: 'human' }, created_at: '2026-07-13T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 'x', line_hint: '42; rm -rf ~ #', char_offset: 0 },
+      commentType: 'nota', body: 'x',
+    };
+    await writeFile(join(dir, `${bad.id}.json`), JSON.stringify(bad), 'utf8');
+    const events = await readEvents(dir);
+    assert.deepStrictEqual(events, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readEvents descarta un evento cuyo quote del ancla no es string', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mesh-review-badquote-'));
+  try {
+    const bad = {
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0008',
+      version: 2, type: 'thread.opened', thread_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0008',
+      author: { kind: 'human' }, created_at: '2026-07-13T10:00:00.000Z',
+      commit: null, dirty: false,
+      anchor: { quote: 42, line_hint: 0, char_offset: 0 },
+      commentType: 'nota', body: 'x',
+    };
+    await writeFile(join(dir, `${bad.id}.json`), JSON.stringify(bad), 'utf8');
+    const events = await readEvents(dir);
+    assert.deepStrictEqual(events, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('readEvents descarta un evento con thread_id no-UUID', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'mesh-review-badtid-'));
   try {

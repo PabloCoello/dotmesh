@@ -36,6 +36,8 @@ import { applyDecorations, disposeDecorationTypes } from './decorations';
 import { ThreadCardsViewProvider } from './thread-cards';
 import { buildCardViewModels, computeUnseenCount, pickNextThread } from './thread-cards-utils';
 import { buildDiffTitle, isMeshReviewDiffTabLabel } from './diff-utils';
+import { getScribeTerminal, launchScribeTerminal, ensureScribeTerminal, sendToScribe } from './scribe-bridge';
+import { buildLaunchCommand, buildSendAllPrompt, buildFocusPrompt } from './scribe-bridge-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -1117,6 +1119,39 @@ export function activate(context: vscode.ExtensionContext): void {
           }
           break;
         }
+        case 'scribe-focus': {
+          // Valida que el hilo siga abierto en las proyecciones del host.
+          // thread_id ya fue validado como UUID por isWebviewActionMessage.
+          const focusThread = cardsProvider.projections.find(t => t.thread_id === msg.thread_id);
+          if (!focusThread || focusThread.status !== 'open') {
+            vscode.window.showInformationMessage('mesh-review: el hilo ya no está abierto.');
+            break;
+          }
+          if (!_currentGitRoot) {
+            vscode.window.showErrorMessage('mesh-review: el documento no está en un repositorio git.');
+            break;
+          }
+          const focusRelPath = path.relative(_currentGitRoot, docUri.fsPath);
+          // Misma guarda de traversal que jump-doc: el prompt nunca debe
+          // apuntar a un .ai/review/ fuera del repositorio.
+          if (focusRelPath.startsWith('..') || path.isAbsolute(focusRelPath)) {
+            vscode.window.showErrorMessage('mesh-review: el documento está fuera del repositorio git.');
+            break;
+          }
+          const focusDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
+          const { terminal: focusTerminal, isNew: focusIsNew, ready: focusReady } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
+          focusTerminal.show();
+          await focusReady;
+          if (focusIsNew) await new Promise(r => setTimeout(r, focusDelayMs));
+          // typeof en runtime, no solo `in`: un line_hint no numérico procedente
+          // de un evento corrupto no debe concatenarse en la etiqueta.
+          const focusHint = (focusThread.anchor as { line_hint?: unknown }).line_hint;
+          const focusLineLabel = typeof focusHint === 'number' && Number.isFinite(focusHint)
+            ? `L${focusHint + 1}`
+            : '(desanclado)';
+          await sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+          break;
+        }
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1413,6 +1448,53 @@ export function activate(context: vscode.ExtensionContext): void {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`mesh-review: error al navegar al hilo anterior — ${msg}`);
       }
+    }),
+
+    // --- Launch Scribe ---
+    // Busca el terminal scribe existente o crea uno nuevo. Si ya existe, lo revela
+    // sin relanzar claude. El cwd usa _currentGitRoot si está disponible.
+    vscode.commands.registerCommand('mesh-review.launchScribe', async () => {
+      const existing = getScribeTerminal();
+      if (existing) {
+        existing.show();
+        return;
+      }
+      const cwd = _currentGitRoot ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const { terminal, ready } = launchScribeTerminal(cwd ?? '', buildLaunchCommand('scribe'));
+      terminal.show();
+      await ready;
+    }),
+
+    // --- Scribe All ---
+    // Envía a la sesión scribe el prompt de "procesa todos los hilos pendientes"
+    // del documento activo. Valida docUri, git root y existencia de hilos abiertos.
+    vscode.commands.registerCommand('mesh-review.scribeAll', async () => {
+      const scribeDocUri = cardsProvider.docUri;
+      if (!scribeDocUri) {
+        vscode.window.showInformationMessage('mesh-review: abre un documento antes de enviar a scribe.');
+        return;
+      }
+      if (!_currentGitRoot) {
+        vscode.window.showErrorMessage('mesh-review: el documento no está en un repositorio git.');
+        return;
+      }
+      const openCount = cardsProvider.projections.filter(p => p.status === 'open').length;
+      if (openCount === 0) {
+        vscode.window.showInformationMessage('mesh-review: sin hilos abiertos en este documento.');
+        return;
+      }
+      const scribeRelPath = path.relative(_currentGitRoot, scribeDocUri.fsPath);
+      // Misma guarda de traversal que jump-doc y scribe-focus.
+      if (scribeRelPath.startsWith('..') || path.isAbsolute(scribeRelPath)) {
+        vscode.window.showErrorMessage('mesh-review: el documento está fuera del repositorio git.');
+        return;
+      }
+      const scribeDelayMs = vscode.workspace.getConfiguration('mesh-review').get<number>('scribe.launchDelayMs', 2000);
+      const { terminal: scribeTerminal, isNew: scribeIsNew, ready: scribeReady } = ensureScribeTerminal(_currentGitRoot, buildLaunchCommand('scribe'));
+      scribeTerminal.show();
+      await scribeReady;
+      if (scribeIsNew) await new Promise(r => setTimeout(r, scribeDelayMs));
+      await sendToScribe(scribeTerminal, buildSendAllPrompt(scribeRelPath));
     })
   );
 }

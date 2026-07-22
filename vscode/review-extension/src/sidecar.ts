@@ -593,6 +593,15 @@ export async function readEvents(
       if (typeof parsed.id !== 'string' || !isUuid(parsed.id)) continue;
       if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
       if ('body' in parsed && typeof parsed.body !== 'string') continue;
+      // Los campos del ancla también son datos de disco: un line_hint string
+      // acabaría concatenado en etiquetas ("L" + hint) y un quote no-string
+      // rompería escapeHtml, igual que el body.
+      if ('anchor' in parsed && parsed.anchor !== null && typeof parsed.anchor === 'object') {
+        const anchorRec = parsed.anchor as Record<string, unknown>;
+        if ('line_hint' in anchorRec && typeof anchorRec.line_hint !== 'number') continue;
+        if ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number') continue;
+        if ('quote' in anchorRec && typeof anchorRec.quote !== 'string') continue;
+      }
       results.push(parsed as unknown as EventEnvelope);
     } catch (err) {
       // ENOENT: el fichero desapareció entre readdir y readFile — silencio esperado.

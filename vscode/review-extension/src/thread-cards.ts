@@ -668,6 +668,12 @@ export class ThreadCardsViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage(msg);
           return;
         }
+        // scribe-focus: fire-and-forget sin ACK; el botón no se deshabilita
+        // (no hay confirmación de vuelta desde el host para esta acción).
+        if (action === 'scribe-focus') {
+          vscode.postMessage({ type: 'scribe-focus', thread_id: threadId });
+          return;
+        }
         btn.disabled = true; // deshabilita mientras la acción está en vuelo
         // Red de seguridad: si el ACK no llega en 10 s, re-habilita los botones del hilo
         if (_ackTimers.has(threadId)) clearTimeout(_ackTimers.get(threadId));
