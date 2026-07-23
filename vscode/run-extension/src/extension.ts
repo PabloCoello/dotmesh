@@ -11,7 +11,7 @@ import { parseChunks, parseOutputs } from './parser.js';
 import type { ParsedChunk, ParsedOutput } from './parser.js';
 import { chunkHash } from './hash.js';
 import { computeLensSpecs } from './lenses.js';
-import { generateChunkId, resolveChunkInsertionOffset } from './chunks.js';
+import { generateChunkId, resolveChunkInsertionOffset, resolveChunkLanguage } from './chunks.js';
 import {
   truncateOutput,
   buildOutputBlock,
@@ -1013,9 +1013,11 @@ function registerCommands(
   );
 
   // mesh-run.insertChunk
-  // Inserta un nuevo chunk de Python con ID único tras la línea del cursor
-  // (o tras el cierre de la valla si el cursor está dentro de una valla
-  // existente). El cursor queda en la línea en blanco interior del chunk.
+  // Inserta un nuevo chunk con ID único tras la línea del cursor (o tras el
+  // cierre de la valla si el cursor está dentro de una valla existente).
+  // El lenguaje se infiere de los chunks ya presentes en el documento; si no
+  // hay ninguno, se pregunta al usuario (Python/R). El cursor queda en la
+  // línea en blanco interior del chunk.
   context.subscriptions.push(
     vscode.commands.registerCommand('mesh-run.insertChunk', async () => {
       const editor = vscode.window.activeTextEditor;
@@ -1040,8 +1042,23 @@ function registerCommands(
       );
       const prefixLen = (insideFence && insertOffset >= text.length) ? 2 : 1;
 
+      // Determinar el lenguaje del chunk: infiere de los chunks existentes o
+      // pregunta al usuario en la primera inserción del documento.
+      let lang = resolveChunkLanguage(chunks);
+      if (lang === null) {
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: 'Python', value: 'python' },
+            { label: 'R', value: 'r' },
+          ],
+          { placeHolder: 'Elige el lenguaje para los chunks de este documento' },
+        );
+        if (!pick) return; // usuario canceló
+        lang = pick.value;
+      }
+
       const id = generateChunkId(chunks.map(c => c.id));
-      const openingFence = `\`\`\`python {#${id}}`;
+      const openingFence = `\`\`\`${lang} {#${id}}`;
       const insertText = '\n'.repeat(prefixLen) + `${openingFence}\n\n\`\`\``;
 
       const insertPos = document.positionAt(insertOffset);
