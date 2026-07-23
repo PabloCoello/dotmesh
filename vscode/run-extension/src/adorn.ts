@@ -179,43 +179,47 @@ export function computeAdornments(
         });
       }
 
-      // Before: línea en blanco intermedia (si existe)
-      const hasBlankLine =
-        output.startOffset >= 2 &&
-        text[output.startOffset - 1] === '\n' &&
-        text[output.startOffset - 2] === '\n';
-      if (hasBlankLine) {
-        const blankNlOffset = output.startOffset - 1;
-        before.push({
-          lineStartOffset: blankNlOffset,
-          lineEndOffset: blankNlOffset,
-          contentText: '│',
-          state,
-        });
-      }
-
-      // Before: valla de apertura del output → '│'
-      before.push({
-        lineStartOffset: output.startOffset,
-        lineEndOffset: outOpenLineEnd,
-        contentText: '│',
-        state,
-      });
-
       // Before: líneas de contenido del output.
       // La primera lleva la flecha '╰─▶ ' (el espacio final es nbsp U+00A0).
       // Las de continuación llevan cuatro nbsp '    '.
       // VS Code colapsa los espacios normales en el render del `before`,
       // lo que hace que solo la primera línea aparezca indentada; nbsp evita ese colapso.
       const contentLines = contentLineOffsets(text, output);
-      for (let i = 0; i < contentLines.length; i++) {
-        const [lStart, lEnd] = contentLines[i];
+
+      // Solo se añaden el │ de la línea en blanco y el │ de apertura del output
+      // cuando hay contenido que mostrar. Con 0 líneas (ejecución sin salida),
+      // se renderiza únicamente la barra horizontal.
+      if (contentLines.length > 0) {
+        const hasBlankLine =
+          output.startOffset >= 2 &&
+          text[output.startOffset - 1] === '\n' &&
+          text[output.startOffset - 2] === '\n';
+        if (hasBlankLine) {
+          const blankNlOffset = output.startOffset - 1;
+          before.push({
+            lineStartOffset: blankNlOffset,
+            lineEndOffset: blankNlOffset,
+            contentText: '│',
+            state,
+          });
+        }
+
         before.push({
-          lineStartOffset: lStart,
-          lineEndOffset: lEnd,
-          contentText: i === 0 ? '╰─▶ ' : '    ',
+          lineStartOffset: output.startOffset,
+          lineEndOffset: outOpenLineEnd,
+          contentText: '│',
           state,
         });
+
+        for (let i = 0; i < contentLines.length; i++) {
+          const [lStart, lEnd] = contentLines[i];
+          before.push({
+            lineStartOffset: lStart,
+            lineEndOffset: lEnd,
+            contentText: i === 0 ? '╰─▶ ' : '    ',
+            state,
+          });
+        }
       }
     }
   }
