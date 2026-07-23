@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { generateChunkId, resolveChunkInsertionOffset } from './chunks.ts';
+import { generateChunkId, resolveChunkInsertionOffset, resolveChunkLanguage } from './chunks.ts';
 
 // ===========================================================================
 // generateChunkId
@@ -84,6 +84,65 @@ test('resolveChunkInsertionOffset: cursor exactamente en startOffset → dentro 
     { startOffset: 0, endOffset },
   ]);
   assert.strictEqual(offset, endOffset);
+});
+
+// ===========================================================================
+// resolveChunkLanguage
+// ===========================================================================
+
+test('resolveChunkLanguage: sin chunks devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([]), null);
+});
+
+test('resolveChunkLanguage: documento con un chunk python devuelve python', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'python' }]), 'python');
+});
+
+test('resolveChunkLanguage: documento con un chunk r devuelve r', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'r' }]), 'r');
+});
+
+test('resolveChunkLanguage: lenguaje se normaliza a minúsculas', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'Python' }]), 'python');
+  assert.strictEqual(resolveChunkLanguage([{ language: 'R' }]), 'r');
+});
+
+test('resolveChunkLanguage: varios chunks del mismo lenguaje devuelve ese lenguaje', () => {
+  assert.strictEqual(
+    resolveChunkLanguage([{ language: 'python' }, { language: 'python' }]),
+    'python',
+  );
+});
+
+test('resolveChunkLanguage: mezcla python/r devuelve el lenguaje del último chunk', () => {
+  assert.strictEqual(
+    resolveChunkLanguage([{ language: 'python' }, { language: 'r' }]),
+    'r',
+  );
+  assert.strictEqual(
+    resolveChunkLanguage([{ language: 'r' }, { language: 'python' }]),
+    'python',
+  );
+});
+
+test('resolveChunkLanguage: lenguaje fuera de whitelist (python3) devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'python3' }]), null);
+});
+
+test('resolveChunkLanguage: lenguaje fuera de whitelist (bash) devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'bash' }]), null);
+});
+
+test('resolveChunkLanguage: lenguaje vacío devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: '' }]), null);
+});
+
+test('resolveChunkLanguage: último chunk fuera de whitelist pero anterior en whitelist → null', () => {
+  // El último chunk manda; si no está en la whitelist se pregunta.
+  assert.strictEqual(
+    resolveChunkLanguage([{ language: 'python' }, { language: 'bash' }]),
+    null,
+  );
 });
 
 test('resolveChunkInsertionOffset: cursor exactamente en endOffset → dentro de la valla', () => {

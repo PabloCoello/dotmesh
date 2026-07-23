@@ -11,7 +11,7 @@ import { parseChunks, parseOutputs } from './parser.js';
 import type { ParsedChunk, ParsedOutput } from './parser.js';
 import { chunkHash } from './hash.js';
 import { computeLensSpecs } from './lenses.js';
-import { generateChunkId, resolveChunkInsertionOffset } from './chunks.js';
+import { generateChunkId, resolveChunkInsertionOffset, resolveChunkLanguage } from './chunks.js';
 import {
   truncateOutput,
   buildOutputBlock,
@@ -1013,35 +1013,66 @@ function registerCommands(
   );
 
   // mesh-run.insertChunk
-  // Inserta un nuevo chunk de Python con ID único tras la línea del cursor
-  // (o tras el cierre de la valla si el cursor está dentro de una valla
-  // existente). El cursor queda en la línea en blanco interior del chunk.
+  // Inserta un nuevo chunk con ID único tras la línea del cursor (o tras el
+  // cierre de la valla si el cursor está dentro de una valla existente).
+  // El lenguaje se infiere de los chunks ya presentes en el documento; si no
+  // hay ninguno, se pregunta al usuario (Python/R). El cursor queda en la
+  // línea en blanco interior del chunk.
   context.subscriptions.push(
     vscode.commands.registerCommand('mesh-run.insertChunk', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'markdown') return;
 
       const document = editor.document;
-      const text = document.getText();
-      const chunks = parseChunks(text);
-      const outputs = parseOutputs(text);
-      const allFences = [...chunks, ...outputs];
-      const cursorOffset = document.offsetAt(editor.selection.active);
 
-      // Calcular el offset de inserción con la función pura de chunks.ts
-      const insertOffset = resolveChunkInsertionOffset(text, cursorOffset, allFences);
+      // Calcula los parámetros de inserción a partir del estado actual del
+      // documento. Se invoca dos veces cuando el flujo incluye un QuickPick:
+      // antes de mostrarlo (para inferir el lenguaje) y después del await,
+      // para que offsets e IDs reflejen cualquier edición que el usuario
+      // haya hecho mientras el picker estaba abierto.
+      const computeState = () => {
+        const text = document.getText();
+        const chunks = parseChunks(text);
+        const outputs = parseOutputs(text);
+        const allFences = [...chunks, ...outputs];
+        const cursorOffset = document.offsetAt(editor.selection.active);
+        // Calcular el offset de inserción con la función pura de chunks.ts
+        const insertOffset = resolveChunkInsertionOffset(text, cursorOffset, allFences);
+        // Si la valla del cursor termina en EOF sin \n final, el primer \n del
+        // texto insertado solo cierra esa línea de cierre: hace falta un segundo
+        // para abrir línea nueva. En el resto de casos insertOffset apunta a un
+        // \n existente y basta con uno.
+        const insideFence = allFences.some(
+          f => cursorOffset >= f.startOffset && cursorOffset <= f.endOffset,
+        );
+        const prefixLen = (insideFence && insertOffset >= text.length) ? 2 : 1;
+        return { chunks, insertOffset, prefixLen };
+      };
 
-      // Si la valla del cursor termina en EOF sin \n final, el primer \n del
-      // texto insertado solo cierra esa línea de cierre: hace falta un segundo
-      // para abrir línea nueva. En el resto de casos insertOffset apunta a un
-      // \n existente y basta con uno.
-      const insideFence = allFences.some(
-        f => cursorOffset >= f.startOffset && cursorOffset <= f.endOffset,
-      );
-      const prefixLen = (insideFence && insertOffset >= text.length) ? 2 : 1;
+      // Determinar el lenguaje del chunk: infiere de los chunks existentes o
+      // pregunta al usuario en la primera inserción del documento.
+      // Nota: kernel.ts:378 fuerza 'python' en la celda bootstrap del notebook
+      // acompañante; la ejecución de chunks r depende de que el kernel del
+      // documento sea R — la inserción es correcta pero el kernel no se cambia.
+      let lang = resolveChunkLanguage(computeState().chunks);
+      if (lang === null) {
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: 'Python', value: 'python' },
+            { label: 'R', value: 'r' },
+          ],
+          { placeHolder: 'Elige el lenguaje para los chunks de este documento' },
+        );
+        if (!pick) return; // usuario canceló
+        lang = pick.value as 'python' | 'r';
+      }
+
+      // Recalcular con el estado actual del documento: el usuario puede haber
+      // editado el texto con el picker abierto, generando offsets o IDs obsoletos.
+      const { chunks, insertOffset, prefixLen } = computeState();
 
       const id = generateChunkId(chunks.map(c => c.id));
-      const openingFence = `\`\`\`python {#${id}}`;
+      const openingFence = `\`\`\`${lang} {#${id}}`;
       const insertText = '\n'.repeat(prefixLen) + `${openingFence}\n\n\`\`\``;
 
       const insertPos = document.positionAt(insertOffset);

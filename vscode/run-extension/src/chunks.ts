@@ -17,6 +17,30 @@ export function generateChunkId(existingIds: readonly string[]): string {
   return `chunk-${n}`;
 }
 
+/** Lenguajes que mesh-run soporta para inserción de chunks. */
+const SUPPORTED_LANGUAGES = ['python', 'r'] as const;
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
+/**
+ * Infiere el lenguaje de los chunks ya presentes en el documento.
+ *
+ * Contrato:
+ * - Sin chunks → null (el llamante debe preguntar al usuario).
+ * - El lenguaje del último chunk manda en caso de mezcla (decisión documentada).
+ * - Si el lenguaje inferido no está en la whitelist `['python', 'r']` → null,
+ *   de modo que el llamante vuelve a preguntar. Esto evita insertar vallas con
+ *   lenguajes no soportados (p. ej. `bash`, `python3`) heredados del documento.
+ */
+export function resolveChunkLanguage(
+  chunks: readonly { language: string }[],
+): SupportedLanguage | null {
+  if (chunks.length === 0) return null;
+  const lang = chunks[chunks.length - 1].language.toLowerCase();
+  return (SUPPORTED_LANGUAGES as readonly string[]).includes(lang)
+    ? (lang as SupportedLanguage)
+    : null;
+}
+
 /**
  * Devuelve el offset en `text` donde se debe insertar el nuevo chunk.
  *
