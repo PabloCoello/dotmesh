@@ -6,9 +6,9 @@ import { parseChunks, parseOutputs } from './parser.ts';
 import type { OutputStateResult } from './stale.ts';
 import { buildOutputBlock } from './writer.ts';
 
-// Espacio de no separación (U+00A0) — adorn.ts lo usa en lugar del espacio
-// normal porque VS Code colapsa los espacios normales en el render del `before`.
-const NBSP = ' ';
+// Figure space (U+2007) — adorn.ts lo usa en lugar del espacio normal porque VS Code
+// colapsa los espacios normales en el render del `before` y renderiza nbsp como `·`.
+const NBSP = ' ';
 const ARROW = '╰─▶' + NBSP;     // texto de la primera línea de contenido
 const CONT4 = NBSP.repeat(4);    // texto de las líneas de continuación
 
@@ -148,7 +148,7 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + 2 before
   assert.strictEqual(barBefore.state, 'fresh');
 
   // Primera línea de contenido → '╰─▶ '
-  assert.strictEqual(contentBefore.contentText, '╰─▶ ');
+  assert.strictEqual(contentBefore.contentText, '╰─▶ ');
   assert.strictEqual(contentBefore.state, 'fresh');
 });
 
@@ -188,7 +188,7 @@ test('computeAdornments: cursor dentro del chunk → vallas del chunk no en conc
   assert.strictEqual(barBefore, undefined, 'la barra horizontal no debe aparecer con cursor en chunk');
 
   // La flecha de contenido permanece (sin │ intermedios)
-  const hasArrow = result.before.some(b => b.contentText === '╰─▶ ');
+  const hasArrow = result.before.some(b => b.contentText === '╰─▶ ');
   assert.ok(hasArrow, 'debe haber ╰─▶  en la primera línea de contenido');
 });
 
@@ -278,7 +278,7 @@ test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda
   assert.strictEqual(result.before.length, 4, `esperados 4 befores, obtenidos ${result.before.length}`);
 
   const contentBefores = result.before.slice(1); // los 3 últimos (de 4) son líneas de contenido
-  assert.strictEqual(contentBefores[0].contentText, '╰─▶ ');
+  assert.strictEqual(contentBefores[0].contentText, '╰─▶ ');
   assert.strictEqual(contentBefores[1].contentText, CONT4);
   assert.strictEqual(contentBefores[2].contentText, CONT4);
 });
@@ -305,7 +305,7 @@ test('computeAdornments: output con 0 líneas de contenido → sin before de fle
   assert.strictEqual(result.before.length, 1, `esperado 1 before (solo barra), obtenidos ${result.before.length}`);
   const [barBefore] = result.before;
   assert.ok(barBefore.contentText.startsWith('╭'), 'el único before debe ser la barra horizontal');
-  const arrowBefore = result.before.find(b => b.contentText === '╰─▶ ');
+  const arrowBefore = result.before.find(b => b.contentText === '╰─▶ ');
   assert.strictEqual(arrowBefore, undefined, 'no debe haber before de flecha con output vacío');
 });
 

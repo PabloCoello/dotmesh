@@ -180,10 +180,10 @@ export function computeAdornments(
       }
 
       // Before: líneas de contenido del output.
-      // La primera lleva la flecha '╰─▶ ' (el espacio final es nbsp U+00A0).
-      // Las de continuación llevan cuatro nbsp '    '.
-      // VS Code colapsa los espacios normales en el render del `before`,
-      // lo que hace que solo la primera línea aparezca indentada; nbsp evita ese colapso.
+      // La primera lleva la flecha '╰─▶ ' (el espacio final es figure space U+2007).
+      // Las de continuación llevan cuatro figure spaces '    '.
+      // VS Code colapsa los espacios normales y renderiza nbsp (U+00A0) como ·;
+      // figure space evita ambos problemas.
       const contentLines = contentLineOffsets(text, output);
 
       // La flecha aparece directamente bajo la barra horizontal, sin tramo
@@ -193,7 +193,7 @@ export function computeAdornments(
         before.push({
           lineStartOffset: lStart,
           lineEndOffset: lEnd,
-          contentText: i === 0 ? '╰─▶ ' : '    ',
+          contentText: i === 0 ? '╰─▶ ' : '    ',
           state,
         });
       }
