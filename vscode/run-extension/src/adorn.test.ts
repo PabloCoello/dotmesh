@@ -8,9 +8,9 @@ import { buildOutputBlock } from './writer.ts';
 
 // Figure space (U+2007) — adorn.ts lo usa en lugar del espacio normal porque VS Code
 // colapsa los espacios normales en el render del `before` y renderiza nbsp como `·`.
-const NBSP = ' ';
-const ARROW = '╰─▶' + NBSP;     // texto de la primera línea de contenido
-const CONT4 = NBSP.repeat(4);    // texto de las líneas de continuación
+const FIGSP = ' ';
+const ARROW = '╰─▶' + FIGSP;     // texto de la primera línea de contenido
+const CONT4 = FIGSP.repeat(4);   // texto de las líneas de continuación
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,7 +147,7 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + 2 before
   );
   assert.strictEqual(barBefore.state, 'fresh');
 
-  // Primera línea de contenido → '╰─▶ '
+  // Primera línea de contenido → '╰─▶' + figure space
   assert.strictEqual(contentBefore.contentText, '╰─▶ ');
   assert.strictEqual(contentBefore.state, 'fresh');
 });
@@ -261,7 +261,7 @@ test('computeAdornments: output sin línea en blanco → no │ en posición int
 // Chunk con 3 líneas de contenido en el output
 // ---------------------------------------------------------------------------
 
-test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda y tercera 4 nbsp', () => {
+test('computeAdornments: 3 líneas de contenido → primera flecha, segunda y tercera 4 figure spaces', () => {
   const text = [
     makeChunk('a', 'code'),
     '',

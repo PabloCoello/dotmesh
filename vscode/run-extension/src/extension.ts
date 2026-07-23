@@ -238,7 +238,7 @@ function registerStaleDecorations(
     );
     editor.setDecorations(concealDecorationType, concealRanges);
 
-    // Before: barra, │ y flecha con color por estado, aplicados por instancia
+    // Before: barra y flecha con color por estado, aplicados por instancia
     const beforeDecorations = adornResult.before.map(spec => ({
       range: new vscode.Range(
         doc.positionAt(spec.lineStartOffset),
