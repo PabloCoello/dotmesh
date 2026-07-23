@@ -166,8 +166,8 @@ export function computeAdornments(
       conceal.push({ startOffset: outCloseLineStart, endOffset: outCloseLineEnd });
 
       // Before: barra horizontal con codo curvo en la valla de cierre del chunk.
-      // El codo '╭' en el extremo izquierdo indica la unión con la barra vertical
-      // que desciende hacia el bloque de output. El resto son '─' hasta BAR_WIDTH.
+      // El codo '╭' enlaza visualmente con la flecha '╰─▶' de la primera
+      // línea de contenido. El resto son '─' hasta BAR_WIDTH.
       // Solo se pinta si el cursor no está en el chunk (cuando está dentro,
       // la valla de cierre está revelada y la barra estorbaría).
       if (!cursorInChunk) {
@@ -180,46 +180,22 @@ export function computeAdornments(
       }
 
       // Before: líneas de contenido del output.
-      // La primera lleva la flecha '╰─▶ ' (el espacio final es nbsp U+00A0).
-      // Las de continuación llevan cuatro nbsp '    '.
-      // VS Code colapsa los espacios normales en el render del `before`,
-      // lo que hace que solo la primera línea aparezca indentada; nbsp evita ese colapso.
+      // La primera lleva la flecha '╰─▶ ' (el espacio final es figure space U+2007).
+      // Las de continuación llevan cuatro figure spaces '    '.
+      // VS Code colapsa los espacios normales y renderiza nbsp (U+00A0) como ·;
+      // figure space evita ambos problemas.
       const contentLines = contentLineOffsets(text, output);
 
-      // Solo se añaden el │ de la línea en blanco y el │ de apertura del output
-      // cuando hay contenido que mostrar. Con 0 líneas (ejecución sin salida),
-      // se renderiza únicamente la barra horizontal.
-      if (contentLines.length > 0) {
-        const hasBlankLine =
-          output.startOffset >= 2 &&
-          text[output.startOffset - 1] === '\n' &&
-          text[output.startOffset - 2] === '\n';
-        if (hasBlankLine) {
-          const blankNlOffset = output.startOffset - 1;
-          before.push({
-            lineStartOffset: blankNlOffset,
-            lineEndOffset: blankNlOffset,
-            contentText: '│',
-            state,
-          });
-        }
-
+      // La flecha aparece directamente bajo la barra horizontal, sin tramo
+      // vertical intermedio (ni en la línea en blanco ni en la apertura del output).
+      for (let i = 0; i < contentLines.length; i++) {
+        const [lStart, lEnd] = contentLines[i];
         before.push({
-          lineStartOffset: output.startOffset,
-          lineEndOffset: outOpenLineEnd,
-          contentText: '│',
+          lineStartOffset: lStart,
+          lineEndOffset: lEnd,
+          contentText: i === 0 ? '╰─▶ ' : '    ',
           state,
         });
-
-        for (let i = 0; i < contentLines.length; i++) {
-          const [lStart, lEnd] = contentLines[i];
-          before.push({
-            lineStartOffset: lStart,
-            lineEndOffset: lEnd,
-            contentText: i === 0 ? '╰─▶ ' : '    ',
-            state,
-          });
-        }
       }
     }
   }
