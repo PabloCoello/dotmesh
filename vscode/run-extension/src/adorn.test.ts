@@ -94,7 +94,7 @@ test('computeAdornments: chunk sin output, cursor dentro → 0 conceal, 0 before
 // Chunk con output — cursor fuera de ambos
 // ---------------------------------------------------------------------------
 
-test('computeAdornments: chunk con output, cursor fuera → 4 conceal + before completos', () => {
+test('computeAdornments: chunk con output, cursor fuera → 4 conceal + 2 before', () => {
   // Documento con línea en blanco entre chunk y output
   const text = [
     makeChunk('a', 'code'),
@@ -133,10 +133,10 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + before c
     );
   }
 
-  // Before: barra horizontal + línea en blanco + apertura output + primera línea contenido
-  assert.strictEqual(result.before.length, 4, `esperados 4 before, obtenidos ${result.before.length}`);
+  // Before: barra horizontal + primera línea de contenido (sin │ intermedios)
+  assert.strictEqual(result.before.length, 2, `esperados 2 before, obtenidos ${result.before.length}`);
 
-  const [barBefore, blankBefore, openBefore, contentBefore] = result.before;
+  const [barBefore, contentBefore] = result.before;
 
   // Barra horizontal en la línea de cierre del chunk: codo ╭ + guiones ─
   assert.strictEqual(barBefore.lineEndOffset, chunk.endOffset, 'barra: lineEndOffset = chunk.endOffset');
@@ -146,15 +146,6 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + before c
     'el resto de la barra solo contiene ─'
   );
   assert.strictEqual(barBefore.state, 'fresh');
-
-  // Línea en blanco → '│'
-  assert.strictEqual(blankBefore.contentText, '│');
-  assert.strictEqual(blankBefore.state, 'fresh');
-
-  // Apertura del output → '│'
-  assert.strictEqual(openBefore.lineStartOffset, output.startOffset);
-  assert.strictEqual(openBefore.contentText, '│');
-  assert.strictEqual(openBefore.state, 'fresh');
 
   // Primera línea de contenido → '╰─▶ '
   assert.strictEqual(contentBefore.contentText, '╰─▶ ');
@@ -196,13 +187,9 @@ test('computeAdornments: cursor dentro del chunk → vallas del chunk no en conc
   const barBefore = result.before.find(b => b.contentText.startsWith('╭'));
   assert.strictEqual(barBefore, undefined, 'la barra horizontal no debe aparecer con cursor en chunk');
 
-  // Los adornos del output permanecen
-  const hasBlank = result.before.some(b => b.contentText === '│' && b.lineStartOffset < outputs[0].startOffset);
-  const hasOpen = result.before.some(b => b.contentText === '│' && b.lineStartOffset === outputs[0].startOffset);
+  // La flecha de contenido permanece (sin │ intermedios)
   const hasArrow = result.before.some(b => b.contentText === '╰─▶ ');
-  assert.ok(hasBlank, 'debe haber │ en la línea en blanco');
-  assert.ok(hasOpen, 'debe haber │ en la apertura del output');
-  assert.ok(hasArrow, 'debe haber ╰─▶  en la primera línea de contenido');
+  assert.ok(hasArrow, 'debe haber ╰─▶  en la primera línea de contenido');
 });
 
 // ---------------------------------------------------------------------------
@@ -266,8 +253,8 @@ test('computeAdornments: output sin línea en blanco → no │ en posición int
   );
   assert.strictEqual(blankBefore, undefined, 'no debe haber before en la posición de línea en blanco');
 
-  // Debe haber: barra, apertura output, primera línea contenido = 3 befores
-  assert.strictEqual(result.before.length, 3);
+  // Debe haber: barra + primera línea contenido = 2 befores (sin │ de apertura)
+  assert.strictEqual(result.before.length, 2);
 });
 
 // ---------------------------------------------------------------------------
@@ -287,10 +274,10 @@ test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda
 
   const result = computeAdornments(text, chunks, outputs, states, -1);
 
-  // Befores: barra + │ (blank) + │ (open) + ╰─▶  + '    ' + '    '
-  assert.strictEqual(result.before.length, 6, `esperados 6 befores, obtenidos ${result.before.length}`);
+  // Befores: barra + ╰─▶  + '    ' + '    '
+  assert.strictEqual(result.before.length, 4, `esperados 4 befores, obtenidos ${result.before.length}`);
 
-  const contentBefores = result.before.slice(3); // los 3 últimos son líneas de contenido
+  const contentBefores = result.before.slice(1); // los 3 últimos (de 4) son líneas de contenido
   assert.strictEqual(contentBefores[0].contentText, '╰─▶ ');
   assert.strictEqual(contentBefores[1].contentText, CONT4);
   assert.strictEqual(contentBefores[2].contentText, CONT4);
