@@ -18,6 +18,21 @@ export function generateChunkId(existingIds: readonly string[]): string {
 }
 
 /**
+ * Infiere el lenguaje de los chunks ya presentes en el documento.
+ *
+ * - Sin chunks: devuelve null (el llamante debe preguntar al usuario).
+ * - Un solo lenguaje: lo devuelve normalizado a minúsculas.
+ * - Mezcla de lenguajes: devuelve el lenguaje del último chunk (el más
+ *   cercano al punto de inserción habitual) — decisión simple y documentada.
+ */
+export function resolveChunkLanguage(
+  chunks: readonly { language: string }[],
+): string | null {
+  if (chunks.length === 0) return null;
+  return chunks[chunks.length - 1].language.toLowerCase();
+}
+
+/**
  * Devuelve el offset en `text` donde se debe insertar el nuevo chunk.
  *
  * El offset devuelto es siempre «el final de la línea de inserción»: la
