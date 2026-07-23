@@ -7,6 +7,7 @@
  *     humana y reactivación por asignación posterior.
  *   - emit message.posted produce un fichero que readEvents no descarta.
  *   - Roundtrip emit → project: el evento emitido reaparece en la proyección.
+ *   - fix: caso nominal, documento sin cambios, --already-done, --reanchor, --confidence.
  */
 
 import { test } from 'node:test';
@@ -15,12 +16,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
 import { isPending } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
 import { reanchorThreads } from './commands/reanchor.ts';
+import { runFix } from './commands/fix.ts';
 import { writeFile } from 'node:fs/promises';
+
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // Helpers de fixtures
@@ -568,5 +574,292 @@ test('reanchor: ancla sin desplazar → no emite nada', async () => {
     assert.strictEqual(count, 0, 'no emite eventos cuando el ancla no ha cambiado');
   } finally {
     await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// fix
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a minimal git repo in a temp directory suitable for fix tests.
+ * Returns gitRoot and a cleanup function.
+ */
+async function makeGitRepo(): Promise<{ gitRoot: string; cleanup: () => Promise<void> }> {
+  const gitRoot = await mkdtemp(join(tmpdir(), 'mr-fix-repo-'));
+  await execFileAsync('git', ['init'], { cwd: gitRoot });
+  await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: gitRoot });
+  await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: gitRoot });
+  // Initial commit so HEAD exists
+  await writeFile(join(gitRoot, '.gitkeep'), '', 'utf8');
+  await execFileAsync('git', ['add', '.gitkeep'], { cwd: gitRoot });
+  await execFileAsync('git', ['commit', '-m', 'init'], { cwd: gitRoot });
+  return { gitRoot, cleanup: () => rm(gitRoot, { recursive: true }) };
+}
+
+test('fix: caso nominal → crea commit y emite message.posted con SHA', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido para revisar\n', 'utf8');
+    // Stage the file so it appears in git status --porcelain and can be committed
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runFix([docAbs, tid, '-m', 'fix(doc): corrige contenido', '--body', 'Corrección aplicada']);
+
+    // Event was emitted
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const ev = events[0];
+    assert.strictEqual(ev.type, 'message.posted');
+    assert.strictEqual(ev.thread_id, tid);
+    assert.strictEqual(ev.body as string, 'Corrección aplicada');
+    assert.strictEqual((ev.author as { kind: string }).kind, 'ai');
+    assert.ok(ev.commit, 'el evento tiene commit');
+    assert.strictEqual(typeof ev.commit, 'string', 'commit es string');
+    assert.strictEqual(ev.dirty, false);
+
+    // A new commit was created
+    const { stdout: logOut } = await execFileAsync('git', ['log', '--oneline'], { cwd: gitRoot });
+    assert.ok(logOut.includes('fix(doc): corrige contenido'), 'commit creado con el mensaje correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: documento sin cambios → exit 1, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    // Commit the doc so it is clean in the worktree
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido sin cambios\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    await execFileAsync('git', ['commit', '-m', 'add doc'], { cwd: gitRoot });
+
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    // Intercept process.exit so the test process does not actually exit
+    let capturedExitCode: number | undefined;
+    const origExit = process.exit;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process as any).exit = (code?: number) => {
+      capturedExitCode = code ?? 0;
+      throw new Error(`process.exit:${capturedExitCode}`);
+    };
+    try {
+      await runFix([docAbs, tid, '-m', 'fix(doc): sin cambios', '--body', 'Sin cambios']);
+    } catch (e) {
+      if (!(e instanceof Error && e.message.startsWith('process.exit:'))) throw e;
+    } finally {
+      process.exit = origExit;
+    }
+
+    assert.strictEqual(capturedExitCode, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --already-done <sha> → sin commit nuevo, evento con ese SHA', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    // File is NOT staged: --already-done should not require pending changes
+
+    const tid = randomUUID();
+    const alreadyDoneSha = 'abc1234';
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const { stdout: logBefore } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    const commitsBefore = parseInt(logBefore.trim(), 10);
+
+    await runFix([docAbs, tid, '--already-done', alreadyDoneSha, '--body', 'Resuelto anteriormente']);
+
+    // No new commit should have been created
+    const { stdout: logAfter } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    assert.strictEqual(parseInt(logAfter.trim(), 10), commitsBefore, 'sin commit nuevo');
+
+    // Event emitted with the supplied SHA
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    assert.strictEqual(events[0].commit, alreadyDoneSha, 'commit es el SHA de --already-done');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --reanchor → emite thread.reanchored cuando el ancla se desplaza', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    const initialContent = 'texto ancla\nfin del documento\n';
+    await writeFile(docAbs, initialContent, 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    await execFileAsync('git', ['commit', '-m', 'add doc'], { cwd: gitRoot });
+
+    // Open a review thread with anchor at the start of the doc (offset 0)
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto ancla', 0, 0);
+
+    // Modify the doc: prefix shifts the anchor
+    const newContent = 'prefijo nuevo\ntexto ancla\nfin del documento\n';
+    await writeFile(docAbs, newContent, 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+
+    await runFix([docAbs, tid, '-m', 'fix(doc): añade prefijo', '--body', 'Corrección aplicada', '--reanchor']);
+
+    // Should have the message.posted plus at least one thread.reanchored
+    const events = await readEvents(eventDir);
+    const reanchored = events.filter(e => e.type === 'thread.reanchored');
+    assert.ok(reanchored.length >= 1, 'se emite thread.reanchored tras --reanchor');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --confidence alta → el campo aparece en el evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido a revisar\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runFix([
+      docAbs, tid,
+      '-m', 'fix(doc): con confianza',
+      '--body', 'Corrección aplicada',
+      '--confidence', 'alta',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    assert.strictEqual(events[0].confidence, 'alta', 'campo confidence presente y correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --model <id> → aparece como author.model en el evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runFix([
+      docAbs, tid,
+      '--already-done', 'abc1234',
+      '--body', 'Corrección aplicada',
+      '--model', 'claude-opus-4',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const author = events[0].author as { kind: string; model?: string };
+    assert.strictEqual(author.model, 'claude-opus-4', 'author.model coincide con --model');
+  } finally {
+    await cleanup();
+  }
+});
+
+// Helper: intercepts process.exit so the test process does not actually exit.
+// Returns the captured exit code (undefined if runFix resolved normally).
+async function captureExit(fn: () => Promise<void>): Promise<number | undefined> {
+  let capturedExitCode: number | undefined;
+  const origExit = process.exit;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (process as any).exit = (code?: number) => {
+    capturedExitCode = code ?? 0;
+    throw new Error(`process.exit:${capturedExitCode}`);
+  };
+  try {
+    await fn();
+  } catch (e) {
+    if (!(e instanceof Error && e.message.startsWith('process.exit:'))) throw e;
+  } finally {
+    process.exit = origExit;
+  }
+  return capturedExitCode;
+}
+
+test('fix: --already-done con SHA malformado → exit 1, sin evento emitido', async () => {
+  // Uses a real git repo so the git-root check succeeds; the failure must come
+  // from the SHA format validation, not from the repo lookup.
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '--already-done', 'no-es-sha!!', '--body', 'Resuelto'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: -m y --already-done juntos → exit 1, sin evento emitido', async () => {
+  // Uses a real git repo so the git-root check succeeds; the failure must come
+  // from the mutual-exclusion guard, not from the repo lookup.
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--already-done', 'abc1234', '--body', 'Resuelto'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --confidence con valor inválido → exit 1, sin evento emitido', async () => {
+  // Uses a real git repo with a staged file so the confidence validation is the
+  // only thing that can cause an early exit.
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--body', 'Corrección', '--confidence', 'high'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
   }
 });

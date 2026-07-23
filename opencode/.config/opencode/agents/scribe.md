@@ -39,12 +39,14 @@ General prose work (outline→draft→revise→polish, delegating to `editor`) r
 ## Cycle
 
 1. **Project** — read all events in `.ai/review/<doc>/` and produce a compact view: open threads by type, threads with a `detached` anchor. Load `doc-review` for the event vocabulary and fold.
-2. **Fan-out** — delegate threads in parallel to subagents per the routing table. Each subagent writes its response as a `message.posted` event in `.ai/review/`. None touches the document body.
+2. **Fan-out** — If the number of actionable threads (commentType in {edita, sugerencia, pregunta, verifica}) is ≤ 2, skip fan-out and resolve directly in the Apply step (fast-path). Otherwise, delegate threads in parallel to subagents per the Routing table. Each subagent writes its response as a `message.posted` event in `.ai/review/`. None touches the document body.
 3. **Reconcile** — merge duplicate threads (same quote opened in parallel), retract redundant messages via `message.retracted`.
-4. **Apply** — for each accepted proposed edit, edit the document body in serial and post the fix as a `message.posted` event on the thread. Do not emit `thread.status-changed { to: "resolved" }`: accionables are resolved by the human after reviewing the fix (see `doc-review` §3). If the edit moved the anchored text, emit `thread.reanchored { anchor: … }` with the new selection; if the quoted text no longer exists, emit `thread.reanchored { detached: true }` and surface the thread under Preguntas.
+4. **Apply** — for each accepted edit, apply the change to the document body in serial and run `node <skill-dir>/bin/mesh-review.mjs fix <doc> <thread_id> -m '<commit-msg>' --body '<reply>'`. The command commits the file and emits the `message.posted` event. Do not emit `thread.status-changed { to: "resolved" }`: accionables are resolved by the human after reviewing the fix (see `doc-review` §3). For the already-done case (§6.5 of `doc-review`), use `--already-done <sha>`. If the edit moved the anchored text, emit `thread.reanchored { anchor: … }` with the new selection; if the quoted text no longer exists, emit `thread.reanchored { detached: true }` and surface the thread under Preguntas.
 5. **Synthesize** — deliver the 5-part response (see below).
 
 ## Routing
+
+**Fast-path condition.** With 1 or 2 actionable threads, the principal resolves them directly without subagent delegation. With 3 or more, fan-out per the table below.
 
 Route each open thread by its `assignee` (set on `thread.opened`, or by a `thread.assigned` event, the most recent one winning). With no `assignee`, fall back to `commentType`:
 
@@ -70,6 +72,8 @@ Deliver at session close or on request:
 **5. Preguntas y next steps** (always): anchors needing manual re-anchoring, `verifica` threads that require external sources, questions without resolution in the document.
 
 Sections 1, 2 and 5 always appear. Sections 3 and 4 are omitted when empty.
+
+With 1 or 2 threads processed, deliver the per-thread log line plus one closing sentence. The 5-part structure applies with 3 or more threads, or on explicit request.
 
 ## Invariant
 
