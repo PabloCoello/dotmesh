@@ -125,6 +125,26 @@ test('resolveChunkLanguage: mezcla python/r devuelve el lenguaje del último chu
   );
 });
 
+test('resolveChunkLanguage: lenguaje fuera de whitelist (python3) devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'python3' }]), null);
+});
+
+test('resolveChunkLanguage: lenguaje fuera de whitelist (bash) devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: 'bash' }]), null);
+});
+
+test('resolveChunkLanguage: lenguaje vacío devuelve null', () => {
+  assert.strictEqual(resolveChunkLanguage([{ language: '' }]), null);
+});
+
+test('resolveChunkLanguage: último chunk fuera de whitelist pero anterior en whitelist → null', () => {
+  // El último chunk manda; si no está en la whitelist se pregunta.
+  assert.strictEqual(
+    resolveChunkLanguage([{ language: 'python' }, { language: 'bash' }]),
+    null,
+  );
+});
+
 test('resolveChunkInsertionOffset: cursor exactamente en endOffset → dentro de la valla', () => {
   // cursor sobre el \n que sigue a la línea de cierre (extremo incluido)
   const text = '```python {#a}\ncode\n```\nresto';
