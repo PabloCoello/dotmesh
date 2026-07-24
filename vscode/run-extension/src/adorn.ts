@@ -165,15 +165,18 @@ export function computeAdornments(
       conceal.push({ startOffset: output.startOffset, endOffset: outOpenLineEnd });
       conceal.push({ startOffset: outCloseLineStart, endOffset: outCloseLineEnd });
 
-      // Before: barra horizontal con codo curvo en la valla de cierre del chunk.
-      // El codo '╭' enlaza visualmente con la flecha '╰─▶' de la primera
-      // línea de contenido. El resto son '─' hasta BAR_WIDTH.
-      // Solo se pinta si el cursor no está en el chunk (cuando está dentro,
-      // la valla de cierre está revelada y la barra estorbaría).
+      // Before: barra horizontal con codo curvo en la valla de APERTURA del output.
+      // El codo '╭' queda en la línea inmediatamente anterior a la flecha '╰─▶'
+      // de la primera línea de contenido, de modo que los dos codos aparecen
+      // seguidos, sin línea en blanco entre ellos. (La valla de cierre del chunk,
+      // oculta, es la única línea en blanco de la región y queda ahora encima de
+      // la barra, entre el código y el conector.) El resto son '─' hasta BAR_WIDTH.
+      // Solo se pinta si el cursor no está en el chunk (al editar, se revela la
+      // valla y la barra estorbaría).
       if (!cursorInChunk) {
         before.push({
-          lineStartOffset: closeLineStart,
-          lineEndOffset: closeLineEnd,
+          lineStartOffset: output.startOffset,
+          lineEndOffset: outOpenLineEnd,
           contentText: '╭' + '─'.repeat(BAR_WIDTH - 1),
           state,
         });

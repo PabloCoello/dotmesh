@@ -138,8 +138,8 @@ test('computeAdornments: chunk con output, cursor fuera → 4 conceal + 2 before
 
   const [barBefore, contentBefore] = result.before;
 
-  // Barra horizontal en la línea de cierre del chunk: codo ╭ + guiones ─
-  assert.strictEqual(barBefore.lineEndOffset, chunk.endOffset, 'barra: lineEndOffset = chunk.endOffset');
+  // Barra horizontal en la línea de APERTURA del output: codo ╭ + guiones ─
+  assert.strictEqual(barBefore.lineStartOffset, output.startOffset, 'barra: lineStartOffset = output.startOffset');
   assert.ok(barBefore.contentText.startsWith('╭'), 'contentText de barra empieza por ╭');
   assert.ok(
     barBefore.contentText.slice(1).split('').every(c => c === '─'),
