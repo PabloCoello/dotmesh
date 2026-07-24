@@ -79,6 +79,7 @@
 
   "[markdown]": {
     "editor.wordWrap": "on",
+    "editor.renderWhitespace": "none",
     "editor.quickSuggestions": {
       "comments": "off",
       "strings": "off",
