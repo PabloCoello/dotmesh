@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { computeAdornments, type AdornResult } from './adorn.ts';
 import { parseChunks, parseOutputs } from './parser.ts';
 import type { OutputStateResult } from './stale.ts';
+import { buildOutputBlock } from './writer.ts';
 
 // Espacio de no separación (U+00A0) — adorn.ts lo usa en lugar del espacio
 // normal porque VS Code colapsa los espacios normales en el render del `before`.
@@ -300,9 +301,8 @@ test('computeAdornments: 3 líneas de contenido → primera ╰─▶ , segunda
 // ---------------------------------------------------------------------------
 
 test('computeAdornments: output con 0 líneas de contenido → sin before de flecha', () => {
-  // Output vacío (apertura + cierre, sin líneas de contenido)
-  // buildOutputBlock escribe siempre content + \n, así que un output vacío
-  // tiene "\n" como único contenido. Aquí lo construimos a mano:
+  // Output vacío (apertura + cierre, sin líneas de contenido).
+  // Este es exactamente el formato que buildOutputBlock produce para content=''.
   const outputBlock = '```output {#a hash=12345678}\n```';
   const text = makeChunk('a', 'code') + '\n\n' + outputBlock;
 
@@ -314,10 +314,33 @@ test('computeAdornments: output con 0 líneas de contenido → sin before de fle
 
   const result = computeAdornments(text, chunks, outputs, states, -1);
 
-  // Befores: barra + │ (blank) + │ (open) — sin flecha
-  assert.strictEqual(result.before.length, 3, `esperados 3 befores, obtenidos ${result.before.length}`);
+  // Solo la barra horizontal: sin │ (blank), sin │ (open), sin flecha.
+  assert.strictEqual(result.before.length, 1, `esperado 1 before (solo barra), obtenidos ${result.before.length}`);
+  const [barBefore] = result.before;
+  assert.ok(barBefore.contentText.startsWith('╭'), 'el único before debe ser la barra horizontal');
   const arrowBefore = result.before.find(b => b.contentText === '╰─▶ ');
   assert.strictEqual(arrowBefore, undefined, 'no debe haber before de flecha con output vacío');
+});
+
+// ---------------------------------------------------------------------------
+// Output vacío (0 líneas) — integración writer→adorn
+// ---------------------------------------------------------------------------
+
+test('computeAdornments: output generado por buildOutputBlock vacío — solo barra, sin │ ni flecha', () => {
+  // Verifica el caso end-to-end: buildOutputBlock con contenido vacío produce
+  // el bloque sin newline interior y adorn.ts lo renderiza como solo la barra.
+  const outputBlock = buildOutputBlock('a', '12345678', '');
+  const text = makeChunk('a', 'code') + '\n' + outputBlock;
+
+  const chunks = parseChunks(text);
+  const outputs = parseOutputs(text);
+  assert.strictEqual(outputs.length, 1, 'debe haber un output');
+  const states = statesFor(text, { a: 'fresh' });
+
+  const result = computeAdornments(text, chunks, outputs, states, -1);
+
+  assert.strictEqual(result.before.length, 1, 'solo la barra horizontal');
+  assert.ok(result.before[0].contentText.startsWith('╭'), 'el before es la barra');
 });
 
 // ---------------------------------------------------------------------------

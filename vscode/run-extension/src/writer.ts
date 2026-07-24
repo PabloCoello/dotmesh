@@ -57,6 +57,9 @@ export function buildOutputBlock(
   if (options?.seq !== undefined) info += ` seq=${options.seq}`;
   if (options?.up !== undefined) info += ` up=${options.up}`;
   info += '}';
+  // Contenido vacío: bloque sin newline interior (0 líneas de contenido).
+  // adorn.ts detecta 0 líneas y renderiza solo la barra horizontal, sin flecha.
+  if (output === '') return `${info}\n\`\`\``;
   return `${info}\n${output}\n\`\`\``;
 }
 

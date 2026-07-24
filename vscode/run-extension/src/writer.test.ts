@@ -109,9 +109,22 @@ test('buildOutputBlock: output con múltiples líneas', () => {
   );
 });
 
-test('buildOutputBlock: output vacío genera bloque con cuerpo vacío', () => {
+test('buildOutputBlock: output vacío genera bloque sin newline interior (0 líneas de contenido)', () => {
   const block = buildOutputBlock('baz', '00000000', '');
-  assert.strictEqual(block, '```output {#baz hash=00000000}\n\n```');
+  assert.strictEqual(block, '```output {#baz hash=00000000}\n```');
+});
+
+test('buildOutputBlock: output vacío — round-trip produce content="" y 0 líneas de contenido al parsear', () => {
+  const block = buildOutputBlock('baz', '00000000', '');
+  const doc = block + '\n';
+  const outputs = parseOutputs(doc);
+  assert.strictEqual(outputs.length, 1);
+  assert.strictEqual(outputs[0].content, '');
+  // El bloque tiene 0 líneas de contenido: la línea de apertura va directamente
+  // seguida de la línea de cierre sin ninguna línea intermedia.
+  // Verificamos parseando con extractFencedBlocks indirectamente: content = ''.join([]) = ''.
+  const contentLineCount = block.split('\n').length - 2; // info line + closing, rest = content
+  assert.strictEqual(contentLineCount, 0, 'el bloque vacío no debe tener líneas de contenido');
 });
 
 // ===========================================================================
