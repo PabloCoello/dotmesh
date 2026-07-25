@@ -39,6 +39,7 @@ make gnome-rice                     # opcional; solo si usas GNOME
 | Agente IA #3 | Claude Code | [claude/](claude/) (CLAUDE.md/AGENTS.md globales + settings + hooks + statusline + agentes + comandos + mcp) |
 | Skills globales | Convención `.agents/skills/` | [agents/](agents/) |
 | Escritorio (Linux) | GNOME (retint dotmesh) | [gnome/](gnome/) |
+| Terminal (WSL) | Windows Terminal | [windows-terminal/](windows-terminal/) |
 
 ## Estructura
 
@@ -55,6 +56,7 @@ dotmesh/
 ├── claude/     .claude/{CLAUDE.md,AGENTS.md,settings.json,hooks/,statusline.sh,agents/,commands/,mcp/}
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
 ├── gnome/      .config/gtk-{3,4}.0/gtk.css   (rice GNOME, Linux; fuera de PACKAGES)
+├── windows-terminal/  themes/dotmesh.json + scripts/install.sh   (esquema WT, solo WSL; fuera de PACKAGES)
 ├── scripts/    backup-current-config.sh
 ├── docs/       INSTALL.md, SECRETS.md, TROUBLESHOOTING.md
 ├── Makefile
@@ -215,8 +217,9 @@ make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
 make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
-make health      # comprueba binarios
-make clean       # vacía ~/dotfiles-backup
+make health         # comprueba binarios
+make wsl-terminal   # instala el esquema dotmesh en Windows Terminal (solo WSL)
+make clean          # vacía ~/dotfiles-backup
 ```
 
 ## Filosofía

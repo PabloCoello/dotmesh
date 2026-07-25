@@ -48,12 +48,15 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
+| `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
 
-`Makefile:5` defines `PACKAGES` — keep this list in sync when adding or removing a package directory.
+`Makefile:5` defines `PACKAGES` — keep this list in sync when adding or removing a package directory. `IS_WSL`, computed just below, drives WSL-aware conditional logic in `health`, `vscode-install` and `wsl-terminal`.
 
 The `vscode/` package contains a `.stow-local-ignore` and `package.json` because the directory doubles as a publishable VS Code theme extension; only the `Library/...` subtree is intended to be stowed.
 
 The `gnome/` package is Linux-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make gnome-rice` both links its `gtk.css` (via `stow gnome`) and applies the dconf layer (`gnome/scripts/apply-rice.sh`). Its `.stow-local-ignore` keeps `scripts/` and `README.md` out of `$HOME`.
+
+The `windows-terminal/` package is WSL-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make wsl-terminal` applies it from inside a WSL distro (`windows-terminal/scripts/install.sh`). It writes the dotmesh colour scheme into the Windows Terminal `LocalState/settings.json` on the Windows side.
 
 ## Skills as the integration point
 
