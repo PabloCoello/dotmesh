@@ -184,9 +184,20 @@ health:
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
-	@command -v ghostty  >/dev/null && echo "  ok  ghostty"  || echo "  --  ghostty (brew install --cask ghostty)"
-	@command -v herdr    >/dev/null && echo "  ok  herdr"    || echo "  --  herdr    (brew install herdr)"
-	@command -v herdr >/dev/null && herdr integration status 2>/dev/null | grep -qE '^claude: current' && echo "  ok  integraciones herdr (claude·codex·opencode)" || echo "  --  integraciones herdr (ver docs/INSTALL.md)"
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		echo "  n/a ghostty  (WSL — usa Windows Terminal)"; \
+	else \
+		command -v ghostty >/dev/null && echo "  ok  ghostty" || echo "  --  ghostty  (brew install --cask ghostty)"; \
+	fi
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		echo "  n/a herdr    (WSL — no disponible)"; \
+	else \
+		command -v herdr >/dev/null && echo "  ok  herdr" || echo "  --  herdr    (brew install herdr)"; \
+		command -v herdr >/dev/null && herdr integration status 2>/dev/null \
+			| grep -qE '^claude: current' \
+			&& echo "  ok  integraciones herdr (claude·codex·opencode)" \
+			|| echo "  --  integraciones herdr (ver docs/INSTALL.md)"; \
+	fi
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
 	@command -v nvim     >/dev/null && echo "  ok  nvim"     || echo "  --  nvim"
 	@command -v npx      >/dev/null && echo "  ok  npx"      || echo "  --  npx"
@@ -196,8 +207,13 @@ health:
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-run' \
 		&& echo "  ok  mesh-run" \
 		|| echo "  --  mesh-run (corre 'make run-install')"
-	@[ "$$(uname -s)" = "Linux" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
-	@[ "$$(uname -s)" = "Linux" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
+	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
+	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		command -v code >/dev/null \
+			&& echo "  ok  code (VS Code Windows desde WSL)" \
+			|| echo "  --  code  (añade %CODE_PATH% al PATH de Windows o instala la integración WSL de VS Code)"; \
+	fi
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
