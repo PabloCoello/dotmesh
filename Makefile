@@ -27,7 +27,7 @@ help:
 	@echo "  make stow      - Aplica symlinks con GNU Stow"
 	@echo "  make unstow    - Elimina symlinks"
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
-	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; macOS: no-op, va por stow)"
+	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; WSL: copia al lado Windows; macOS: no-op, va por stow)"
 	@echo "  make review-build   - Compila la extensión mesh-review"
 	@echo "  make review-install - Instala mesh-review en VS Code (requiere node y code)"
 	@echo "  make run-build      - Compila la extensión mesh-run"
