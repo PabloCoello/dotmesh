@@ -28,6 +28,47 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     KEYBINDINGS_SRC="keybindings.linux.json"  # Linux usa ctrl+
 fi
 
+# ── Detección de WSL ──────────────────────────────────────────────────────
+_is_wsl=0
+if [[ -n "$WSL_DISTRO_NAME" ]] || grep -qi microsoft /proc/version 2>/dev/null; then
+    _is_wsl=1
+fi
+
+# ── Detectar usuario de Windows (solo en WSL) ─────────────────────────────
+_wsl_winuser() {
+    local u
+    if command -v cmd.exe >/dev/null 2>&1; then
+        u=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r\n')
+    fi
+    if [[ -z "$u" ]] && command -v wslvar >/dev/null 2>&1; then
+        u=$(wslvar USERNAME 2>/dev/null)
+    fi
+    if [[ -z "$u" ]]; then
+        # Fallback: primer directorio en /mnt/c/Users que no sea de sistema
+        u=$(ls /mnt/c/Users/ 2>/dev/null \
+            | grep -Ev '^(Public|Default|All Users|Default User)$' \
+            | head -1)
+    fi
+    echo "$u"
+}
+
+if [[ "$_is_wsl" -eq 1 ]]; then
+    WINUSER="${WINUSER:-$(_wsl_winuser)}"
+    if [[ -z "$WINUSER" ]]; then
+        echo "  !!  No se pudo detectar el usuario de Windows."
+        echo "      Exporta WINUSER=<tu_usuario_windows> y reintenta."
+        exit 1
+    fi
+    WIN_VSCODE_DIR="/mnt/c/Users/${WINUSER}/AppData/Roaming/Code/User"
+    if [[ ! -d "/mnt/c/Users/${WINUSER}" ]]; then
+        echo "  !!  /mnt/c/ no está montado o el usuario '${WINUSER}' no existe."
+        echo "      Comprueba que WSL tiene acceso a C:\\."
+        exit 0   # aviso sin error: no bloquea make install
+    fi
+    VSCODE_CONFIG_DIR="$WIN_VSCODE_DIR"
+    KEYBINDINGS_SRC="keybindings.linux.json"
+fi
+
 echo -e "${BLUE}===========================================${NC}"
 echo -e "${BLUE}   Instalador de Configuración VS Code   ${NC}"
 echo -e "${BLUE}===========================================${NC}"
@@ -54,6 +95,22 @@ backup_current_config() {
     echo ""
 }
 
+# Copia idempotente: evita tocar el destino si los contenidos son idénticos (WSL).
+_copy_idempotent() {
+    local src="$1" dst="$2"
+    if [[ ! -f "$src" ]]; then
+        echo -e "${RED}✗${NC} $(basename "$src") no encontrado en el repo"
+        return
+    fi
+    mkdir -p "$(dirname "$dst")"
+    if [[ -f "$dst" ]] && diff -q "$src" "$dst" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} $(basename "$dst") sin cambios (destino ya actualizado)"
+    else
+        cp -f "$src" "$dst"
+        echo -e "${GREEN}✓${NC} $(basename "$dst") copiado"
+    fi
+}
+
 # Hacer backup si se solicita
 if [[ "$1" == "--backup" ]]; then
     backup_current_config
@@ -64,21 +121,26 @@ echo -e "${YELLOW}Verificando directorios...${NC}"
 mkdir -p "$VSCODE_CONFIG_DIR"
 mkdir -p "$VSCODE_DIR/extensions"
 
-# Enlazar configuraciones (symlink: el repo es la fuente de verdad, sin deriva)
+# Enlazar configuraciones (symlink fuera de WSL; copia idempotente en WSL)
 echo -e "${YELLOW}Enlazando configuraciones...${NC}"
 
-if [ -f "$REPO_CONFIG_DIR/settings.json" ]; then
-    ln -sfn "$REPO_CONFIG_DIR/settings.json" "$VSCODE_CONFIG_DIR/settings.json"
-    echo -e "${GREEN}✓${NC} settings.json enlazado"
+if [[ "$_is_wsl" -eq 1 ]]; then
+    _copy_idempotent "$REPO_CONFIG_DIR/settings.json" "$VSCODE_CONFIG_DIR/settings.json"
+    _copy_idempotent "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" "$VSCODE_CONFIG_DIR/keybindings.json"
 else
-    echo -e "${RED}✗${NC} settings.json no encontrado"
-fi
+    if [ -f "$REPO_CONFIG_DIR/settings.json" ]; then
+        ln -sfn "$REPO_CONFIG_DIR/settings.json" "$VSCODE_CONFIG_DIR/settings.json"
+        echo -e "${GREEN}✓${NC} settings.json enlazado"
+    else
+        echo -e "${RED}✗${NC} settings.json no encontrado"
+    fi
 
-if [ -f "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" ]; then
-    ln -sfn "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" "$VSCODE_CONFIG_DIR/keybindings.json"
-    echo -e "${GREEN}✓${NC} keybindings.json enlazado (desde $KEYBINDINGS_SRC)"
-else
-    echo -e "${RED}✗${NC} $KEYBINDINGS_SRC no encontrado"
+    if [ -f "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" ]; then
+        ln -sfn "$REPO_CONFIG_DIR/$KEYBINDINGS_SRC" "$VSCODE_CONFIG_DIR/keybindings.json"
+        echo -e "${GREEN}✓${NC} keybindings.json enlazado (desde $KEYBINDINGS_SRC)"
+    else
+        echo -e "${RED}✗${NC} $KEYBINDINGS_SRC no encontrado"
+    fi
 fi
 
 # Instalar el tema como extensión REGISTRADA (VSIX).

@@ -96,7 +96,10 @@ link-skills:
 # En Linux, VS Code ignora ~/Library y lee ~/.config/Code/User; install.sh crea los symlinks
 # correctos y empaqueta el tema. En macOS el subárbol Library/... ya va por stow: no-op.
 vscode-install:
-	@if [ "$$(uname -s)" != "Linux" ]; then \
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		echo "→ configurando VS Code (WSL: copia al lado Windows)"; \
+		bash "$(abspath vscode/scripts/install.sh)"; \
+	elif [ "$$(uname -s)" != "Linux" ]; then \
 		echo "  ok  VS Code configurado vía stow en macOS; vscode-install es no-op aquí"; \
 	else \
 		echo "→ configurando VS Code (Linux: install.sh)"; \
@@ -180,7 +183,9 @@ health:
 	@command -v git      >/dev/null && echo "  ok  git"      || echo "  --  git"
 	@command -v delta    >/dev/null && echo "  ok  delta"    || echo "  --  delta"
 	@command -v starship >/dev/null && echo "  ok  starship" || echo "  --  starship"
-	@command -v code     >/dev/null && echo "  ok  code (VS Code)" || echo "  --  code (VS Code)"
+	@if [ "$(IS_WSL)" != "1" ]; then \
+		command -v code >/dev/null && echo "  ok  code (VS Code)" || echo "  --  code (VS Code)"; \
+	fi
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
