@@ -6,6 +6,13 @@ PACKAGES := shell git starship ghostty herdr opencode codex claude agents
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
+
+# Detección de WSL2. WSL_DISTRO_NAME es la variable oficial de Microsoft;
+# el grep de /proc/version cubre distros que no la exportan.
+# $(if ...) evalúa el primer argumento como cadena: no vacío → 1, vacío → fallback.
+# El fallback produce "1" en WSL o "0" en Linux nativo/macOS.
+IS_WSL := $(if $(WSL_DISTRO_NAME),1,$(shell grep -qi microsoft /proc/version 2>/dev/null && echo 1 || echo 0))
+
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
