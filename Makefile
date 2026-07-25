@@ -1,4 +1,4 @@
-.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install run-build run-install cli-build seed-claude-settings gnome-rice gnome-unrice health clean test-scribe-flow
+.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install run-build run-install cli-build seed-claude-settings gnome-rice gnome-unrice wsl-terminal health clean test-scribe-flow
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
@@ -37,6 +37,7 @@ help:
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
+	@echo "  make wsl-terminal - Instala el esquema dotmesh en Windows Terminal (solo WSL)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
@@ -174,6 +175,16 @@ gnome-unrice:
 		stow -v -D -t ~ gnome || exit 1; \
 		echo "  ok  symlinks de GNOME eliminados"; \
 		echo "  !!  dconf no se revierte automáticamente; hazlo manualmente si es necesario"; \
+	fi
+
+# Instala el esquema de color dotmesh en Windows Terminal (solo WSL).
+# windows-terminal/ no entra en PACKAGES; este target lo aplica manualmente.
+wsl-terminal:
+	@if [ "$(IS_WSL)" != "1" ]; then \
+		echo "  ok  wsl-terminal solo aplica en WSL; no-op aquí"; \
+	else \
+		echo "→ instalando esquema dotmesh en Windows Terminal"; \
+		bash "$(abspath windows-terminal/scripts/install.sh)"; \
 	fi
 
 health:
