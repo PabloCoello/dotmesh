@@ -10,6 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 SCHEME_FILE="$REPO_DIR/windows-terminal/themes/dotmesh.json"
 
+# WT_SETTINGS se define más adelante; el trap lo borra solo si la variable tiene valor.
+WT_SETTINGS=""
+trap '[ -n "$WT_SETTINGS" ] && rm -f "${WT_SETTINGS}.tmp"' EXIT
+
 # ── Verificar que estamos en WSL ────────────────────────────────────────────
 _is_wsl=0
 if [[ -n "$WSL_DISTRO_NAME" ]] || grep -qi microsoft /proc/version 2>/dev/null; then
@@ -45,6 +49,12 @@ WINUSER="${WINUSER:-$(_wsl_winuser)}"
 if [[ -z "$WINUSER" ]]; then
     echo "  !!  No se pudo detectar el usuario de Windows."
     echo "      Exporta WINUSER=<tu_usuario_windows> y reintenta."
+    exit 1
+fi
+
+# Rechaza valores con traversal de ruta antes de construir ninguna ruta bajo /mnt/c/Users/.
+if [[ "$WINUSER" == *..* || "$WINUSER" == */* || "$WINUSER" == *\\* ]]; then
+    echo "  !!  WINUSER contiene caracteres no válidos: '$WINUSER'"
     exit 1
 fi
 

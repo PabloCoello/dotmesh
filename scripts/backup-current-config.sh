@@ -45,12 +45,21 @@ elif [ -n "$WSL_DISTRO_NAME" ] || grep -qi microsoft /proc/version 2>/dev/null; 
     if [ -z "$_wsl_user" ] && command -v wslvar >/dev/null 2>&1; then
         _wsl_user=$(wslvar USERNAME 2>/dev/null) || true
     fi
-    if [ -n "$_wsl_user" ] && [ -d "/mnt/c/Users/$_wsl_user" ]; then
-        VSCODE_DIR="/mnt/c/Users/${_wsl_user}/AppData/Roaming/Code/User"
-    else
-        echo "  !!  WSL detectado pero /mnt/c/ no accesible; backup de VS Code omitido"
-        VSCODE_DIR=""
-    fi
+    # Valida el usuario antes de construir ninguna ruta bajo /mnt/c/Users/.
+    case "$_wsl_user" in
+        *..*|*/*|*\\*)
+            echo "  !!  WINUSER contiene caracteres no válidos: '$_wsl_user'; backup de VS Code omitido"
+            VSCODE_DIR=""
+            ;;
+        *)
+            if [ -n "$_wsl_user" ] && [ -d "/mnt/c/Users/$_wsl_user" ]; then
+                VSCODE_DIR="/mnt/c/Users/${_wsl_user}/AppData/Roaming/Code/User"
+            else
+                echo "  !!  WSL detectado pero /mnt/c/ no accesible; backup de VS Code omitido"
+                VSCODE_DIR=""
+            fi
+            ;;
+    esac
 else
     VSCODE_DIR="$HOME/.config/Code/User"
 fi

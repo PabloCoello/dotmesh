@@ -59,6 +59,11 @@ if [[ "$_is_wsl" -eq 1 ]]; then
         echo "      Exporta WINUSER=<tu_usuario_windows> y reintenta."
         exit 1
     fi
+    # Rechaza valores con traversal de ruta antes de construir ninguna ruta bajo /mnt/c/Users/.
+    if [[ "$WINUSER" == *..* || "$WINUSER" == */* || "$WINUSER" == *\\* ]]; then
+        echo "  !!  WINUSER contiene caracteres no válidos: '$WINUSER'"
+        exit 1
+    fi
     WIN_VSCODE_DIR="/mnt/c/Users/${WINUSER}/AppData/Roaming/Code/User"
     if [[ ! -d "/mnt/c/Users/${WINUSER}" ]]; then
         echo "  !!  /mnt/c/ no está montado o el usuario '${WINUSER}' no existe."
