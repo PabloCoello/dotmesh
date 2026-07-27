@@ -33,12 +33,39 @@ backup_file "$HOME/.gitconfig"        "gitconfig"
 backup_file "$HOME/.gitignore_global" "gitignore_global"
 backup_file "$HOME/.gitmessage"       "gitmessage"
 
-# VS Code
-VSCODE_DIR="$HOME/Library/Application Support/Code/User"
-[ "$(uname)" = "Linux" ] && VSCODE_DIR="$HOME/.config/Code/User"
-backup_file "$VSCODE_DIR/settings.json"    "vscode/settings.json"
-backup_file "$VSCODE_DIR/keybindings.json" "vscode/keybindings.json"
-backup_file "$VSCODE_DIR/snippets"         "vscode/snippets"
+# VS Code: la ruta depende del SO y de si estamos en WSL.
+if [ "$(uname)" = "Darwin" ]; then
+    VSCODE_DIR="$HOME/Library/Application Support/Code/User"
+elif [ -n "$WSL_DISTRO_NAME" ] || grep -qi microsoft /proc/version 2>/dev/null; then
+    # WSL: los settings que usa VS Code están en el lado Windows
+    _wsl_user="${WINUSER:-}"
+    if [ -z "$_wsl_user" ] && command -v cmd.exe >/dev/null 2>&1; then
+        _wsl_user=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r\n') || true
+    fi
+    if [ -z "$_wsl_user" ] && command -v wslvar >/dev/null 2>&1; then
+        _wsl_user=$(wslvar USERNAME 2>/dev/null) || true
+    fi
+    # Valida el usuario antes de construir ninguna ruta bajo /mnt/c/Users/.
+    case "$_wsl_user" in
+        *..*|*/*|*\\*)
+            echo "  !!  WINUSER contiene caracteres no válidos: '$_wsl_user'; backup de VS Code omitido"
+            VSCODE_DIR=""
+            ;;
+        *)
+            if [ -n "$_wsl_user" ] && [ -d "/mnt/c/Users/$_wsl_user" ]; then
+                VSCODE_DIR="/mnt/c/Users/${_wsl_user}/AppData/Roaming/Code/User"
+            else
+                echo "  !!  WSL detectado pero /mnt/c/ no accesible; backup de VS Code omitido"
+                VSCODE_DIR=""
+            fi
+            ;;
+    esac
+else
+    VSCODE_DIR="$HOME/.config/Code/User"
+fi
+[ -n "$VSCODE_DIR" ] && backup_file "$VSCODE_DIR/settings.json"    "vscode/settings.json"
+[ -n "$VSCODE_DIR" ] && backup_file "$VSCODE_DIR/keybindings.json" "vscode/keybindings.json"
+[ -n "$VSCODE_DIR" ] && backup_file "$VSCODE_DIR/snippets"         "vscode/snippets"
 
 # Claude Code
 backup_file "$HOME/.claude/settings.json"     "claude/settings.json"

@@ -243,6 +243,71 @@ propio proyecto:
 *.sql  # solo si las migraciones no se versionan
 ```
 
+## Windows + WSL2
+
+### Requisitos previos (lado Windows)
+
+- WSL2 habilitado (`wsl --install` en PowerShell como administrador).
+- Ubuntu instalado (`wsl --install -d Ubuntu`).
+- JetBrains Mono Nerd Font instalada en Windows (no en la distro): <https://www.nerdfonts.com/font-downloads>.
+- Windows Terminal (opcional, recomendado).
+
+### Bootstrap en la distro Ubuntu
+
+Las dependencias del lado Linux son las mismas que en el bloque «Requisitos» de esta guía (Ubuntu/Debian). Añade `zsh` si no viene en tu imagen de Ubuntu. VS Code no se instala en la distro; `make install` configura el VS Code de Windows de forma automática.
+
+```bash
+sudo apt install zsh stow git git-delta
+curl -sS https://starship.rs/install.sh | sh
+```
+
+Con las dependencias listas, clona el repo y ejecuta la instalación:
+
+```bash
+git clone https://github.com/pablocoello/dotmesh.git ~/Documentos/GitHub/dotmesh
+cd ~/Documentos/GitHub/dotmesh
+
+make health
+make install
+```
+
+### Pasos manuales del lado Windows
+
+#### VS Code
+
+`make install` ya incluye `make vscode-install`. En WSL copia `settings.json` y `keybindings.json` a `%APPDATA%\Code\User\`. Si la detección automática del usuario Windows falla, exporta `WINUSER=<tu_usuario_windows>` antes de ejecutarlo.
+
+#### Windows Terminal
+
+```bash
+make wsl-terminal
+```
+
+Alternativa directa: `bash windows-terminal/scripts/install.sh`. Añade el esquema `dotmesh` al `settings.json` de Windows Terminal; actívalo en Configuración > Perfiles > Apariencia > Esquema de colores.
+
+#### Fuente
+
+Instala JetBrains Mono Nerd Font en Windows (no en la distro WSL): <https://www.nerdfonts.com/font-downloads>. Configúrala en Windows Terminal: Configuración > Perfiles > Apariencia > Fuente.
+
+#### Git Credential Manager (opcional)
+
+Si tienes Git for Windows instalado en el lado Windows:
+
+```bash
+git config --global credential.helper \
+  "$(wslpath -u 'C:/Program Files/Git/mingw64/bin/git-credential-manager.exe')"
+```
+
+Permite usar el keychain de Windows para los tokens de GitHub desde WSL.
+
+### Lo que no funciona en WSL
+
+- `ghostty`: no hay binario para WSL. Los symlinks de `make stow` son inofensivos.
+- `herdr`: no hay binario para WSL. El flujo de agentes funciona sin él.
+- `make gnome-rice`: sin efecto (no hay GNOME en WSL).
+
+---
+
 ## Desinstalación
 
 ```bash

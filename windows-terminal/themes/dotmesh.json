@@ -1,0 +1,23 @@
+{
+  "name": "dotmesh",
+  "background": "#121212",
+  "foreground": "#cecece",
+  "cursorColor": "#6CB6B0",
+  "selectionBackground": "#2e2e2e",
+  "black":        "#2a2a2a",
+  "red":          "#E59A9A",
+  "green":        "#A8CBA0",
+  "yellow":       "#E3C58A",
+  "blue":         "#8FB4E3",
+  "purple":       "#CBAACB",
+  "cyan":         "#6CB6B0",
+  "white":        "#c6c6c6",
+  "brightBlack":  "#5c5c5c",
+  "brightRed":    "#EAA9A9",
+  "brightGreen":  "#B9D6B2",
+  "brightYellow": "#ECD2A3",
+  "brightBlue":   "#A8C6EA",
+  "brightPurple": "#D8BFD8",
+  "brightCyan":   "#84C4BF",
+  "brightWhite":  "#F0F1F3"
+}

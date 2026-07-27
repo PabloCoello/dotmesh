@@ -1,4 +1,4 @@
-.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install run-build run-install cli-build seed-claude-settings gnome-rice gnome-unrice health clean test-scribe-flow
+.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install run-build run-install cli-build seed-claude-settings gnome-rice gnome-unrice wsl-terminal health clean test-scribe-flow
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
@@ -6,6 +6,13 @@ PACKAGES := shell git starship ghostty herdr opencode codex claude agents
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
+
+# Detección de WSL2. WSL_DISTRO_NAME es la variable oficial de Microsoft;
+# el grep de /proc/version cubre distros que no la exportan.
+# $(if ...) evalúa el primer argumento como cadena: no vacío → 1, vacío → fallback.
+# El fallback produce "1" en WSL o "0" en Linux nativo/macOS.
+IS_WSL := $(if $(WSL_DISTRO_NAME),1,$(shell grep -qi microsoft /proc/version 2>/dev/null && echo 1 || echo 0))
+
 SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
@@ -20,7 +27,7 @@ help:
 	@echo "  make stow      - Aplica symlinks con GNU Stow"
 	@echo "  make unstow    - Elimina symlinks"
 	@echo "  make restow    - unstow + stow (útil tras añadir/quitar ficheros)"
-	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; macOS: no-op, va por stow)"
+	@echo "  make vscode-install - Configura VS Code (Linux: install.sh; WSL: copia al lado Windows; macOS: no-op, va por stow)"
 	@echo "  make review-build   - Compila la extensión mesh-review"
 	@echo "  make review-install - Instala mesh-review en VS Code (requiere node y code)"
 	@echo "  make run-build      - Compila la extensión mesh-run"
@@ -30,6 +37,7 @@ help:
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
+	@echo "  make wsl-terminal - Instala el esquema dotmesh en Windows Terminal (solo WSL)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
@@ -89,7 +97,10 @@ link-skills:
 # En Linux, VS Code ignora ~/Library y lee ~/.config/Code/User; install.sh crea los symlinks
 # correctos y empaqueta el tema. En macOS el subárbol Library/... ya va por stow: no-op.
 vscode-install:
-	@if [ "$$(uname -s)" != "Linux" ]; then \
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		echo "→ configurando VS Code (WSL: copia al lado Windows)"; \
+		bash "$(abspath vscode/scripts/install.sh)"; \
+	elif [ "$$(uname -s)" != "Linux" ]; then \
 		echo "  ok  VS Code configurado vía stow en macOS; vscode-install es no-op aquí"; \
 	else \
 		echo "→ configurando VS Code (Linux: install.sh)"; \
@@ -166,6 +177,16 @@ gnome-unrice:
 		echo "  !!  dconf no se revierte automáticamente; hazlo manualmente si es necesario"; \
 	fi
 
+# Instala el esquema de color dotmesh en Windows Terminal (solo WSL).
+# windows-terminal/ no entra en PACKAGES; este target lo aplica manualmente.
+wsl-terminal:
+	@if [ "$(IS_WSL)" != "1" ]; then \
+		echo "  ok  wsl-terminal solo aplica en WSL; no-op aquí"; \
+	else \
+		echo "→ instalando esquema dotmesh en Windows Terminal"; \
+		bash "$(abspath windows-terminal/scripts/install.sh)"; \
+	fi
+
 health:
 	@echo "Healthcheck:"
 	@command -v zsh      >/dev/null && echo "  ok  zsh"      || echo "  --  zsh"
@@ -173,13 +194,26 @@ health:
 	@command -v git      >/dev/null && echo "  ok  git"      || echo "  --  git"
 	@command -v delta    >/dev/null && echo "  ok  delta"    || echo "  --  delta"
 	@command -v starship >/dev/null && echo "  ok  starship" || echo "  --  starship"
-	@command -v code     >/dev/null && echo "  ok  code (VS Code)" || echo "  --  code (VS Code)"
+	@if [ "$(IS_WSL)" != "1" ]; then \
+		command -v code >/dev/null && echo "  ok  code (VS Code)" || echo "  --  code (VS Code)"; \
+	fi
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
-	@command -v ghostty  >/dev/null && echo "  ok  ghostty"  || echo "  --  ghostty (brew install --cask ghostty)"
-	@command -v herdr    >/dev/null && echo "  ok  herdr"    || echo "  --  herdr    (brew install herdr)"
-	@command -v herdr >/dev/null && herdr integration status 2>/dev/null | grep -qE '^claude: current' && echo "  ok  integraciones herdr (claude·codex·opencode)" || echo "  --  integraciones herdr (ver docs/INSTALL.md)"
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		echo "  n/a ghostty  (WSL — usa Windows Terminal)"; \
+	else \
+		command -v ghostty >/dev/null && echo "  ok  ghostty" || echo "  --  ghostty  (brew install --cask ghostty)"; \
+	fi
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		echo "  n/a herdr    (WSL — no disponible)"; \
+	else \
+		command -v herdr >/dev/null && echo "  ok  herdr" || echo "  --  herdr    (brew install herdr)"; \
+		command -v herdr >/dev/null && herdr integration status 2>/dev/null \
+			| grep -qE '^claude: current' \
+			&& echo "  ok  integraciones herdr (claude·codex·opencode)" \
+			|| echo "  --  integraciones herdr (ver docs/INSTALL.md)"; \
+	fi
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
 	@command -v nvim     >/dev/null && echo "  ok  nvim"     || echo "  --  nvim"
 	@command -v npx      >/dev/null && echo "  ok  npx"      || echo "  --  npx"
@@ -189,8 +223,13 @@ health:
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-run' \
 		&& echo "  ok  mesh-run" \
 		|| echo "  --  mesh-run (corre 'make run-install')"
-	@[ "$$(uname -s)" = "Linux" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
-	@[ "$$(uname -s)" = "Linux" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
+	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
+	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
+	@if [ "$(IS_WSL)" = "1" ]; then \
+		command -v code >/dev/null \
+			&& echo "  ok  code (VS Code Windows desde WSL)" \
+			|| echo "  --  code  (añade %CODE_PATH% al PATH de Windows o instala la integración WSL de VS Code)"; \
+	fi
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
