@@ -44,6 +44,8 @@
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-render-*.vsix | head -1)\" --force",
+    "smoke": "node scripts/smoke.js",
+    "pretest": "npm run smoke",
     "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/table.test.ts src/formula.test.ts src/table-render.test.ts"
   },
   "devDependencies": {
