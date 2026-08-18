@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { formulaAtPosition, renderLatex, _renderCacheSize } from './formula.ts';
+import { formulaAtPosition, renderLatex, _renderCacheSize, _setGetMathJaxForTest } from './formula.ts';
 
 // ---------------------------------------------------------------------------
 // Inline válida
@@ -258,4 +258,37 @@ test('renderLatex: caché LRU no supera el tope y evicta la entrada más antigua
     `Tras insertar ${OVER_LIMIT} entradas el tamaño (${sizeAfter}) debe ser ≤ 500`,
   );
   void sizeBefore; // suprimir "unused variable" en runtime
+});
+
+// ---------------------------------------------------------------------------
+// Robustez: getMathJax que lanza → renderLatex no propaga, devuelve error
+// ---------------------------------------------------------------------------
+
+test('renderLatex: si getMathJax lanza, devuelve mensaje de error sin propagar', async () => {
+  _setGetMathJaxForTest(() => { throw new Error('init fail test'); });
+  try {
+    const result = await renderLatex('x + y');
+    assert.ok(typeof result === 'string', 'Debe devolver string, no lanzar');
+    assert.ok(result.startsWith('LaTeX error:'), `Debe empezar por "LaTeX error:"; recibido: ${result}`);
+    assert.ok(result.includes('init fail test'), 'El mensaje de error original debe aparecer en el resultado');
+  } finally {
+    _setGetMathJaxForTest(null);
+  }
+});
+
+test('renderLatex: si doc.convert lanza, devuelve mensaje de error sin propagar', async () => {
+  _setGetMathJaxForTest(() => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    doc: { convert: () => { throw new Error('convert fail test'); } } as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    adaptor: {} as any,
+  }));
+  try {
+    const result = await renderLatex('a^2 + b^2');
+    assert.ok(typeof result === 'string', 'Debe devolver string, no lanzar');
+    assert.ok(result.startsWith('LaTeX error:'), `Debe empezar por "LaTeX error:"; recibido: ${result}`);
+    assert.ok(result.includes('convert fail test'), 'El detalle del error debe aparecer en el resultado');
+  } finally {
+    _setGetMathJaxForTest(null);
+  }
 });

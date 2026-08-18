@@ -181,7 +181,19 @@ let _mjxDoc: any | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _mjxAdaptor: any | null = null;
 
+// Hook de inyección para tests: permite sustituir la fábrica de MathJax sin
+// modificar la lógica de producción. null = usar la implementación real.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _mjxFactoryOverride: (() => { doc: any; adaptor: any }) | null = null;
+
+/** Solo para tests: inyecta una fábrica de MathJax alternativa. Pasar null restaura la real. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function _setGetMathJaxForTest(factory: (() => { doc: any; adaptor: any }) | null): void {
+  _mjxFactoryOverride = factory;
+}
+
 function getMathJax(): { doc: any; adaptor: any } {
+  if (_mjxFactoryOverride) return _mjxFactoryOverride();
   if (_mjxDoc && _mjxAdaptor) {
     return { doc: _mjxDoc, adaptor: _mjxAdaptor };
   }
@@ -249,21 +261,25 @@ export async function renderLatex(latex: string, display = false): Promise<strin
   const cached = _cacheGet(cacheKey);
   if (cached !== undefined) return cached;
 
-  const { doc, adaptor } = getMathJax();
-  const node = doc.convert(latex, { display });
-  const containerHtml: string = adaptor.outerHTML(node);
+  let result: string;
+  try {
+    const { doc, adaptor } = getMathJax();
+    const node = doc.convert(latex, { display });
+    const containerHtml: string = adaptor.outerHTML(node);
 
-  // Detectar error de LaTeX: MathJax incluye data-mjx-error en el nodo merror
-  const errMatch = /data-mjx-error="([^"]*)"/.exec(containerHtml);
-  if (errMatch) {
-    const msg = `LaTeX error: ${errMatch[1]}`;
-    _cacheSet(cacheKey, msg);
-    return msg;
+    // Detectar error de LaTeX: MathJax incluye data-mjx-error en el nodo merror
+    const errMatch = /data-mjx-error="([^"]*)"/.exec(containerHtml);
+    if (errMatch) {
+      result = `LaTeX error: ${errMatch[1]}`;
+    } else {
+      // Extraer solo el elemento <svg> del contenedor mjx-container
+      const svgMatch = /<svg[\s\S]*?<\/svg>/.exec(containerHtml);
+      result = svgMatch ? svgMatch[0] : containerHtml;
+    }
+  } catch (err: unknown) {
+    // Fallo de inicialización o conversión: devolver mensaje de error sin propagar.
+    result = `LaTeX error: ${err instanceof Error ? err.message : String(err)}`;
   }
-
-  // Extraer solo el elemento <svg> del contenedor mjx-container
-  const svgMatch = /<svg[\s\S]*?<\/svg>/.exec(containerHtml);
-  const result = svgMatch ? svgMatch[0] : containerHtml;
 
   _cacheSet(cacheKey, result);
   return result;
