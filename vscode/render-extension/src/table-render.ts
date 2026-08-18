@@ -5,10 +5,9 @@
  * data: antes de pasar el markdown al MarkdownString de VS Code.
  *
  * Módulo puro sin dependencias de vscode (reutiliza renderLatex de formula.ts).
- * Se implementa en la tarea 2.5.
  */
 
-import { renderLatex } from './formula';
+import { renderLatex } from './formula.ts';
 
 /**
  * Dado el markdown de una tabla GFM, sustituye todas las fórmulas inline
