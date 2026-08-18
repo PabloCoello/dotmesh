@@ -34,7 +34,6 @@ export class MeshRenderHoverProvider implements vscode.HoverProvider {
     if (table !== null) {
       const renderedTable = await renderTableMarkdown(table);
       const md = new vscode.MarkdownString(renderedTable);
-      md.isTrusted = true;
       md.supportHtml = true;
       return new vscode.Hover(md);
     }
@@ -45,7 +44,6 @@ export class MeshRenderHoverProvider implements vscode.HoverProvider {
       const svg = await renderLatex(formula.latex, formula.kind === 'block');
 
       const md = new vscode.MarkdownString();
-      md.isTrusted = true;
       md.supportHtml = true;
 
       if (svg.startsWith('LaTeX error:')) {
