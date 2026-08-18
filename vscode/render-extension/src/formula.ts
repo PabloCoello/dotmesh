@@ -104,6 +104,12 @@ function inlineFormulaAtPosition(
   let i = 0;
 
   while (i < len) {
+    // Secuencia \$: dólar escapado — no es delimitador de fórmula
+    if (line[i] === '\\' && i + 1 < len && line[i + 1] === '$') {
+      i += 2;
+      continue;
+    }
+
     if (line[i] !== '$') { i++; continue; }
 
     // Secuencia $$: saltar todo el span $$ ... $$ y continuar

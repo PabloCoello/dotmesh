@@ -108,6 +108,19 @@ test('formulaAtPosition: bloque multilínea de varias líneas — cursor en lín
 });
 
 // ---------------------------------------------------------------------------
+// \$ escapado — no debe iniciar fórmula
+// ---------------------------------------------------------------------------
+
+test('formulaAtPosition: \\$ escapado no inicia fórmula', () => {
+  // "cuesta \$5 y \$10" — ningún \$ es delimitador de fórmula
+  const lines = ['cuesta \\$5 y \\$10'];
+  // Cursor sobre el primer \$5
+  assert.strictEqual(formulaAtPosition(lines, 0, 7), null, '\\$ no debe iniciar fórmula');
+  // Cursor sobre el segundo \$10
+  assert.strictEqual(formulaAtPosition(lines, 0, 13), null, '\\$ no debe iniciar fórmula (segundo)');
+});
+
+// ---------------------------------------------------------------------------
 // Cursor fuera de fórmula
 // ---------------------------------------------------------------------------
 
