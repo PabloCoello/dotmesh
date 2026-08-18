@@ -47,14 +47,22 @@ function isBlockFence(line: string): boolean {
 function blockFormulaAtPosition(
   lines: string[],
   cursorLine: number,
+  cursorChar: number,
 ): FormulaResult | null {
   const line = lines[cursorLine];
 
-  // Single-line: $$ contenido $$ (contenido no vacío)
-  const singleMatch = /\$\$(.+?)\$\$/.exec(line);
-  if (singleMatch) {
-    const latex = singleMatch[1].trim();
-    if (latex) return { kind: 'block', latex };
+  // Single-line: $$ contenido $$ — buscar la ocurrencia que contiene cursorChar.
+  // Se usa regex global para iterar todas las coincidencias en la línea en lugar
+  // de devolver siempre la primera.
+  const singleRe = /\$\$(.+?)\$\$/g;
+  let singleMatch: RegExpExecArray | null;
+  while ((singleMatch = singleRe.exec(line)) !== null) {
+    const startOuter = singleMatch.index;
+    const endOuter = singleRe.lastIndex; // posición justo después del $$ de cierre
+    if (cursorChar >= startOuter && cursorChar < endOuter) {
+      const latex = singleMatch[1].trim();
+      if (latex) return { kind: 'block', latex };
+    }
   }
 
   // Si el cursor está en una valla $$ el contenido está en otra línea
@@ -151,7 +159,7 @@ export function formulaAtPosition(
 ): FormulaResult | null {
   if (cursorLine < 0 || cursorLine >= lines.length) return null;
 
-  const block = blockFormulaAtPosition(lines, cursorLine);
+  const block = blockFormulaAtPosition(lines, cursorLine, cursorChar);
   if (block !== null) return block;
 
   return inlineFormulaAtPosition(lines[cursorLine], cursorChar);

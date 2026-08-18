@@ -69,6 +69,23 @@ test('formulaAtPosition: bloque $$ ... $$ de una sola línea devuelve { kind: bl
   assert.strictEqual(result.latex, 'E = mc^2');
 });
 
+test('formulaAtPosition: dos bloques $$ en la misma línea — cursor en el segundo devuelve el segundo', () => {
+  // Cursor dentro de $$b$$ (posición 17, dentro del segundo bloque)
+  const lines = ['antes $$a$$ medio $$b$$ despues'];
+  //                    0123456789012345678901234567890
+  //                    0         1         2
+  //  $$a$$ → índices 6-11,  $$b$$ → índices 18-23
+  const resultA = formulaAtPosition(lines, 0, 8); // cursor en 'a'
+  assert.ok(resultA !== null, 'Debe detectar $$a$$');
+  assert.strictEqual(resultA.kind, 'block');
+  assert.strictEqual(resultA.latex, 'a');
+
+  const resultB = formulaAtPosition(lines, 0, 20); // cursor en 'b'
+  assert.ok(resultB !== null, 'Debe detectar $$b$$ cuando el cursor está en b');
+  assert.strictEqual(resultB.kind, 'block');
+  assert.strictEqual(resultB.latex, 'b', 'Con cursor en b debe devolver b, no a');
+});
+
 // ---------------------------------------------------------------------------
 // Bloque multilínea, cursor en línea intermedia
 // ---------------------------------------------------------------------------
