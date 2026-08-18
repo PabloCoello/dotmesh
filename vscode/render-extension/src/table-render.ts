@@ -46,11 +46,18 @@ async function renderTableLine(line: string): Promise<string> {
 
 /**
  * Dado el resultado de renderLatex, devuelve la imagen data URI o el mensaje
- * de error como texto para incrustar en la celda.
+ * de error escapado para incrustar en la celda de tabla.
+ *
+ * El mensaje de error se envuelve en backticks para neutralizar cualquier
+ * metacaracter markdown que pudiera provenir del texto del error de MathJax
+ * (por ejemplo `[`, `]`, `(`, `)`, `*`, `_`, etc.).
  */
 function svgOrError(result: string): string {
   if (result.startsWith('LaTeX error:')) {
-    return result;
+    // Escapar el mensaje: reemplazar backticks internos para evitar romper el
+    // bloque de código inline, luego envolver en backticks.
+    const safe = result.replace(/`/g, "'");
+    return `\`${safe}\``;
   }
   const dataUri = `data:image/svg+xml;base64,${Buffer.from(result).toString('base64')}`;
   return `![](${dataUri})`;

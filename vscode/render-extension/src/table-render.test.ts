@@ -76,7 +76,7 @@ test('renderTableMarkdown: celda sin fórmula — la tabla no cambia', async () 
 });
 
 // ---------------------------------------------------------------------------
-// Fórmula con error — incrusta el mensaje de error
+// Fórmula con error — incrusta el mensaje de error escapado en backticks
 // ---------------------------------------------------------------------------
 
 test('renderTableMarkdown: fórmula con error — incrusta el mensaje de error', async () => {
@@ -92,6 +92,34 @@ test('renderTableMarkdown: fórmula con error — incrusta el mensaje de error',
     result.includes('LaTeX error:') || isImgMarkdown(result),
     'Debe incrustar el mensaje de error o una imagen de error de MathJax',
   );
+});
+
+test('renderTableMarkdown: error con metacaracteres markdown — queda neutralizado en backticks', async () => {
+  // Usamos una expresión que genera error y cuyo mensaje podría contener
+  // metacaracteres markdown. El punto clave es que el resultado esté en backticks.
+  const table = [
+    '| Expr              |',
+    '| ----------------- |',
+    '| $\\invalid[x](y)$ |',
+  ].join('\n');
+
+  const result = await renderTableMarkdown(table);
+  // Si hay error de LaTeX, debe estar envuelto en backticks
+  if (result.includes('LaTeX error:')) {
+    // El mensaje de error debe estar rodeado de backticks
+    assert.ok(
+      /`LaTeX error:[^`]*`/.test(result),
+      'El mensaje de error debe estar envuelto en backticks para neutralizar metacaracteres markdown',
+    );
+    // Los corchetes del mensaje de error no deben quedar sueltos como markdown
+    assert.ok(
+      !result.includes(']('),
+      'No debe haber secuencia ](  que podría interpretarse como enlace markdown',
+    );
+  } else {
+    // MathJax devolvió imagen de error — también válido
+    assert.ok(isImgMarkdown(result), 'Debe ser imagen o error en backticks');
+  }
 });
 
 // ---------------------------------------------------------------------------
