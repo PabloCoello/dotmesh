@@ -189,8 +189,40 @@ function getMathJax(): { doc: any; adaptor: any } {
   return { doc, adaptor };
 }
 
-/** Caché de expresión LaTeX → SVG (o mensaje de error). */
+// ---------------------------------------------------------------------------
+// Caché LRU para renderLatex
+// ---------------------------------------------------------------------------
+
+/** Número máximo de entradas en la caché LRU. */
+const RENDER_CACHE_MAX = 500;
+
+/**
+ * Caché LRU de expresión LaTeX → SVG (o mensaje de error).
+ *
+ * Usa Map con orden de inserción: la entrada más antigua es la primera del
+ * iterador. Al superar RENDER_CACHE_MAX se evicta la primera (LRU).
+ * Un acceso exitoso mueve la entrada al final para refrescar su antigüedad.
+ */
 const _renderCache = new Map<string, string>();
+
+function _cacheGet(key: string): string | undefined {
+  const val = _renderCache.get(key);
+  if (val === undefined) return undefined;
+  // Refrescar: mover al final del Map (más recientemente usado)
+  _renderCache.delete(key);
+  _renderCache.set(key, val);
+  return val;
+}
+
+function _cacheSet(key: string, value: string): void {
+  if (_renderCache.has(key)) {
+    _renderCache.delete(key);
+  } else if (_renderCache.size >= RENDER_CACHE_MAX) {
+    // Evictar la entrada más antigua (primera en el iterador del Map)
+    _renderCache.delete(_renderCache.keys().next().value as string);
+  }
+  _renderCache.set(key, value);
+}
 
 /**
  * Renderiza una expresión LaTeX a SVG con MathJax.
@@ -202,11 +234,13 @@ const _renderCache = new Map<string, string>();
  *
  * El SVG resultante usa `fill=currentColor` / `stroke=currentColor` para heredar
  * el color del tema del editor (claro / oscuro).
- * Las llamadas repetidas con la misma (latex, display) usan caché en memoria.
+ * Las llamadas repetidas con la misma (latex, display) usan caché LRU en memoria
+ * (máximo RENDER_CACHE_MAX entradas; la entrada menos usada se evicta al superar
+ * el tope para evitar fugas de memoria en sesiones largas).
  */
 export async function renderLatex(latex: string, display = false): Promise<string> {
   const cacheKey = `${display ? 'D' : 'I'}:${latex}`;
-  const cached = _renderCache.get(cacheKey);
+  const cached = _cacheGet(cacheKey);
   if (cached !== undefined) return cached;
 
   const { doc, adaptor } = getMathJax();
@@ -217,7 +251,7 @@ export async function renderLatex(latex: string, display = false): Promise<strin
   const errMatch = /data-mjx-error="([^"]*)"/.exec(containerHtml);
   if (errMatch) {
     const msg = `LaTeX error: ${errMatch[1]}`;
-    _renderCache.set(cacheKey, msg);
+    _cacheSet(cacheKey, msg);
     return msg;
   }
 
@@ -225,6 +259,11 @@ export async function renderLatex(latex: string, display = false): Promise<strin
   const svgMatch = /<svg[\s\S]*?<\/svg>/.exec(containerHtml);
   const result = svgMatch ? svgMatch[0] : containerHtml;
 
-  _renderCache.set(cacheKey, result);
+  _cacheSet(cacheKey, result);
   return result;
+}
+
+/** Expone el tamaño actual de la caché (para tests). Solo uso interno/test. */
+export function _renderCacheSize(): number {
+  return _renderCache.size;
 }

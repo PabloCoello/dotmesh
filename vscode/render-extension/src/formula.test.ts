@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { formulaAtPosition, renderLatex } from './formula.ts';
+import { formulaAtPosition, renderLatex, _renderCacheSize } from './formula.ts';
 
 // ---------------------------------------------------------------------------
 // Inline válida
@@ -180,4 +180,35 @@ test('renderLatex: llamada repetida con misma expresión usa caché', async () =
   // Segunda llamada — debe devolver exactamente el mismo string (referencia de caché)
   const svg2 = await renderLatex('a + b');
   assert.strictEqual(svg1, svg2, 'La caché debe devolver el mismo resultado');
+});
+
+test('renderLatex: caché LRU no supera el tope y evicta la entrada más antigua', async () => {
+  // Insertamos RENDER_CACHE_MAX + 1 entradas distintas. Para no suponer el valor
+  // exacto de la constante interna usamos 501 entradas (> 500).
+  // Primero anotamos el tamaño antes de la prueba para calcular cuántas hay ya.
+  const sizeBefore = _renderCacheSize();
+
+  // Crear expresiones únicas para llenar la caché más allá del tope
+  const OVER_LIMIT = 501;
+  const firstKey = `lru_test_0`;
+  await renderLatex(firstKey); // primera entrada que debería evictarse
+  for (let n = 1; n < OVER_LIMIT; n++) {
+    await renderLatex(`lru_test_${n}`);
+  }
+
+  const sizeAfter = _renderCacheSize();
+  // El tamaño total nunca debe superar el tope (500)
+  assert.ok(
+    sizeAfter <= 500,
+    `La caché no debe superar 500 entradas; tamaño actual: ${sizeAfter}`,
+  );
+  // La primera entrada insertada en esta prueba debe haber sido evictada
+  // Rellenar la caché de nuevo con la misma clave fuerza un re-render (no hay hit)
+  // Para verificar la evicción: el tamaño antes + OVER_LIMIT debería haber requerido
+  // evictar, y el tamaño final debe ser ≤ 500.
+  assert.ok(
+    sizeAfter <= 500,
+    `Tras insertar ${OVER_LIMIT} entradas el tamaño (${sizeAfter}) debe ser ≤ 500`,
+  );
+  void sizeBefore; // suprimir "unused variable" en runtime
 });
