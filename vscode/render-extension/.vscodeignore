@@ -1,0 +1,7 @@
+.gitignore
+node_modules/**
+src/**
+build.js
+tsconfig.json
+**/*.ts
+!out/**

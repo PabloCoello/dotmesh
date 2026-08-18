@@ -1,0 +1,59 @@
+{
+  "name": "mesh-render",
+  "displayName": "mesh-render",
+  "description": "Hover bajo demanda que renderiza fórmulas LaTeX y tablas GFM en ficheros markdown y texto plano",
+  "version": "0.1.0",
+  "publisher": "pablocoello",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PabloCoello/dotmesh"
+  },
+  "engines": {
+    "vscode": "^1.93.0",
+    "node": ">=22.6.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [],
+    "configuration": {
+      "title": "mesh-render",
+      "properties": {
+        "mesh-render.gutter.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "description": "Milisegundos de debounce para actualizar los iconos de gutter tras un cambio en el documento."
+        },
+        "mesh-render.gutter.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Activa o desactiva los iconos de gutter."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.js",
+    "check": "tsc --noEmit",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies",
+    "install-ext": "npm run package && code --install-extension \"$(ls mesh-render-*.vsix | head -1)\" --force",
+    "smoke": "node scripts/smoke.js",
+    "pretest": "npm run smoke",
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/table.test.ts src/formula.test.ts src/table-render.test.ts src/gutter.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.93.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "mathjax-full": "^3.2.1",
+    "typescript": "^5.4.0"
+  }
+}
