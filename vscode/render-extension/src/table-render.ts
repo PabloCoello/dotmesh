@@ -15,12 +15,20 @@ import { renderLatex } from './formula.ts';
  * El resto del markdown de la tabla se mantiene intacto.
  *
  * @param tableMarkdown  Bloque GFM completo devuelto por tableAtPosition.
+ * @param svgColor       Color CSS para reemplazar `currentColor` en los SVGs
+ *                       generados por MathJax. En un contexto <img> el SVG es
+ *                       aislado y currentColor no hereda el color del editor.
+ *                       Por defecto '#888888' (gris neutro visible en ambos temas).
+ *                       hover.ts pasa el color del tema activo via vscode.window.activeColorTheme.
  * @returns              Markdown con las fórmulas reemplazadas por imágenes.
  */
-export async function renderTableMarkdown(tableMarkdown: string): Promise<string> {
+export async function renderTableMarkdown(
+  tableMarkdown: string,
+  svgColor = '#888888',
+): Promise<string> {
   // Procesar línea a línea para preservar la estructura de la tabla
   const lines = tableMarkdown.split('\n');
-  const rendered = await Promise.all(lines.map(line => renderTableLine(line)));
+  const rendered = await Promise.all(lines.map(line => renderTableLine(line, svgColor)));
   return rendered.join('\n');
 }
 
@@ -28,17 +36,17 @@ export async function renderTableMarkdown(tableMarkdown: string): Promise<string
  * Sustituye las fórmulas de una línea de tabla por imágenes SVG.
  * Prioridad: $$ (bloque inline en celda) sobre $ (inline).
  */
-async function renderTableLine(line: string): Promise<string> {
+async function renderTableLine(line: string, svgColor: string): Promise<string> {
   // Primero sustituir $$ ... $$ (bloque inline dentro de celda)
   line = await replaceAsync(line, /\$\$(.+?)\$\$/g, async (_, latex: string) => {
     const trimmed = latex.trim();
     if (!trimmed) return '$$$$';
-    return svgOrError(await renderLatex(trimmed, true));
+    return svgOrError(await renderLatex(trimmed, true), svgColor);
   });
 
   // Luego sustituir $ ... $ (inline, sin espacio tras $)
   line = await replaceAsync(line, /\$([^\s$][^$]*)\$/g, async (_, latex: string) => {
-    return svgOrError(await renderLatex(latex.trim(), false));
+    return svgOrError(await renderLatex(latex.trim(), false), svgColor);
   });
 
   return line;
@@ -48,18 +56,23 @@ async function renderTableLine(line: string): Promise<string> {
  * Dado el resultado de renderLatex, devuelve la imagen data URI o el mensaje
  * de error escapado para incrustar en la celda de tabla.
  *
+ * @param result    Cadena SVG o mensaje de error devuelto por renderLatex.
+ * @param svgColor  Color para sustituir `currentColor` en el SVG. En un contexto
+ *                  <img> el SVG es aislado y currentColor no hereda el tema.
+ *
  * El mensaje de error se envuelve en backticks para neutralizar cualquier
  * metacaracter markdown que pudiera provenir del texto del error de MathJax
  * (por ejemplo `[`, `]`, `(`, `)`, `*`, `_`, etc.).
  */
-function svgOrError(result: string): string {
+function svgOrError(result: string, svgColor: string): string {
   if (result.startsWith('LaTeX error:')) {
     // Escapar el mensaje: reemplazar backticks internos para evitar romper el
     // bloque de código inline, luego envolver en backticks.
     const safe = result.replace(/`/g, "'");
     return `\`${safe}\``;
   }
-  const dataUri = `data:image/svg+xml;base64,${Buffer.from(result).toString('base64')}`;
+  const coloredSvg = result.replace(/currentColor/g, svgColor);
+  const dataUri = `data:image/svg+xml;base64,${Buffer.from(coloredSvg).toString('base64')}`;
   return `![](${dataUri})`;
 }
 

@@ -16,6 +16,26 @@ import { tableAtPosition } from './table';
 import { formulaAtPosition, renderLatex } from './formula';
 import { renderTableMarkdown } from './table-render';
 
+/**
+ * Devuelve el color de primer plano para incrustar SVGs de fórmulas.
+ *
+ * Los SVGs de MathJax usan `currentColor` como fill/stroke. Al incrustarse
+ * como `<img src="data:image/svg+xml;base64,...">` el SVG queda en un contexto
+ * aislado y currentColor no hereda el color del editor. Se elige un color
+ * estático según el tipo de tema activo:
+ *   - Claro / Alto contraste claro: #333333 (gris oscuro, contraste ≥ 10:1 sobre blanco)
+ *   - Oscuro / Alto contraste oscuro: #cccccc (gris claro, contraste ≥ 10:1 sobre #1e1e1e)
+ *
+ * Esta solución es un buen compromiso mientras VS Code no exponga el color
+ * real del hover widget a las extensiones vía API pública.
+ */
+function _themeFgColor(): string {
+  const kind = vscode.window.activeColorTheme.kind;
+  return kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight
+    ? '#333333'
+    : '#cccccc';
+}
+
 export class MeshRenderHoverProvider implements vscode.HoverProvider {
   async provideHover(
     document: vscode.TextDocument,
@@ -32,7 +52,15 @@ export class MeshRenderHoverProvider implements vscode.HoverProvider {
     //    Las fórmulas dentro de las celdas se renderizan embebidas.
     const table = tableAtPosition(lines, position.line, position.character);
     if (table !== null) {
-      const renderedTable = await renderTableMarkdown(table);
+      let renderedTable: string;
+      try {
+        renderedTable = await renderTableMarkdown(table, _themeFgColor());
+      } catch {
+        // Degradación: mostrar la tabla sin renderizar fórmulas antes que
+        // no mostrar nada. renderLatex ya no propaga, pero cualquier otro
+        // fallo de renderTableMarkdown queda cubierto aquí.
+        renderedTable = table;
+      }
       const md = new vscode.MarkdownString(renderedTable);
       return new vscode.Hover(md);
     }
@@ -48,8 +76,11 @@ export class MeshRenderHoverProvider implements vscode.HoverProvider {
         // Error de LaTeX: mostrar el mensaje como texto
         md.appendText(svg);
       } else {
-        // SVG válido: incrustar como imagen data URI
-        const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+        // SVG válido: reemplazar currentColor con el color del tema activo
+        // antes de codificar. En un contexto <img> el SVG es aislado y
+        // currentColor no hereda el color del editor.
+        const coloredSvg = svg.replace(/currentColor/g, _themeFgColor());
+        const dataUri = `data:image/svg+xml;base64,${Buffer.from(coloredSvg).toString('base64')}`;
         md.appendMarkdown(`![fórmula](${dataUri})`);
       }
 

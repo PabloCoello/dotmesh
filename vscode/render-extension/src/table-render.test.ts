@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { renderTableMarkdown } from './table-render.ts';
+import { _setGetMathJaxForTest } from './formula.ts';
 
 // ---------------------------------------------------------------------------
 // Helper: extrae el contenido de un data URI SVG o devuelve el string tal cual
@@ -198,4 +199,55 @@ test('renderTableMarkdown: tabla de ejemplo — $a_i$, $F^{text{ia}}$, $(1-f)$',
   // El texto no-fórmula debe preservarse
   assert.ok(result.includes('Variable'), 'Cabecera debe preservarse');
   assert.ok(result.includes('índice a sub i'), 'Texto de celda sin fórmula debe preservarse');
+});
+
+// ---------------------------------------------------------------------------
+// Degradación con gracia: si MathJax falla, la tabla sigue mostrándose
+// ---------------------------------------------------------------------------
+
+test('renderTableMarkdown: si MathJax lanza, la tabla sigue mostrándose con mensaje de error', async () => {
+  _setGetMathJaxForTest(() => { throw new Error('MathJax init fail'); });
+  try {
+    const table = [
+      '| Variable | Fórmula  |',
+      '| -------- | -------- |',
+      '| $x^2$   | texto    |',
+    ].join('\n');
+
+    const result = await renderTableMarkdown(table);
+
+    // La tabla no debe estar vacía ni lanzar
+    assert.ok(result.length > 0, 'La tabla no debe estar vacía cuando MathJax falla');
+    // Las celdas con fórmula deben mostrar el mensaje de error
+    assert.ok(
+      result.includes('LaTeX error:'),
+      'La celda con fórmula debe mostrar el mensaje de error de MathJax',
+    );
+    // El texto sin fórmula debe preservarse
+    assert.ok(result.includes('texto'), 'El texto de celda sin fórmula debe preservarse');
+    assert.ok(result.includes('Variable'), 'La cabecera debe preservarse');
+  } finally {
+    _setGetMathJaxForTest(null);
+  }
+});
+
+test('renderTableMarkdown: svgColor reemplaza currentColor en el SVG embebido', async () => {
+  const table = [
+    '| Fórmula  |',
+    '| -------- |',
+    '| $a + b$  |',
+  ].join('\n');
+
+  const result = await renderTableMarkdown(table, '#ff0000');
+
+  // El data URI debe contener el color inyectado, no currentColor
+  if (isImgMarkdown(result)) {
+    // Decodificar el base64 para verificar el color en el SVG
+    const b64Match = /base64,([^)]+)/.exec(result);
+    if (b64Match) {
+      const decoded = Buffer.from(b64Match[1], 'base64').toString('utf8');
+      assert.ok(decoded.includes('#ff0000'), 'El SVG debe contener el color inyectado');
+      assert.ok(!decoded.includes('currentColor'), 'El SVG no debe contener currentColor tras la sustitución');
+    }
+  }
 });
