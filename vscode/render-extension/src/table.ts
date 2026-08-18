@@ -7,8 +7,12 @@
  * que espera este módulo vive en hover.ts.
  */
 
-/** Devuelve true si la línea contiene al menos un carácter pipe. */
-function isTableRow(line: string): boolean {
+/**
+ * Devuelve true si la línea contiene al menos un carácter pipe.
+ *
+ * Exportada para ser reutilizada por gutter.ts sin duplicar la lógica.
+ */
+export function isTableRow(line: string): boolean {
   return line.includes('|');
 }
 

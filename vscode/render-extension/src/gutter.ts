@@ -16,17 +16,12 @@
  * formulaAtPosition (formula.ts) para no duplicar reglas.
  */
 
-import { isSeparatorRow } from './table.ts';
+import { isSeparatorRow, isTableRow } from './table.ts';
 import { formulaAtPosition } from './formula.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers internos
 // ---------------------------------------------------------------------------
-
-/** True si la línea contiene al menos un pipe (posible fila de tabla GFM). */
-function isTableRow(line: string): boolean {
-  return line.includes('|');
-}
 
 /** Regex para bloque single-line: $$ contenido $$ en una sola línea. */
 const BLOCK_SINGLE_RE = /\$\$(.+?)\$\$/;
