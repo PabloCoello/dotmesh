@@ -20,13 +20,31 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
-  "contributes": {},
+  "contributes": {
+    "commands": [],
+    "configuration": {
+      "title": "mesh-render",
+      "properties": {
+        "mesh-render.gutter.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "description": "Milisegundos de debounce para actualizar los iconos de gutter tras un cambio en el documento."
+        },
+        "mesh-render.gutter.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Activa o desactiva los iconos de gutter."
+        }
+      }
+    }
+  },
   "scripts": {
     "build": "node build.js",
     "check": "tsc --noEmit",
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
-    "install-ext": "npm run package && code --install-extension \"$(ls mesh-render-*.vsix | head -1)\" --force"
+    "install-ext": "npm run package && code --install-extension \"$(ls mesh-render-*.vsix | head -1)\" --force",
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/table.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
