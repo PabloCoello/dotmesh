@@ -15,7 +15,10 @@ export class MeshRenderHoverProvider implements vscode.HoverProvider {
     position: vscode.Position,
     _token: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.Hover> {
-    // Extraer las líneas del documento como cadenas simples
+    // Extraer las líneas del documento como cadenas simples.
+    // Copiar el array en cada invocación es aceptable: el hover es bajo demanda
+    // (una llamada por interacción del usuario) y los documentos Markdown
+    // típicos son lo bastante pequeños para que el coste sea despreciable.
     const lines: string[] = [];
     for (let i = 0; i < document.lineCount; i++) {
       lines.push(document.lineAt(i).text);
