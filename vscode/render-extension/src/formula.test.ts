@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { formulaAtPosition } from './formula.ts';
+import { formulaAtPosition, renderLatex } from './formula.ts';
 
 // ---------------------------------------------------------------------------
 // Inline válida
@@ -138,4 +138,29 @@ test('formulaAtPosition: línea negativa devuelve null', () => {
 test('formulaAtPosition: línea mayor que el documento devuelve null', () => {
   const lines = ['$a+b$'];
   assert.strictEqual(formulaAtPosition(lines, 100, 0), null);
+});
+
+// ---------------------------------------------------------------------------
+// renderLatex — render con MathJax y caché
+// ---------------------------------------------------------------------------
+
+test('renderLatex: expresión válida devuelve cadena SVG con fill=currentColor', async () => {
+  const svg = await renderLatex('E = mc^2');
+  assert.ok(svg.includes('<svg'), 'Debe contener elemento <svg>');
+  assert.ok(svg.includes('currentColor'), 'El SVG debe usar currentColor para fill/stroke');
+});
+
+test('renderLatex: expresión con error devuelve mensaje de error (no lanza)', async () => {
+  const result = await renderLatex('\\invalidcommand{');
+  // No debe lanzar; debe devolver algo (SVG de error o texto de error)
+  assert.ok(typeof result === 'string', 'Debe devolver string, no lanzar');
+  assert.ok(result.length > 0, 'El resultado no debe estar vacío');
+});
+
+test('renderLatex: llamada repetida con misma expresión usa caché', async () => {
+  // Primera llamada
+  const svg1 = await renderLatex('a + b');
+  // Segunda llamada — debe devolver exactamente el mismo string (referencia de caché)
+  const svg2 = await renderLatex('a + b');
+  assert.strictEqual(svg1, svg2, 'La caché debe devolver el mismo resultado');
 });

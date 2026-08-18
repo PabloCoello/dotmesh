@@ -1,10 +1,25 @@
 /**
  * formula.ts — detección de delimitadores de fórmula LaTeX y render con MathJax.
  *
- * Módulo puro para la detección de posición (formulaAtPosition); sin importar
- * vscode para que sea testeable directamente con node:test.
- * renderLatex sí importa mathjax-full (bundleado por esbuild).
+ * La sección de detección (formulaAtPosition) es un módulo puro sin dependencias
+ * de vscode, testeable directamente con node:test.
+ * renderLatex importa mathjax-full (bundleado por esbuild en out/extension.js).
+ *
+ * API MathJax verificada contra mathjax-full@3.2.x:
+ *   liteAdaptor()          — adaptador sin DOM (nodo/navegador independiente)
+ *   RegisterHTMLHandler()  — registra el manejador HTML en el singleton mathjax
+ *   mathjax.document()     — crea un documento de conversión
+ *   doc.convert()          — convierte LaTeX → nodo SVG (síncrono)
+ *   adaptor.outerHTML()    — serializa el nodo a cadena HTML/SVG
  */
+
+// Imports de MathJax — todos estáticos para que esbuild los bundlee sin
+// necesidad de loader dinámico. Se importan con la ruta JS del paquete CJS.
+import { liteAdaptor } from 'mathjax-full/js/adaptors/liteAdaptor.js';
+import { RegisterHTMLHandler } from 'mathjax-full/js/handlers/html.js';
+import { mathjax } from 'mathjax-full/js/mathjax.js';
+import { TeX } from 'mathjax-full/js/input/tex.js';
+import { SVG } from 'mathjax-full/js/output/svg.js';
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -140,4 +155,68 @@ export function formulaAtPosition(
   if (block !== null) return block;
 
   return inlineFormulaAtPosition(lines[cursorLine], cursorChar);
+}
+
+// ---------------------------------------------------------------------------
+// Render con MathJax
+// ---------------------------------------------------------------------------
+
+// Singleton: el documento MathJax y el adaptador se inicializan una sola vez.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _mjxDoc: any | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _mjxAdaptor: any | null = null;
+
+function getMathJax(): { doc: any; adaptor: any } {
+  if (_mjxDoc && _mjxAdaptor) {
+    return { doc: _mjxDoc, adaptor: _mjxAdaptor };
+  }
+  const adaptor = liteAdaptor();
+  RegisterHTMLHandler(adaptor);
+  const tex = new TeX({ packages: ['base', 'ams'] });
+  const svg = new SVG({ fontCache: 'none' });
+  const doc = mathjax.document('', { InputJax: tex, OutputJax: svg });
+  _mjxAdaptor = adaptor;
+  _mjxDoc = doc;
+  return { doc, adaptor };
+}
+
+/** Caché de expresión LaTeX → SVG (o mensaje de error). */
+const _renderCache = new Map<string, string>();
+
+/**
+ * Renderiza una expresión LaTeX a SVG con MathJax.
+ *
+ * @param latex   - Expresión LaTeX sin delimitadores ($, $$).
+ * @param display - true para modo display (bloque centrado), false para inline.
+ * @returns       SVG autocontenido como cadena, o un mensaje de error de MathJax
+ *                si la expresión es inválida. Nunca lanza.
+ *
+ * El SVG resultante usa `fill=currentColor` / `stroke=currentColor` para heredar
+ * el color del tema del editor (claro / oscuro).
+ * Las llamadas repetidas con la misma (latex, display) usan caché en memoria.
+ */
+export async function renderLatex(latex: string, display = false): Promise<string> {
+  const cacheKey = `${display ? 'D' : 'I'}:${latex}`;
+  const cached = _renderCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const { doc, adaptor } = getMathJax();
+  const node = doc.convert(latex, { display });
+  const containerHtml: string = adaptor.outerHTML(node);
+
+  // Detectar error de LaTeX: MathJax incluye data-mjx-error en el nodo merror
+  const errMatch = /data-mjx-error="([^"]*)"/.exec(containerHtml);
+  if (errMatch) {
+    const msg = `LaTeX error: ${errMatch[1]}`;
+    _renderCache.set(cacheKey, msg);
+    return msg;
+  }
+
+  // Extraer solo el elemento <svg> del contenedor mjx-container
+  const svgMatch = /<svg[\s\S]*?<\/svg>/.exec(containerHtml);
+  const result = svgMatch ? svgMatch[0] : containerHtml;
+
+  _renderCache.set(cacheKey, result);
+  return result;
 }
