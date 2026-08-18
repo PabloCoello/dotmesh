@@ -61,6 +61,16 @@ fi
 export QUARTO_PYTHON="python3"
 
 # ─────────────────────────────────────────────
+# ➤ DETECCIÓN DE WSL
+# ─────────────────────────────────────────────
+# Devuelve 0 (verdadero) si el proceso corre dentro de WSL2.
+# WSL_DISTRO_NAME es la variable oficial de Microsoft; el grep cubre
+# distros que no la exportan.
+function __is_wsl() {
+    [[ -n "$WSL_DISTRO_NAME" ]] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+# ─────────────────────────────────────────────
 # ➤ HOMEBREW CONFIGURATION (macOS)
 # ─────────────────────────────────────────────
 # Verifica la existencia del binario (ARM/Intel macOS; no aplica en Linux).
