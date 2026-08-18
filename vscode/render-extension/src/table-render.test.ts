@@ -159,6 +159,23 @@ test('renderTableMarkdown: celda con texto + $$ ... $$ — solo la fórmula se s
 });
 
 // ---------------------------------------------------------------------------
+// R6: $ de precio en celda — sin cierre, no produce imagen
+// ---------------------------------------------------------------------------
+
+test('renderTableMarkdown: $ de precio en celda sin cierre no produce imagen', async () => {
+  const table = [
+    '| Artículo | Precio |',
+    '| -------- | ------ |',
+    '| Mesa     | $100   |',
+  ].join('\n');
+
+  const result = await renderTableMarkdown(table);
+  // $100 no tiene $ de cierre en la línea, no debe renderizarse como fórmula
+  assert.ok(!isImgMarkdown(result), '$ de precio sin cierre no debe producir imagen');
+  assert.ok(result.includes('$100'), 'El precio debe mantenerse tal cual');
+});
+
+// ---------------------------------------------------------------------------
 // Tabla de ejemplo del usuario: $a_i$, $F^{\\text{ia}}$, $(1-f)$
 // ---------------------------------------------------------------------------
 

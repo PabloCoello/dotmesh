@@ -171,6 +171,40 @@ test('formulaAtPosition: línea mayor que el documento devuelve null', () => {
 });
 
 // ---------------------------------------------------------------------------
+// R5: dos $...$ en la misma línea — cursor en cada una da la correcta
+// ---------------------------------------------------------------------------
+
+test('formulaAtPosition: dos inline en la misma línea — cursor en la primera devuelve la primera', () => {
+  const lines = ['Sea $a+b$ y también $c-d$ en la ecuación'];
+  //               0123456789012345678901234567890
+  // $a+b$ → [4, 9),  $c-d$ → [20, 25)
+  const result = formulaAtPosition(lines, 0, 6); // cursor en 'a'
+  assert.ok(result !== null, 'Debe detectar la primera fórmula');
+  assert.strictEqual(result.kind, 'inline');
+  assert.strictEqual(result.latex, 'a+b');
+});
+
+test('formulaAtPosition: dos inline en la misma línea — cursor en la segunda devuelve la segunda', () => {
+  const lines = ['Sea $a+b$ y también $c-d$ en la ecuación'];
+  const result = formulaAtPosition(lines, 0, 22); // cursor en 'c'
+  assert.ok(result !== null, 'Debe detectar la segunda fórmula');
+  assert.strictEqual(result.kind, 'inline');
+  assert.strictEqual(result.latex, 'c-d');
+});
+
+// ---------------------------------------------------------------------------
+// R6: $ de precio dentro de celda de tabla — NO se renderiza como fórmula
+// ---------------------------------------------------------------------------
+
+test('formulaAtPosition: $ de precio sin cierre en la línea devuelve null', () => {
+  // "| Precio: $100 |" — hay un solo $ sin cierre en la misma línea
+  const line = '| Precio: $100 |';
+  const lines = [line];
+  // Cursor sobre el $
+  assert.strictEqual(formulaAtPosition(lines, 0, 9), null, '$ de precio sin cierre no es fórmula');
+});
+
+// ---------------------------------------------------------------------------
 // renderLatex — render con MathJax y caché
 // ---------------------------------------------------------------------------
 
