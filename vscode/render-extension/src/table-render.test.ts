@@ -123,6 +123,42 @@ test('renderTableMarkdown: error con metacaracteres markdown — queda neutraliz
 });
 
 // ---------------------------------------------------------------------------
+// Celda con $$ ... $$ — bloque inline dentro de celda
+// ---------------------------------------------------------------------------
+
+test('renderTableMarkdown: celda con $$...$$ como único contenido — se renderiza', async () => {
+  const table = [
+    '| Fórmula de bloque    |',
+    '| ------------------- |',
+    '| $$E = mc^2$$         |',
+  ].join('\n');
+
+  const result = await renderTableMarkdown(table);
+  assert.ok(
+    isImgMarkdown(result),
+    'La celda con $$...$$ debe producir una imagen data URI',
+  );
+  assert.ok(!result.includes('$$E'), 'El LaTeX crudo $$...$$ no debe aparecer tras el render');
+});
+
+test('renderTableMarkdown: celda con texto + $$ ... $$ — solo la fórmula se sustituye', async () => {
+  const table = [
+    '| Contenido mixto        |',
+    '| ---------------------- |',
+    '| ver: $$x^2$$ para más  |',
+  ].join('\n');
+
+  const result = await renderTableMarkdown(table);
+  // La imagen debe aparecer
+  assert.ok(isImgMarkdown(result), 'Debe haber imagen data URI en la celda');
+  // El texto circundante debe preservarse
+  assert.ok(result.includes('ver:'), 'El texto antes de la fórmula debe preservarse');
+  assert.ok(result.includes('para más'), 'El texto después de la fórmula debe preservarse');
+  // El LaTeX crudo no debe quedar sin rendeizar
+  assert.ok(!result.includes('$$x^2$$'), 'El bloque $$...$$ no debe quedar sin renderizar');
+});
+
+// ---------------------------------------------------------------------------
 // Tabla de ejemplo del usuario: $a_i$, $F^{\\text{ia}}$, $(1-f)$
 // ---------------------------------------------------------------------------
 
