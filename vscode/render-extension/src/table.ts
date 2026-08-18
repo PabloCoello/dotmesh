@@ -15,8 +15,10 @@ function isTableRow(line: string): boolean {
 /**
  * Devuelve true si la línea es una fila separadora GFM válida.
  * Cada celda (dividida por '|') debe coincidir con /^\s*:?-+:?\s*$/.
+ *
+ * Exportada para ser reutilizada por gutter.ts sin duplicar la lógica.
  */
-function isSeparatorRow(line: string): boolean {
+export function isSeparatorRow(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed.includes('|')) return false;
   // Eliminar pipes exteriores opcionales y dividir por '|'
