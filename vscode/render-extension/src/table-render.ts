@@ -65,6 +65,24 @@ function svgOrError(result: string): string {
 
 /**
  * Versión asíncrona de String.replace con soporte de reemplazos async.
+ *
+ * @param str      - Cadena de entrada.
+ * @param regex    - Expresión regular global (flag `g`). Se aplica sobre `str`
+ *                   para colectar todas las coincidencias con sus índices.
+ * @param replacer - Función async que recibe (match, ...grupos) y devuelve el
+ *                   texto de reemplazo. Se invoca en paralelo para todas las
+ *                   coincidencias.
+ * @returns        Nueva cadena con todos los reemplazos aplicados.
+ *
+ * Implementación en dos fases:
+ *   1. Colecta: un `str.replace` síncrono recorre las coincidencias y guarda
+ *      cada {match, grupos capturados, índice}. El reemplazo en esta fase es un
+ *      placeholder (devuelve `match` sin cambios).
+ *   2. Aplicación: se resuelven todos los reemplazos async en paralelo y se
+ *      reconstruye la cadena de derecha a izquierda. El recorrido inverso es
+ *      necesario para que los índices originales sigan siendo válidos a medida
+ *      que se sustituye: reemplazar desde el final no desplaza los índices de
+ *      las coincidencias anteriores.
  */
 async function replaceAsync(
   str: string,
