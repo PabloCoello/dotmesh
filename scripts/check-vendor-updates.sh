@@ -68,7 +68,23 @@ while IFS=$'\t' read -r component local_path upstream_url upstream_ref local_ref
     continue
   fi
 
-  if ! output="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0 GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https git -C / -c credential.helper= ls-remote --quiet "$upstream_url" "$upstream_ref" 2>/dev/null)"; then
+  if ! output="$(
+    cd /
+    unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+    unset GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE
+    unset GIT_CONFIG GIT_CONFIG_LOCAL GIT_ASKPASS GIT_SSH GIT_SSH_COMMAND SSH_ASKPASS
+    unset GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+    env -i \
+      PATH="$PATH" \
+      HOME=/nonexistent \
+      GIT_CONFIG_NOSYSTEM=1 \
+      GIT_CONFIG_SYSTEM=/dev/null \
+      GIT_CONFIG_GLOBAL=/dev/null \
+      GIT_CONFIG_COUNT=0 \
+      GIT_TERMINAL_PROMPT=0 \
+      GIT_ALLOW_PROTOCOL=https \
+      git -C / -c credential.helper= ls-remote --quiet "$upstream_url" "$upstream_ref" 2>/dev/null
+  )"; then
     printf '%s\t%s\t%s\t%s\t%s\n' "$component" "network_unavailable" "$local_ref" "$upstream_ref" "$local_path"
     continue
   fi

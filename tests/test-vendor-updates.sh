@@ -8,40 +8,60 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 write_git_stub() {
   local mode="$1"
   mkdir -p "$TMP_DIR/bin"
-  cat >"$TMP_DIR/bin/git" <<'STUB'
+  cat >"$TMP_DIR/bin/git" <<STUB
 #!/usr/bin/env bash
 set -euo pipefail
 
-mode="${VENDOR_TEST_MODE:?}"
-if [ "${GIT_TERMINAL_PROMPT:-}" != "0" ] || [ "${GIT_ALLOW_PROTOCOL:-}" != "https" ]; then
+mode="$mode"
+if [ "\$(pwd)" != "/" ]; then
+  echo "git was not invoked from neutral directory" >&2
+  exit 91
+fi
+
+if [ "\${GIT_TERMINAL_PROMPT:-}" != "0" ] || [ "\${GIT_ALLOW_PROTOCOL:-}" != "https" ]; then
   echo "unsafe git environment" >&2
   exit 97
 fi
 
-if [ "${GIT_CONFIG_NOSYSTEM:-}" != "1" ] || [ "${GIT_CONFIG_SYSTEM:-}" != "/dev/null" ]; then
+if [ "\${GIT_CONFIG_NOSYSTEM:-}" != "1" ] || [ "\${GIT_CONFIG_SYSTEM:-}" != "/dev/null" ]; then
   echo "unsafe system git config" >&2
   exit 95
 fi
 
-if [ "${GIT_CONFIG_GLOBAL:-}" != "/dev/null" ] || [ "${GIT_CONFIG_COUNT:-}" != "0" ]; then
+if [ "\${GIT_CONFIG_GLOBAL:-}" != "/dev/null" ] || [ "\${GIT_CONFIG_COUNT:-}" != "0" ]; then
   echo "unsafe user git config" >&2
   exit 94
 fi
 
-if [ "$1" != "-C" ] || [ "$2" != "/" ]; then
+if [ "\${HOME:-}" != "/nonexistent" ]; then
+  echo "unsafe home" >&2
+  exit 89
+fi
+
+if [ -n "\${GIT_CONFIG_PARAMETERS:-}" ] || [ -n "\${GIT_DIR:-}" ] || [ -n "\${GIT_WORK_TREE:-}" ]; then
+  echo "local git environment leaked" >&2
+  exit 90
+fi
+
+if [ -n "\${GIT_COMMON_DIR:-}" ] || [ -n "\${GIT_CONFIG:-}" ] || [ -n "\${GIT_ASKPASS:-}" ]; then
+  echo "extra git environment leaked" >&2
+  exit 88
+fi
+
+if [ "\$1" != "-C" ] || [ "\$2" != "/" ]; then
   echo "neutral working directory not set" >&2
   exit 92
 fi
 shift 2
 
-if [ "$1" != "-c" ] || [ "$2" != "credential.helper=" ]; then
+if [ "\$1" != "-c" ] || [ "\$2" != "credential.helper=" ]; then
   echo "credential helper not disabled" >&2
   exit 93
 fi
 shift 2
 
-if [ "$1" != "ls-remote" ]; then
-  echo "unexpected git command: $*" >&2
+if [ "\$1" != "ls-remote" ]; then
+  echo "unexpected git command: \$*" >&2
   exit 99
 fi
 
@@ -73,6 +93,12 @@ run_check() {
   export GIT_CONFIG_COUNT=1
   export GIT_CONFIG_KEY_0=url.https://evil.example/.insteadOf
   export GIT_CONFIG_VALUE_0=https://github.com/
+  export GIT_CONFIG_PARAMETERS="'url.https://evil.example/.insteadOf'='https://github.com/'"
+  export GIT_DIR="$TMP_DIR/evil.git"
+  export GIT_WORK_TREE="$TMP_DIR/evil-worktree"
+  export GIT_COMMON_DIR="$TMP_DIR/evil-common.git"
+  export GIT_CONFIG="$TMP_DIR/evil-config"
+  export GIT_ASKPASS="$TMP_DIR/evil-askpass"
   "$ROOT_DIR/scripts/check-vendor-updates.sh" "$ROOT_DIR/scripts/vendor/upstreams.tsv"
 }
 
