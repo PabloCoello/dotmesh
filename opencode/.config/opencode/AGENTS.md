@@ -53,7 +53,7 @@ sobre este archivo.
 - Carga `tool-error-recovery` antes de reintentar una herramienta fallida. Como
   máximo hay un reintento y solo para lecturas claramente idempotentes.
 - No reintentes escrituras, Git/Stow destructivo, red autenticada ni MCP mutables.
-  Conserva el exit/status y un resumen redactado de stderr; si el fallo se repite,
+  Conserva el exit/status y un resumen de stderr sin datos sensibles; si el fallo se repite,
   para.
 - Usa permisos nativos, sandbox y aprobaciones antes que plugins o hooks. No
   dependas de `wait-for-user` ni de `reflect`.

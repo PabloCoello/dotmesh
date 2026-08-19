@@ -132,7 +132,7 @@ Los paquetes `claude/` y `codex/` replican el flujo de OpenCode dentro de los l�
 | Comandos custom | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` | equivalentes en lenguaje natural en `codex/.codex/AGENTS.md` |
 | MCP | `~/.config/opencode/opencode.json` | `claude/.claude/mcp/servers.reference.json` (aplicar con `claude mcp add`, ver [docs/INSTALL.md](docs/INSTALL.md)) | `[mcp_servers.*]` en `codex/.codex/config.toml` |
 
-La recuperación de errores de herramientas se comparte en `tool-error-recovery`: un solo reintento como máximo, solo para lecturas claramente idempotentes. No se reintentan escrituras, Git/Stow destructivo, red autenticada ni MCP mutables. Cada agente conserva exit/status y un resumen redactado de stderr, y usa permisos nativos, sandbox o aprobaciones antes que añadir plugins o hooks.
+La recuperación de errores de herramientas se comparte en `tool-error-recovery`: un solo reintento como máximo, solo para lecturas claramente idempotentes. No se reintentan escrituras, Git/Stow destructivo, red autenticada ni MCP mutables. Cada agente conserva exit/status y un resumen de stderr sin datos sensibles, y usa permisos nativos, sandbox o aprobaciones antes que añadir plugins o hooks.
 
 Limitaciones conocidas que no se replican:
 

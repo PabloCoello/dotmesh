@@ -14,6 +14,33 @@ const requireIncludes = (path, snippets) => {
   }
 };
 
+const requireMatches = (path, checks) => {
+  const content = read(path);
+  const missing = checks.filter(({ pattern }) => !pattern.test(content));
+  if (missing.length > 0) {
+    throw new Error(`${path} is missing contract rule(s): ${missing.map(({ name }) => name).join(', ')}`);
+  }
+};
+
+const requireNotMatches = (path, checks) => {
+  const content = read(path);
+  const present = checks.filter(({ pattern }) => pattern.test(content));
+  if (present.length > 0) {
+    throw new Error(`${path} has contradictory wording: ${present.map(({ name }) => name).join(', ')}`);
+  }
+};
+
+const requireNoPositiveMutationRetry = (path) => {
+  const forbidden = /(?:retry|reintent(?:a|ar|an))[^\n]*(?:writes|escrituras|mutations|mutaciones|mutable MCP|MCP mutables|authenticated network|red autenticada|destructive Git|Git\/Stow destructivo|Stow)/i;
+  const negated = /(?:Never|Do not|No reintentes|no se reintentan)/i;
+  const offenders = read(path)
+    .split('\n')
+    .filter((line) => forbidden.test(line) && !negated.test(line));
+  if (offenders.length > 0) {
+    throw new Error(`${path} has positive mutation retry wording: ${offenders.join(' | ')}`);
+  }
+};
+
 const walk = (dir) => {
   const absolute = join(root, dir);
   if (!existsSync(absolute)) return [];
@@ -24,14 +51,26 @@ const walk = (dir) => {
   });
 };
 
-requireIncludes('agents/.agents/skills/tool-error-recovery/SKILL.md', [
-  'Retry only when the failed operation is a clearly idempotent read',
-  'Make at most one retry',
-  'Never retry writes, destructive Git or Stow operations, authenticated network calls, or mutable MCP calls',
-  'preserve enough evidence to debug without leaking secrets',
-  'Do not use `wait-for-user`, `reflect`, or another synthetic tool as a recovery crutch',
-  'Do not add a plugin, hook, wrapper, daemon, or retry framework',
+const canonicalSkill = 'agents/.agents/skills/tool-error-recovery/SKILL.md';
+
+requireMatches(canonicalSkill, [
+  { name: 'one retry maximum', pattern: /(?:at most one retry|Make at most one retry)/i },
+  { name: 'idempotent reads only', pattern: /clearly idempotent (?:local )?reads?[^\n|]*\|\s*1/i },
+  { name: 'zero retries for writes', pattern: /Writes or edits\s*\|\s*0/i },
+  { name: 'zero retries for destructive Git or Stow', pattern: /Git or Stow operations that can change state\s*\|\s*0/i },
+  { name: 'zero retries for authenticated network', pattern: /Authenticated network calls\s*\|\s*0/i },
+  { name: 'zero retries for mutable MCP', pattern: /Mutable MCP calls\s*\|\s*0/i },
+  { name: 'preserve exit or status', pattern: /exit code, status, or exception class/i },
+  { name: 'summarise stderr without secrets', pattern: /stderr\/error summary[\s\S]*redacted[\s\S]*secrets|without leaking secrets[\s\S]*stderr\/error summary/i },
+  { name: 'stop after repeated failure', pattern: /(?:Stop after a repeated failure|If the retry also fails, stop|stopped after a repeated failure)/i },
+  { name: 'no wait-for-user or reflect', pattern: /Do not use `wait-for-user`, `reflect`/i },
+  { name: 'no retry plugin or hook by default', pattern: /Do not add a plugin, hook, wrapper, daemon, or retry framework/i },
 ]);
+
+requireNotMatches(canonicalSkill, [
+  { name: 'multiple retries', pattern: /(?:two|three|multiple|unlimited) retries/i },
+]);
+requireNoPositiveMutationRetry(canonicalSkill);
 
 for (const path of [
   'AGENTS.md',
@@ -46,6 +85,11 @@ for (const path of [
   'README.md',
 ]) {
   requireIncludes(path, ['tool-error-recovery']);
+  requireNotMatches(path, [
+    { name: 'Spanish ambiguous redaction wording', pattern: /resumen redactado/i },
+    { name: 'multiple retries', pattern: /(?:dos|múltiples|multiple|unlimited) reintentos|(?:two|multiple|unlimited) retries/i },
+  ]);
+  requireNoPositiveMutationRetry(path);
 }
 
 const opencodeConfig = JSON.parse(read('opencode/.config/opencode/opencode.json'));
