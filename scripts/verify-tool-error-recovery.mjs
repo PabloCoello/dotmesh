@@ -49,7 +49,8 @@ for (const path of [
 }
 
 const opencodeConfig = JSON.parse(read('opencode/.config/opencode/opencode.json'));
-if (Array.isArray(opencodeConfig.plugin) && opencodeConfig.plugin.length !== 0) {
+const opencodePlugins = JSON.stringify(opencodeConfig.plugin ?? []);
+if (/tool-error|retry/i.test(opencodePlugins)) {
   throw new Error('opencode config must not add a retry plugin');
 }
 
