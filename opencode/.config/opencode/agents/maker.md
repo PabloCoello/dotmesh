@@ -15,8 +15,8 @@ permission:
     "ast-grep scan *": allow
     "ast-grep --rewrite*": ask
     "ast-grep * --rewrite*": ask
-    "ast-grep -r *": ask
-    "ast-grep * -r *": ask
+    "ast-grep -r*": ask
+    "ast-grep * -r*": ask
     "ast-grep --interactive*": ask
     "ast-grep * --interactive*": ask
     "ast-grep -i*": ask
