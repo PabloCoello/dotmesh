@@ -36,7 +36,7 @@ Para verificar identificadores de modelo: `opencode models`. Ajusta el campo `mo
 
 Las skills compartidas viven en `~/.agents/skills/`. No crees una segunda fuente como `.opencode/skills/` salvo que el proyecto lo requiera explícitamente y quede documentado cómo se sincroniza.
 
-`ast-grep` está contemplado como herramienta opcional de búsqueda estructural para `maker` y `build`. Si existe el binario `ast-grep`, esos agentes pueden usar `ast-grep run`, `ast-grep scan` y `ast-grep outline` para leer código por forma sintáctica. Los modos de rewrite (`--rewrite`, `-r`), interactivo (`--interactive`, `-i`) y aplicación masiva (`--update-all`, `-U`) quedan en `ask` o `deny` en las reglas de bash y no forman parte del uso normal. `review` y `security` no reciben permiso especial para ejecutar `ast-grep`. Consulta la skill `structured-search` antes de usarlo.
+`ast-grep` está contemplado como herramienta opcional de búsqueda estructural para `maker` y `build`. Si existe el binario `ast-grep`, esos agentes pueden usar `ast-grep run`, `ast-grep scan` y `ast-grep outline` para leer código por forma sintáctica. Los modos de rewrite (`--rewrite`, `-r`), interactivo (`--interactive`, `-i`) y aplicación masiva (`--update-all`, `-U`) quedan en `ask` o `deny` en las reglas de bash y no forman parte del uso normal. Estas reglas son guardarraíles para invocaciones reconocibles, no un sandbox para agentes con shell y escritura. El alias `sg` queda en `ask` para evitar ambigüedad con Linux. `review` y `security` no reciben permiso especial para ejecutar `ast-grep`. Consulta la skill `structured-search` antes de usarlo.
 
 ## Verificación
 

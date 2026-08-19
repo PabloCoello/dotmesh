@@ -9,6 +9,8 @@ Usa esta skill cuando necesites encontrar código por forma sintáctica, no por 
 
 En OpenCode, el uso normal de `ast-grep` queda reservado a `maker` y `build`. Los agentes `review` y `security` mantienen `bash` restringido y no reciben un permiso especial de `ast-grep`, para evitar escritura indirecta mediante redirecciones o encadenado de comandos.
 
+Las reglas de `maker` y `build` son guardarraíles para invocaciones reconocibles de `ast-grep`, no un sandbox. Esos agentes ya tienen shell y escritura; revisa cualquier comando que combine `ast-grep` con redirecciones, pipes o shell avanzado. No uses el alias `sg`: queda en `ask` y puede ser ambiguo en Linux.
+
 ## Comandos seguros
 
 Preferir el binario largo `ast-grep`. La documentación oficial también menciona `sg`, pero en Linux ese nombre puede chocar con `setgroups`.

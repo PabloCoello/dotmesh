@@ -7,12 +7,12 @@ permission:
   edit: deny
   write: deny
   bash:
-    "*": deny
     "npm audit*": allow
     "pip-audit*": allow
     "pip list*": allow
     "git diff*": allow
     "git log*": allow
+    "*": deny
   webfetch: allow
   read: allow
 ---
