@@ -23,7 +23,7 @@ Al incorporar o actualizar una skill:
 
 ## Core pack diario
 
-Estas 15 skills forman el conjunto base de ingeniería:
+Estas skills forman el conjunto base de ingeniería:
 
 | Skill | Cuándo usarla |
 |---|---|

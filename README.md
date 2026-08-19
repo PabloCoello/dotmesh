@@ -88,7 +88,7 @@ referencia completa —paleta, tipografía y mapa de sintaxis— está en
 - `~/.agents/skills/<skill>/SKILL.md` — vía `make stow agents` (consumido por OpenCode y Codex).
 - `~/.claude/skills/<skill>/SKILL.md` — vía `make link-skills` (symlink a la ruta anterior, consumido por Claude Code).
 
-El core pack diario incluye 15 skills de ingeniería:
+El core pack diario incluye estas skills de ingeniería:
 
 - `idea-refine`
 - `spec-driven-development`
