@@ -48,6 +48,7 @@ help:
 	@echo "  make test-opencode-doctor - Pruebas del diagnóstico OpenCode"
 	@echo "  make verify-opencode-ast-grep - Comprueba permisos ast-grep de OpenCode"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
+	@echo "  make test-wait-for-user - Verifica el contrato WAIT_FOR_USER en agentes y docs"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
 	@echo "  make test-tool-error-recovery - Verifica la política común de reintentos de herramientas"
 	@echo ""
@@ -309,3 +310,7 @@ test-tool-error-recovery:
 clean:
 	@rm -rf ~/dotfiles-backup/*
 	@echo "Backups eliminados."
+
+.PHONY: test-wait-for-user
+test-wait-for-user:
+	@bash scripts/check-wait-for-user.sh
