@@ -153,6 +153,32 @@ mv "$fixture_split_flag/opencode/.config/opencode/opencode.json.tmp" \
 assert_sensitive_literal_fails "$fixture_split_flag" "$home_split_flag" \
   'DO_NOT_PRINT_SPLIT_ARG_123456789' "flag sensible con valor separado"
 
+# Common auth-token flags split from their value are rejected.
+fixture_auth_token="$tmp_dir/auth-token-repo"
+home_auth_token="$tmp_dir/auth-token-home"
+make_fixture_repo "$fixture_auth_token"
+make_fake_home "$home_auth_token" "$fixture_auth_token"
+jq '.mcp.notion.command += ["--auth-token", "DO_NOT_PRINT_AUTH_TOKEN_123456789"]' \
+  "$fixture_auth_token/opencode/.config/opencode/opencode.json" \
+  > "$fixture_auth_token/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_auth_token/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_auth_token/opencode/.config/opencode/opencode.json"
+assert_sensitive_literal_fails "$fixture_auth_token" "$home_auth_token" \
+  'DO_NOT_PRINT_AUTH_TOKEN_123456789' "flag auth-token con valor separado"
+
+# Header flags carrying credential headers are rejected.
+fixture_header_arg="$tmp_dir/header-arg-repo"
+home_header_arg="$tmp_dir/header-arg-home"
+make_fixture_repo "$fixture_header_arg"
+make_fake_home "$home_header_arg" "$fixture_header_arg"
+jq '.mcp.notion.command += ["--header", "X-API-Key: DO_NOT_PRINT_X_API_KEY_123456789"]' \
+  "$fixture_header_arg/opencode/.config/opencode/opencode.json" \
+  > "$fixture_header_arg/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_header_arg/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_header_arg/opencode/.config/opencode/opencode.json"
+assert_sensitive_literal_fails "$fixture_header_arg" "$home_header_arg" \
+  'DO_NOT_PRINT_X_API_KEY_123456789' "flag header con API key"
+
 # Secrets embedded in headers: fail without printing the header value.
 fixture_header="$tmp_dir/header-repo"
 home_header="$tmp_dir/header-home"
@@ -224,6 +250,26 @@ if output="$(run_doctor "$fixture_flag_env" "$home_flag_env")"; then
   fi
 else
   fail "placeholder env en flag devuelve error"
+fi
+
+# Env placeholders embedded in command header flags are allowed.
+fixture_header_env="$tmp_dir/header-env-repo"
+home_header_env="$tmp_dir/header-env-home"
+make_fixture_repo "$fixture_header_env"
+make_fake_home "$home_header_env" "$fixture_header_env"
+jq '.mcp.notion.command += ["--header", "X-API-Key: {env:DOTMESH_MCP_TOKEN}"]' \
+  "$fixture_header_env/opencode/.config/opencode/opencode.json" \
+  > "$fixture_header_env/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_header_env/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_header_env/opencode/.config/opencode/opencode.json"
+if output="$(run_doctor "$fixture_header_env" "$home_header_env")"; then
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "placeholder env en flag header se permite"
+  else
+    fail "placeholder env en flag header no informa 0 avisos y 0 fallos"
+  fi
+else
+  fail "placeholder env en flag header devuelve error"
 fi
 
 # Non-sensitive names containing PAT as part of another word are allowed.

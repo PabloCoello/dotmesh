@@ -137,17 +137,23 @@ check_json() {
     def env_backed:
       env_ref
       or test("(?i)^(authorization:[[:space:]]*)?bearer[[:space:]]+\\{env:[A-Z0-9_]+\\}$")
-      or test("(?i)^--?(password|secret|token|api[_-]?key|authorization|bearer|cookie)=\\{env:[A-Z0-9_]+\\}$");
+      or test("(?i)^((x-)?api-key|cookie):[[:space:]]*\\{env:[A-Z0-9_]+\\}$")
+      or test("(?i)^--?(password|secret|(auth[-_]?)?token|api[_-]?key|authorization|bearer|cookie)=\\{env:[A-Z0-9_]+\\}$")
+      or test("(?i)^--?(header|h)=((authorization:[[:space:]]*)?bearer[[:space:]]+|(x-)?api-key:[[:space:]]*|cookie:[[:space:]]*)\\{env:[A-Z0-9_]+\\}$");
     def sensitive_key: test("(?i)(password|secret|token|api[_-]?key|authorization|bearer|cookie|(^|[_-])pat($|[_-]))");
-    def sensitive_flag: test("(?i)^--?(password|secret|token|api[_-]?key|authorization|bearer|cookie)(=|$)");
+    def sensitive_flag: test("(?i)^--?(password|secret|(auth[-_]?)?token|api[_-]?key|authorization|bearer|cookie)(=|$)");
+    def header_flag: test("(?i)^--?(header|h)(=|$)");
+    def credential_header:
+      test("(?i)^((authorization:[[:space:]]*)?bearer[[:space:]]+|(x-)?api-key:[[:space:]]*|cookie:[[:space:]]*)[^[:space:]]{8,}");
     def secretish_value:
-      test("(?i)(authorization:[[:space:]]*bearer[[:space:]]+[^[:space:]]{8,}|bearer[[:space:]]+[^[:space:]]{8,}|cookie:[^[:space:]]{8,}|token=[^[:space:]]{8,}|api[_-]?key=[^[:space:]]{8,}|password=[^[:space:]]{4,}|secret=[^[:space:]]{8,}|ghp_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})");
+      credential_header
+      or test("(?i)(authorization:[[:space:]]*bearer[[:space:]]+[^[:space:]]{8,}|bearer[[:space:]]+[^[:space:]]{8,}|cookie:[^[:space:]]{8,}|token=[^[:space:]]{8,}|api[_-]?key=[^[:space:]]{8,}|password=[^[:space:]]{4,}|secret=[^[:space:]]{8,}|ghp_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})");
     def command_secret_args:
       [.mcp[]?.command? | select(type == "array")
         | . as $args | any(range(0; ($args | length) - 1);
             ($args[.] | type == "string")
-            and ($args[.] | sensitive_flag)
             and ($args[. + 1] | type == "string")
+            and (($args[.] | sensitive_flag) or (($args[.] | header_flag) and ($args[. + 1] | credential_header)))
             and (($args[. + 1] | env_backed) | not))]
       | any;
     ([paths(scalars) as $path
