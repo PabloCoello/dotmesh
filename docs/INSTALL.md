@@ -85,10 +85,11 @@ make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa St
 exec zsh                                    # recarga la shell
 starship --version                          # debe imprimir versión
 git diff                                    # debe usar delta
-opencode agent list                         # debe listar maker, scribe + 6 subagentes
+make opencode-doctor                        # valida OpenCode sin arrancar servicios
+opencode agent list                         # debe listar maker, scribe y subagentes
 codex mcp list                              # debe listar notion/github/tavily/openalex/zotero
 ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
-ls ~/.claude/agents/                        # debe listar 6 subagentes de Claude Code
+ls ~/.claude/agents/                        # debe listar 7 subagentes de Claude Code
 ```
 
 Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una

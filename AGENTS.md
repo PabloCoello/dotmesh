@@ -126,8 +126,8 @@ The agent system has two layers, identical in concept across the three tools.
   `maker`), `mode: primary` agents in OpenCode (native selector), and workflow
   modes in Codex. The active persona is meant to be visible — the Claude
   statusline prints it.
-- **Six subagents** — the workers a persona delegates to, never switched into by
-  hand: `build`, `plan`, `review`, `security`, `editor`, `maths`. Their
+- **Seven subagents** — the workers a persona delegates to, never switched into by
+  hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
   situation, not on the user naming them. The `remind-load-skills` and
   `remind-review-gate` hooks are the safety net under that delegation.
@@ -155,7 +155,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 | Memory file | reads `AGENTS.md` directly | reads `CLAUDE.md` (project and global `~/.claude/CLAUDE.md`), each a stub importing `AGENTS.md` via `@AGENTS.md` | reads `~/.codex/AGENTS.md` plus project `AGENTS.md` |
 | Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` | shared skills referenced from `~/.agents/skills/` and surfaced through Codex skill discovery |
 | Personas (primary) | `maker`, `scribe` as `mode: primary` agents, switched with the native selector | `maker`, `scribe` as output styles in `~/.claude/output-styles/`, configured via `outputStyle` in `settings.json` (default `maker`) | `maker`, `scribe` workflow modes in `codex/.codex/AGENTS.md` |
-| Subagents | `~/.config/opencode/agents/` (6 `subagent`: build, plan, review, security, editor, maths) | `~/.claude/agents/` (6, same names and roles) | helper passes in `codex/.codex/AGENTS.md`, not separate agent files |
+| Subagents | `~/.config/opencode/agents/` (7 `subagent`: build, plan, review, security, editor, maths, reviser) | `~/.claude/agents/` (7, same names and roles) | helper passes in `codex/.codex/AGENTS.md`, not separate agent files |
 | Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) | natural-language command equivalents in `codex/.codex/AGENTS.md` |
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
