@@ -7,7 +7,6 @@ permission:
   "*": deny
   read: allow
   edit: deny
-  write: deny
   bash: ask
   task: deny
   notion_*: deny

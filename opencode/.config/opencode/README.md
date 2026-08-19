@@ -53,23 +53,33 @@ La matriz de permisos se comprueba sin arrancar MCP ni ejecutar herramientas rem
 node scripts/test-opencode-agent-capabilities.mjs
 ```
 
+Para ver la configuración efectiva de OpenCode 1.18.15:
+
+```bash
+XDG_CONFIG_HOME="$PWD/opencode/.config" OPENCODE_DISABLE_PROJECT_CONFIG=1 opencode debug agent <agente>
+```
+
 ## Matriz de capacidades
 
 OpenCode evalúa las reglas de permisos por patrón y gana la última coincidencia.
 Por eso las reglas anchas (`"*": deny`) aparecen antes de las excepciones.
 La configuración usa `permission`, no el campo antiguo `tools`.
+En OpenCode 1.18.15, `permission.edit` autoriza todas las herramientas de modificación de ficheros (`edit`, `write`, `patch`); no hay un permiso `write` operativo independiente.
 
 | Agente | Lectura/búsqueda | Edición | Bash | Task | Skill | Web | MCP |
 |---|---|---|---|---|---|---|---|
-| `maker` | Permitida | `edit` y `write` permitidos | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
-| `build` | Permitida | `edit` y `write` permitidos | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Solo `review` y `maths` | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
-| `scribe` | Permitida | `edit` solo en `.md`, `.qmd`, `.tex` y `.bib`; `write` también en `.ai/review/**` y `.ai/backlog/**` | Solo `pandoc*`, `git diff*`, `git log*` y `git status*`, con denegaciones posteriores para metacaracteres de shell | Solo `editor`, `reviser`, `maths` y `security` | Solo `anti-ai-style`, `castellano-peninsular` y `doc-review` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
-| `plan` | Permitida | `write` solo en `.ai/tasks/**`; `edit` denegado | Denegado | Denegado | Solo planificación, source-driven y skills de castellano | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `maker` | Permitida | Permitida por `edit: allow` | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
+| `build` | Permitida | Permitida por `edit: allow` | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Denegado | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
+| `scribe` | Permitida | Permitida por `edit` solo en `.md`, `.qmd`, `.tex`, `.bib`, `.ai/review/**` y `.ai/backlog/**` | `pandoc*` pide aprobación; Git exacto seguro permitido; variantes amplias en `ask`; `--output` y `--ext-diff` denegados | Solo `editor`, `reviser`, `maths` y `security` | Solo `anti-ai-style`, `castellano-peninsular` y `doc-review` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `plan` | Permitida | Permitida por `edit` solo en `.ai/tasks/**` | Denegado | Denegado | Solo planificación, source-driven y skills de castellano | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
 | `review` | Permitida | Denegada | Denegado | Denegado | Solo `code-review-and-quality` | Denegado | Denegado para los servidores configurados |
 | `editor` | Permitida | Denegada | Denegado | Denegado | Solo `anti-ai-style` y `castellano-peninsular` | Denegado | Denegado para los servidores configurados |
-| `security` | Permitida | Denegada | Solo `git diff*`, `git log*`, `npm audit*`, `pip-audit*` y `pip list*`, con denegaciones posteriores para metacaracteres de shell | Denegado | Solo `security-and-hardening` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `security` | Permitida | Denegada | Comandos exactos seguros permitidos; variantes amplias en `ask`; `npm audit fix`, `pip-audit --fix`, `--output` y `--ext-diff` denegados | Denegado | Solo `security-and-hardening` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
 | `maths` | Solo lectura | Denegada | `ask` para todo comando | Denegado | Denegado | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
-| `reviser` | Permitida | `edit` denegado; `write` solo en `.ai/review/**` para eventos nuevos | Denegado | Denegado | Solo `doc-review` | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `reviser` | Permitida | Permitida por `edit` solo en `.ai/review/**` | Denegado | Denegado | Solo `doc-review` | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
+
+OpenCode no distingue creación y modificación dentro de `permission.edit`.
+`reviser` puede modificar rutas bajo `.ai/review/**` a nivel de permiso; el prompt lo limita a crear un evento nuevo y a no sobrescribir eventos existentes.
 
 Los patrones MCP (`notion_*`, `github_*`, `tavily_*`, `openalex_*`, `zotero_*`) siguen la documentación oficial: las claves de `permission` también se comparan con nombres de herramientas MCP.
 El wildcard inicial (`"*": deny`) deniega también herramientas MCP futuras en los agentes restringidos.

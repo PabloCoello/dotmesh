@@ -11,49 +11,51 @@ const mcpServers = ["notion", "github", "tavily", "openalex", "zotero"]
 const expected = {
   maker: {
     mode: "primary",
-    allows: [["edit", "src/example.txt"], ["write", "src/new.txt"], ["task", "build"], ["skill", "source-driven-development"]],
+    allows: [["edit", "src/example.txt"], ["task", "build"], ["skill", "source-driven-development"]],
     asks: [["bash", "git reset --hard"], ["bash", "git push --force-with-lease"]],
   },
   build: {
     mode: "subagent",
-    allows: [["edit", "src/example.txt"], ["write", "src/new.txt"], ["task", "review"], ["task", "maths"], ["skill", "test-driven-development"]],
-    denies: [["task", "security"], ["task", "plan"], ["task", "editor"]],
+    allows: [["edit", "src/example.txt"], ["skill", "test-driven-development"]],
+    denies: [["task", "review"], ["task", "maths"], ["task", "security"], ["task", "plan"], ["task", "editor"]],
     asks: [["bash", "git reset --hard"], ["bash", "git push --force"]],
   },
   scribe: {
     mode: "primary",
-    allows: [["edit", "draft.md"], ["write", "draft.md"], ["write", ".ai/review/docs/file.md/new-event.json"], ["task", "reviser"], ["task", "security"], ["skill", "doc-review"]],
-    denies: [["edit", "src/code.ts"], ["write", "src/code.ts"], ["bash", "npm test"], ["bash", "git diff; rm README.md"], ["task", "build"]],
+    allows: [["edit", "draft.md"], ["edit", ".ai/review/docs/file.md/new-event.json"], ["task", "reviser"], ["task", "security"], ["skill", "doc-review"], ["bash", "git diff"], ["bash", "git status --short"]],
+    asks: [["bash", "pandoc draft.md"], ["bash", "git diff -- README.md"], ["bash", "git log --oneline -5"]],
+    denies: [["edit", "src/code.ts"], ["bash", "npm test"], ["bash", "pandoc draft.md -o out.pdf"], ["bash", "git diff --output=/tmp/diff"], ["bash", "git diff --ext-diff"], ["task", "build"]],
   },
   plan: {
     mode: "subagent",
-    allows: [["write", ".ai/tasks/2026-08-19-opencode-slim/plan.md"], ["skill", "planning-and-task-breakdown"], ["webfetch", "https://opencode.ai/docs/agents"]],
-    denies: [["edit", ".ai/tasks/2026-08-19-opencode-slim/plan.md"], ["write", "README.md"], ["bash", "git status"], ["task", "build"]],
+    allows: [["edit", ".ai/tasks/2026-08-19-opencode-slim/plan.md"], ["skill", "planning-and-task-breakdown"], ["webfetch", "https://opencode.ai/docs/agents"]],
+    denies: [["edit", "README.md"], ["bash", "git status"], ["task", "build"]],
   },
   review: {
     mode: "subagent",
     allows: [["read", "README.md"], ["skill", "code-review-and-quality"]],
-    denies: [["edit", "README.md"], ["write", "README.md"], ["bash", "git diff"], ["task", "security"]],
+    denies: [["edit", "README.md"], ["bash", "git diff"], ["task", "security"]],
   },
   editor: {
     mode: "subagent",
     allows: [["read", "draft.md"], ["skill", "anti-ai-style"]],
-    denies: [["edit", "draft.md"], ["write", "draft.md"], ["bash", "pandoc draft.md"], ["task", "reviser"]],
+    denies: [["edit", "draft.md"], ["bash", "pandoc draft.md"], ["task", "reviser"]],
   },
   security: {
     mode: "subagent",
-    allows: [["bash", "git diff --staged"], ["bash", "npm audit --omit=dev"], ["skill", "security-and-hardening"]],
-    denies: [["edit", "README.md"], ["write", "README.md"], ["bash", "git status"], ["bash", "git diff; rm README.md"], ["task", "review"]],
+    allows: [["bash", "git diff --staged"], ["bash", "npm audit"], ["bash", "npm audit --json"], ["bash", "pip-audit"], ["skill", "security-and-hardening"]],
+    asks: [["bash", "npm audit --omit=dev"], ["bash", "pip list --outdated"], ["bash", "git log --oneline -5"]],
+    denies: [["edit", "README.md"], ["bash", "git status"], ["bash", "npm audit fix"], ["bash", "pip-audit --fix"], ["bash", "pip --fix"], ["bash", "git diff --output=/tmp/diff"], ["bash", "git diff --ext-diff"], ["task", "review"]],
   },
   maths: {
     mode: "subagent",
     asks: [["bash", "python3 -c 'import sympy as s; print(s.factor(s.Symbol(\"x\")**2-1))'"]],
-    denies: [["edit", "README.md"], ["write", "README.md"], ["task", "review"]],
+    denies: [["edit", "README.md"], ["task", "review"]],
   },
   reviser: {
     mode: "subagent",
-    allows: [["write", ".ai/review/docs/file.md/new-event.json"], ["skill", "doc-review"]],
-    denies: [["edit", ".ai/review/docs/file.md/existing-event.json"], ["write", "docs/file.md"], ["bash", "git diff"], ["task", "editor"]],
+    allows: [["edit", ".ai/review/docs/file.md/new-event.json"], ["skill", "doc-review"]],
+    denies: [["edit", "docs/file.md"], ["bash", "git diff"], ["task", "editor"]],
   },
 }
 
@@ -136,6 +138,7 @@ for (const [agent, checks] of Object.entries(expected)) {
   const frontmatter = extractFrontmatter(markdown)
   if (frontmatter.mode !== checks.mode) failures.push(`${agent}: expected mode ${checks.mode}, got ${frontmatter.mode}`)
   const permission = frontmatter.permission ?? {}
+  if (permission.write !== undefined) failures.push(`${agent}: permission.write is not an operational OpenCode 1.18.15 gate; use permission.edit`)
   for (const [key, input] of checks.allows ?? []) {
     const action = resolve(permission, key, input)
     if (action !== "allow") failures.push(`${agent}: expected ${key} ${input} => allow, got ${action}`)

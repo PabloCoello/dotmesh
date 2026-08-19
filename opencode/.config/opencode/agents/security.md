@@ -10,21 +10,28 @@ permission:
   grep: allow
   list: allow
   edit: deny
-  write: deny
   bash:
     "*": deny
-    "npm audit*": allow
-    "pip-audit*": allow
-    "pip list*": allow
-    "git diff*": allow
-    "git log*": allow
-    "*;*": deny
-    "*&&*": deny
-    "*|*": deny
-    "*`*": deny
-    "*$(*": deny
-    "*>*": deny
-    "*<*": deny
+    "npm audit*": ask
+    "npm audit": allow
+    "npm audit --json": allow
+    "npm audit fix*": deny
+    "pip-audit*": ask
+    "pip-audit": allow
+    "pip-audit --format json": allow
+    "pip-audit --fix*": deny
+    "pip list*": ask
+    "pip list": allow
+    "pip list --format=json": allow
+    "git diff*": ask
+    "git diff": allow
+    "git diff --cached": allow
+    "git diff --staged": allow
+    "git diff *--output*": deny
+    "git diff *--ext-diff*": deny
+    "git log*": ask
+    "git log": allow
+    "git log --oneline": allow
   webfetch: allow
   skill:
     "*": deny

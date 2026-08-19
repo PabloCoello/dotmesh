@@ -10,7 +10,6 @@ permission:
   grep: allow
   list: allow
   edit: deny
-  write: deny
   bash: deny
   skill:
     "*": deny

@@ -11,8 +11,6 @@ permission:
   list: allow
   edit:
     "*": deny
-  write:
-    "*": deny
     ".ai/tasks/**": allow
   bash: deny
   webfetch: allow

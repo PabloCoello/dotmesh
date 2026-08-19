@@ -15,27 +15,24 @@ permission:
     "*.qmd": allow
     "*.tex": allow
     "*.bib": allow
-  write:
-    "*": deny
-    "*.md": allow
-    "*.qmd": allow
-    "*.tex": allow
-    "*.bib": allow
     ".ai/review/**": allow
     ".ai/backlog/**": allow
   bash:
     "*": deny
-    "pandoc*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git status*": allow
-    "*;*": deny
-    "*&&*": deny
-    "*|*": deny
-    "*`*": deny
-    "*$(*": deny
-    "*>*": deny
-    "*<*": deny
+    "pandoc*": ask
+    "pandoc * -o *": deny
+    "git diff*": ask
+    "git diff": allow
+    "git diff --cached": allow
+    "git diff --staged": allow
+    "git diff *--output*": deny
+    "git diff *--ext-diff*": deny
+    "git log*": ask
+    "git log": allow
+    "git log --oneline": allow
+    "git status*": ask
+    "git status": allow
+    "git status --short": allow
   webfetch: allow
   skill:
     "*": deny
