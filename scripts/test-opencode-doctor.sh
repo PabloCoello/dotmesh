@@ -70,10 +70,29 @@ assert_sensitive_literal_fails() {
   if output="$(run_doctor "$fixture_repo" "$fake_home")"; then
     fail "$label no falla"
   else
-    if printf '%s\n' "$output" | grep -q "$forbidden_value"; then
+    if printf '%s\n' "$output" | grep -q -- "$forbidden_value"; then
       fail "$label imprime el valor literal"
     elif printf '%s\n' "$output" | grep -q 'valor sensible literal'; then
       pass "$label se detecta sin imprimirlo"
+    else
+      fail "$label no deja mensaje claro"
+    fi
+  fi
+}
+
+assert_mcp_type_fails_without_value() {
+  local fixture_repo="$1"
+  local fake_home="$2"
+  local forbidden_value="$3"
+  local label="$4"
+
+  if output="$(run_doctor "$fixture_repo" "$fake_home")"; then
+    fail "$label no falla"
+  else
+    if [ -n "$forbidden_value" ] && printf '%s\n' "$output" | grep -q -- "$forbidden_value"; then
+      fail "$label imprime contenido de mcp"
+    elif printf '%s\n' "$output" | grep -q 'MCP debe ser un objeto JSON'; then
+      pass "$label se informa sin volcar contenido"
     else
       fail "$label no deja mensaje claro"
     fi
@@ -114,6 +133,43 @@ else
   fi
 fi
 
+# Invalid MCP top-level types fail in a controlled way without dumping values.
+fixture_mcp_string="$tmp_dir/mcp-string-repo"
+home_mcp_string="$tmp_dir/mcp-string-home"
+make_fixture_repo "$fixture_mcp_string"
+make_fake_home "$home_mcp_string" "$fixture_mcp_string"
+jq '.mcp = "DO_NOT_PRINT_MCP_STRING"' \
+  "$fixture_mcp_string/opencode/.config/opencode/opencode.json" \
+  > "$fixture_mcp_string/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_mcp_string/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_mcp_string/opencode/.config/opencode/opencode.json"
+assert_mcp_type_fails_without_value "$fixture_mcp_string" "$home_mcp_string" \
+  'DO_NOT_PRINT_MCP_STRING' "MCP string"
+
+fixture_mcp_array="$tmp_dir/mcp-array-repo"
+home_mcp_array="$tmp_dir/mcp-array-home"
+make_fixture_repo "$fixture_mcp_array"
+make_fake_home "$home_mcp_array" "$fixture_mcp_array"
+jq '.mcp = ["DO_NOT_PRINT_MCP_ARRAY"]' \
+  "$fixture_mcp_array/opencode/.config/opencode/opencode.json" \
+  > "$fixture_mcp_array/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_mcp_array/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_mcp_array/opencode/.config/opencode/opencode.json"
+assert_mcp_type_fails_without_value "$fixture_mcp_array" "$home_mcp_array" \
+  'DO_NOT_PRINT_MCP_ARRAY' "MCP array"
+
+fixture_mcp_null="$tmp_dir/mcp-null-repo"
+home_mcp_null="$tmp_dir/mcp-null-home"
+make_fixture_repo "$fixture_mcp_null"
+make_fake_home "$home_mcp_null" "$fixture_mcp_null"
+jq '.mcp = null' \
+  "$fixture_mcp_null/opencode/.config/opencode/opencode.json" \
+  > "$fixture_mcp_null/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_mcp_null/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_mcp_null/opencode/.config/opencode/opencode.json"
+assert_mcp_type_fails_without_value "$fixture_mcp_null" "$home_mcp_null" \
+  '' "MCP null"
+
 # Literal values in sensitive MCP fields: fail without printing the value.
 fixture_literal="$tmp_dir/literal-repo"
 home_literal="$tmp_dir/literal-home"
@@ -139,6 +195,19 @@ mv "$fixture_command/opencode/.config/opencode/opencode.json.tmp" \
   "$fixture_command/opencode/.config/opencode/opencode.json"
 assert_sensitive_literal_fails "$fixture_command" "$home_command" \
   'DO_NOT_PRINT_ARG_123456789' "secreto en command/args"
+
+# Sensitive flag assignments are rejected even at the end of command arrays.
+fixture_assignment_final="$tmp_dir/assignment-final-repo"
+home_assignment_final="$tmp_dir/assignment-final-home"
+make_fixture_repo "$fixture_assignment_final"
+make_fake_home "$home_assignment_final" "$fixture_assignment_final"
+jq '.mcp.notion.command += ["--token=x"]' \
+  "$fixture_assignment_final/opencode/.config/opencode/opencode.json" \
+  > "$fixture_assignment_final/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_assignment_final/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_assignment_final/opencode/.config/opencode/opencode.json"
+assert_sensitive_literal_fails "$fixture_assignment_final" "$home_assignment_final" \
+  '--token=x' "flag sensible con asignación final"
 
 # Sensitive flags split from their value in command arrays are rejected.
 fixture_split_flag="$tmp_dir/split-flag-repo"
@@ -250,6 +319,26 @@ if output="$(run_doctor "$fixture_flag_env" "$home_flag_env")"; then
   fi
 else
   fail "placeholder env en flag devuelve error"
+fi
+
+# Env placeholders in flag assignments remain allowed with following args.
+fixture_flag_env_more="$tmp_dir/flag-env-more-repo"
+home_flag_env_more="$tmp_dir/flag-env-more-home"
+make_fixture_repo "$fixture_flag_env_more"
+make_fake_home "$home_flag_env_more" "$fixture_flag_env_more"
+jq '.mcp.notion.command += ["--token={env:DOTMESH_MCP_TOKEN}", "--verbose"]' \
+  "$fixture_flag_env_more/opencode/.config/opencode/opencode.json" \
+  > "$fixture_flag_env_more/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_flag_env_more/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_flag_env_more/opencode/.config/opencode/opencode.json"
+if output="$(run_doctor "$fixture_flag_env_more" "$home_flag_env_more")"; then
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "placeholder env en flag con argumentos posteriores se permite"
+  else
+    fail "placeholder env en flag con argumentos posteriores no informa 0 avisos y 0 fallos"
+  fi
+else
+  fail "placeholder env en flag con argumentos posteriores devuelve error"
 fi
 
 # Env placeholders embedded in command header flags are allowed.

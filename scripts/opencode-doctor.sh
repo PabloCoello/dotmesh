@@ -86,6 +86,11 @@ check_json() {
     return
   fi
 
+  if ! jq -e '.mcp | type == "object"' "$CONFIG_FILE" >/dev/null 2>&1; then
+    fail "MCP debe ser un objeto JSON"
+    return
+  fi
+
   local actual_keys expected_count actual_count key
   expected_count="${#EXPECTED_MCP[@]}"
   actual_count="$(jq '.mcp // {} | keys | length' "$CONFIG_FILE")"
@@ -141,8 +146,14 @@ check_json() {
       or test("(?i)^--?(password|secret|(auth[-_]?)?token|api[_-]?key|authorization|bearer|cookie)=\\{env:[A-Z0-9_]+\\}$")
       or test("(?i)^--?(header|h)=((authorization:[[:space:]]*)?bearer[[:space:]]+|(x-)?api-key:[[:space:]]*|cookie:[[:space:]]*)\\{env:[A-Z0-9_]+\\}$");
     def sensitive_key: test("(?i)(password|secret|token|api[_-]?key|authorization|bearer|cookie|(^|[_-])pat($|[_-]))");
-    def sensitive_flag: test("(?i)^--?(password|secret|(auth[-_]?)?token|api[_-]?key|authorization|bearer|cookie)(=|$)");
+    def sensitive_flag_name: "(?i)^--?(password|secret|(auth[-_]?)?token|api[_-]?key|authorization|bearer|cookie)";
+    def sensitive_flag_assign: test(sensitive_flag_name + "=");
+    def sensitive_flag_split: test(sensitive_flag_name + "$");
     def header_flag: test("(?i)^--?(header|h)(=|$)");
+    def header_flag_assign: test("(?i)^--?(header|h)=");
+    def header_flag_split: test("(?i)^--?(header|h)$");
+    def header_flag_credential_assign:
+      test("(?i)^--?(header|h)=(((authorization:[[:space:]]*)?bearer[[:space:]]+|(x-)?api-key:[[:space:]]*|cookie:[[:space:]]*)[^[:space:]]{8,})");
     def credential_header:
       test("(?i)^((authorization:[[:space:]]*)?bearer[[:space:]]+|(x-)?api-key:[[:space:]]*|cookie:[[:space:]]*)[^[:space:]]{8,}");
     def secretish_value:
@@ -150,11 +161,18 @@ check_json() {
       or test("(?i)(authorization:[[:space:]]*bearer[[:space:]]+[^[:space:]]{8,}|bearer[[:space:]]+[^[:space:]]{8,}|cookie:[^[:space:]]{8,}|token=[^[:space:]]{8,}|api[_-]?key=[^[:space:]]{8,}|password=[^[:space:]]{4,}|secret=[^[:space:]]{8,}|ghp_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})");
     def command_secret_args:
       [.mcp[]?.command? | select(type == "array")
-        | . as $args | any(range(0; ($args | length) - 1);
+        | . as $args
+        | any(range(0; ($args | length));
             ($args[.] | type == "string")
-            and ($args[. + 1] | type == "string")
-            and (($args[.] | sensitive_flag) or (($args[.] | header_flag) and ($args[. + 1] | credential_header)))
-            and (($args[. + 1] | env_backed) | not))]
+            and (
+              (($args[.] | sensitive_flag_assign) and (($args[.] | env_backed) | not))
+              or (($args[.] | header_flag_assign) and ($args[.] | header_flag_credential_assign) and (($args[.] | env_backed) | not))
+              or (. < (($args | length) - 1)
+                  and ($args[. + 1] | type == "string")
+                  and (($args[. + 1] | env_backed) | not)
+                  and ((($args[.] | sensitive_flag_split) or (($args[.] | header_flag_split) and ($args[. + 1] | credential_header))))
+                )
+            ))]
       | any;
     ([paths(scalars) as $path
       | getpath($path) as $value
