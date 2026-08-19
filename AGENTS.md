@@ -134,7 +134,7 @@ The agent system has two layers, identical in concept across the three tools.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
-ten-agent setup went unused. Keep this 2 + 6 shape in sync across
+ten-agent setup went unused. Keep this 2 + 7 shape in sync across
 `claude/.claude/{output-styles,agents}/`, `opencode/.config/opencode/agents/`
 and `codex/.codex/AGENTS.md`.
 

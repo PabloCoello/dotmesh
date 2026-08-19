@@ -33,6 +33,7 @@ make_fixture_repo() {
 make_fake_home() {
   local fake_home="$1"
   local fixture_repo="$2"
+  local name
 
   mkdir -p "$fake_home/.config/opencode/agents" \
     "$fake_home/.config/opencode/commands" \
@@ -40,10 +41,14 @@ make_fake_home() {
 
   ln -s "$fixture_repo/opencode/.config/opencode/opencode.json" \
     "$fake_home/.config/opencode/opencode.json"
-  ln -s "$fixture_repo/opencode/.config/opencode/agents/maker.md" \
-    "$fake_home/.config/opencode/agents/maker.md"
-  ln -s "$fixture_repo/opencode/.config/opencode/commands/setup.md" \
-    "$fake_home/.config/opencode/commands/setup.md"
+  for name in maker scribe build editor maths plan review reviser security; do
+    ln -s "$fixture_repo/opencode/.config/opencode/agents/$name.md" \
+      "$fake_home/.config/opencode/agents/$name.md"
+  done
+  for name in check-last checkpoint setup super-git; do
+    ln -s "$fixture_repo/opencode/.config/opencode/commands/$name.md" \
+      "$fake_home/.config/opencode/commands/$name.md"
+  done
   ln -s "$fixture_repo/agents/.agents/skills" "$fake_home/.agents/skills"
   mkdir -p "$fake_home/.claude"
   ln -s "$fake_home/.agents/skills" "$fake_home/.claude/skills"
@@ -84,13 +89,13 @@ home_good="$tmp_dir/good-home"
 make_fixture_repo "$fixture_good"
 make_fake_home "$home_good" "$fixture_good"
 if output="$(run_doctor "$fixture_good" "$home_good")"; then
-  if printf '%s\n' "$output" | grep -q '0 fallos'; then
-    pass "configuración válida termina sin fallos"
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "fixture completo termina sin avisos ni fallos"
   else
-    fail "configuración válida no informa 0 fallos"
+    fail "fixture completo no informa 0 avisos y 0 fallos"
   fi
 else
-  fail "configuración válida devuelve error"
+  fail "fixture completo devuelve error"
 fi
 
 # Missing expected agent: repository diagnostics must fail.
@@ -135,6 +140,19 @@ mv "$fixture_command/opencode/.config/opencode/opencode.json.tmp" \
 assert_sensitive_literal_fails "$fixture_command" "$home_command" \
   'DO_NOT_PRINT_ARG_123456789' "secreto en command/args"
 
+# Sensitive flags split from their value in command arrays are rejected.
+fixture_split_flag="$tmp_dir/split-flag-repo"
+home_split_flag="$tmp_dir/split-flag-home"
+make_fixture_repo "$fixture_split_flag"
+make_fake_home "$home_split_flag" "$fixture_split_flag"
+jq '.mcp.notion.command += ["--token", "DO_NOT_PRINT_SPLIT_ARG_123456789"]' \
+  "$fixture_split_flag/opencode/.config/opencode/opencode.json" \
+  > "$fixture_split_flag/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_split_flag/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_split_flag/opencode/.config/opencode/opencode.json"
+assert_sensitive_literal_fails "$fixture_split_flag" "$home_split_flag" \
+  'DO_NOT_PRINT_SPLIT_ARG_123456789' "flag sensible con valor separado"
+
 # Secrets embedded in headers: fail without printing the header value.
 fixture_header="$tmp_dir/header-repo"
 home_header="$tmp_dir/header-home"
@@ -166,6 +184,85 @@ if output="$(run_doctor "$fixture_env" "$home_env")"; then
   fi
 else
   fail "placeholder env permitido devuelve error"
+fi
+
+# Env placeholders embedded in bearer headers are allowed.
+fixture_bearer_env="$tmp_dir/bearer-env-repo"
+home_bearer_env="$tmp_dir/bearer-env-home"
+make_fixture_repo "$fixture_bearer_env"
+make_fake_home "$home_bearer_env" "$fixture_bearer_env"
+jq '.mcp.tavily.headers.Authorization = "Bearer {env:DOTMESH_AUTH_HEADER}"' \
+  "$fixture_bearer_env/opencode/.config/opencode/opencode.json" \
+  > "$fixture_bearer_env/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_bearer_env/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_bearer_env/opencode/.config/opencode/opencode.json"
+if output="$(run_doctor "$fixture_bearer_env" "$home_bearer_env")"; then
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "placeholder env embebido se permite"
+  else
+    fail "placeholder env embebido no informa 0 avisos y 0 fallos"
+  fi
+else
+  fail "placeholder env embebido devuelve error"
+fi
+
+# Env placeholders embedded in command flag assignments are allowed.
+fixture_flag_env="$tmp_dir/flag-env-repo"
+home_flag_env="$tmp_dir/flag-env-home"
+make_fixture_repo "$fixture_flag_env"
+make_fake_home "$home_flag_env" "$fixture_flag_env"
+jq '.mcp.notion.command += ["--token={env:DOTMESH_MCP_TOKEN}"]' \
+  "$fixture_flag_env/opencode/.config/opencode/opencode.json" \
+  > "$fixture_flag_env/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_flag_env/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_flag_env/opencode/.config/opencode/opencode.json"
+if output="$(run_doctor "$fixture_flag_env" "$home_flag_env")"; then
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "placeholder env en flag se permite"
+  else
+    fail "placeholder env en flag no informa 0 avisos y 0 fallos"
+  fi
+else
+  fail "placeholder env en flag devuelve error"
+fi
+
+# Non-sensitive names containing PAT as part of another word are allowed.
+fixture_data_path="$tmp_dir/data-path-repo"
+home_data_path="$tmp_dir/data-path-home"
+make_fixture_repo "$fixture_data_path"
+make_fake_home "$home_data_path" "$fixture_data_path"
+jq '.mcp.zotero.environment.DATA_PATH = "/tmp/dotmesh-data"' \
+  "$fixture_data_path/opencode/.config/opencode/opencode.json" \
+  > "$fixture_data_path/opencode/.config/opencode/opencode.json.tmp"
+mv "$fixture_data_path/opencode/.config/opencode/opencode.json.tmp" \
+  "$fixture_data_path/opencode/.config/opencode/opencode.json"
+if output="$(run_doctor "$fixture_data_path" "$home_data_path")"; then
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "DATA_PATH se permite"
+  else
+    fail "DATA_PATH permitido no informa 0 avisos y 0 fallos"
+  fi
+else
+  fail "DATA_PATH permitido devuelve error"
+fi
+
+# Symlinks must point to dotmesh's canonical targets, not merely to any file.
+fixture_wrong_link="$tmp_dir/wrong-link-repo"
+home_wrong_link="$tmp_dir/wrong-link-home"
+make_fixture_repo "$fixture_wrong_link"
+make_fake_home "$home_wrong_link" "$fixture_wrong_link"
+mkdir -p "$tmp_dir/other-target"
+touch "$tmp_dir/other-target/maker.md"
+rm "$home_wrong_link/.config/opencode/agents/maker.md"
+ln -s "$tmp_dir/other-target/maker.md" "$home_wrong_link/.config/opencode/agents/maker.md"
+if output="$(run_doctor "$fixture_wrong_link" "$home_wrong_link")"; then
+  if printf '%s\n' "$output" | grep -q 'instalación agente maker apunta a otro destino'; then
+    pass "symlink a target erróneo se detecta"
+  else
+    fail "symlink a target erróneo no deja mensaje claro"
+  fi
+else
+  fail "symlink a target erróneo no debe ser fallo fatal"
 fi
 
 printf '\nResumen: %s PASS, %s FAIL\n' "$PASS" "$FAIL"

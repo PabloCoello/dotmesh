@@ -28,6 +28,16 @@ pass() { say "  ok  $*"; PASS=$((PASS + 1)); }
 warn() { say "  --  $*"; WARN=$((WARN + 1)); }
 fail() { say "  !!  $*"; FAIL=$((FAIL + 1)); }
 
+canonical_path() {
+  local path="$1"
+
+  if [ -d "$path" ]; then
+    cd "$path" && pwd -P
+  else
+    printf '%s/%s\n' "$(cd "$(dirname "$path")" && pwd -P)" "$(basename "$path")"
+  fi
+}
+
 frontmatter_value() {
   local file_path="$1"
   local key="$2"
@@ -124,16 +134,29 @@ check_json() {
 
   if jq -e '
     def env_ref: test("^\\{env:[A-Z0-9_]+\\}$");
-    def sensitive_key: test("(?i)(password|secret|token|api[_-]?key|pat|authorization|bearer|cookie)");
+    def env_backed:
+      env_ref
+      or test("(?i)^(authorization:[[:space:]]*)?bearer[[:space:]]+\\{env:[A-Z0-9_]+\\}$")
+      or test("(?i)^--?(password|secret|token|api[_-]?key|authorization|bearer|cookie)=\\{env:[A-Z0-9_]+\\}$");
+    def sensitive_key: test("(?i)(password|secret|token|api[_-]?key|authorization|bearer|cookie|(^|[_-])pat($|[_-]))");
+    def sensitive_flag: test("(?i)^--?(password|secret|token|api[_-]?key|authorization|bearer|cookie)(=|$)");
     def secretish_value:
       test("(?i)(authorization:[[:space:]]*bearer[[:space:]]+[^[:space:]]{8,}|bearer[[:space:]]+[^[:space:]]{8,}|cookie:[^[:space:]]{8,}|token=[^[:space:]]{8,}|api[_-]?key=[^[:space:]]{8,}|password=[^[:space:]]{4,}|secret=[^[:space:]]{8,}|ghp_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})");
-    [paths(scalars) as $path
+    def command_secret_args:
+      [.mcp[]?.command? | select(type == "array")
+        | . as $args | any(range(0; ($args | length) - 1);
+            ($args[.] | type == "string")
+            and ($args[.] | sensitive_flag)
+            and ($args[. + 1] | type == "string")
+            and (($args[. + 1] | env_backed) | not))]
+      | any;
+    ([paths(scalars) as $path
       | getpath($path) as $value
       | ($path[-1] | tostring) as $key
       | select(($value | type == "string")
-          and (($value | env_ref) | not)
+          and (($value | env_backed) | not)
           and (($key | sensitive_key) or ($value | secretish_value)))]
-    | length == 0
+    | length == 0) and (command_secret_args | not)
   ' "$CONFIG_FILE" >/dev/null; then
     pass "MCP no contiene valores secretos literales"
   else
@@ -243,9 +266,22 @@ check_skills() {
 check_install_symlink() {
   local path="$1"
   local label="$2"
+  local expected_target="$3"
+  local actual_target actual_abs expected_abs
 
   if [ -L "$path" ] && [ -e "$path" ]; then
-    pass "$label"
+    actual_target="$(readlink "$path")"
+    if [ "${actual_target#/}" = "$actual_target" ]; then
+      actual_target="$(dirname "$path")/$actual_target"
+    fi
+    actual_abs="$(canonical_path "$actual_target")"
+    expected_abs="$(canonical_path "$expected_target")"
+
+    if [ "$actual_abs" = "$expected_abs" ]; then
+      pass "$label"
+    else
+      warn "$label apunta a otro destino"
+    fi
   elif [ -L "$path" ]; then
     warn "$label roto"
   elif [ -e "$path" ]; then
@@ -258,14 +294,20 @@ check_install_symlink() {
 check_local_install() {
   local name
 
-  check_install_symlink "$HOME_DIR/.config/opencode/opencode.json" "instalación ~/.config/opencode/opencode.json"
+  check_install_symlink "$HOME_DIR/.config/opencode/opencode.json" \
+    "instalación ~/.config/opencode/opencode.json" \
+    "$CONFIG_FILE"
 
   for name in "${EXPECTED_PRIMARY_AGENTS[@]}" "${EXPECTED_SUBAGENTS[@]}"; do
-    check_install_symlink "$HOME_DIR/.config/opencode/agents/$name.md" "instalación agente $name"
+    check_install_symlink "$HOME_DIR/.config/opencode/agents/$name.md" \
+      "instalación agente $name" \
+      "$AGENTS_DIR/$name.md"
   done
 
   for name in "${EXPECTED_COMMANDS[@]}"; do
-    check_install_symlink "$HOME_DIR/.config/opencode/commands/$name.md" "instalación comando $name"
+    check_install_symlink "$HOME_DIR/.config/opencode/commands/$name.md" \
+      "instalación comando $name" \
+      "$COMMANDS_DIR/$name.md"
   done
 
   if [ -d "$HOME_DIR/.agents/skills" ]; then
@@ -275,7 +317,9 @@ check_local_install() {
   fi
 
   if [ -L "$HOME_DIR/.claude/skills" ] && [ -e "$HOME_DIR/.claude/skills" ]; then
-    pass "instalación ~/.claude/skills symlink válido"
+    check_install_symlink "$HOME_DIR/.claude/skills" \
+      "instalación ~/.claude/skills" \
+      "$HOME_DIR/.agents/skills"
   elif [ -L "$HOME_DIR/.claude/skills" ]; then
     warn "instalación ~/.claude/skills symlink roto"
   elif [ -e "$HOME_DIR/.claude/skills" ]; then
