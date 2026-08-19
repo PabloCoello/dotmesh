@@ -75,7 +75,7 @@ En OpenCode 1.18.15, `permission.edit` autoriza todas las herramientas de modifi
 | `review` | Permitida | Denegada | Denegado | Denegado | Solo `code-review-and-quality` | Denegado | Denegado para los servidores configurados |
 | `editor` | Permitida | Denegada | Denegado | Denegado | Solo `anti-ai-style` y `castellano-peninsular` | Denegado | Denegado para los servidores configurados |
 | `security` | Permitida | Denegada | Comandos exactos seguros permitidos; variantes amplias en `ask`; `npm audit fix`, `pip-audit --fix`, `--output` y `--ext-diff` denegados | Denegado | Solo `security-and-hardening` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
-| `maths` | Solo lectura | Denegada | `ask` para todo comando | Denegado | Denegado | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `maths` | Solo lectura | Denegada | Solo one-liners `python -c` y `python3 -c`; el resto denegado | Denegado | Denegado | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
 | `reviser` | Permitida | Permitida por `edit` solo en `.ai/review/**` | Denegado | Denegado | Solo `doc-review` | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
 
 OpenCode no distingue creación y modificación dentro de `permission.edit`.

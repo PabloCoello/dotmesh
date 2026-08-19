@@ -49,8 +49,8 @@ const expected = {
   },
   maths: {
     mode: "subagent",
-    asks: [["bash", "python3 -c 'import sympy as s; print(s.factor(s.Symbol(\"x\")**2-1))'"]],
-    denies: [["edit", "README.md"], ["task", "review"]],
+    allows: [["bash", "python3 -c 'import sympy as s; print(s.factor(s.Symbol(\"x\")**2-1))'"], ["bash", "python -c 'print(1)'"]],
+    denies: [["edit", "README.md"], ["task", "review"], ["bash", "git status"], ["bash", "npm test"], ["bash", "python3.11 -c 'print(1)'"], ["bash", "/usr/bin/python3 -c 'print(1)'"], ["bash", "python3 -m json.tool"]],
   },
   reviser: {
     mode: "subagent",

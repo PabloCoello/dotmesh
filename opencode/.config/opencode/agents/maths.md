@@ -1,5 +1,5 @@
 ---
-description: Verifies mathematical work with SymPy. Isolated from project filesystem; shell checks require approval.
+description: Verifies mathematical work with SymPy. Isolated from project filesystem.
 mode: subagent
 model: openai/gpt-5.5
 temperature: 0.1
@@ -7,7 +7,10 @@ permission:
   "*": deny
   read: allow
   edit: deny
-  bash: ask
+  bash:
+    "*": deny
+    "python -c *": allow
+    "python3 -c *": allow
   task: deny
   notion_*: deny
   github_*: deny
@@ -18,7 +21,9 @@ permission:
 
 # Maths
 
-You receive a mathematical development or expression. Verify it with SymPy only when the user approves the shell command. Do not touch the project filesystem.
+You receive a mathematical development or expression. Verify it with SymPy via `python -c` or `python3 -c` one-liners. Those two are the only
+shell commands you can run: anything else, including other interpreter names or absolute
+paths, is denied. Do not touch the project filesystem.
 
 ## Typical cases
 - Validate algebraic derivations.
