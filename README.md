@@ -135,6 +135,9 @@ consulta metadatos con `git ls-remote`. La salida es tabular:
 - `update_available`: el ref remoto apunta a otro commit.
 - `network_unavailable`: no se pudo consultar el remoto. No bloquea el comando.
 - `upstream_ref_missing`: el remoto respondió, pero no contiene el ref esperado.
+- `blocked_upstream`: el origen no coincide con la allowlist HTTPS de GitHub.
+- `blocked_value`: la URL o el ref empieza por `-` y se rechaza antes de llamar a Git.
+- `invalid_ref`: el ref no cumple el formato admitido (`HEAD`, `refs/heads/*` o `refs/tags/*`).
 - `manual/unknown`: hay una fuente upstream anotada, pero no existe un commit o ref
   local fiable para comparar. Revisa el componente a mano.
 

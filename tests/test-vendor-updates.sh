@@ -18,6 +18,11 @@ if [ "$1" != "ls-remote" ]; then
   exit 99
 fi
 
+if [ "${GIT_TERMINAL_PROMPT:-}" != "0" ] || [ "${GIT_ALLOW_PROTOCOL:-}" != "https" ]; then
+  echo "unsafe git environment" >&2
+  exit 97
+fi
+
 case "$mode" in
   current)
     printf '%s\tHEAD\n' '6cbdba434fd10000000000000000000000000000'
@@ -46,6 +51,19 @@ run_check() {
   "$ROOT_DIR/scripts/check-vendor-updates.sh" "$ROOT_DIR/scripts/vendor/upstreams.tsv"
 }
 
+run_check_with_manifest() {
+  local manifest="$1"
+  mkdir -p "$TMP_DIR/bin"
+  cat >"$TMP_DIR/bin/git" <<'STUB'
+#!/usr/bin/env bash
+echo 'git must not run for blocked manifests' >&2
+exit 96
+STUB
+  chmod +x "$TMP_DIR/bin/git"
+  export PATH="$TMP_DIR/bin:$PATH"
+  "$ROOT_DIR/scripts/check-vendor-updates.sh" "$manifest"
+}
+
 output="$(run_check current)"
 grep -Fq 'herdr-skill' <<<"$output"
 grep -Fq 'current' <<<"$output"
@@ -62,5 +80,37 @@ status=$?
 set -e
 [ "$status" -eq 0 ]
 grep -Fq 'network_unavailable' <<<"$output"
+
+malicious_manifest="$TMP_DIR/malicious.tsv"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	--upload-pack=evil	HEAD	6cbdba434fd1	Option-like URL.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'blocked_value' <<<"$output"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	https://example.com/ogulcancelik/herdr.git	HEAD	6cbdba434fd1	Wrong host.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'blocked_upstream' <<<"$output"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	ssh://github.com/ogulcancelik/herdr.git	HEAD	6cbdba434fd1	Wrong protocol.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'blocked_upstream' <<<"$output"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	https://github.com/ogulcancelik/herdr.git	--upload-pack=evil	6cbdba434fd1	Option-like ref.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'blocked_value' <<<"$output"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	https://github.com/ogulcancelik/herdr.git	refs/heads/main..evil	6cbdba434fd1	Invalid ref.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'invalid_ref' <<<"$output"
 
 echo "ok vendor update checks"

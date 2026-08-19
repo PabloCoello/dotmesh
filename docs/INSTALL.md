@@ -176,7 +176,9 @@ anotados en [`scripts/vendor/upstreams.tsv`](../scripts/vendor/upstreams.tsv).
 No ejecuta código remoto, no clona repositorios y no actualiza ficheros. Si no
 hay red, informa `network_unavailable` y termina con código 0. Si un componente
 aparece como `manual/unknown`, no hay una referencia local fiable para compararlo
-y la revisión debe hacerse a mano.
+y la revisión debe hacerse a mano. Las URLs se limitan a repos HTTPS de GitHub
+inventariados en el script; los valores que empiezan por `-` y los refs fuera de
+`HEAD`, `refs/heads/*` o `refs/tags/*` se bloquean antes de llamar a Git.
 
 ## MCP en Codex
 
