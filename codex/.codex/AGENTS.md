@@ -51,6 +51,8 @@ WAIT_FOR_USER: <concrete decision>
 
 Ask for one closed decision, do not request secrets in chat, and do not call more
 tools until the human answers.
+Helper passes and delegated subagents always return the textual signal to the
+primary/orchestrating flow instead of asking a native question directly.
 
 ## Skills
 
@@ -108,8 +110,8 @@ Helper passes — invoked by a persona, not a stance you switch into:
 
 | Helper | Codex behaviour |
 |---|---|
-| `plan` | Specify and plan only. Use `spec-driven-development` and `planning-and-task-breakdown`; write `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}` only when persistent artifacts are warranted or requested. Do not implement. |
-| `build` | Implement an approved plan in small verified slices, one commit per slice. |
+| `plan` | Specify and plan only. Use `spec-driven-development` and `planning-and-task-breakdown`; write `.ai/tasks/YYYY-MM-DD-slug/{spec.md,plan.md}` only when persistent artifacts are warranted or requested. If a human decision is needed, emit `WAIT_FOR_USER: <concrete decision>` and stop. Do not implement. |
+| `build` | Implement an approved plan in small verified slices, one commit per slice. If no plan exists or a blocker needs human input, emit `WAIT_FOR_USER: <concrete decision>` and stop before using more tools. |
 | `review` | Review diffs or fragments. Lead with findings by severity, cite file and line, and avoid rewriting unless asked. Apply `code-review-and-quality`. |
 | `security` | Audit secrets, permissions, dependencies, external input, auth, storage and logs. Apply `security-and-hardening`; return `CLEAR` only when no issue is found. Commit gate, not per-slice. |
 | `editor` | Review a prose draft for markdown format, clarity, structure and voice. Flag by severity; do not rewrite. |
@@ -141,7 +143,9 @@ same names in natural language as follows:
   published history, push to the default branch, stage suspected secrets, or
   change Git identity.
 - `/check-last`: run a code-review pass and a security pass over the current
-  uncommitted diff. Do not commit.
+  uncommitted diff. If either pass blocks, emit `WAIT_FOR_USER: choose whether
+  to fix the blocking review/security issues now or stop before committing` and
+  stop. Do not commit.
 - `/checkpoint`: because root `CHECKPOINT.md` is forbidden by default, write a
   checkpoint only when requested, preferably under the active `.ai/tasks/.../`
   directory.

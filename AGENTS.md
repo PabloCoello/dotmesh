@@ -93,9 +93,9 @@ Default flow for a code change, and the skill that owns each phase:
 ### Waiting for user input
 
 When the next safe action depends on a human decision, load `wait-for-user`.
-OpenCode agents should use the native `question` tool when available: ask one
-closed question, put the recommended option first, avoid secrets, and do not call
-any other tool until the user answers.
+OpenCode primary agents should use the native `question` tool when available:
+ask one closed question, put the recommended option first, avoid secrets, and do
+not call any other tool until the user answers.
 
 For subagents, herdr panes, Claude, Codex or any text-only hand-off, use the
 interoperable contract and then stop the turn:
@@ -104,8 +104,10 @@ interoperable contract and then stop the turn:
 WAIT_FOR_USER: <decisión concreta>
 ```
 
-The decision must be specific enough to act on. Do not poll, sleep, spawn more
-agents, continue with assumptions or ask for secret values in chat.
+The decision must be specific enough to act on. OpenCode subagents must return
+the textual signal to the primary agent rather than calling `question`. Do not
+poll, sleep, spawn more agents, continue with assumptions or ask for secret
+values in chat.
 
 ### Ideation: which door
 

@@ -72,7 +72,7 @@ sobre este archivo.
 ## Esperar intervención humana
 
 - Si el siguiente paso seguro depende de una persona, carga `wait-for-user`.
-- En OpenCode, usa la herramienta nativa `question` cuando esté disponible:
+- En OpenCode, solo los agentes `primary` usan la herramienta nativa `question`:
   pregunta cerrada, opción recomendada primero, sin pedir secretos. Tras llamar a
   `question`, no uses más herramientas hasta recibir respuesta.
 - En subagentes, herdr, Claude, Codex o flujos de solo texto, emite una sola línea

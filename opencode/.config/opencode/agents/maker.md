@@ -6,6 +6,7 @@ temperature: 0.2
 permission:
   edit: allow
   read: allow
+  question: allow
   glob: allow
   grep: allow
   list: allow
@@ -57,7 +58,8 @@ Fire these without being asked; the trigger is the situation, not a request.
 - **Implementing an approved plan**, especially multi-phase → run each phase in a
   fresh `build` subagent. Isolated context, commits per slice, returns a summary.
 - **Right after code is written or modified** → delegate to `review` over the
-  diff. Blocking issues → stop and surface them.
+  diff. Blocking issues → load `wait-for-user`, ask one closed `question`, and
+  stop using tools until the user answers.
 - **Before a commit on a security-sensitive surface** → delegate to `security`
   (commit gate, not per slice; `/check-last` also forces this).
 - **A quantitative claim to verify** → delegate to `maths`.

@@ -105,6 +105,7 @@ El core pack diario incluye estas skills de ingeniería:
 - `security-and-hardening`
 - `git-workflow-and-versioning`
 - `documentation-and-adrs`
+- `wait-for-user`
 
 También se mantienen skills locales adicionales:
 

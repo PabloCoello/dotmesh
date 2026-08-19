@@ -31,7 +31,7 @@ WAIT_FOR_USER: choose whether to keep the broader commit or split the ambiguous 
 
 ## OpenCode path
 
-If you are the active OpenCode agent and have the `question` tool available:
+If you are the active OpenCode primary agent and have the `question` tool available:
 
 1. Ask one closed question with the `question` tool.
 2. Make the recommended option first and label it `(Recommended)`.
@@ -47,6 +47,9 @@ If a native blocking question is not available, or you are inside a subagent or 
 2. Immediately stop your turn.
 3. Do not call more tools, spawn agents, poll, sleep, watch files, or continue with assumptions.
 4. Resume only after the human answers in the conversation or the orchestrator passes the answer back.
+
+Subagents must use this path even inside OpenCode. They return the textual signal
+to the primary agent or orchestrator; they never call the native `question` tool.
 
 ## Question shape
 
@@ -73,7 +76,7 @@ WAIT_FOR_USER: choose whether to proceed with the safe read-only audit or stop u
 ## Verification
 
 - [ ] The wait asks for exactly one concrete decision.
-- [ ] OpenCode used `question` when available.
+- [ ] OpenCode primary agents used `question` when available.
 - [ ] Non-OpenCode or subagent flows emitted `WAIT_FOR_USER: ...` and stopped.
 - [ ] No tool calls happen after the wait request until the human answers.
 - [ ] No secrets are requested, printed, committed, or logged.

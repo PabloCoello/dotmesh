@@ -145,6 +145,10 @@ una sola línea con este contrato y detente:
 WAIT_FOR_USER: <decisión concreta>
 ```
 
+Solo los agentes `primary` (`maker` y `scribe`) tienen `question: allow`. Los
+subagentes tienen `question: deny`, así que devuelven la señal textual al agente
+principal u orquestador.
+
 ## Fuentes de OpenCode consultadas
 
 - Esquema JSON oficial: <https://opencode.ai/config.json>.

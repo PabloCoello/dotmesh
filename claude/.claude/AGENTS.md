@@ -77,6 +77,8 @@ sobre este archivo.
 - Si no hay pregunta nativa bloqueante, emite una sola línea
   `WAIT_FOR_USER: <decisión concreta>` y detente. No uses más herramientas hasta
   que la persona responda.
+- Si actúas como subagente, usa siempre la señal textual y devuelve el bloqueo al
+  agente principal u orquestador.
 - Pide una decisión cerrada y no solicites secretos en el chat.
 
 ## Idioma
