@@ -47,6 +47,7 @@ help:
 	@echo "  make test-opencode-doctor - Pruebas del diagnóstico OpenCode"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
+	@echo "  make test-tool-error-recovery - Verifica la política común de reintentos de herramientas"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
@@ -287,6 +288,11 @@ test-opencode-doctor:
 test-scribe-flow:
 	@echo "→ arnés headless scribe"
 	@bash scripts/test-scribe-flow.sh
+
+.PHONY: test-tool-error-recovery
+test-tool-error-recovery:
+	@echo "→ verifica tool-error-recovery"
+	@node scripts/verify-tool-error-recovery.mjs
 
 .PHONY: clean
 clean:

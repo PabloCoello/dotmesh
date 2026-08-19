@@ -42,7 +42,8 @@ Load the owning skill before you act in each phase — don't work from memory.
 3. Behaviour bound to external docs/APIs/versions → `source-driven-development`.
 4. Before writing code → the YAGNI gate in `code-simplification`.
 5. Implementing → `incremental-implementation` + `test-driven-development`.
-6. Failures → `debugging-and-error-recovery`.
+6. Test/build/runtime failures → `debugging-and-error-recovery`; failed tool
+   calls → `tool-error-recovery` before any retry.
 7. Before merge → `code-review-and-quality`; sensitive surface →
    `security-and-hardening`.
 8. Durable decision or interface change → `documentation-and-adrs`;

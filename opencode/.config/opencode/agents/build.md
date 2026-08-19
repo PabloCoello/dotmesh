@@ -86,6 +86,7 @@ Load these skills as relevant:
 - `git-workflow-and-versioning` when committing, splitting changes, or organizing work across branches.
 - `api-and-interface-design` for contracts.
 - `debugging-and-error-recovery` when something fails.
+- `tool-error-recovery` before retrying any failed tool call.
 
 ## After each significant block
 Invoke `review` over the latest diff. If math is relevant, invoke `maths`. If the change is documentable, update the docs inline (load `documentation-and-adrs`) — non-blocking, do not gate the slice on it.

@@ -61,6 +61,7 @@ Load these skills as relevant:
 - `git-workflow-and-versioning` when committing, splitting changes, or organizing work across branches.
 - `api-and-interface-design` for contracts.
 - `debugging-and-error-recovery` when something fails.
+- `tool-error-recovery` before retrying any failed tool call.
 
 ## Self-check and gates
 
