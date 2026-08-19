@@ -5,6 +5,7 @@ model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 permission:
   edit: allow
+  write: allow
   read: allow
   glob: allow
   grep: allow
@@ -36,7 +37,9 @@ permission:
   websearch: allow
   skill: allow
   task:
-    "*": allow
+    "*": deny
+    "review": allow
+    "maths": allow
 ---
 
 # Build

@@ -11,48 +11,49 @@ const mcpServers = ["notion", "github", "tavily", "openalex", "zotero"]
 const expected = {
   maker: {
     mode: "primary",
-    allows: [["edit", "src/example.txt"], ["task", "build"], ["skill", "source-driven-development"]],
+    allows: [["edit", "src/example.txt"], ["write", "src/new.txt"], ["task", "build"], ["skill", "source-driven-development"]],
     asks: [["bash", "git reset --hard"], ["bash", "git push --force-with-lease"]],
   },
   build: {
     mode: "subagent",
-    allows: [["edit", "src/example.txt"], ["task", "review"], ["skill", "test-driven-development"]],
+    allows: [["edit", "src/example.txt"], ["write", "src/new.txt"], ["task", "review"], ["task", "maths"], ["skill", "test-driven-development"]],
+    denies: [["task", "security"], ["task", "plan"], ["task", "editor"]],
     asks: [["bash", "git reset --hard"], ["bash", "git push --force"]],
   },
   scribe: {
     mode: "primary",
-    allows: [["edit", "draft.md"], ["edit", ".ai/review/docs/file.md/event.json"], ["task", "reviser"], ["skill", "doc-review"]],
-    denies: [["edit", "src/code.ts"], ["bash", "npm test"], ["task", "build"]],
+    allows: [["edit", "draft.md"], ["write", "draft.md"], ["write", ".ai/review/docs/file.md/new-event.json"], ["task", "reviser"], ["task", "security"], ["skill", "doc-review"]],
+    denies: [["edit", "src/code.ts"], ["write", "src/code.ts"], ["bash", "npm test"], ["bash", "git diff; rm README.md"], ["task", "build"]],
   },
   plan: {
     mode: "subagent",
-    allows: [["edit", ".ai/tasks/2026-08-19-opencode-slim/plan.md"], ["skill", "planning-and-task-breakdown"], ["webfetch", "https://opencode.ai/docs/agents"]],
-    denies: [["edit", "README.md"], ["bash", "git status"], ["task", "build"]],
+    allows: [["write", ".ai/tasks/2026-08-19-opencode-slim/plan.md"], ["skill", "planning-and-task-breakdown"], ["webfetch", "https://opencode.ai/docs/agents"]],
+    denies: [["edit", ".ai/tasks/2026-08-19-opencode-slim/plan.md"], ["write", "README.md"], ["bash", "git status"], ["task", "build"]],
   },
   review: {
     mode: "subagent",
     allows: [["read", "README.md"], ["skill", "code-review-and-quality"]],
-    denies: [["edit", "README.md"], ["bash", "git diff"], ["task", "security"]],
+    denies: [["edit", "README.md"], ["write", "README.md"], ["bash", "git diff"], ["task", "security"]],
   },
   editor: {
     mode: "subagent",
     allows: [["read", "draft.md"], ["skill", "anti-ai-style"]],
-    denies: [["edit", "draft.md"], ["bash", "pandoc draft.md"], ["task", "reviser"]],
+    denies: [["edit", "draft.md"], ["write", "draft.md"], ["bash", "pandoc draft.md"], ["task", "reviser"]],
   },
   security: {
     mode: "subagent",
     allows: [["bash", "git diff --staged"], ["bash", "npm audit --omit=dev"], ["skill", "security-and-hardening"]],
-    denies: [["edit", "README.md"], ["bash", "git status"], ["task", "review"]],
+    denies: [["edit", "README.md"], ["write", "README.md"], ["bash", "git status"], ["bash", "git diff; rm README.md"], ["task", "review"]],
   },
   maths: {
     mode: "subagent",
-    allows: [["bash", "python3 -c 'import sympy as s; print(s.factor(s.Symbol(\"x\")**2-1))'"]],
-    denies: [["edit", "README.md"], ["bash", "python3 script.py"], ["task", "review"]],
+    asks: [["bash", "python3 -c 'import sympy as s; print(s.factor(s.Symbol(\"x\")**2-1))'"]],
+    denies: [["edit", "README.md"], ["write", "README.md"], ["task", "review"]],
   },
   reviser: {
     mode: "subagent",
-    allows: [["edit", ".ai/review/docs/file.md/event.json"], ["skill", "doc-review"]],
-    denies: [["edit", "docs/file.md"], ["bash", "git diff"], ["task", "editor"]],
+    allows: [["write", ".ai/review/docs/file.md/new-event.json"], ["skill", "doc-review"]],
+    denies: [["edit", ".ai/review/docs/file.md/existing-event.json"], ["write", "docs/file.md"], ["bash", "git diff"], ["task", "editor"]],
   },
 }
 
@@ -132,7 +133,6 @@ const failures = []
 
 for (const [agent, checks] of Object.entries(expected)) {
   const markdown = readFileSync(join(agentsDir, `${agent}.md`), "utf8")
-  if (/^  write:/m.test(markdown)) failures.push(`${agent}: use native edit permission, not legacy write permission`)
   const frontmatter = extractFrontmatter(markdown)
   if (frontmatter.mode !== checks.mode) failures.push(`${agent}: expected mode ${checks.mode}, got ${frontmatter.mode}`)
   const permission = frontmatter.permission ?? {}
@@ -152,6 +152,10 @@ for (const [agent, checks] of Object.entries(expected)) {
     const action = resolve(permission, `${server}_search`, `${server}_search`)
     const shouldDeny = !["maker", "build"].includes(agent)
     if (shouldDeny && action !== "deny") failures.push(`${agent}: expected MCP ${server}_* => deny, got ${action}`)
+  }
+  if (!["maker", "build"].includes(agent)) {
+    const futureMcpAction = resolve(permission, "futuremcp_search", "futuremcp_search")
+    if (futureMcpAction !== "deny") failures.push(`${agent}: expected unknown MCP tool => deny, got ${futureMcpAction}`)
   }
 }
 

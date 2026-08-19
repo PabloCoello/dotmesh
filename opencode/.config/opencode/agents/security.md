@@ -10,6 +10,7 @@ permission:
   grep: allow
   list: allow
   edit: deny
+  write: deny
   bash:
     "*": deny
     "npm audit*": allow
@@ -17,6 +18,13 @@ permission:
     "pip list*": allow
     "git diff*": allow
     "git log*": allow
+    "*;*": deny
+    "*&&*": deny
+    "*|*": deny
+    "*`*": deny
+    "*$(*": deny
+    "*>*": deny
+    "*<*": deny
   webfetch: allow
   skill:
     "*": deny

@@ -61,19 +61,20 @@ La configuración usa `permission`, no el campo antiguo `tools`.
 
 | Agente | Lectura/búsqueda | Edición | Bash | Task | Skill | Web | MCP |
 |---|---|---|---|---|---|---|---|
-| `maker` | Permitida | Permitida | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
-| `build` | Permitida | Permitida | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
-| `scribe` | Permitida | Solo `.md`, `.qmd`, `.tex`, `.bib`, `.ai/review/**` y `.ai/backlog/**` | Solo `pandoc*`, `git diff*`, `git log*` y `git status*` | Solo `editor`, `reviser` y `maths` | Solo `anti-ai-style`, `castellano-peninsular` y `doc-review` | `webfetch` permitido | Denegado para los servidores configurados |
-| `plan` | Permitida | Solo `.ai/tasks/**` | Denegado | Denegado | Solo planificación, source-driven y skills de castellano | `webfetch` permitido | Denegado para los servidores configurados |
+| `maker` | Permitida | `edit` y `write` permitidos | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
+| `build` | Permitida | `edit` y `write` permitidos | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Solo `review` y `maths` | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
+| `scribe` | Permitida | `edit` solo en `.md`, `.qmd`, `.tex` y `.bib`; `write` también en `.ai/review/**` y `.ai/backlog/**` | Solo `pandoc*`, `git diff*`, `git log*` y `git status*`, con denegaciones posteriores para metacaracteres de shell | Solo `editor`, `reviser`, `maths` y `security` | Solo `anti-ai-style`, `castellano-peninsular` y `doc-review` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `plan` | Permitida | `write` solo en `.ai/tasks/**`; `edit` denegado | Denegado | Denegado | Solo planificación, source-driven y skills de castellano | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
 | `review` | Permitida | Denegada | Denegado | Denegado | Solo `code-review-and-quality` | Denegado | Denegado para los servidores configurados |
 | `editor` | Permitida | Denegada | Denegado | Denegado | Solo `anti-ai-style` y `castellano-peninsular` | Denegado | Denegado para los servidores configurados |
-| `security` | Permitida | Denegada | Solo `git diff*`, `git log*`, `npm audit*`, `pip-audit*` y `pip list*` | Denegado | Solo `security-and-hardening` | `webfetch` permitido | Denegado para los servidores configurados |
-| `maths` | Solo lectura | Denegada | Solo `python -c *` y `python3 -c *` | Denegado | Denegado | Denegado | Denegado para los servidores configurados |
-| `reviser` | Permitida | Solo `.ai/review/**` | Denegado | Denegado | Solo `doc-review` | Denegado | Denegado para los servidores configurados |
+| `security` | Permitida | Denegada | Solo `git diff*`, `git log*`, `npm audit*`, `pip-audit*` y `pip list*`, con denegaciones posteriores para metacaracteres de shell | Denegado | Solo `security-and-hardening` | `webfetch` permitido | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `maths` | Solo lectura | Denegada | `ask` para todo comando | Denegado | Denegado | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
+| `reviser` | Permitida | `edit` denegado; `write` solo en `.ai/review/**` para eventos nuevos | Denegado | Denegado | Solo `doc-review` | Denegado | Denegado por wildcard; patrones explícitos para servidores actuales |
 
 Los patrones MCP (`notion_*`, `github_*`, `tavily_*`, `openalex_*`, `zotero_*`) siguen la documentación oficial: las claves de `permission` también se comparan con nombres de herramientas MCP.
-La garantía cubre esos servidores por nombre.
-No hay un control fiable para servidores MCP futuros si se añaden con otro prefijo y no se actualiza esta matriz; en ese caso hay que añadir el patrón explícito correspondiente, no simular aislamiento por prompt.
+El wildcard inicial (`"*": deny`) deniega también herramientas MCP futuras en los agentes restringidos.
+Los patrones explícitos documentan los servidores actuales y sirven como prueba estática de sus prefijos.
+Los permisos de comandos no son un sandbox de shell: las reglas de `scribe` y `security` deniegan metacaracteres habituales después de las allowlist, pero un cambio de patrón debe revisarse como superficie de seguridad.
 
 ```bash
 # Dentro de opencode

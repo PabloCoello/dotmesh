@@ -15,6 +15,12 @@ permission:
     "*.qmd": allow
     "*.tex": allow
     "*.bib": allow
+  write:
+    "*": deny
+    "*.md": allow
+    "*.qmd": allow
+    "*.tex": allow
+    "*.bib": allow
     ".ai/review/**": allow
     ".ai/backlog/**": allow
   bash:
@@ -23,6 +29,13 @@ permission:
     "git diff*": allow
     "git log*": allow
     "git status*": allow
+    "*;*": deny
+    "*&&*": deny
+    "*|*": deny
+    "*`*": deny
+    "*$(*": deny
+    "*>*": deny
+    "*<*": deny
   webfetch: allow
   skill:
     "*": deny
@@ -34,6 +47,7 @@ permission:
     "editor": allow
     "reviser": allow
     "maths": allow
+    "security": allow
   notion_*: deny
   github_*: deny
   tavily_*: deny
