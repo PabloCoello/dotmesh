@@ -13,19 +13,35 @@ write_git_stub() {
 set -euo pipefail
 
 mode="${VENDOR_TEST_MODE:?}"
-if [ "$1" != "ls-remote" ]; then
-  echo "unexpected git command: $*" >&2
-  exit 99
-fi
-
 if [ "${GIT_TERMINAL_PROMPT:-}" != "0" ] || [ "${GIT_ALLOW_PROTOCOL:-}" != "https" ]; then
   echo "unsafe git environment" >&2
   exit 97
 fi
 
+if [ "${GIT_CONFIG_NOSYSTEM:-}" != "1" ] || [ "${GIT_CONFIG_SYSTEM:-}" != "/dev/null" ]; then
+  echo "unsafe system git config" >&2
+  exit 95
+fi
+
+if [ "${GIT_CONFIG_GLOBAL:-}" != "/dev/null" ] || [ "${GIT_CONFIG_COUNT:-}" != "0" ]; then
+  echo "unsafe user git config" >&2
+  exit 94
+fi
+
+if [ "$1" != "-c" ] || [ "$2" != "credential.helper=" ]; then
+  echo "credential helper not disabled" >&2
+  exit 93
+fi
+shift 2
+
+if [ "$1" != "ls-remote" ]; then
+  echo "unexpected git command: $*" >&2
+  exit 99
+fi
+
 case "$mode" in
   current)
-    printf '%s\tHEAD\n' '6cbdba434fd10000000000000000000000000000'
+    printf '%s\tHEAD\n' '6cbdba434fd15fc3818302a5843593da47db2eb4'
     ;;
   updated)
     printf '%s\tHEAD\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -48,6 +64,9 @@ STUB
 run_check() {
   local mode="$1"
   write_git_stub "$mode"
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=url.https://evil.example/.insteadOf
+  export GIT_CONFIG_VALUE_0=https://github.com/
   "$ROOT_DIR/scripts/check-vendor-updates.sh" "$ROOT_DIR/scripts/vendor/upstreams.tsv"
 }
 
@@ -112,5 +131,17 @@ herdr-skill	agents/.agents/skills/herdr	https://github.com/ogulcancelik/herdr.gi
 EOF
 output="$(run_check_with_manifest "$malicious_manifest")"
 grep -Fq 'invalid_ref' <<<"$output"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	https://github.com/ogulcancelik/herdr.git	refs/tags/v1.0.0	6cbdba434fd15fc3818302a5843593da47db2eb4	Tags are not needed by the inventory.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'invalid_ref' <<<"$output"
+
+cat >"$malicious_manifest" <<'EOF'
+herdr-skill	agents/.agents/skills/herdr	https://github.com/ogulcancelik/herdr.git	HEAD	6cbdba434fd1	Short hash.
+EOF
+output="$(run_check_with_manifest "$malicious_manifest")"
+grep -Fq 'invalid_local_ref' <<<"$output"
 
 echo "ok vendor update checks"

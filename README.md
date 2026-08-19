@@ -137,12 +137,14 @@ consulta metadatos con `git ls-remote`. La salida es tabular:
 - `upstream_ref_missing`: el remoto respondió, pero no contiene el ref esperado.
 - `blocked_upstream`: el origen no coincide con la allowlist HTTPS de GitHub.
 - `blocked_value`: la URL o el ref empieza por `-` y se rechaza antes de llamar a Git.
-- `invalid_ref`: el ref no cumple el formato admitido (`HEAD`, `refs/heads/*` o `refs/tags/*`).
+- `invalid_ref`: el ref no cumple el formato admitido (`HEAD` o `refs/heads/*`).
+- `invalid_local_ref`: el commit local no es un hash completo de 40 caracteres.
 - `manual/unknown`: hay una fuente upstream anotada, pero no existe un commit o ref
   local fiable para comparar. Revisa el componente a mano.
 
 La comprobación solo lee metadatos upstream. No clona repositorios, no descarga
 artefactos, no ejecuta scripts de terceros y no actualiza el árbol de trabajo.
+También desactiva prompts, credential helpers y configuración de reescritura Git.
 Si aparece `update_available`, revisa el diff upstream fuera de este target y
 re-vendoriza el componente en un commit aparte.
 

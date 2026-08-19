@@ -178,7 +178,9 @@ hay red, informa `network_unavailable` y termina con código 0. Si un componente
 aparece como `manual/unknown`, no hay una referencia local fiable para compararlo
 y la revisión debe hacerse a mano. Las URLs se limitan a repos HTTPS de GitHub
 inventariados en el script; los valores que empiezan por `-` y los refs fuera de
-`HEAD`, `refs/heads/*` o `refs/tags/*` se bloquean antes de llamar a Git.
+`HEAD` o `refs/heads/*` se bloquean antes de llamar a Git. El script exige hashes
+locales completos, desactiva credential helpers y aísla la configuración de Git
+para evitar reglas `url.*.insteadOf` locales.
 
 ## MCP en Codex
 
