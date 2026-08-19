@@ -16,7 +16,10 @@ SKILLS_DIR="$REPO_ROOT/agents/.agents/skills"
 
 EXPECTED_PRIMARY_AGENTS=(maker scribe)
 EXPECTED_SUBAGENTS=(build editor maths plan review reviser security)
-EXPECTED_COMMANDS=(check-last checkpoint setup super-git)
+# Closed inventories: an entry missing from the repository is a failure, an
+# extra file is a failure too. Adding an agent or a command means editing
+# these lists in the same change.
+EXPECTED_COMMANDS=(check-last checkpoint setup super-git wait-for-user)
 EXPECTED_MCP=(github notion openalex tavily zotero)
 
 PASS=0

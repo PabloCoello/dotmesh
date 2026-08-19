@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Tests for scripts/opencode-doctor.sh. They use temporary repositories and a
 # fake HOME, so they do not inspect or modify the user's live configuration.
+#
+# The command inventory includes wait-for-user, which the doctor requires and
+# which arrives with its own branch. Until that branch is in the base, the
+# first case fails with "fixture completo devuelve error": the doctor reports
+# the command as missing, which is the closed inventory doing its job. Rebase
+# on a base that carries the command and the suite goes green again.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,7 +51,7 @@ make_fake_home() {
     ln -s "$fixture_repo/opencode/.config/opencode/agents/$name.md" \
       "$fake_home/.config/opencode/agents/$name.md"
   done
-  for name in check-last checkpoint setup super-git; do
+  for name in check-last checkpoint setup super-git wait-for-user; do
     ln -s "$fixture_repo/opencode/.config/opencode/commands/$name.md" \
       "$fake_home/.config/opencode/commands/$name.md"
   done
