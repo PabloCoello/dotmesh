@@ -123,11 +123,16 @@ check_json() {
   done <<< "$actual_keys"
 
   if jq -e '
-    def suspicious_key: test("(?i)(password|secret|token|api[_-]?key|pat)");
+    def env_ref: test("^\\{env:[A-Z0-9_]+\\}$");
+    def sensitive_key: test("(?i)(password|secret|token|api[_-]?key|pat|authorization|bearer|cookie)");
+    def secretish_value:
+      test("(?i)(authorization:[[:space:]]*bearer[[:space:]]+[^[:space:]]{8,}|bearer[[:space:]]+[^[:space:]]{8,}|cookie:[^[:space:]]{8,}|token=[^[:space:]]{8,}|api[_-]?key=[^[:space:]]{8,}|password=[^[:space:]]{4,}|secret=[^[:space:]]{8,}|ghp_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})");
     [paths(scalars) as $path
-      | select(($path | map(tostring) | join(".") | suspicious_key)
-          and (getpath($path) | type == "string")
-          and ((getpath($path) | test("^\\{env:[A-Z0-9_]+\\}$")) | not))]
+      | getpath($path) as $value
+      | ($path[-1] | tostring) as $key
+      | select(($value | type == "string")
+          and (($value | env_ref) | not)
+          and (($key | sensitive_key) or ($value | secretish_value)))]
     | length == 0
   ' "$CONFIG_FILE" >/dev/null; then
     pass "MCP no contiene valores secretos literales"
