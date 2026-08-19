@@ -9,7 +9,7 @@ Usa esta skill cuando necesites encontrar código por forma sintáctica, no por 
 
 En OpenCode, el uso normal de `ast-grep` queda reservado a `maker` y `build`. Los agentes `review` y `security` mantienen `bash` restringido y no reciben un permiso especial de `ast-grep`, para evitar escritura indirecta mediante redirecciones o encadenado de comandos.
 
-Las reglas de `maker` y `build` son guardarraíles para invocaciones reconocibles de `ast-grep`, no un sandbox. Esos agentes ya tienen shell y escritura; revisa cualquier comando que combine `ast-grep` con redirecciones, pipes o shell avanzado. No uses el alias `sg`: queda en `ask` y puede ser ambiguo en Linux.
+Las reglas de `maker` y `build` son guardarraíles para invocaciones reconocibles de `ast-grep`, no un sandbox. Esos agentes ya tienen shell y escritura; cualquier comando que contenga `ast-grep` pide confirmación. No uses el alias `sg`: queda en `ask` y puede ser ambiguo en Linux.
 
 ## Comandos seguros
 
@@ -25,8 +25,8 @@ Usa comillas simples alrededor del patrón para que la shell no expanda `$NAME` 
 
 ## Límites
 
-- No uses `--rewrite`, `-r`, `--interactive`, `-i`, `--update-all` ni `-U` para exploración normal. Las variantes compactas como `-r=...`, `-r...`, `-U=...` o `--rewrite=...` también quedan fuera del uso normal.
-- Pide permiso antes de cualquier rewrite.
+- La confirmación humana es el límite operativo: revisa la orden antes de aprobarla.
+- No uses `--rewrite`, `-r`, `--interactive`, `-i`, `--update-all` ni `-U` para exploración normal. Las variantes compactas como `-r=...`, `-r...`, `-iU` o `--rewrite=...` también quedan fuera del uso normal.
 - No añadas configuración `sgconfig.yml` ni reglas persistentes salvo que el proyecto lo pida.
 - No instales `ast-grep` como dependencia global desde una sesión de agente.
 

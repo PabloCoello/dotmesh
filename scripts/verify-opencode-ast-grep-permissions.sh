@@ -62,25 +62,21 @@ def assert_permission(agent, command, expected):
         )
 
 
-safe_search = [
+ast_grep_commands = [
     "ast-grep --help",
     "ast-grep --version",
     "ast-grep run -p 'console.log($$$ARGS)' -l ts src",
     "ast-grep scan rules",
     "ast-grep outline src/parser.ts",
-]
-
-guarded_search = [
     "env AST_GREP_LOG=debug ast-grep run -p foo -l js .",
     "command ast-grep run -p foo -l js .",
     "/opt/homebrew/bin/ast-grep run -p foo -l js .",
     "ast-grep run -p foo -l js . > matches.txt",
+    "ast-grep run -p foo -l js . & touch marker",
     "ast-grep run -p foo -l js . && touch marker",
     "ast-grep run -p foo -l js . | tee matches.txt",
     "ast-grep run -p foo -l js .; touch marker",
-]
-
-rewrite_or_interactive = [
+    "ast-grep run -p foo -l js .\ntouch marker",
     "ast-grep --rewrite foo -p bar -l js .",
     "ast-grep --rewrite=foo -p bar -l js .",
     "ast-grep run -p foo --rewrite bar -l js .",
@@ -102,10 +98,9 @@ rewrite_or_interactive = [
     "ast-grep -i -p foo -l js .",
     "ast-grep -i=true -p foo -l js .",
     "ast-grep run -i -p foo -l js .",
+    "ast-grep run -iU -p foo -l js .",
+    "ast-grep run -Ui -p foo -l js .",
     "env X=1 ast-grep run -i=true -p foo -l js .",
-]
-
-mass_update = [
     "ast-grep --update-all -p foo -l js .",
     "ast-grep --update-all=true -p foo -l js .",
     "ast-grep run --update-all -p foo -l js .",
@@ -123,17 +118,13 @@ mass_update = [
 ]
 
 for agent in ("maker", "build"):
-    for command in safe_search:
-        assert_permission(agent, command, "allow")
-    for command in guarded_search + rewrite_or_interactive:
+    for command in ast_grep_commands:
         assert_permission(agent, command, "ask")
-    for command in mass_update:
-        assert_permission(agent, command, "deny")
     assert_permission(agent, "sg", "ask")
     assert_permission(agent, "sg run -p foo -l js .", "ask")
 
 for agent in ("review", "security"):
-    for command in safe_search + guarded_search + rewrite_or_interactive + mass_update:
+    for command in ast_grep_commands:
         assert_permission(agent, command, "deny")
 
 assert_permission("security", "curl https://example.com", "deny")
