@@ -6,6 +6,8 @@ const root = process.cwd();
 
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
+const textOf = (pathOrText) => (existsSync(join(root, pathOrText)) ? read(pathOrText) : pathOrText);
+
 const requireIncludes = (path, snippets) => {
   const content = read(path);
   const missing = snippets.filter((snippet) => !content.includes(snippet));
@@ -31,11 +33,13 @@ const requireNotMatches = (path, checks) => {
 };
 
 const requireNoPositiveMutationRetry = (path) => {
-  const forbidden = /(?:retry|reintent(?:a|ar|an))[^\n]*(?:writes|escrituras|mutations|mutaciones|mutable MCP|MCP mutables|authenticated network|red autenticada|destructive Git|Git\/Stow destructivo|Stow)/i;
-  const negated = /(?:Never|Do not|No reintentes|no se reintentan)/i;
-  const offenders = read(path)
+  const forbidden = /(?:retry|reintent(?:a|ar|an))[^.;\n]*(?:writes|escrituras|mutations|mutaciones|mutable MCP|MCP mutables|authenticated network|red autenticada|destructive Git|Git\/Stow destructivo|Stow)/gi;
+  const offenders = textOf(path)
     .split('\n')
-    .filter((line) => forbidden.test(line) && !negated.test(line));
+    .filter((line) => [...line.matchAll(forbidden)].some((match) => {
+      const prefix = line.slice(Math.max(0, match.index - 18), match.index).toLowerCase();
+      return !/(never\s+|do not\s+|no\s+|no se\s+)$/.test(prefix);
+    }));
   if (offenders.length > 0) {
     throw new Error(`${path} has positive mutation retry wording: ${offenders.join(' | ')}`);
   }
@@ -52,6 +56,13 @@ const walk = (dir) => {
 };
 
 const canonicalSkill = 'agents/.agents/skills/tool-error-recovery/SKILL.md';
+
+const integrationContract = [
+  { name: 'one retry maximum for idempotent reads', pattern: /(?:at most once|at most one retry|un solo reintento|máximo hay un reintento|un reintento como máximo)[\s\S]{0,140}(?:clearly idempotent reads|lecturas claramente idempotentes)|(?:clearly idempotent reads|lecturas claramente idempotentes)[\s\S]{0,140}(?:at most once|at most one retry|un solo reintento|máximo hay un reintento|un reintento como máximo)/i },
+  { name: 'zero retries for mutation categories', pattern: /(?:Do not retry|No reintentes|No se reintentan|no retries for)[\s\S]{0,180}(?:writes|escrituras)[\s\S]{0,180}(?:destructive Git or Stow|Git\/Stow destructivo|destructive Git\/Stow)[\s\S]{0,180}(?:authenticated network|red autenticada)[\s\S]{0,180}(?:mutable MCP|MCP mutables)/i },
+  { name: 'preserve status and stderr without secrets', pattern: /(?:Preserve|Conserva|preserve)[\s\S]{0,80}(?:exit\/status|status)[\s\S]{0,120}(?:redacted|sin datos sensibles)?[\s\S]{0,80}stderr/i },
+  { name: 'stop after second failure', pattern: /(?:stop after a repeated failure|if the retry also fails, stop|si el fallo se repite[\s\S]{0,20}para|se detiene si el fallo se repite)/i },
+];
 
 requireMatches(canonicalSkill, [
   { name: 'one retry maximum', pattern: /(?:at most one retry|Make at most one retry)/i },
@@ -74,15 +85,26 @@ requireNoPositiveMutationRetry(canonicalSkill);
 
 for (const path of [
   'AGENTS.md',
-  'agents/.agents/skills/README.md',
   'opencode/.config/opencode/AGENTS.md',
   'claude/.claude/AGENTS.md',
   'codex/.codex/AGENTS.md',
+  'README.md',
+]) {
+  requireIncludes(path, ['tool-error-recovery']);
+  requireMatches(path, integrationContract);
+  requireNotMatches(path, [
+    { name: 'Spanish ambiguous redaction wording', pattern: /resumen redactado/i },
+    { name: 'multiple retries', pattern: /(?:dos|múltiples|multiple|unlimited) reintentos|(?:two|multiple|unlimited) retries/i },
+  ]);
+  requireNoPositiveMutationRetry(path);
+}
+
+for (const path of [
+  'agents/.agents/skills/README.md',
   'opencode/.config/opencode/agents/maker.md',
   'claude/.claude/output-styles/maker.md',
   'opencode/.config/opencode/agents/build.md',
   'claude/.claude/agents/build.md',
-  'README.md',
 ]) {
   requireIncludes(path, ['tool-error-recovery']);
   requireNotMatches(path, [
@@ -90,6 +112,19 @@ for (const path of [
     { name: 'multiple retries', pattern: /(?:dos|múltiples|multiple|unlimited) reintentos|(?:two|multiple|unlimited) retries/i },
   ]);
   requireNoPositiveMutationRetry(path);
+}
+
+for (const phrase of [
+  'Do not call extra tools. You may retry writes once.',
+  'Do not retry writes. Retry mutable MCP calls after a timeout.',
+  'No hagas cambios destructivos. Reintenta la red autenticada si falla.',
+]) {
+  try {
+    requireNoPositiveMutationRetry(phrase);
+  } catch {
+    continue;
+  }
+  throw new Error(`positive mutation retry fixture was not rejected: ${phrase}`);
 }
 
 const opencodeConfig = JSON.parse(read('opencode/.config/opencode/opencode.json'));
