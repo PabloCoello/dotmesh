@@ -71,6 +71,14 @@ sobre este archivo.
   extremadamente conciso: sacrifica la gramática si hace falta para ganar
   concisión.
 
+## Esperar intervención humana
+
+- Si el siguiente paso seguro depende de una persona, carga `wait-for-user`.
+- Si no hay pregunta nativa bloqueante, emite una sola línea
+  `WAIT_FOR_USER: <decisión concreta>` y detente. No uses más herramientas hasta
+  que la persona responda.
+- Pide una decisión cerrada y no solicites secretos en el chat.
+
 ## Idioma
 
 - Prosa de cara al usuario en **español peninsular** (READMEs, documentos, fichas).

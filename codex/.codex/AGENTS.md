@@ -39,6 +39,19 @@ Do not delete artifacts automatically. The user decides retention.
 
 When reporting information directly to me, be extremely concise—sacrifice grammar if needed to gain concision.
 
+## Waiting for human input
+
+When the next safe action depends on a human decision, load `wait-for-user` if it
+is available. If no native blocking question tool exists, emit exactly one line
+and stop:
+
+```text
+WAIT_FOR_USER: <concrete decision>
+```
+
+Ask for one closed decision, do not request secrets in chat, and do not call more
+tools until the human answers.
+
 ## Skills
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.

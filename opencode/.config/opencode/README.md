@@ -1,6 +1,6 @@
 # OpenCode — Configuración del sistema de agentes
 
-Configuración global para opencode con dos agentes principales (personas), siete subagentes, cuatro comandos y skills compartidas.
+Configuración global para opencode con dos agentes principales (personas), siete subagentes, cinco comandos y skills compartidas.
 
 ## Estructura
 
@@ -20,7 +20,8 @@ Configuración global para opencode con dos agentes principales (personas), siet
     ├── setup.md          # Inicializa proyecto con skills compartidas
     ├── super-git.md      # Flujo Git autónomo: rama, slices, commits, push y PR
     ├── checkpoint.md     # Snapshot estructurado de sesión
-    └── check-last.md     # review + security en paralelo
+    ├── check-last.md     # review + security en paralelo
+    └── wait-for-user.md  # pregunta cerrada con `question` o contrato WAIT_FOR_USER
 
 # Skills (incluida castellano-peninsular) viven en ~/.agents/skills/
 # (paquete `agents/` del repo dotmesh)
@@ -94,6 +95,7 @@ Los permisos de comandos no son un sandbox de shell: las reglas de `scribe` y `s
 /super-git   # sincroniza, crea rama, hace commits por slices, hace push y abre PR
 /checkpoint  # genera CHECKPOINT.md
 /check-last  # review + security sobre git diff
+/wait-for-user # pausa la tarea hasta una decisión humana cerrada
 ```
 
 ## Flujo de trabajo
@@ -128,6 +130,20 @@ Esta convención está integrada en las instrucciones de los agentes `plan` y `b
 Este setup asume que las skills compartidas están disponibles en `~/.agents/skills/`, enlazadas desde el paquete `agents/` de dotmesh. El core pack está documentado en `agents/.agents/skills/README.md`.
 
 Si un proyecto necesita skills específicas adicionales, documenta antes dónde viven y cómo se sincronizan con la fuente de verdad.
+
+## Esperar intervención humana
+
+Cuando el siguiente paso dependa de una decisión humana, carga `wait-for-user`.
+En OpenCode, usa la herramienta nativa `question`: una pregunta cerrada, con la
+opción recomendada primero y sin pedir secretos. Tras llamar a `question`, no se
+usan más herramientas hasta recibir respuesta.
+
+En subagentes, herdr, Claude o Codex, si no hay pregunta nativa bloqueante, emite
+una sola línea con este contrato y detente:
+
+```text
+WAIT_FOR_USER: <decisión concreta>
+```
 
 ## Fuentes de OpenCode consultadas
 

@@ -90,6 +90,23 @@ Default flow for a code change, and the skill that owns each phase:
 10. Durable decision or interface change → `documentation-and-adrs`; new or sharpened domain terminology → `domain-modeling` (maintains `CONTEXT.md`).
 11. Switching agents mid-task, or pausing with work in flight → `handoff`.
 
+### Waiting for user input
+
+When the next safe action depends on a human decision, load `wait-for-user`.
+OpenCode agents should use the native `question` tool when available: ask one
+closed question, put the recommended option first, avoid secrets, and do not call
+any other tool until the user answers.
+
+For subagents, herdr panes, Claude, Codex or any text-only hand-off, use the
+interoperable contract and then stop the turn:
+
+```text
+WAIT_FOR_USER: <decisión concreta>
+```
+
+The decision must be specific enough to act on. Do not poll, sleep, spawn more
+agents, continue with assumptions or ask for secret values in chat.
+
 ### Ideation: which door
 
 Two skills share the "what to build" phase. Pick by what you have and what you want — only one fires at a time:

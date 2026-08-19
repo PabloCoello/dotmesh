@@ -42,6 +42,7 @@ Estas skills forman el conjunto base de ingeniería:
 | `security-and-hardening` | Para secretos, inputs externos, permisos, dependencias, logs o datos sensibles. |
 | `git-workflow-and-versioning` | Para commits, ramas, staging, conflictos y organización de cambios. |
 | `documentation-and-adrs` | Para registrar decisiones, interfaces, reglas de proyecto y contexto duradero. |
+| `wait-for-user` | Para parar una tarea hasta que una persona dé una decisión cerrada. En OpenCode usa `question`; en subagentes y otros agentes emite `WAIT_FOR_USER: <decisión concreta>` y se detiene. |
 
 ## Skills locales adicionales
 
