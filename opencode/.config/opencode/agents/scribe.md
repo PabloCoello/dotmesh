@@ -4,30 +4,41 @@ mode: primary
 model: openai/gpt-5.5
 temperature: 0.5
 permission:
+  "*": deny
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
   edit:
-    "*.md": allow
-    "*.qmd": allow
-    "*.tex": allow
-    "*.bib": allow
     "*": deny
-  write:
     "*.md": allow
     "*.qmd": allow
     "*.tex": allow
     "*.bib": allow
     ".ai/review/**": allow
     ".ai/backlog/**": allow
-    "*": deny
   bash:
+    "*": deny
     "pandoc*": allow
     "git diff*": allow
     "git log*": allow
     "git status*": allow
-    "*": deny
   webfetch: allow
-  read: allow
+  skill:
+    "*": deny
+    "anti-ai-style": allow
+    "castellano-peninsular": allow
+    "doc-review": allow
   task:
-    "*": allow
+    "*": deny
+    "editor": allow
+    "reviser": allow
+    "maths": allow
+  notion_*: deny
+  github_*: deny
+  tavily_*: deny
+  openalex_*: deny
+  zotero_*: deny
 ---
 
 # Scribe — dotmesh review persona

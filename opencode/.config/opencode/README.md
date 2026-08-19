@@ -47,6 +47,34 @@ opencode agent list
 servidores MCP: JSON, agentes, comandos, MCP, skills y symlinks locales. El comando
 `opencode agent list` debe mostrar los agentes instalados.
 
+La matriz de permisos se comprueba sin arrancar MCP ni ejecutar herramientas remotas:
+
+```bash
+node scripts/test-opencode-agent-capabilities.mjs
+```
+
+## Matriz de capacidades
+
+OpenCode evalúa las reglas de permisos por patrón y gana la última coincidencia.
+Por eso las reglas anchas (`"*": deny`) aparecen antes de las excepciones.
+La configuración usa `permission`, no el campo antiguo `tools`.
+
+| Agente | Lectura/búsqueda | Edición | Bash | Task | Skill | Web | MCP |
+|---|---|---|---|---|---|---|---|
+| `maker` | Permitida | Permitida | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
+| `build` | Permitida | Permitida | Permitido, con operaciones destructivas de Git en `ask` por reglas posteriores | Cualquier subagente | Permitida | `webfetch` y `websearch` permitidos | Sin restricción adicional |
+| `scribe` | Permitida | Solo `.md`, `.qmd`, `.tex`, `.bib`, `.ai/review/**` y `.ai/backlog/**` | Solo `pandoc*`, `git diff*`, `git log*` y `git status*` | Solo `editor`, `reviser` y `maths` | Solo `anti-ai-style`, `castellano-peninsular` y `doc-review` | `webfetch` permitido | Denegado para los servidores configurados |
+| `plan` | Permitida | Solo `.ai/tasks/**` | Denegado | Denegado | Solo planificación, source-driven y skills de castellano | `webfetch` permitido | Denegado para los servidores configurados |
+| `review` | Permitida | Denegada | Denegado | Denegado | Solo `code-review-and-quality` | Denegado | Denegado para los servidores configurados |
+| `editor` | Permitida | Denegada | Denegado | Denegado | Solo `anti-ai-style` y `castellano-peninsular` | Denegado | Denegado para los servidores configurados |
+| `security` | Permitida | Denegada | Solo `git diff*`, `git log*`, `npm audit*`, `pip-audit*` y `pip list*` | Denegado | Solo `security-and-hardening` | `webfetch` permitido | Denegado para los servidores configurados |
+| `maths` | Solo lectura | Denegada | Solo `python -c *` y `python3 -c *` | Denegado | Denegado | Denegado | Denegado para los servidores configurados |
+| `reviser` | Permitida | Solo `.ai/review/**` | Denegado | Denegado | Solo `doc-review` | Denegado | Denegado para los servidores configurados |
+
+Los patrones MCP (`notion_*`, `github_*`, `tavily_*`, `openalex_*`, `zotero_*`) siguen la documentación oficial: las claves de `permission` también se comparan con nombres de herramientas MCP.
+La garantía cubre esos servidores por nombre.
+No hay un control fiable para servidores MCP futuros si se añaden con otro prefijo y no se actualiza esta matriz; en ese caso hay que añadir el patrón explícito correspondiente, no simular aislamiento por prompt.
+
 ```bash
 # Dentro de opencode
 /setup       # debe inicializar AGENTS.md y skills del stack
@@ -87,6 +115,14 @@ Esta convención está integrada en las instrucciones de los agentes `plan` y `b
 Este setup asume que las skills compartidas están disponibles en `~/.agents/skills/`, enlazadas desde el paquete `agents/` de dotmesh. El core pack está documentado en `agents/.agents/skills/README.md`.
 
 Si un proyecto necesita skills específicas adicionales, documenta antes dónde viven y cómo se sincronizan con la fuente de verdad.
+
+## Fuentes de OpenCode consultadas
+
+- Esquema JSON oficial: <https://opencode.ai/config.json>.
+- Permisos: <https://opencode.ai/docs/permissions>.
+- Agentes: <https://opencode.ai/docs/agents>.
+- Skills: <https://opencode.ai/docs/skills>.
+- Herramientas y MCP: <https://opencode.ai/docs/tools/> y <https://opencode.ai/docs/mcp-servers/>.
 
 ## Idiomas
 

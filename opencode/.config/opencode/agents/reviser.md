@@ -4,12 +4,24 @@ mode: subagent
 model: github-copilot/claude-haiku-4.5
 temperature: 0.1
 permission:
-  edit: deny
-  write:
-    ".ai/review/**": allow
-    "*": deny
-  bash: deny
+  "*": deny
   read: allow
+  glob: allow
+  grep: allow
+  list: allow
+  edit:
+    "*": deny
+    ".ai/review/**": allow
+  bash: deny
+  skill:
+    "*": deny
+    "doc-review": allow
+  task: deny
+  notion_*: deny
+  github_*: deny
+  tavily_*: deny
+  openalex_*: deny
+  zotero_*: deny
 ---
 
 # Reviser

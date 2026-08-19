@@ -4,17 +4,29 @@ mode: subagent
 model: openai/gpt-5.5
 temperature: 0.1
 permission:
+  "*": deny
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
   edit: deny
-  write: deny
   bash:
+    "*": deny
     "npm audit*": allow
     "pip-audit*": allow
     "pip list*": allow
     "git diff*": allow
     "git log*": allow
-    "*": deny
   webfetch: allow
-  read: allow
+  skill:
+    "*": deny
+    "security-and-hardening": allow
+  task: deny
+  notion_*: deny
+  github_*: deny
+  tavily_*: deny
+  openalex_*: deny
+  zotero_*: deny
 ---
 
 # Security

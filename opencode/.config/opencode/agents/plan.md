@@ -4,11 +4,29 @@ mode: subagent
 model: github-copilot/claude-sonnet-4.5
 temperature: 0.3
 permission:
-  edit: allow
-  write: allow
+  "*": deny
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
+  edit:
+    "*": deny
+    ".ai/tasks/**": allow
   bash: deny
   webfetch: allow
-  read: allow
+  skill:
+    "*": deny
+    "spec-driven-development": allow
+    "planning-and-task-breakdown": allow
+    "source-driven-development": allow
+    "castellano-peninsular": allow
+    "anti-ai-style": allow
+  task: deny
+  notion_*: deny
+  github_*: deny
+  tavily_*: deny
+  openalex_*: deny
+  zotero_*: deny
 ---
 
 # Plan

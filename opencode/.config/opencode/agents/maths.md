@@ -4,13 +4,19 @@ mode: subagent
 model: openai/gpt-5.5
 temperature: 0.1
 permission:
+  "*": deny
+  read: allow
   edit: deny
-  write: deny
   bash:
+    "*": deny
     "python -c *": allow
     "python3 -c *": allow
-    "*": deny
-  read: allow
+  task: deny
+  notion_*: deny
+  github_*: deny
+  tavily_*: deny
+  openalex_*: deny
+  zotero_*: deny
 ---
 
 # Maths

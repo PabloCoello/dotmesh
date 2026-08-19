@@ -5,7 +5,10 @@ model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 permission:
   edit: allow
-  write: allow
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
   bash:
     "*": allow
     "rm -rf /*": deny
@@ -30,7 +33,8 @@ permission:
     "git worktree remove*--force*": ask
     "git branch*--delete*--force*": ask
   webfetch: allow
-  read: allow
+  websearch: allow
+  skill: allow
   task:
     "*": allow
 ---
