@@ -28,6 +28,12 @@ if [ "${GIT_CONFIG_GLOBAL:-}" != "/dev/null" ] || [ "${GIT_CONFIG_COUNT:-}" != "
   exit 94
 fi
 
+if [ "$1" != "-C" ] || [ "$2" != "/" ]; then
+  echo "neutral working directory not set" >&2
+  exit 92
+fi
+shift 2
+
 if [ "$1" != "-c" ] || [ "$2" != "credential.helper=" ]; then
   echo "credential helper not disabled" >&2
   exit 93
@@ -99,6 +105,15 @@ status=$?
 set -e
 [ "$status" -eq 0 ]
 grep -Fq 'network_unavailable' <<<"$output"
+
+repo_with_local_config="$TMP_DIR/repo-with-local-config"
+mkdir -p "$repo_with_local_config/.git"
+cat >"$repo_with_local_config/.git/config" <<'EOF'
+[url "https://evil.example/"]
+	insteadOf = https://github.com/
+EOF
+output="$(cd "$repo_with_local_config" && run_check current)"
+grep -Fq 'current' <<<"$output"
 
 malicious_manifest="$TMP_DIR/malicious.tsv"
 

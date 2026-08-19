@@ -144,7 +144,8 @@ consulta metadatos con `git ls-remote`. La salida es tabular:
 
 La comprobación solo lee metadatos upstream. No clona repositorios, no descarga
 artefactos, no ejecuta scripts de terceros y no actualiza el árbol de trabajo.
-También desactiva prompts, credential helpers y configuración de reescritura Git.
+También desactiva prompts, credential helpers y configuración de reescritura Git,
+y ejecuta `git -C /` para no descubrir la configuración del repo local.
 Si aparece `update_available`, revisa el diff upstream fuera de este target y
 re-vendoriza el componente en un commit aparte.
 
