@@ -165,6 +165,19 @@ Comprueba el estado con `herdr integration status`; tras actualizar herdr,
 re-vendoriza cualquier hook que salga desfasado (ver
 [docs/DESIGN.md](DESIGN.md), «Limitaciones conocidas»).
 
+Para comprobar componentes vendorizados sin modificar la instalación local:
+
+```bash
+make vendor-check
+```
+
+El target consulta solo metadatos upstream con `git ls-remote` y compara los refs
+anotados en [`scripts/vendor/upstreams.tsv`](../scripts/vendor/upstreams.tsv).
+No ejecuta código remoto, no clona repositorios y no actualiza ficheros. Si no
+hay red, informa `network_unavailable` y termina con código 0. Si un componente
+aparece como `manual/unknown`, no hay una referencia local fiable para compararlo
+y la revisión debe hacerse a mano.
+
 ## MCP en Codex
 
 Codex lee los servidores MCP directamente desde

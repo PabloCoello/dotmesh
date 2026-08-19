@@ -119,6 +119,30 @@ El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/s
 
 OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las descubre automáticamente desde `~/.claude/skills/` (symlink). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
 
+### Comprobación manual de vendorizados
+
+Algunos componentes se mantienen como copia local. Para detectar desfases sin tocar
+ficheros ni ejecutar código remoto:
+
+```bash
+make vendor-check
+```
+
+El target lee [`scripts/vendor/upstreams.tsv`](scripts/vendor/upstreams.tsv) y
+consulta metadatos con `git ls-remote`. La salida es tabular:
+
+- `current`: el ref remoto empieza por el commit local inventariado.
+- `update_available`: el ref remoto apunta a otro commit.
+- `network_unavailable`: no se pudo consultar el remoto. No bloquea el comando.
+- `upstream_ref_missing`: el remoto respondió, pero no contiene el ref esperado.
+- `manual/unknown`: hay una fuente upstream anotada, pero no existe un commit o ref
+  local fiable para comparar. Revisa el componente a mano.
+
+La comprobación solo lee metadatos upstream. No clona repositorios, no descarga
+artefactos, no ejecuta scripts de terceros y no actualiza el árbol de trabajo.
+Si aparece `update_available`, revisa el diff upstream fuera de este target y
+re-vendoriza el componente en un commit aparte.
+
 ## Paridad OpenCode ↔ Claude Code ↔ Codex
 
 Los paquetes `claude/` y `codex/` replican el flujo de OpenCode dentro de los límites de cada herramienta, para poder cambiar de agente en mitad de un proyecto sin alterar la forma de trabajar:
@@ -217,6 +241,7 @@ make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
 make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
+make vendor-check # comprueba metadatos upstream de componentes vendorizados
 make health         # comprueba binarios
 make opencode-doctor # diagnóstico estático de OpenCode
 make wsl-terminal   # instala el esquema dotmesh en Windows Terminal (solo WSL)
