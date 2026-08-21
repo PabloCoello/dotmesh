@@ -60,6 +60,17 @@ make_fake_home() {
   ln -s "$fake_home/.agents/skills" "$fake_home/.claude/skills"
 }
 
+make_folded_home() {
+  local fake_home="$1"
+  local fixture_repo="$2"
+
+  # Stow folding: a single directory symlink links every file underneath it.
+  mkdir -p "$fake_home/.config" "$fake_home/.claude"
+  ln -s "$fixture_repo/opencode/.config/opencode" "$fake_home/.config/opencode"
+  ln -s "$fixture_repo/agents/.agents" "$fake_home/.agents"
+  ln -s "$fake_home/.agents/skills" "$fake_home/.claude/skills"
+}
+
 run_doctor() {
   local fixture_repo="$1"
   local fake_home="$2"
@@ -404,6 +415,39 @@ if output="$(run_doctor "$fixture_wrong_link" "$home_wrong_link")"; then
   fi
 else
   fail "symlink a target erróneo no debe ser fallo fatal"
+fi
+
+# A folded install links each file through a directory symlink, not leaf by leaf.
+fixture_folded="$tmp_dir/folded-repo"
+home_folded="$tmp_dir/folded-home"
+make_fixture_repo "$fixture_folded"
+make_folded_home "$home_folded" "$fixture_folded"
+if output="$(run_doctor "$fixture_folded" "$home_folded")"; then
+  if printf '%s\n' "$output" | grep -q '0 avisos, 0 fallos'; then
+    pass "instalación plegada por symlink de directorio no avisa"
+  else
+    fail "instalación plegada no informa 0 avisos y 0 fallos"
+  fi
+else
+  fail "instalación plegada devuelve error"
+fi
+
+# A real copy is not an install: resolving through parents must not hide it.
+fixture_copy="$tmp_dir/copy-repo"
+home_copy="$tmp_dir/copy-home"
+make_fixture_repo "$fixture_copy"
+make_fake_home "$home_copy" "$fixture_copy"
+rm "$home_copy/.config/opencode/agents/maker.md"
+cp "$fixture_copy/opencode/.config/opencode/agents/maker.md" \
+  "$home_copy/.config/opencode/agents/maker.md"
+if output="$(run_doctor "$fixture_copy" "$home_copy")"; then
+  if printf '%s\n' "$output" | grep -q 'instalación agente maker existe, pero no es symlink'; then
+    pass "copia real en vez de enlace se detecta"
+  else
+    fail "copia real en vez de enlace no deja mensaje claro"
+  fi
+else
+  fail "copia real no debe ser fallo fatal"
 fi
 
 printf '\nResumen: %s PASS, %s FAIL\n' "$PASS" "$FAIL"
