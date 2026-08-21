@@ -1,6 +1,6 @@
 # OpenCode — Configuración del sistema de agentes
 
-Configuración global para opencode con dos agentes principales (personas), seis subagentes, cuatro comandos y skills compartidas.
+Configuración global para opencode con dos agentes principales (personas), siete subagentes, cuatro comandos y skills compartidas.
 
 ## Estructura
 
@@ -14,7 +14,8 @@ Configuración global para opencode con dos agentes principales (personas), seis
 │   ├── review.md         # subagent · github-copilot/claude-haiku-4.5, revisa diffs
 │   ├── editor.md         # subagent · github-copilot/claude-haiku-4.5, revisa drafts (formato MD + claridad + voz)
 │   ├── security.md       # subagent · openai/gpt-5.5, auditoría de seguridad (gate de commit)
-│   └── maths.md          # subagent · openai/gpt-5.5, verificación con SymPy
+│   ├── maths.md          # subagent · openai/gpt-5.5, verificación con SymPy
+│   └── reviser.md        # subagent · github-copilot/claude-haiku-4.5, responde hilos de revisión documental
 └── commands/
     ├── setup.md          # Inicializa proyecto con skills compartidas
     ├── super-git.md      # Flujo Git autónomo: rama, slices, commits, push y PR
@@ -38,10 +39,13 @@ Las skills compartidas viven en `~/.agents/skills/`. No crees una segunda fuente
 ## Verificación
 
 ```bash
+make opencode-doctor
 opencode agent list
 ```
 
-Debe mostrar los ocho agentes: dos principales (`maker`, `scribe`) y seis subagentes.
+`make opencode-doctor` valida la configuración versionada sin arrancar OpenCode ni
+servidores MCP: JSON, agentes, comandos, MCP, skills y symlinks locales. El comando
+`opencode agent list` debe mostrar los agentes instalados.
 
 ```bash
 # Dentro de opencode

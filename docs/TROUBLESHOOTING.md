@@ -70,12 +70,16 @@ make restow                                    # vuelve a enlazar
 ### `opencode agent list` no muestra todos los agentes
 
 ```bash
+make opencode-doctor
 ls -la ~/.config/opencode/agents/              # comprueba symlinks
 opencode --version
 ```
 
-Si falta alguno: revisa que los `.md` tengan el frontmatter correcto (ver
-ejemplos en [opencode/.config/opencode/agents/](../opencode/.config/opencode/agents/)).
+`make opencode-doctor` no arranca OpenCode ni servidores MCP. Revisa el JSON, los
+agentes y comandos esperados, las skills y los symlinks locales sin imprimir
+valores de secretos. Si falta algún agente: revisa que los `.md` tengan el
+frontmatter correcto (ver ejemplos en
+[opencode/.config/opencode/agents/](../opencode/.config/opencode/agents/)).
 
 ## Codex
 
