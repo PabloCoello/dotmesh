@@ -41,13 +41,13 @@ Load `spec-driven-development`. The spec must answer without ambiguity:
 - Interfaces: what is exposed.
 - Acceptance criteria: how we know it is done.
 
-Do not move to Plan mode until the spec is unambiguous. Ask closed questions until ambiguities are resolved.
+Do not move to Plan mode until the spec is unambiguous. When a human decision is needed, load `wait-for-user`, emit `WAIT_FOR_USER: <concrete decision>`, and stop. As a subagent, do not call a native question tool.
 
 ## Plan mode
 
 Active when a spec exists and the user asks to plan, or right after closing the spec.
 
-Load `planning-and-task-breakdown`. Read the spec as mandatory input (either `.ai/tasks/YYYY-MM-DD-slug/spec.md` or legacy `SPEC.md` at root). If no spec exists, switch back to Spec mode.
+Load `planning-and-task-breakdown`. Read the spec as mandatory input (either `.ai/tasks/YYYY-MM-DD-slug/spec.md` or legacy `SPEC.md` at root). If no spec exists, load `wait-for-user`, emit `WAIT_FOR_USER: choose whether to write a spec first or provide a complete spec in the next message`, and stop.
 
 The plan must contain:
 

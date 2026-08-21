@@ -105,6 +105,7 @@ El core pack diario incluye estas skills de ingeniería:
 - `security-and-hardening`
 - `git-workflow-and-versioning`
 - `documentation-and-adrs`
+- `wait-for-user`
 
 También se mantienen skills locales adicionales:
 
@@ -160,7 +161,7 @@ Los paquetes `claude/` y `codex/` replican el flujo de OpenCode dentro de los l�
 | Memoria por proyecto | `AGENTS.md` directo | `CLAUDE.md` con `@AGENTS.md` (import) | `~/.codex/AGENTS.md` + `AGENTS.md` del proyecto |
 | Skills | `~/.agents/skills/` | `~/.claude/skills/` → `~/.agents/skills/` | `~/.agents/skills/`, referenciadas desde `codex/.codex/AGENTS.md` |
 | Personas + subagentes | 2 personas (`maker`, `scribe`) + 7 subagentes en `~/.config/opencode/agents/` | 2 output styles en `~/.claude/output-styles/` + 7 subagentes en `~/.claude/agents/` | modos de trabajo en `codex/.codex/AGENTS.md` |
-| Comandos custom | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` | equivalentes en lenguaje natural en `codex/.codex/AGENTS.md` |
+| Comandos custom | 5 comandos: `/setup`, `/super-git`, `/checkpoint`, `/check-last`, `/wait-for-user` | `/setup`, `/super-git` | equivalentes en lenguaje natural en `codex/.codex/AGENTS.md` |
 | MCP | `~/.config/opencode/opencode.json` | `claude/.claude/mcp/servers.reference.json` (aplicar con `claude mcp add`, ver [docs/INSTALL.md](docs/INSTALL.md)) | `[mcp_servers.*]` en `codex/.codex/config.toml` |
 
 La recuperación de errores de herramientas se comparte en `tool-error-recovery`: un solo reintento como máximo, solo para lecturas claramente idempotentes. No se reintentan escrituras, Git/Stow destructivo, red autenticada ni MCP mutables. Cada agente conserva exit/status y un resumen de stderr sin datos sensibles, se detiene si el fallo se repite, y usa permisos nativos, sandbox o aprobaciones antes que añadir plugins o hooks.

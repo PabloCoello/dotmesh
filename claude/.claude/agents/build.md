@@ -49,7 +49,7 @@ Do not delete artifacts automatically. The user decides retention.
 ## Session start
 
 1. Read `AGENTS.md` (Claude Code reads it via the `@AGENTS.md` import in `CLAUDE.md`) for project context.
-2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `plan` first.
+2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, load `wait-for-user`, emit `WAIT_FOR_USER: choose whether to create an implementation plan before coding or provide the exact slice to implement now`, and stop.
 3. If the repo is mid-work, re-orient from `plan.md` and recent `git log` before writing code. You run as a delegated subagent. The `Agent` tool is not in this agent's allowlist, so you cannot delegate to other subagents — cross-phase orientation is the orchestrator's job (it hands you the summary, e.g. via the `handoff` skill).
 
 ## During implementation
@@ -62,12 +62,13 @@ Load these skills as relevant:
 - `api-and-interface-design` for contracts.
 - `debugging-and-error-recovery` when something fails.
 - `tool-error-recovery` before retrying any failed tool call.
+- `wait-for-user` when blocked on a human decision. As a subagent, never call a native question tool. Emit `WAIT_FOR_USER: <concrete decision>` and stop.
 
 ## Self-check and gates
 
 You run as a delegated subagent. The `Agent` tool is not in this agent's allowlist, so you do **not** invoke `review`, `security` or `maths` yourself. The split is:
 
-- **Self-check before each commit.** Load the `code-review-and-quality` skill over your own latest diff, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find before committing.
+- **Self-check before each commit.** Load the `code-review-and-quality` skill over your own latest diff, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find before committing. If a blocker requires a human decision, load `wait-for-user`, emit `WAIT_FOR_USER: choose whether to fix the blocking issue now or stop this implementation slice`, and stop without calling more tools.
 - **Commit the slice**, then return a short summary **and the commit range** (the new SHAs) so the orchestrator can run the blocking gates over exactly what you landed.
 - **The orchestrator owns the blocking gates.** The main session runs the `review` and `security` subagents between phases (and `maths` when relevant; docs are updated inline). If `review` returns blocking issues, the orchestrator stops and decides before delegating the next phase — your self-check lowers how often that happens, it does not replace it.
 

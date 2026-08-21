@@ -90,6 +90,25 @@ Default flow for a code change, and the skill that owns each phase:
 10. Durable decision or interface change → `documentation-and-adrs`; new or sharpened domain terminology → `domain-modeling` (maintains `CONTEXT.md`).
 11. Switching agents mid-task, or pausing with work in flight → `handoff`.
 
+### Waiting for user input
+
+When the next safe action depends on a human decision, load `wait-for-user`.
+OpenCode primary agents should use the native `question` tool when available:
+ask one closed question, put the recommended option first, avoid secrets, and do
+not call any other tool until the user answers.
+
+For subagents, herdr panes, Claude, Codex or any text-only hand-off, use the
+interoperable contract and then stop the turn:
+
+```text
+WAIT_FOR_USER: <decisión concreta>
+```
+
+The decision must be specific enough to act on. OpenCode subagents must return
+the textual signal to the primary agent rather than calling `question`. Do not
+poll, sleep, spawn more agents, continue with assumptions or ask for secret
+values in chat.
+
 ### Ideation: which door
 
 Two skills share the "what to build" phase. Pick by what you have and what you want — only one fires at a time:
@@ -158,7 +177,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 | Skills | `~/.agents/skills/` | `~/.claude/skills/` symlinked to `~/.agents/skills/` | shared skills referenced from `~/.agents/skills/` and surfaced through Codex skill discovery |
 | Personas (primary) | `maker`, `scribe` as `mode: primary` agents, switched with the native selector | `maker`, `scribe` as output styles in `~/.claude/output-styles/`, configured via `outputStyle` in `settings.json` (default `maker`) | `maker`, `scribe` workflow modes in `codex/.codex/AGENTS.md` |
 | Subagents | `~/.config/opencode/agents/` (7 `subagent`: build, plan, review, security, editor, maths, reviser) | `~/.claude/agents/` (7, same names and roles) | helper passes in `codex/.codex/AGENTS.md`, not separate agent files |
-| Custom commands | `/setup`, `/super-git`, `/checkpoint`, `/check-last` | `/setup`, `/super-git` (rest deferred) | natural-language command equivalents in `codex/.codex/AGENTS.md` |
+| Custom commands | 5 commands: `/setup`, `/super-git`, `/checkpoint`, `/check-last`, `/wait-for-user` | `/setup`, `/super-git` (rest deferred) | natural-language command equivalents in `codex/.codex/AGENTS.md` |
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
 | Per-agent bash granularity | yes (e.g. `npm audit*`) | tools on/off per agent; within agents with Bash, sub-restrictions are by judgment (agent instructions), not enforced by the permission system | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |

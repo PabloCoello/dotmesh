@@ -6,6 +6,7 @@ temperature: 0.1
 permission:
   "*": deny
   read: allow
+  question: deny
   glob: allow
   grep: allow
   list: allow

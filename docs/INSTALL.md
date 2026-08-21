@@ -86,7 +86,7 @@ exec zsh                                    # recarga la shell
 starship --version                          # debe imprimir versión
 git diff                                    # debe usar delta
 make opencode-doctor                        # valida OpenCode sin arrancar servicios
-opencode agent list                         # debe listar maker, scribe y subagentes
+opencode agent list                         # debe listar 2 primary + 7 subagentes
 codex mcp list                              # debe listar notion/github/tavily/openalex/zotero
 ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
 ls ~/.claude/agents/                        # debe listar 7 subagentes de Claude Code

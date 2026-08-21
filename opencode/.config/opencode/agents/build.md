@@ -6,6 +6,7 @@ temperature: 0.2
 permission:
   edit: allow
   read: allow
+  question: deny
   glob: allow
   grep: allow
   list: allow
@@ -82,7 +83,7 @@ Do not delete artifacts automatically. The user decides retention.
 
 ## Session start
 1. Read `AGENTS.md` for project context.
-2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, ask the user to go through `plan` first.
+2. Read `.ai/tasks/YYYY-MM-DD-slug/plan.md` if it exists. If not, check for `PLAN.md` at root (legacy). If neither exists, load `wait-for-user`, emit `WAIT_FOR_USER: choose whether to create an implementation plan before coding or provide the exact slice to implement now`, and stop.
 3. If the repo is mid-work, orient yourself from `.ai/tasks/*/plan.md`, the latest commits, and any `handoff.md` (the `handoff` skill owns this).
 
 ## During implementation
@@ -93,6 +94,7 @@ Load these skills as relevant:
 - `api-and-interface-design` for contracts.
 - `debugging-and-error-recovery` when something fails.
 - `tool-error-recovery` before retrying any failed tool call.
+- `wait-for-user` when blocked on a human decision. As a subagent, never call a native question tool. Emit `WAIT_FOR_USER: <concrete decision>` and stop.
 
 ## After each significant block
 Do not invoke subagents from `build`: OpenCode's default `subagent_depth=1` means gates belong to the parent orchestrator. Return a concise summary with changed files, verification commands, risks, and any maths/security surface so `maker` can run `review`, `maths`, and `security` gates.
