@@ -3,7 +3,7 @@
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
-PACKAGES := shell git starship ghostty herdr opencode codex claude agents
+PACKAGES := shell git starship ghostty herdr opencode codex claude agents dsh
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
@@ -36,6 +36,8 @@ help:
 	@echo "  make run-install    - Instala mesh-run en VS Code (requiere node y code)"
 	@echo "  make render-build   - Compila la extensión mesh-render"
 	@echo "  make render-install - Instala mesh-render en VS Code (requiere node y code)"
+	@echo "  make dsh-ui-build   - Compila el plugin de interfaz dsh-ui (requiere node; pendiente Fase 7)"
+	@echo "  make dsh-ui-install - Instala dsh-ui en el perfil web de dsh (requiere dsh o npx)"
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
@@ -56,6 +58,9 @@ help:
 
 .PHONY: install
 install: backup stow vscode-install review-install run-install render-install seed-claude-settings link-skills
+	@if command -v dsh >/dev/null 2>&1; then \
+		$(MAKE) dsh-ui-install; \
+	fi
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -175,6 +180,26 @@ render-install:
 		echo "  !!  'code' o 'node' no disponibles; instálalos y ejecuta 'make render-install'"; \
 	fi
 
+.PHONY: dsh-ui-build
+dsh-ui-build:
+	@echo "→ build dsh-ui"
+	@if [ ! -f "$(abspath dsh/dsh-ui/package.json)" ]; then \
+		echo "  !!  dsh/dsh-ui/package.json no existe; pendiente la Fase 7 del paquete dsh"; \
+		exit 1; \
+	fi
+	@(cd dsh/dsh-ui && npm run build)
+
+.PHONY: dsh-ui-install
+dsh-ui-install:
+	@echo "→ instalando plugin dsh-ui"
+	@if command -v dsh >/dev/null 2>&1; then \
+		$(MAKE) dsh-ui-build && dsh plugin --profile web add "file:$(abspath dsh/dsh-ui)"; \
+	elif command -v npx >/dev/null 2>&1; then \
+		$(MAKE) dsh-ui-build && npx @deepseek-ai/dsh plugin --profile web add "file:$(abspath dsh/dsh-ui)"; \
+	else \
+		echo "  !!  'dsh' no disponible en PATH; instala con: npm install -g @deepseek-ai/dsh  o asegúrate de que npx está disponible"; \
+	fi
+
 # settings.json es plantilla base y NO se enlaza con Stow (ver claude/.stow-local-ignore).
 # Se copia una vez a un ~/.claude/settings.json REAL y nunca se sobreescribe, para que
 # los ajustes por-máquina queden fuera del repo. Idempotente.
@@ -245,6 +270,13 @@ health:
 	@command -v claude   >/dev/null && echo "  ok  claude"   || echo "  --  claude"
 	@command -v codex    >/dev/null && echo "  ok  codex"    || echo "  --  codex"
 	@command -v opencode >/dev/null && echo "  ok  opencode" || echo "  --  opencode"
+	@if command -v dsh >/dev/null 2>&1; then \
+		echo "  ok  dsh"; \
+	elif command -v npx >/dev/null 2>&1; then \
+		echo "  ok  dsh  (no instalado globalmente; disponible vía npx @deepseek-ai/dsh)"; \
+	else \
+		echo "  --  dsh  (instala con: npm install -g @deepseek-ai/dsh  o asegúrate de que npx está disponible)"; \
+	fi
 	@if [ "$(IS_WSL)" = "1" ]; then \
 		echo "  n/a ghostty  (WSL — usa Windows Terminal)"; \
 	else \

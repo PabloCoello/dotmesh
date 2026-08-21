@@ -25,3 +25,11 @@ codex/.codex/history*
 codex/.codex/sessions/
 codex/.codex/log/
 opencode/.config/opencode/auth.json
+dsh/.dsh/settings.yaml
+dsh/.dsh/settings.yaml.bak
+dsh/.dsh/.credentials.yaml
+dsh/.dsh/sessions/
+dsh/.dsh/storages/
+dsh/.dsh/profiles/
+dsh/dsh-ui/dist/
+dsh/dsh-ui/node_modules/
