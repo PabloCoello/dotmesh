@@ -1,4 +1,5 @@
-.PHONY: help install backup stow unstow restow link-skills vscode-install review-build review-install run-build run-install render-build render-install cli-build seed-claude-settings gnome-rice gnome-unrice wsl-terminal health opencode-doctor test-opencode-doctor clean test-scribe-flow
+# Convención: cada target declara su propio .PHONY justo encima de la regla.
+# Evita una lista global que todas las ramas tocan a la vez (conflictos de merge).
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
@@ -18,6 +19,7 @@ SKILLS_DST := $(HOME)/.claude/skills
 CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
 CLAUDE_SETTINGS_DST := $(HOME)/.claude/settings.json
 
+.PHONY: help
 help:
 	@echo "dotmesh — gestión de dotfiles"
 	@echo ""
@@ -48,31 +50,37 @@ help:
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
+.PHONY: install
 install: backup stow vscode-install review-install run-install render-install seed-claude-settings link-skills
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
+.PHONY: backup
 backup:
 	@./scripts/backup-current-config.sh
 
+.PHONY: stow
 stow:
 	@for pkg in $(PACKAGES); do \
 		echo "→ stow $$pkg"; \
 		stow --no-folding -v -t ~ $$pkg || exit 1; \
 	done
 
+.PHONY: unstow
 unstow:
 	@for pkg in $(PACKAGES); do \
 		echo "← unstow $$pkg"; \
 		stow -v -D -t ~ $$pkg || exit 1; \
 	done
 
+.PHONY: restow
 restow:
 	@for pkg in $(PACKAGES); do \
 		echo "↻ restow $$pkg"; \
 		stow --no-folding -v -R -t ~ $$pkg || exit 1; \
 	done
 
+.PHONY: link-skills
 link-skills:
 	@if [ ! -d "$(SKILLS_SRC)" ]; then \
 		echo "  --  $(SKILLS_SRC) no existe. Ejecuta 'make stow' antes."; \
@@ -100,6 +108,7 @@ link-skills:
 
 # En Linux, VS Code ignora ~/Library y lee ~/.config/Code/User; install.sh crea los symlinks
 # correctos y empaqueta el tema. En macOS el subárbol Library/... ya va por stow: no-op.
+.PHONY: vscode-install
 vscode-install:
 	@if [ "$(IS_WSL)" = "1" ]; then \
 		echo "→ configurando VS Code (WSL: copia al lado Windows)"; \
@@ -111,14 +120,17 @@ vscode-install:
 		bash "$(abspath vscode/scripts/install.sh)"; \
 	fi
 
+.PHONY: review-build
 review-build:
 	@echo "→ build mesh-review"
 	@(cd vscode/review-extension && npm run build)
 
+.PHONY: cli-build
 cli-build:
 	@echo "→ build mesh-review CLI"
 	@(cd vscode/review-extension && npm run build)
 
+.PHONY: review-install
 review-install:
 	@echo "→ instalando mesh-review"
 	@if command -v code >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then \
@@ -127,10 +139,12 @@ review-install:
 		echo "  !!  'code' o 'node' no disponibles; instálalos y ejecuta 'make review-install'"; \
 	fi
 
+.PHONY: run-build
 run-build:
 	@echo "→ build mesh-run"
 	@(cd vscode/run-extension && npm run build)
 
+.PHONY: run-install
 run-install:
 	@echo "→ instalando mesh-run"
 	@if command -v code >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then \
@@ -139,10 +153,12 @@ run-install:
 		echo "  !!  'code' o 'node' no disponibles; instálalos y ejecuta 'make run-install'"; \
 	fi
 
+.PHONY: render-build
 render-build:
 	@echo "→ build mesh-render"
 	@(cd vscode/render-extension && npm run build)
 
+.PHONY: render-install
 render-install:
 	@echo "→ instalando mesh-render"
 	@if command -v code >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then \
@@ -154,6 +170,7 @@ render-install:
 # settings.json es plantilla base y NO se enlaza con Stow (ver claude/.stow-local-ignore).
 # Se copia una vez a un ~/.claude/settings.json REAL y nunca se sobreescribe, para que
 # los ajustes por-máquina queden fuera del repo. Idempotente.
+.PHONY: seed-claude-settings
 seed-claude-settings:
 	@mkdir -p "$(HOME)/.claude"
 	@if [ -L "$(CLAUDE_SETTINGS_DST)" ]; then \
@@ -169,6 +186,7 @@ seed-claude-settings:
 
 # Rice del escritorio GNOME (retint sobre Yaru). Enlaza gtk.css por stow y
 # aplica la capa dconf. Solo Linux; en macOS es un no-op informativo.
+.PHONY: gnome-rice
 gnome-rice:
 	@if [ "$$(uname -s)" != "Linux" ]; then \
 		echo "  ok  gnome-rice solo aplica en Linux/GNOME; no-op aquí"; \
@@ -182,6 +200,7 @@ gnome-rice:
 # Deshace el stow de gnome (gtk.css y fondo). Solo Linux.
 # La capa dconf no se revierte automáticamente: hazlo manualmente con
 # dconf reset -f /org/gnome/ o cargando el backup de tu sesión anterior.
+.PHONY: gnome-unrice
 gnome-unrice:
 	@if [ "$$(uname -s)" != "Linux" ]; then \
 		echo "  ok  gnome-unrice solo aplica en Linux/GNOME; no-op aquí"; \
@@ -195,6 +214,7 @@ gnome-unrice:
 
 # Instala el esquema de color dotmesh en Windows Terminal (solo WSL).
 # windows-terminal/ no entra en PACKAGES; este target lo aplica manualmente.
+.PHONY: wsl-terminal
 wsl-terminal:
 	@if [ "$(IS_WSL)" != "1" ]; then \
 		echo "  ok  wsl-terminal solo aplica en WSL; no-op aquí"; \
@@ -203,6 +223,7 @@ wsl-terminal:
 		bash "$(abspath windows-terminal/scripts/install.sh)"; \
 	fi
 
+.PHONY: health
 health:
 	@echo "Healthcheck:"
 	@command -v zsh      >/dev/null && echo "  ok  zsh"      || echo "  --  zsh"
@@ -254,16 +275,20 @@ health:
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.config/starship.toml" ] && [ -e "$$HOME/.config/starship.toml" ] && echo "  ok  symlink ~/.config/starship.toml" || echo "  --  ~/.config/starship.toml no es symlink al repo (corre 'make stow')"
 
+.PHONY: opencode-doctor
 opencode-doctor:
 	@bash scripts/opencode-doctor.sh
 
+.PHONY: test-opencode-doctor
 test-opencode-doctor:
 	@bash scripts/test-opencode-doctor.sh
 
+.PHONY: test-scribe-flow
 test-scribe-flow:
 	@echo "→ arnés headless scribe"
 	@bash scripts/test-scribe-flow.sh
 
+.PHONY: clean
 clean:
 	@rm -rf ~/dotfiles-backup/*
 	@echo "Backups eliminados."
