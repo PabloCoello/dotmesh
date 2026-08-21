@@ -92,6 +92,7 @@ Load these skills as relevant:
 - `git-workflow-and-versioning` when committing, splitting changes, or organizing work across branches.
 - `api-and-interface-design` for contracts.
 - `debugging-and-error-recovery` when something fails.
+- `tool-error-recovery` before retrying any failed tool call.
 
 ## After each significant block
 Do not invoke subagents from `build`: OpenCode's default `subagent_depth=1` means gates belong to the parent orchestrator. Return a concise summary with changed files, verification commands, risks, and any maths/security surface so `maker` can run `review`, `maths`, and `security` gates.

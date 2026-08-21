@@ -70,7 +70,8 @@ Fire these without being asked; the trigger is the situation, not a request.
 3. External docs/APIs/versions → `source-driven-development`.
 4. Before code → the YAGNI gate in `code-simplification`.
 5. Implementing → `incremental-implementation` + `test-driven-development`.
-6. Failures → `debugging-and-error-recovery`.
+6. Test/build/runtime failures → `debugging-and-error-recovery`; failed tool
+   calls → `tool-error-recovery` before any retry.
 7. Before merge → `code-review-and-quality`; sensitive → `security-and-hardening`.
 8. Durable decision/interface → `documentation-and-adrs`; terminology →
    `domain-modeling`.

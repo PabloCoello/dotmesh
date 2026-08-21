@@ -23,7 +23,7 @@ Al incorporar o actualizar una skill:
 
 ## Core pack diario
 
-Estas 14 skills forman el conjunto base de ingeniería:
+Estas skills forman el conjunto base de ingeniería:
 
 | Skill | Cuándo usarla |
 |---|---|
@@ -36,6 +36,7 @@ Estas 14 skills forman el conjunto base de ingeniería:
 | `incremental-implementation` | Para implementar en slices pequeñas y verificables. |
 | `test-driven-development` | Para lógica, bugs o cambios de comportamiento que deben probarse. |
 | `debugging-and-error-recovery` | Para fallos de tests, build, ejecución o comportamiento inesperado. |
+| `tool-error-recovery` | Para decidir si un fallo de herramienta puede reintentarse y cómo conservar el error. |
 | `code-review-and-quality` | Para revisar cambios antes de darlos por buenos. |
 | `code-simplification` | Para simplificar código que funciona pero es más complejo de lo necesario. |
 | `security-and-hardening` | Para secretos, inputs externos, permisos, dependencias, logs o datos sensibles. |
