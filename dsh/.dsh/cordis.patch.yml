@@ -1,0 +1,75 @@
+# Parche de máquina — ~/.dsh/cordis.patch.yml
+# Se aplica después de los bundles del perfil (dsh-base + dsh-web-app) y antes
+# de cualquier --patch de arranque. Cada entrada sobrescribe los campos que
+# declara; el resto del árbol queda intacto.
+
+# ── 1. Proveedor local (llama.cpp en 127.0.0.1:8081) ─────────────────────────
+# El plugin llm-pi-ai ya está montado en dsh-base; aquí se le inyecta el perfil
+# del servidor local. `config` sustituye entero, así que se declaran todos los
+# campos necesarios. `apiKeyEnv` es obligatorio en el esquema aunque llama-server
+# no autentique; apunta a una variable que puede estar vacía.
+- id: llm-pi-ai
+  config:
+    providers:
+      llamacpp:
+        displayName: llama.cpp local
+        api: openai-completions
+        apiKeyEnv: LLAMACPP_API_KEY
+        baseURL: http://127.0.0.1:8081/v1
+        models:
+          - id: qwen3.8-27b
+            name: Qwen3.8 27B
+            contextWindow: 131072
+            maxTokens: 8192
+
+# Modelo por defecto: apunta al proveedor y modelo locales. Sin este parche dsh
+# intentaría usar deepseek-official/deepseek-v4-flash, que no está disponible
+# en esta máquina.
+- id: agent-default-model
+  config:
+    provider: llamacpp
+    model: qwen3.8-27b
+
+# ── 2. Ajustes de contexto ────────────────────────────────────────────────────
+# Objetivo: reducir el gasto de ventana con el modelo local (131 072 tokens,
+# ~32 tok/s de generación). Los valores son punto de partida empírico; se
+# pueden subir si las salidas de grep resultan demasiado cortas.
+
+# maxInlineBytes 10 000 (defecto 50 000 B): los resultados de herramientas que
+# superan esta marca se vuelcan a fichero y el modelo recibe solo cabeza/cola
+# más un localizador. 10 000 B ≈ 2 500 tokens; deja margen para varios
+# resultados por turno sin saturar el contexto con salidas de grep o cat.
+- id: spill-policy
+  config:
+    maxInlineBytes: 10000
+
+# thresholdChars 4096 / headChars 2048 / tailChars 512 (defectos 8192/4096/1024):
+# poda barata SIN LLM aplicada a resultados individuales antes de que el
+# compactador general entre en juego. Con 131 072 tokens es preferible cortar
+# pronto y relanzar la herramienta que perder un turno de compactación.
+# NOTA: en el perfil web esta fila está desactivada en el plano host y se
+# re-monta dentro del grupo `compaction` de cada preset. Este parche afecta
+# a perfiles no-web y documenta los valores objetivo; el preset `taller` los
+# replica explícitamente en su agent.cordis.yml.
+- id: tool-result-pruner
+  config:
+    thresholdChars: 4096
+    headChars: 2048
+    tailChars: 512
+
+# maxBytes 16 384 (defecto 65 536 B): inyecta AGENTS.md/CLAUDE.md como mensaje
+# de usuario durable. 16 384 B caben las convenciones relevantes del proyecto
+# sin gastar un cuarto de la ventana en instrucciones estáticas.
+# NOTA: igual que tool-result-pruner, en el perfil web esta fila está
+# desactivada en el plano host y se re-monta por preset.
+- id: agent-instructions
+  config:
+    maxBytes: 16384
+
+# ── 3. Superficie ────────────────────────────────────────────────────────────
+# Desactivar la marca oficial de dsh. El plugin de interfaz (Fase 8) sustituirá
+# los slots sidebar.brand.mark / sidebar.brand.name /
+# conversation.hero.brand.mark con la marca dotmesh; dsh-client-ui-brand-official
+# los ocupa por defecto y debe apagarse para que el registro posterior surta efecto.
+- id: ui-brand-official
+  disabled: true
