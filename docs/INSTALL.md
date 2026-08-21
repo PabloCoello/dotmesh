@@ -165,6 +165,24 @@ Comprueba el estado con `herdr integration status`; tras actualizar herdr,
 re-vendoriza cualquier hook que salga desfasado (ver
 [docs/DESIGN.md](DESIGN.md), «Limitaciones conocidas»).
 
+Para comprobar componentes vendorizados sin modificar la instalación local:
+
+```bash
+make vendor-check
+```
+
+El target consulta solo metadatos upstream con `git ls-remote` y compara los refs
+anotados en [`scripts/vendor/upstreams.tsv`](../scripts/vendor/upstreams.tsv).
+No ejecuta código remoto, no clona repositorios y no actualiza ficheros. Si no
+hay red, informa `network_unavailable` y termina con código 0. Si un componente
+aparece como `manual/unknown`, no hay una referencia local fiable para compararlo
+y la revisión debe hacerse a mano. Las URLs se limitan a repos HTTPS de GitHub
+inventariados en el script; los valores que empiezan por `-` y los refs fuera de
+`HEAD` o `refs/heads/*` se bloquean antes de llamar a Git. El script exige hashes
+locales completos, desactiva credential helpers y aísla el entorno y la
+configuración de Git para evitar reglas `url.*.insteadOf` locales. También
+ejecuta `git -C /` para no leer `.git/config` del repo actual.
+
 ## MCP en Codex
 
 Codex lee los servidores MCP directamente desde

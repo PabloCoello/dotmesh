@@ -37,6 +37,7 @@ help:
 	@echo "  make render-build   - Compila la extensión mesh-render"
 	@echo "  make render-install - Instala mesh-render en VS Code (requiere node y code)"
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
+	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
@@ -130,6 +131,10 @@ review-build:
 cli-build:
 	@echo "→ build mesh-review CLI"
 	@(cd vscode/review-extension && npm run build)
+
+.PHONY: vendor-check
+vendor-check:
+	@./scripts/check-vendor-updates.sh
 
 .PHONY: review-install
 review-install:
