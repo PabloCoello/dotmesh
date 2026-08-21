@@ -64,8 +64,21 @@ for agent in "$ROOT"/opencode/.config/opencode/agents/*.md; do
   check_agent_question_permission "${agent#"$ROOT/"}"
 done
 
+# The temporary home is global on purpose: bash discards the function scope
+# before running the EXIT trap, so a `local` would already be gone by the time
+# cleanup needs it.
+RUNTIME_HOME=""
+
+cleanup_runtime_home() {
+  trap - EXIT
+  if [ -n "$RUNTIME_HOME" ]; then
+    rm -rf "$RUNTIME_HOME"
+    RUNTIME_HOME=""
+  fi
+}
+
 check_runtime_question_permissions() {
-  local runtime_home tmp_base
+  local tmp_base
 
   if ! command -v opencode >/dev/null 2>&1; then
     printf 'skip runtime question permissions: opencode not found\n'
@@ -73,24 +86,24 @@ check_runtime_question_permissions() {
   fi
 
   tmp_base="${TMPDIR:-/tmp}"
-  runtime_home="$(mktemp -d "$tmp_base/dotmesh-wait-runtime.XXXXXX")"
-  case "$runtime_home" in
+  RUNTIME_HOME="$(mktemp -d "$tmp_base/dotmesh-wait-runtime.XXXXXX")"
+  case "$RUNTIME_HOME" in
     "$tmp_base"/dotmesh-wait-runtime.*) ;;
     *)
-      printf 'unsafe runtime temp path: %s\n' "$runtime_home" >&2
+      printf 'unsafe runtime temp path: %s\n' "$RUNTIME_HOME" >&2
       exit 1
       ;;
   esac
 
-  cleanup_runtime_home() {
-    rm -rf "$runtime_home"
-  }
-  trap cleanup_runtime_home RETURN
+  # EXIT, not RETURN: with `set -e` a failing check exits the shell without
+  # ever returning from this function, so a RETURN trap never fires and the
+  # temporary home survives the run.
+  trap cleanup_runtime_home EXIT
 
-  mkdir -p "$runtime_home/.config"
-  ln -s "$ROOT/opencode/.config/opencode" "$runtime_home/.config/opencode"
+  mkdir -p "$RUNTIME_HOME/.config"
+  ln -s "$ROOT/opencode/.config/opencode" "$RUNTIME_HOME/.config/opencode"
 
-  HOME="$runtime_home" opencode agent list | awk '
+  HOME="$RUNTIME_HOME" opencode agent list | awk '
     BEGIN {
       expected["maker"] = "allow"
       expected["scribe"] = "allow"
@@ -129,6 +142,7 @@ check_runtime_question_permissions() {
       exit failed
     }
   '
+  cleanup_runtime_home
   printf 'ok runtime question permissions\n'
 }
 
