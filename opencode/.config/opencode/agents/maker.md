@@ -11,6 +11,9 @@ permission:
   list: allow
   bash:
     "*": allow
+    "sg": ask
+    "sg *": ask
+    "*ast-grep*": ask
     "rm -rf /*": deny
     "rm -rf ~*": deny
     "git push --force*": ask

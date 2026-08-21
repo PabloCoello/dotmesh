@@ -45,6 +45,7 @@ help:
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make opencode-doctor - Diagnóstico estático de OpenCode (JSON, agentes, comandos, MCP, skills)"
 	@echo "  make test-opencode-doctor - Pruebas del diagnóstico OpenCode"
+	@echo "  make verify-opencode-ast-grep - Comprueba permisos ast-grep de OpenCode"
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
 	@echo ""
@@ -254,6 +255,7 @@ health:
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
 	@command -v nvim     >/dev/null && echo "  ok  nvim"     || echo "  --  nvim"
 	@command -v npx      >/dev/null && echo "  ok  npx"      || echo "  --  npx"
+	@command -v ast-grep >/dev/null && echo "  ok  ast-grep (opcional)" || echo "  --  ast-grep opcional (búsqueda estructural)"
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-review' \
 		&& echo "  ok  mesh-review" \
 		|| echo "  --  mesh-review (corre 'make review-install')"
@@ -282,6 +284,10 @@ opencode-doctor:
 .PHONY: test-opencode-doctor
 test-opencode-doctor:
 	@bash scripts/test-opencode-doctor.sh
+
+.PHONY: verify-opencode-ast-grep
+verify-opencode-ast-grep:
+	@bash scripts/verify-opencode-ast-grep-permissions.sh
 
 .PHONY: test-scribe-flow
 test-scribe-flow:

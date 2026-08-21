@@ -36,6 +36,8 @@ Para verificar identificadores de modelo: `opencode models`. Ajusta el campo `mo
 
 Las skills compartidas viven en `~/.agents/skills/`. No crees una segunda fuente como `.opencode/skills/` salvo que el proyecto lo requiera explícitamente y quede documentado cómo se sincroniza.
 
+`ast-grep` está contemplado como herramienta opcional de búsqueda estructural para `maker` y `build`. Cualquier invocación reconocible de `ast-grep` queda en `ask`; la confirmación humana es el límite operativo. Estas reglas son guardarraíles, no un sandbox para agentes con shell y escritura. El alias `sg` queda en `ask` para evitar ambigüedad con Linux. `review` y `security` no reciben permiso especial para ejecutar `ast-grep`. Consulta la skill `structured-search` antes de usarlo.
+
 ## Verificación
 
 ```bash
