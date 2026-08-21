@@ -81,6 +81,10 @@ valores de secretos. Si falta algún agente: revisa que los `.md` tengan el
 frontmatter correcto (ver ejemplos en
 [opencode/.config/opencode/agents/](../opencode/.config/opencode/agents/)).
 
+Una instalación plegada (Stow enlaza el directorio entero, así que
+`~/.config/opencode` es un symlink y los ficheros de dentro no lo son) también
+es válida: el doctor resuelve la ruta real y no avisa.
+
 ## Codex
 
 ### `~/.codex/config.toml` se modifica con churn al usar Codex
