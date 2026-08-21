@@ -4,10 +4,23 @@ mode: subagent
 model: github-copilot/claude-haiku-4.5
 temperature: 0.1
 permission:
-  edit: deny
-  write: deny
-  bash: deny
+  "*": deny
   read: allow
+  glob: allow
+  grep: allow
+  list: allow
+  edit: deny
+  bash: deny
+  skill:
+    "*": deny
+    "anti-ai-style": allow
+    "castellano-peninsular": allow
+  task: deny
+  notion_*: deny
+  github_*: deny
+  tavily_*: deny
+  openalex_*: deny
+  zotero_*: deny
 ---
 
 # Editor

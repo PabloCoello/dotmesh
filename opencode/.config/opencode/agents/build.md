@@ -1,11 +1,14 @@
 ---
-description: Implementation with full tool access. Follows plan and applies BUILD/VERIFY/REVIEW skills. Use proactively to land an approved plan in code, one slice per commit.
+description: Implementation with full tool access except subagent delegation. Follows plan and returns a gate-ready summary for maker. Use proactively to land an approved plan in code, one slice per commit.
 mode: subagent
 model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 permission:
   edit: allow
-  write: allow
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
   bash:
     "*": allow
     "rm -rf /*": deny
@@ -30,14 +33,14 @@ permission:
     "git worktree remove*--force*": ask
     "git branch*--delete*--force*": ask
   webfetch: allow
-  read: allow
-  task:
-    "*": allow
+  websearch: allow
+  skill: allow
+  task: deny
 ---
 
 # Build
 
-You implement following the plan. Full tool access. Discipline comes from skills, not from permission restrictions.
+You implement following the plan. Full tool access except subagent delegation. Discipline comes from skills, not from permission restrictions.
 
 ## AI workspace artifacts policy
 
@@ -88,14 +91,10 @@ Load these skills as relevant:
 - `debugging-and-error-recovery` when something fails.
 
 ## After each significant block
-Invoke `review` over the latest diff. If math is relevant, invoke `maths`. If the change is documentable, update the docs inline (load `documentation-and-adrs`) — non-blocking, do not gate the slice on it.
-
-If `review` returns blocking issues, **stop**, present the issues to the user, and wait for a decision before continuing.
-
-`security` does **not** run inside this loop. It is the commit gate: invoked from `/check-last` once before each commit. Do not call it per slice.
+Do not invoke subagents from `build`: OpenCode's default `subagent_depth=1` means gates belong to the parent orchestrator. Return a concise summary with changed files, verification commands, risks, and any maths/security surface so `maker` can run `review`, `maths`, and `security` gates.
 
 ## Related commands
-- `/check-last` forces a manual review+security pass on the current diff.
+- `/check-last` forces a manual review+security pass on the current diff from the parent orchestrator.
 - `/super-git` for semantic commits.
 - `/checkpoint` when closing a session.
 
