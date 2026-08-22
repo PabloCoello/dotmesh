@@ -139,6 +139,168 @@ function DotmeshName() {
   );
 }
 
+// ── Workbench panel ───────────────────────────────────────────────────────────
+
+// Endpoint served by the host half of this plugin (src/index.ts).
+const WORKBENCH_ENDPOINT = '/plugins/dotmesh-ui/workbench';
+// 5 s interval: "generous" per spec; short enough for near-real-time feedback
+// without hammering the disk on every conversation turn.
+const POLL_INTERVAL_MS = 5_000;
+const TITLE_MAX_CHARS = 48;
+
+interface WorkbenchState {
+  req?: string;
+  title?: string;
+  status?: string;
+  cwd?: string;
+  gate?: { ok: boolean; findings?: number; ranAt?: string };
+  updatedAt?: string;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+// WorkbenchPanel renders the active REQ and gate result in the sidebar footer.
+// Receives `wide` from the slot runtime: truthy when the sidebar is expanded,
+// falsy when collapsed — mirrors the pattern the settings slot uses.
+function WorkbenchPanel({ wide }: { wide?: boolean }) {
+  const [state, setState] = React.useState<WorkbenchState | null>(null);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const poll = () => {
+      fetch(WORKBENCH_ENDPOINT)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: WorkbenchState | null) => {
+          if (!mounted) return;
+          // Treat empty object (no active REQ) the same as missing file.
+          setState(data && data.req ? data : null);
+        })
+        .catch(() => {
+          /* ignore network errors; keep showing last known state */
+        });
+    };
+
+    poll(); // immediate first fetch
+    const timer = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      mounted = false;
+      clearInterval(timer); // spec: clearInterval on unmount
+    };
+  }, []);
+
+  // All colours come from --dsw-alias-* tokens defined in applyTheme() so the
+  // panel automatically follows light and dark mode without extra media queries.
+  const rootStyle: React.CSSProperties = {
+    padding: wide ? '4px 4px 4px 0' : '4px 0',
+    fontSize: '11px',
+    lineHeight: '1.45',
+    color: 'var(--dsw-alias-label-secondary)',
+    userSelect: 'none',
+    overflow: 'hidden',
+  };
+
+  if (!state) {
+    // No active requirement: show placeholder text when expanded, nothing when
+    // collapsed (a zero-size element is fine for a list-type slot).
+    return React.createElement(
+      'div',
+      { style: rootStyle, title: 'Sin requisito activo' },
+      wide
+        ? React.createElement(
+            'span',
+            { style: { opacity: 0.5 } },
+            'Sin requisito activo',
+          )
+        : null,
+    );
+  }
+
+  const gateEl =
+    state.gate != null
+      ? React.createElement(
+          'span',
+          {
+            style: {
+              color: state.gate.ok
+                ? 'var(--dsw-alias-state-success-primary)'
+                : 'var(--dsw-alias-state-error-primary)',
+              marginLeft: '4px',
+            },
+          },
+          state.gate.ok
+            ? '· Gate OK'
+            : `· ${state.gate.findings ?? '?'} hallazgo${
+                state.gate.findings !== 1 ? 's' : ''
+              }`,
+        )
+      : null;
+
+  if (!wide) {
+    // Collapsed sidebar: show only a coloured dot with the REQ id as tooltip.
+    const dotColor =
+      state.gate == null
+        ? 'var(--dsw-alias-label-secondary)'
+        : state.gate.ok
+        ? 'var(--dsw-alias-state-success-primary)'
+        : 'var(--dsw-alias-state-error-primary)';
+    return React.createElement(
+      'div',
+      { style: { ...rootStyle, display: 'flex', justifyContent: 'center' }, title: state.req },
+      React.createElement('span', {
+        style: {
+          display: 'inline-block',
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: dotColor,
+          marginTop: 2,
+        },
+      }),
+    );
+  }
+
+  return React.createElement(
+    'div',
+    { style: rootStyle },
+    // REQ id on its own line in primary label colour
+    React.createElement(
+      'div',
+      {
+        style: {
+          fontWeight: 600,
+          color: 'var(--dsw-alias-label-primary)',
+          fontFamily: 'var(--ds-font-family-code, monospace)',
+          marginBottom: '1px',
+        },
+      },
+      state.req,
+    ),
+    // Title (truncated), status badge, and gate result on the second line
+    React.createElement(
+      'div',
+      { style: { display: 'flex', flexWrap: 'wrap', gap: '0 4px', alignItems: 'baseline' } },
+      state.title
+        ? React.createElement(
+            'span',
+            { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' } },
+            truncate(state.title, TITLE_MAX_CHARS),
+          )
+        : null,
+      state.status
+        ? React.createElement(
+            'span',
+            { style: { opacity: 0.65, flexShrink: 0 } },
+            `[${state.status}]`,
+          )
+        : null,
+      gateEl,
+    ),
+  );
+}
+
 // ── Brand slot registration ───────────────────────────────────────────────────
 
 function applyBrand(ctx: any): void {
@@ -155,9 +317,28 @@ function applyBrand(ctx: any): void {
   );
 }
 
+// ── Workbench slot registration ───────────────────────────────────────────────
+
+function applyWorkbench(ctx: any): void {
+  // sidebar.footer.action is type "list" (verified in dsh-client-ui-sidebar
+  // lib/client.js line 308), so this register call ADDS to the slot without
+  // displacing any other registrant. The slot is rendered inside the sidebar's
+  // footArea, between the workspace list and the settings row — the right place
+  // for a persistent, at-a-glance workbench status strip.
+  //
+  // Alternatives considered and rejected:
+  //   conversation.input.dock — too prominent; interrupts conversation focus.
+  //   shell.overlay (list type) — floating overlay; wrong affordance for a
+  //     persistent status indicator that must always be visible.
+  ctx.slots.inject('sidebar.footer.action', function* () {
+    yield ctx.slots.register({ name: 'sidebar.footer.action' }, WorkbenchPanel);
+  });
+}
+
 // ── Plugin entry point ────────────────────────────────────────────────────────
 
 export function apply(ctx: any): void {
   applyTheme(ctx);
   applyBrand(ctx);
+  applyWorkbench(ctx);
 }
