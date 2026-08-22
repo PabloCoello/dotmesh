@@ -73,3 +73,14 @@
 # los ocupa por defecto y debe apagarse para que el registro posterior surta efecto.
 - id: ui-brand-official
   disabled: true
+
+# ── 4. Plugin de interfaz dotmesh-ui ─────────────────────────────────────────
+# Monta el plugin de UI en la cadena de Cordis para que dsh sirva su bundle de
+# cliente en /plugins/dotmesh-ui/client.js y llame a apply() en el browser.
+# El nombre de paquete bare (sin ./) es resuelto por HostResolvedRootInclude
+# de dsh-app-boot usando ctx.loader.internal.import(name, profileUrl, {}) —
+# eso activa el mapa exports del package.json y resuelve desde la carpeta del
+# perfil, donde pnpm lo instaló al ejecutar `make dsh-ui-install`.
+- insert:
+    - id: dotmesh-ui
+      name: dotmesh-ui
