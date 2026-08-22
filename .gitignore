@@ -29,6 +29,7 @@ dsh/.dsh/settings.yaml
 dsh/.dsh/settings.yaml.bak
 dsh/.dsh/.credentials.yaml
 dsh/.dsh/sessions/
+dsh/.dsh/state/
 dsh/.dsh/storages/
 dsh/.dsh/profiles/
 dsh/dsh-ui/dist/

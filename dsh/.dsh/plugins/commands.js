@@ -41,13 +41,23 @@ function readState() {
   }
 }
 
+// Artefact fields come from repository content and may carry newlines or
+// markdown that would break the handoff document's structure. Collapse them to
+// a single bounded line so downstream readers treat them as data, not markup.
+function oneLine(value, max = 200) {
+  if (typeof value !== 'string') return value
+  return value.replace(/\s+/g, ' ').trim().slice(0, max)
+}
+
 function writeState(patch) {
   const current = readState()
   const next = { ...current, ...patch, updatedAt: new Date().toISOString() }
+  if (next.title !== undefined) next.title = oneLine(next.title)
   const dir = join(DSH_HOME, 'state')
   mkdirSync(dir, { recursive: true })
   const tmp = STATE_FILE + '.tmp'
-  writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n', 'utf8')
+  // 0600: the file records the absolute path of the active project.
+  writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 })
   // Escritura atómica: rename en el mismo filesystem es operación atómica en Linux.
   renameSync(tmp, STATE_FILE)
 }
@@ -155,7 +165,7 @@ export function apply(ctx) {
 
       return {
         kind: 'success',
-        text: `REQ activo: ${entity.id} — ${entity.title} [${entity.status}]`,
+        text: `REQ activo: ${entity.id} — ${oneLine(entity.title)} [${entity.status}]`,
       }
     },
   })
@@ -173,6 +183,12 @@ export function apply(ctx) {
       if (hasGateTarget(cwd)) {
         cmdLabel = 'make gate'
         const r = run('make', ['gate'], { cwd, timeout: 120000 })
+        // Sin esta comprobación un timeout se registraría como gate fallido:
+        // spawnSync deja status a null y `null === 0` es false. El estado
+        // persistido mentiría sobre por qué falló.
+        if (r.error?.code === 'ETIMEDOUT') {
+          return { kind: 'error', text: 'make gate superó el tiempo límite (120 s).' }
+        }
         ok = r.status === 0
         // make gate no emite hallazgos estructurados: si falla, se registra
         // findings = 1 para indicar «al menos un fallo», sin sobre-contar
