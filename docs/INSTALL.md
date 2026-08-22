@@ -187,7 +187,7 @@ ejecuta `git -C /` para no leer `.git/config` del repo actual.
 
 ## dsh
 
-dsh es el banco de trabajo interactivo para proyectos gobernados por argos. No está instalado globalmente; se invoca vía `npx @deepseek-ai/dsh`. Con la caché de npx poblada el arranque es rápido; crear el perfil `web` por primera vez es bastante más lento porque pnpm resuelve los bundles del cliente.
+dsh es el banco de trabajo interactivo para proyectos gobernados por argos. No está instalado globalmente; se invoca vía `npx @deepseek-ai/dsh`. Con la caché de npx poblada el arranque del CLI ronda el segundo; crear el perfil `web` por primera vez es bastante más lento, porque pnpm resuelve los bundles del cliente.
 
 ### Instalación
 
@@ -203,7 +203,7 @@ make dsh-ui-install
 
 ### Proveedor local
 
-La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Sin ese servidor levantado dsh arranca y carga la interfaz, pero las llamadas al modelo no obtienen respuesta. Ver [docs/SECRETS.md](SECRETS.md) y la nota sobre la máquina LLM local en la memoria del proyecto.
+La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Sin ese servidor levantado dsh arranca y carga la interfaz, pero las llamadas al modelo no obtienen respuesta. El endpoint no autentica, pero el esquema del proveedor exige una variable de entorno para la clave: `LLAMACPP_API_KEY` puede quedar vacía. Ver [SECRETS.md](SECRETS.md).
 
 ### Primera arrancada
 
@@ -211,18 +211,26 @@ La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Si
 npx @deepseek-ai/dsh --profile web
 ```
 
-La primera ejecución construye el perfil `web` (descarga de bundles vía pnpm). Las siguientes son inmediatas gracias a la caché de npx y al perfil ya construido.
+Si `~/.dsh/profiles/web/` no existe, la primera ejecución lo construye resolviendo los bundles con pnpm. Las siguientes arrancan de inmediato.
 
-### Migración opcional desde `~/.dsh-spike/`
+Comprobar el árbol compuesto sin arrancar la interfaz, útil tras tocar el parche:
 
-Si existe un perfil ya construido en `~/.dsh-spike/profiles/web/` del trabajo de exploración previo, copiarlo evita la reconstrucción:
+```bash
+npx @deepseek-ai/dsh --profile web --dump-config
+```
+
+### Reaprovechar un perfil ya construido
+
+Solo si `~/.dsh/profiles/web/` **no** existe y quieres ahorrarte la reconstrucción,
+partiendo de otro perfil de la misma versión de dsh:
 
 ```bash
 mkdir -p ~/.dsh/profiles
-cp -R ~/.dsh-spike/profiles/web ~/.dsh/profiles/web
+cp -R <otro-DSH_HOME>/profiles/web ~/.dsh/profiles/web
 ```
 
-Es opcional y reversible: borra `~/.dsh/profiles/web/` y dsh lo reconstruye solo.
+Es reversible: borra `~/.dsh/profiles/web/` y dsh lo reconstruye solo. No copies
+encima de un perfil existente.
 
 ## MCP en Codex
 
