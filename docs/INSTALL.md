@@ -78,6 +78,7 @@ make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa St
 | `codex` | `~/.codex/{config.toml,AGENTS.md,hooks.json,herdr-agent-state.sh}` |
 | `claude` | `~/.claude/{settings.json,agents/,commands/,hooks/,mcp/,output-styles/,statusline.sh}` |
 | `agents` | `~/.agents/skills/<skill>/` |
+| `dsh` | `~/.dsh/{cordis.patch.yml,.agent-presets/,skills/,plugins/}` |
 
 ## Tras la instalación
 
@@ -90,6 +91,7 @@ opencode agent list                         # debe listar 2 primary + 7 subagent
 codex mcp list                              # debe listar notion/github/tavily/openalex/zotero
 ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
 ls ~/.claude/agents/                        # debe listar 7 subagentes de Claude Code
+make health | grep dsh                      # ok dsh / ok dsh (no instalado globalmente…) / -- dsh
 ```
 
 Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
@@ -182,6 +184,45 @@ inventariados en el script; los valores que empiezan por `-` y los refs fuera de
 locales completos, desactiva credential helpers y aísla el entorno y la
 configuración de Git para evitar reglas `url.*.insteadOf` locales. También
 ejecuta `git -C /` para no leer `.git/config` del repo actual.
+
+## dsh
+
+dsh es el banco de trabajo interactivo para proyectos gobernados por argos. No está instalado globalmente; se invoca vía `npx @deepseek-ai/dsh`. Con la caché de npx poblada el arranque es rápido; crear el perfil `web` por primera vez es bastante más lento porque pnpm resuelve los bundles del cliente.
+
+### Instalación
+
+```bash
+# 1. Enlaza la configuración en ~/.dsh/ (parte del make stow habitual)
+make stow
+
+# 2. Instala el plugin de interfaz en el perfil web
+make dsh-ui-install
+```
+
+`make dsh-ui-install` compila `dsh/dsh-ui/` con esbuild y registra el bundle resultante en el perfil `web` de dsh. Requiere `node` en el PATH. Si `dsh` no está disponible como binario, el target cae a `npx @deepseek-ai/dsh`.
+
+### Proveedor local
+
+La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Sin ese servidor levantado dsh arranca y carga la interfaz, pero las llamadas al modelo no obtienen respuesta. Ver [docs/SECRETS.md](SECRETS.md) y la nota sobre la máquina LLM local en la memoria del proyecto.
+
+### Primera arrancada
+
+```bash
+npx @deepseek-ai/dsh --profile web
+```
+
+La primera ejecución construye el perfil `web` (descarga de bundles vía pnpm). Las siguientes son inmediatas gracias a la caché de npx y al perfil ya construido.
+
+### Migración opcional desde `~/.dsh-spike/`
+
+Si existe un perfil ya construido en `~/.dsh-spike/profiles/web/` del trabajo de exploración previo, copiarlo evita la reconstrucción:
+
+```bash
+mkdir -p ~/.dsh/profiles
+cp -R ~/.dsh-spike/profiles/web ~/.dsh/profiles/web
+```
+
+Es opcional y reversible: borra `~/.dsh/profiles/web/` y dsh lo reconstruye solo.
 
 ## MCP en Codex
 

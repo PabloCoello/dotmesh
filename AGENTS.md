@@ -47,6 +47,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
 | `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
+| `dsh/` | `~/.dsh/` | Agent workbench config for argos projects: machine-level cordis patch (local provider, context tuning), `taller` preset with four subagent rows (`localizador`, `implementador`, `gate`, `redactor`), `argos-traza` skill, `commands.js` server plugin |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 | `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
 
@@ -59,6 +60,8 @@ The `vscode/` package contains a `.stow-local-ignore` and `package.json` because
 The `gnome/` package is Linux-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make gnome-rice` both links its `gtk.css` (via `stow gnome`) and applies the dconf layer (`gnome/scripts/apply-rice.sh`). Its `.stow-local-ignore` keeps `scripts/` and `README.md` out of `$HOME`.
 
 The `windows-terminal/` package is WSL-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make wsl-terminal` applies it from inside a WSL distro (`windows-terminal/scripts/install.sh`). It writes the dotmesh colour scheme into the Windows Terminal `LocalState/settings.json` on the Windows side.
+
+The `dsh/` package is a personal agent workbench for projects governed by argos, running against the local model at `http://127.0.0.1:8081/v1`. It is not a fourth general-purpose agent alongside Claude Code, OpenCode and Codex: it has no persona selector and no 2+7 subagent roster. `taller` is the single selectable preset; four delegate rows (`localizador`, `implementador`, `gate`, `redactor`) narrow its tool set via `toolFilter` — the only shape that `dsh-tool-subagent` allows. Skills under `dsh/.dsh/skills/` are loaded at rank 400 within dsh and are not shared with `agents/.agents/skills/`: the argos workflow (`argos mcp`, REQ-code linking, the gate cycle) is specific to argos-governed projects and has no place in the shared skill tree. `dsh/dsh-ui/` is an npm package with a build step, excluded from Stow by `.stow-local-ignore`; install it with `make dsh-ui-install` (same pattern as `vscode/review-extension/`).
 
 ## Skills as the integration point
 
