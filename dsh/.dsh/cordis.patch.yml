@@ -84,3 +84,11 @@
 - insert:
     - id: dotmesh-ui
       name: dotmesh-ui
+
+# ── 5. Plugin de comandos dotmesh ────────────────────────────────────────────
+# Registra /req, /gate y /handoff vía ctx.commands.register().
+# Ruta relativa al directorio del perfil (profiles/web/); apunta a
+# ~/.dsh/plugins/commands.js. Verificado en la Fase 0 (research.md § 7).
+- insert:
+    - id: dotmesh-commands
+      name: '../../plugins/commands.js'
