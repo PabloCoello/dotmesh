@@ -192,10 +192,14 @@ dsh-ui-build:
 .PHONY: dsh-ui-install
 dsh-ui-install:
 	@echo "→ instalando plugin dsh-ui"
+	@# link: en vez de file: — pnpm enlaza en vez de copiar, así que recompilar
+	@# el bundle basta para que el perfil vea el cambio (tras reiniciar dsh).
+	@# Con file:, pnpm responde "Already up to date" mientras no cambie la
+	@# versión del paquete, y el perfil se queda con un bundle viejo.
 	@if command -v dsh >/dev/null 2>&1; then \
-		$(MAKE) dsh-ui-build && dsh plugin --profile web add "file:$(abspath dsh/dsh-ui)"; \
+		$(MAKE) dsh-ui-build && dsh plugin --profile web add "link:$(abspath dsh/dsh-ui)"; \
 	elif command -v npx >/dev/null 2>&1; then \
-		$(MAKE) dsh-ui-build && npx @deepseek-ai/dsh plugin --profile web add "file:$(abspath dsh/dsh-ui)"; \
+		$(MAKE) dsh-ui-build && npx @deepseek-ai/dsh plugin --profile web add "link:$(abspath dsh/dsh-ui)"; \
 	else \
 		echo "  !!  'dsh' no disponible en PATH; instala con: npm install -g @deepseek-ai/dsh  o asegúrate de que npx está disponible"; \
 	fi

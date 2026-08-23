@@ -331,14 +331,27 @@ function applyWorkbench(ctx: any): void {
   //   shell.overlay (list type) — floating overlay; wrong affordance for a
   //     persistent status indicator that must always be visible.
   ctx.slots.inject('sidebar.footer.action', function* () {
-    yield ctx.slots.register({ name: 'sidebar.footer.action' }, WorkbenchPanel);
+    // A "list" slot admits several occupants, so it needs a stable id to tell
+    // them apart; registering without one throws and aborts the whole apply().
+    yield ctx.slots.register({ name: 'sidebar.footer.action', id: 'dotmesh-workbench' }, WorkbenchPanel);
   });
 }
 
 // ── Plugin entry point ────────────────────────────────────────────────────────
 
+// Each feature is mounted independently: a failure in one must not take the
+// others down with it. A broken panel should still leave the retint and the
+// brand in place, and say so in the console rather than blanking the plugin.
 export function apply(ctx: any): void {
-  applyTheme(ctx);
-  applyBrand(ctx);
-  applyWorkbench(ctx);
+  for (const [label, mount] of [
+    ['theme', applyTheme],
+    ['brand', applyBrand],
+    ['workbench', applyWorkbench],
+  ] as const) {
+    try {
+      mount(ctx);
+    } catch (error) {
+      console.error(`dotmesh-ui: ${label} failed to mount`, error);
+    }
+  }
 }
