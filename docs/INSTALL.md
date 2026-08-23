@@ -203,7 +203,20 @@ make dsh-ui-install
 
 ### Proveedor local
 
-La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Sin ese servidor levantado dsh arranca y carga la interfaz, pero las llamadas al modelo no obtienen respuesta. El endpoint no autentica, pero el esquema del proveedor exige una variable de entorno para la clave: `LLAMACPP_API_KEY` puede quedar vacía. Ver [SECRETS.md](SECRETS.md).
+La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Sin ese servidor levantado dsh arranca y carga la interfaz, pero las llamadas al modelo no obtienen respuesta. El endpoint no autentica, pero el esquema del proveedor exige que la clave **exista**: sin ella el
+turno falla con `MISSING_CREDENTIAL`. Crea el fichero de credenciales fuera del repositorio, con
+permisos restrictivos:
+
+```bash
+umask 077 && cat > ~/.dsh/.credentials.yaml <<'YAML'
+version: 1
+refs:
+  LLAMACPP_API_KEY: unused-llama-cpp-does-not-authenticate
+YAML
+```
+
+El valor es un relleno: llama.cpp lo ignora. La página Models de la interfaz escribe este mismo
+fichero, así que también sirve rellenarlo desde ahí. Nunca se versiona; ver [SECRETS.md](SECRETS.md).
 
 ### Primera arrancada
 
