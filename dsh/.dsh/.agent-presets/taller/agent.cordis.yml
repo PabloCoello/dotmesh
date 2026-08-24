@@ -34,8 +34,15 @@
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
 
+# sampleOverCapGlobResults no tiene valor por defecto en el esquema del plugin
+# (z.boolean().required()): sin él la fila no valida y el preset entero falla al
+# montarse, que a su vez rompe la creación de sesión y el selector de workspace.
+# false = mismo comportamiento que el plano host de dsh-base: por encima del tope
+# devuelve la cabeza ordenada por mtime en lugar de un muestreo del árbol.
 - id: tool-fs-search
   name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
 
 # Necesario para el implementador y el redactor (str_replace_editor).
 - id: tool-str-replace-editor
