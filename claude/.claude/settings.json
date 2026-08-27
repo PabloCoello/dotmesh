@@ -47,6 +47,15 @@
             "timeout": 310
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/handoff-signal.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
