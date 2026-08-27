@@ -20,3 +20,39 @@ enabled = true
 
 [ui]
 show_agent_labels_on_pane_borders = true
+
+[keys]
+# Chords directos ctrl+alt que espejan la capa META del Voyager, uno a uno.
+# Se conservan todos los atajos de prefijo por defecto: la lista añade el chord
+# directo, no lo sustituye. Ver keymesh/keymap.c, donde los keycodes HRD_*
+# mandan exactamente estas combinaciones.
+#
+# ctrl+alt es la única familia que queda casi libre en los tres anfitriones
+# (macOS, Windows y GNOME) y se transmite incluso en terminales sin protocolo
+# de teclado moderno. No se usa ninguna ctrl+alt+flecha, que en GNOME cambia de
+# espacio de trabajo, ni ctrl+alt+t, que en Ubuntu abre un terminal.
+prefix = "ctrl+b"
+
+# Foco de panel, sobre las teclas h j k l reales
+focus_pane_left  = ["prefix+h", "ctrl+alt+h"]
+focus_pane_down  = ["prefix+j", "ctrl+alt+j"]
+focus_pane_up    = ["prefix+k", "ctrl+alt+k"]
+# ctrl+alt+l es bloqueo de pantalla en KDE. En GNOME, Windows y macOS está
+# libre. Si algún día usas KDE, cámbialo aquí y en HRD_RIGHT del keymap.
+focus_pane_right = ["prefix+l", "ctrl+alt+l"]
+
+# Paneles
+zoom             = ["prefix+z", "ctrl+alt+z"]
+split_vertical   = ["prefix+v", "ctrl+alt+d"]
+split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"]
+close_pane       = ["prefix+x", "ctrl+alt+x"]
+
+# Pestañas
+new_tab          = ["prefix+c", "ctrl+alt+c"]
+next_tab         = ["prefix+n", "ctrl+alt+n"]
+previous_tab     = ["prefix+p", "ctrl+alt+p"]
+
+# Sesión
+workspace_picker = ["prefix+w", "ctrl+alt+w"]
+goto             = ["prefix+g", "ctrl+alt+g"]
+detach           = ["prefix+q", "ctrl+alt+q"]
