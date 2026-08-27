@@ -21,9 +21,10 @@ name = "terminal"
 accent        = "#6CB6B0"
 # Paneles y overlays transparentes: heredan el fondo Ink de Ghostty.
 panel_bg      = "reset"
-# La barra lateral se eleva a Ink-1, igual que el sidebar de VS Code sobre el
-# editor. Separa por tono, no por borde.
-sidebar_bg    = "#181818"
+# La lateral se queda en el mismo Ink-0 que los paneles. Elevarla a Ink-1
+# subía el suelo y apagaba todo el texto de encima; la separación la hace ya la
+# fila activa, que no necesita panel propio.
+sidebar_bg    = "reset"
 # Fila del espacio activo y del agente con foco: Ink-3, un realce tranquilo en
 # vez del bloque gris medio que pintaba `DarkGray`.
 active_row_bg = "#2a2a2a"
@@ -37,11 +38,12 @@ surface_dim   = "#121212"
 
 # --- Texto: tres escalones de grafito, sin empates --------------------------
 # text: primario · subtext0: nombre de espacio inactivo · overlay0: rama,
-# separadores, nombre de agente y el punto de estado desconocido.
+# separadores, nombre de agente y el punto de estado desconocido. Un escalón
+# entre cada uno basta para la jerarquía; bajar más apaga la lista entera.
 text          = "#cecece"
-subtext0      = "#9e9e9e"
-overlay0      = "#767676"
-overlay1      = "#c6c6c6"
+subtext0      = "#c6c6c6"
+overlay0      = "#9e9e9e"
+overlay1      = "#dedede"
 # Rama del espacio activo: un paso por encima de la de los inactivos.
 mauve         = "#c6c6c6"
 
@@ -55,7 +57,7 @@ mauve         = "#c6c6c6"
 red           = "#E59A9A"
 yellow        = "#E3C58A"
 teal          = "#A8CBA0"
-green         = "#6e6e6e"
+green         = "#767676"
 # Acento de notificación «terminado» y estados interrumpidos.
 blue          = "#8FB4E3"
 peach         = "#FFAA7A"
@@ -65,9 +67,10 @@ show_agent_labels_on_pane_borders = true
 # Un poco más de aire horizontal: las ramas largas dejan de truncarse a la
 # tercera palabra.
 sidebar_width = 30
-# Los estados van por color (`dots`). Con `symbols` cada estado además cambia de
-# glifo (× ◐ ✓ ○ ·), útil si alguna vez el color no basta.
-# status_indicators = "symbols"
+# Cada estado lleva glifo propio además de color (× blocked · ◐ working ·
+# ✓ done · ○ idle · · unknown): la forma se lee antes que el tono. `dots` vuelve
+# a los puntos de siempre.
+status_indicators = "symbols"
 
 [ui.sidebar.spaces]
 # Una fila en blanco entre espacios: sin ella el nombre de un espacio y la rama
@@ -84,7 +87,9 @@ row_gap = 1
 rows = [
   ["state_icon", "workspace", "tab"],
   # La segunda fila decía «claude» siete veces; con el estado al lado informa.
-  ["agent", "state_text"],
+  # herdr atenúa ambos tokens por defecto y sobre Ink quedaban ilegibles:
+  # `dim = false` los devuelve a su gris real.
+  [{ token = "agent", fg = "#767676", dim = false }, { token = "state_text", dim = false }],
 ]
 
 [ui.sound]
