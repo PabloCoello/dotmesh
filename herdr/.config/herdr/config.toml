@@ -88,8 +88,9 @@ rows = [
   ["state_icon", "workspace", "tab"],
   # La segunda fila decía «claude» siete veces; con el estado al lado informa.
   # herdr atenúa ambos tokens por defecto y sobre Ink quedaban ilegibles:
-  # `dim = false` los devuelve a su gris real.
-  [{ token = "agent", fg = "#767676", dim = false }, { token = "state_text", dim = false }],
+  # `dim = false` los devuelve a su gris real. El agente se queda en el gris
+  # secundario (7:1 sobre Ink-0); por debajo vuelve a leerse como apagado.
+  [{ token = "agent", fg = "#9e9e9e", dim = false }, { token = "state_text", dim = false }],
 ]
 
 [ui.sound]
