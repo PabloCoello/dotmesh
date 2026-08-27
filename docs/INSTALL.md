@@ -10,8 +10,13 @@ Homebrew es el gestor de dependencias:
 
 ```bash
 brew install stow git-delta starship herdr
-brew install --cask ghostty visual-studio-code font-jetbrains-mono-nerd-font
+brew install --cask ghostty visual-studio-code font-jetbrains-mono-nerd-font rectangle
 ```
+
+Rectangle es el gestor de ventanas. No es opcional si usas el Voyager: el layout
+resuelve Pant← y Pant→ como Ctrl+Opt+Cmd+←/→, los atajos de Rectangle para mover
+la ventana de monitor, y macOS no trae equivalente nativo. Ver
+[Rectangle](#rectangle-macos) más abajo.
 
 **Linux (Ubuntu/Debian)**
 
@@ -96,6 +101,50 @@ Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
 sesión OpenCode en cualquier proyecto (ver
 [opencode/.config/opencode/README.md](../opencode/.config/opencode/README.md)).
 En Claude Code el equivalente es `/setup` (custom) o el `/init` nativo.
+
+## Rectangle (macOS)
+
+`make install` ejecuta `make macos-rectangle`, que fija las preferencias de
+Rectangle que el layout del Voyager da por supuestas. Es idempotente y no-op en
+Linux y WSL.
+
+Orden importante: Rectangle escribe sus propias preferencias la primera vez que
+arranca, cuando pregunta qué juego de atajos quieres. Así que en una máquina
+nueva:
+
+```bash
+brew install --cask rectangle
+open -a Rectangle          # concédele Accesibilidad y responde lo que sea
+make macos-rectangle       # fija la config buena por encima
+```
+
+El permiso de Accesibilidad (Ajustes del Sistema → Privacidad y seguridad →
+Accesibilidad) no se puede scriptear: macOS lo protege con TCC.
+
+Lo que fija el script:
+
+| Clave | Valor | Por qué |
+|---|---|---|
+| `alternateDefaultShortcuts` | `false` | Juego de atajos heredado de Spectacle |
+| `subsequentExecutionMode` | `1` | Repetir el atajo mueve la ventana al monitor siguiente |
+| `allowAnyShortcut` | `true` | Permite combinaciones que macOS considera reservadas |
+| `hideMenubarIcon` | `true` | El layout se opera a ciegas desde el teclado |
+| `launchOnLogin` | `true` | Un gestor parado deja Pant←/Pant→ muertas |
+| `SUEnableAutomaticChecks` | `false` | Las actualizaciones van por Homebrew |
+
+`alternateDefaultShortcuts` es el que de verdad importa, y su nombre engaña:
+
+- `false` → juego Spectacle: mitades en **Cmd+Opt+flechas**.
+- `true` → juego «recomendado» de Rectangle: mitades, cuartos y tercios en
+  **Ctrl+Opt+letra**.
+
+Ctrl+Opt+letra es justo la familia que usan los chords directos de herdr
+(`ctrl+alt+h/j/k/l/c/d/g/n/p/q/w/x/z`). Con `true`, Rectangle registra atajos
+globales y se come seis de ellos —J, K, C, D, G— antes de que herdr los vea. Por
+eso se deja en `false`, y por eso `make health` avisa si alguien lo cambia.
+
+Los dos atajos que el Voyager sí usa, `previousDisplay` y `nextDisplay`
+(Ctrl+Opt+Cmd+←/→), son idénticos en los dos juegos.
 
 ## Extensión mesh-review
 
