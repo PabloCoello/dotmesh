@@ -42,6 +42,7 @@ help:
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
+	@echo "  make macos-rectangle - Fija las prefs de Rectangle que asume el layout del Voyager (solo macOS)"
 	@echo "  make wsl-terminal - Instala el esquema dotmesh en Windows Terminal (solo WSL)"
 	@echo "  make health    - Verifica que las herramientas estén instaladas"
 	@echo "  make opencode-doctor - Diagnóstico estático de OpenCode (JSON, agentes, comandos, MCP, skills)"
@@ -55,7 +56,7 @@ help:
 	@echo "Paquetes: $(PACKAGES)"
 
 .PHONY: install
-install: backup stow vscode-install review-install run-install render-install seed-claude-settings link-skills
+install: backup stow vscode-install macos-rectangle review-install run-install render-install seed-claude-settings link-skills
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -192,6 +193,14 @@ seed-claude-settings:
 		echo "  ok  sembrado $(CLAUDE_SETTINGS_DST) desde la plantilla base"; \
 	fi
 
+# Prefs de Rectangle (gestor de ventanas de macOS). El layout del Voyager
+# (repo keymesh) resuelve Pant←/Pant→ como Ctrl+Opt+Cmd+flechas, que son los
+# atajos de Rectangle para mover la ventana de monitor: macOS no trae equivalente
+# nativo. El script es idempotente y no-op fuera de macOS.
+.PHONY: macos-rectangle
+macos-rectangle:
+	@./scripts/macos-rectangle.sh
+
 # Rice del escritorio GNOME (retint sobre Yaru). Enlaza gtk.css por stow y
 # aplica la capa dconf. Solo Linux; en macOS es un no-op informativo.
 .PHONY: gnome-rice
@@ -272,6 +281,16 @@ health:
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-render' \
 		&& echo "  ok  mesh-render" \
 		|| echo "  --  mesh-render (corre 'make render-install')"
+	@if [ "$$(uname -s)" = "Darwin" ]; then \
+		[ -d /Applications/Rectangle.app ] \
+			&& echo "  ok  Rectangle (Pant←/Pant→ del Voyager)" \
+			|| echo "  --  Rectangle  (brew install --cask rectangle)"; \
+		[ -d /Applications/Rectangle.app ] && { \
+			[ "$$(defaults read com.knollsoft.Rectangle alternateDefaultShortcuts 2>/dev/null)" = "0" ] \
+				&& echo "  ok  Rectangle en juego Spectacle (Ctrl+Opt+letra libre para herdr)" \
+				|| echo "  --  Rectangle en juego recomendado: pisa chords de herdr (corre 'make macos-rectangle')"; \
+		}; \
+	fi
 	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
 	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
 	@if [ "$(IS_WSL)" = "1" ]; then \

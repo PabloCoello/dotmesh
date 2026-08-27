@@ -7,6 +7,7 @@ Dotfiles personales para macOS y Linux. Gestiona la configuración del terminal 
 ```bash
 # macOS
 brew install stow
+brew install --cask rectangle       # gestor de ventanas; lo asume el layout del Voyager
 
 # Linux (Ubuntu/Debian)
 sudo apt install stow
@@ -23,6 +24,10 @@ exec zsh                            # recarga la shell
 make vscode-install
 make gnome-rice                     # opcional; solo si usas GNOME
 ```
+
+En macOS, `make install` incluye `make macos-rectangle`, que fija las prefs de
+Rectangle que el layout del Voyager da por supuestas. Ábrelo una vez antes para
+concederle Accesibilidad: ver [docs/INSTALL.md](docs/INSTALL.md#rectangle-macos).
 
 ## Stack
 
@@ -255,6 +260,7 @@ make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
 make vendor-check # comprueba metadatos upstream de componentes vendorizados
 make health         # comprueba binarios
 make opencode-doctor # diagnóstico estático de OpenCode
+make macos-rectangle # fija las prefs de Rectangle (solo macOS)
 make wsl-terminal   # instala el esquema dotmesh en Windows Terminal (solo WSL)
 make clean          # vacía ~/dotfiles-backup
 ```
