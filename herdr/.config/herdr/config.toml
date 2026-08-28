@@ -10,16 +10,91 @@
 name = "terminal"
 
 [theme.custom]
-# Acento teal canónico para bordes, resaltados y navegación (docs/DESIGN.md).
-accent = "#6CB6B0"
-# Panel transparente: hereda el fondo Ink de Ghostty en vez de pintar el suyo.
-panel_bg = "reset"
+# herdr hereda la paleta ANSI de Ghostty, pero sus tokens de tema son de origen
+# catppuccin y con `terminal` caen en los ANSI crudos: el cromo se llena de
+# grises intermedios y los estados de agente acaban en verde y cian a la vez.
+# Aquí se fija el mapa dotmesh completo (docs/DESIGN.md).
 
-[ui.sound]
-enabled = true
+# --- Cromo: monocromo, solo el acento lleva color ---------------------------
+# Teal canónico para bordes, resaltados, navegación y pestaña activa. Es el
+# único sitio donde vive el teal: ya no se usa para ningún estado.
+accent        = "#6CB6B0"
+# Paneles y overlays transparentes: heredan el fondo Ink de Ghostty.
+panel_bg      = "reset"
+# La lateral se queda en el mismo Ink-0 que los paneles. Elevarla a Ink-1
+# subía el suelo y apagaba todo el texto de encima; la separación la hace ya la
+# fila activa, que no necesita panel propio.
+sidebar_bg    = "reset"
+# Fila del espacio activo y del agente con foco: Ink-3, un realce tranquilo en
+# vez del bloque gris medio que pintaba `DarkGray`.
+active_row_bg = "#2a2a2a"
+# Cursor del modo navegar: un paso más marcado que la fila activa.
+selection_bg  = "#383838"
+# Superficies: pestaña inactiva (surface0), hover (surface1) y el contraste del
+# texto sobre el acento (surface_dim, casi negro sobre la pastilla teal).
+surface0      = "#202020"
+surface1      = "#2a2a2a"
+surface_dim   = "#121212"
+
+# --- Texto: tres escalones de grafito, sin empates --------------------------
+# text: primario · subtext0: nombre de espacio inactivo · overlay0: rama,
+# separadores, nombre de agente y el punto de estado desconocido. Un escalón
+# entre cada uno basta para la jerarquía; bajar más apaga la lista entera.
+text          = "#cecece"
+subtext0      = "#c6c6c6"
+overlay0      = "#9e9e9e"
+overlay1      = "#dedede"
+# Rama del espacio activo: un paso por encima de la de los inactivos.
+mauve         = "#c6c6c6"
+
+# --- Estados de agente ------------------------------------------------------
+# Los nombres de token son herencia de catppuccin; lo que importa es el estado
+# que pinta cada uno (src/ui/status.rs de herdr):
+#   red   -> blocked  ●   rose, pide atención
+#   yellow-> working  ●   gold, en marcha
+#   teal  -> done     ●   sage, terminado y sin ver
+#   green -> idle     ○   grafito, en reposo: sin señal, sin color
+red           = "#E59A9A"
+yellow        = "#E3C58A"
+teal          = "#A8CBA0"
+green         = "#767676"
+# Acento de notificación «terminado» y estados interrumpidos.
+blue          = "#8FB4E3"
+peach         = "#FFAA7A"
 
 [ui]
 show_agent_labels_on_pane_borders = true
+# Un poco más de aire horizontal: las ramas largas dejan de truncarse a la
+# tercera palabra.
+sidebar_width = 30
+# Cada estado lleva glifo propio además de color (× blocked · ◐ working ·
+# ✓ done · ○ idle · · unknown): la forma se lee antes que el tono. `dots` vuelve
+# a los puntos de siempre.
+status_indicators = "symbols"
+
+[ui.sidebar.spaces]
+# Una fila en blanco entre espacios: sin ella el nombre de un espacio y la rama
+# del siguiente se leen como el mismo bloque.
+row_gap = 1
+rows = [
+  ["state_icon", "workspace"],
+  # ↑/↓ ya distinguen adelanto y retraso; el color se queda fuera del cromo.
+  ["branch", { token = "git_status", fg = "#9e9e9e" }],
+]
+
+[ui.sidebar.agents]
+row_gap = 1
+rows = [
+  ["state_icon", "workspace", "tab"],
+  # La segunda fila decía «claude» siete veces; con el estado al lado informa.
+  # herdr atenúa ambos tokens por defecto y sobre Ink quedaban ilegibles:
+  # `dim = false` los devuelve a su gris real. El agente se queda en el gris
+  # secundario (7:1 sobre Ink-0); por debajo vuelve a leerse como apagado.
+  [{ token = "agent", fg = "#9e9e9e", dim = false }, { token = "state_text", dim = false }],
+]
+
+[ui.sound]
+enabled = false
 
 [keys]
 # Chords directos ctrl+alt que espejan la capa META del Voyager, uno a uno.
