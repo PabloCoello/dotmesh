@@ -14,9 +14,16 @@ vuelves al ordenador.
 make collie-install
 ```
 
-El script es idempotente, no usa sudo y no arranca nada. Comprueba las precondiciones y
-para con instrucciones si falta alguna. Al terminar imprime los tres pasos que quedan una
-sola vez: generar las claves de push, publicar el puente en el tailnet y emparejar el móvil.
+El script es idempotente, no usa sudo y nunca arranca el puente. Comprueba las
+precondiciones y para con instrucciones si falta alguna. Al terminar imprime los tres pasos
+que quedan una sola vez: generar las claves de push, publicar el puente en el tailnet y
+emparejar el móvil.
+
+Dos cosas que hace y no se deducen de lo anterior. Tras una instalación nueva compara el
+commit que ha resuelto la etiqueta con el pin y desinstala si no coinciden, porque las
+etiquetas de GitHub se pueden mover. Y si es él quien acaba de crear el `.env`, para la
+unidad: herdr decide si arranca el servicio al instalar el plugin, y en esa ventana el
+puente correría sin gate de escritura. Si el `.env` ya existía, no toca el servicio.
 
 `collie/` **no está en `PACKAGES`** ni en `make install`. El puente es acceso a shell
 remoto y se instala a propósito, nunca de arrastre.
@@ -71,7 +78,8 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
 3. **Hace falta ser operador de `tailscaled`**: `sudo tailscale set --operator=$USER`.
 4. **Un `.env` sin `COLLIE_TRUSTED_USER` deja el puente abierto a escritura.** El script lo
    escribe antes del primer arranque para que no exista esa ventana, deduciendo la identidad
-   del tailnet.
+   del tailnet, y si encuentra un `.env` ajeno sin esa variable se niega a seguir en lugar de
+   respetarlo en silencio.
 5. **Brave en Android trae «Use Google services for push messaging» desactivado** por
    defecto, y sin eso el web push no llega nunca aunque la suscripción parezca correcta.
    La prueba del 2026-08-28 se hizo en Chrome.

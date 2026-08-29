@@ -13,6 +13,10 @@
 #
 # Códigos de salida: 1 plataforma · 2 herdr · 3 Bun · 4 Tailscale · 5 configuración.
 set -e
+# pipefail para que un fallo de herdr o tailscale no se cuele como salida vacía a través
+# de un jq que sí termina bien. Los sitios donde una tubería puede fallar sin ser un error
+# llevan su propio `|| true`.
+set -o pipefail
 
 PLUGIN_ID="herdr.collie"
 PLUGIN_REPO="AltanS/collie"
@@ -47,14 +51,15 @@ command -v herdr >/dev/null || die "falta herdr (brew install herdr)" 2
 # el instalador oficial lo crea como symlink a bun. Sin él el build falla sin decir por qué.
 command -v bun >/dev/null || die "falta Bun (curl -fsSL https://bun.sh/install | bash)" 3
 if ! command -v bunx >/dev/null; then
-  BUN_BIN="$(command -v bun)"
-  BUN_DIR="$(cd "$(dirname "$(readlink -f "$BUN_BIN")")" && pwd)"
-  if [ -x "$BUN_DIR/bun" ]; then
-    info "creando el symlink bunx que falta en $BUN_DIR"
-    ln -sfn bun "$BUN_DIR/bunx"
-  else
-    die "falta bunx y no se ha podido crear junto a bun; créalo a mano" 3
-  fi
+  # Sin `readlink -f`: es de GNU coreutils y no existe en macOS, que es plataforma
+  # declarada del paquete. No hace falta resolver el symlink: un bunx enlazado junto a un
+  # bun que a su vez sea symlink resuelve igual, y bun elige su modo por el basename de
+  # argv[0], no por la ruta real del binario.
+  BUN_DIR="$(dirname "$(command -v bun)")"
+  info "creando el symlink bunx que falta en $BUN_DIR"
+  ln -sfn bun "$BUN_DIR/bunx" 2>/dev/null \
+    || die "falta bunx y no se ha podido crear en $BUN_DIR; créalo a mano:
+      ln -sfn bun \"$BUN_DIR/bunx\"" 3
 fi
 ok "bun y bunx en el PATH"
 
@@ -85,7 +90,7 @@ ok "operador de tailscaled ($USER)"
 # una etiqueta se puede mover en upstream y el pin dejaría de significar nada.
 plugin_field() {
   herdr plugin list --json 2>/dev/null \
-    | jq -r ".result.plugins[]? | select(.plugin_id==\"$PLUGIN_ID\") | $1 // empty"
+    | jq -r --arg pid "$PLUGIN_ID" ".result.plugins[]? | select(.plugin_id==\$pid) | $1 // empty"
 }
 
 INSTALLED_REF="$(plugin_field '.source.requested_ref')"
@@ -102,6 +107,16 @@ if [ -n "$INSTALLED_REF" ]; then
 else
   info "instalando $PLUGIN_REPO en $PLUGIN_REF"
   herdr plugin install "$PLUGIN_REPO" --ref "$PLUGIN_REF" --yes
+  # Las etiquetas de GitHub se pueden mover, así que el pin no significa nada si no se
+  # comprueba también aquí: sin esto solo protegería de la segunda corrida en adelante.
+  RESOLVED="$(plugin_field '.source.resolved_commit' || true)"
+  if [ "$RESOLVED" != "$PLUGIN_COMMIT" ]; then
+    herdr plugin uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
+    die "'$PLUGIN_REF' ha resuelto a '${RESOLVED:-nada}' y el pin es $PLUGIN_COMMIT.
+      Se ha desinstalado lo recién traído. Mira qué ha pasado en upstream antes de
+      tocar PLUGIN_COMMIT en este script." 5
+  fi
+  ok "instalado y verificado contra el pin (${PLUGIN_COMMIT:0:7})"
 fi
 
 CONFIG_DIR="$(herdr plugin config-dir "$PLUGIN_ID" 2>/dev/null || true)"
@@ -113,8 +128,15 @@ mkdir -p "$CONFIG_DIR"
 # COLLIE_TRUSTED_USER es el gate de escritura. Se escribe ANTES del primer arranque a
 # propósito: un .env sin esa variable deja el puente abierto a escritura mientras exista.
 ENV_FILE="$CONFIG_DIR/.env"
+ENV_CREATED=0
 if [ -e "$ENV_FILE" ]; then
-  ok ".env existente respetado ($ENV_FILE)"
+  # Respetar un .env ajeno está bien; respetarlo sin mirar el gate es fallar en abierto.
+  # Un .env sin COLLIE_TRUSTED_USER deja el puente escribible para cualquiera que llegue.
+  grep -qE '^COLLIE_TRUSTED_USER=.+' "$ENV_FILE" \
+    || die "el .env existente no define COLLIE_TRUSTED_USER: el puente quedaría abierto
+      a escritura para cualquiera que alcance el tailnet. Añádelo antes de arrancar:
+        echo 'COLLIE_TRUSTED_USER=<tu-login@proveedor>' >> $ENV_FILE" 5
+  ok ".env existente respetado, con el gate de escritura cerrado"
 else
   TS_LOGIN="$(tailscale status --json 2>/dev/null | jq -r '.Self.UserID as $u | .User[$u|tostring].LoginName // empty')"
   [ -n "$TS_LOGIN" ] || die "no se ha podido deducir tu identidad de Tailscale.
@@ -128,6 +150,7 @@ COLLIE_TRUSTED_USER=$TS_LOGIN
 EOF
   )
   chmod 600 "$ENV_FILE"
+  ENV_CREATED=1
 fi
 
 # --- 7. Los presets ---------------------------------------------------------
@@ -143,6 +166,12 @@ ok "presets enlazados y .env intacto"
 # Política de dotmesh: el puente es acceso a shell remoto, así que existe solo mientras
 # lo usas. Sin linger y sin enable; lo arrancas al empezar una sesión larga.
 if [ "$(uname -s)" = "Linux" ] && systemctl --user list-unit-files 2>/dev/null | grep -q "^$UNIT"; then
+  # Si el .env acaba de nacer, el puente pudo arrancar antes que él (herdr decide eso, no
+  # este script) y estaría corriendo con el gate abierto: ahí sí hay que pararlo. En
+  # cualquier otro caso no se toca, para no matar un puente sano en cada corrida.
+  if [ "$ENV_CREATED" = "1" ]; then
+    systemctl --user stop "$UNIT" >/dev/null 2>&1 || true
+  fi
   systemctl --user disable "$UNIT" >/dev/null 2>&1 || true
   ok "unidad $UNIT instalada y deshabilitada (arranque manual)"
 fi
