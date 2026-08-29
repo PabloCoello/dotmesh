@@ -38,6 +38,7 @@ help:
 	@echo "  make render-install - Instala mesh-render en VS Code (requiere node y code)"
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
+	@echo "  make collie-install - Instala Collie (puente móvil de herdr) y enlaza sus presets"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
@@ -240,6 +241,13 @@ wsl-terminal:
 		bash "$(abspath windows-terminal/scripts/install.sh)"; \
 	fi
 
+# Instala Collie, el puente que sirve los panes de herdr al móvil por el tailnet.
+# collie/ no entra en PACKAGES ni en `make install`: el puente es acceso a shell remoto
+# y se instala a propósito, no de arrastre. El script no usa sudo y es idempotente.
+.PHONY: collie-install
+collie-install:
+	@bash "$(abspath collie/scripts/install.sh)"
+
 .PHONY: health
 health:
 	@echo "Healthcheck:"
@@ -293,6 +301,20 @@ health:
 	fi
 	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { command -v gsettings >/dev/null && echo "  ok  gsettings" || echo "  --  gsettings"; } || true
 	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { systemctl --user is-active dotmesh-monitor-guard.service >/dev/null 2>&1 && echo "  ok  dotmesh-monitor-guard (eco tras hotplug de monitores)" || echo "  --  dotmesh-monitor-guard inactivo (corre 'make gnome-rice')"; } || true
+	@[ "$$(uname -s)" = "Linux" ] && [ "$(IS_WSL)" != "1" ] && { \
+		if systemctl --user list-unit-files 2>/dev/null | grep -q '^collie'; then \
+			systemctl --user is-active collie.service >/dev/null 2>&1 \
+				&& echo "  ok  collie activo (párralo al terminar: systemctl --user stop collie)" \
+				|| echo "  ok  collie instalado y parado (arranque manual, por diseño)"; \
+		else \
+			echo "  --  collie no instalado (opcional: corre 'make collie-install')"; \
+		fi; \
+	} || true
+	@if [ -d "$$HOME/.config/herdr/plugins/config/herdr.collie" ]; then \
+		[ -L "$$HOME/.config/herdr/plugins/config/herdr.collie/keys.toml" ] \
+			&& echo "  ok  presets de collie enlazados" \
+			|| echo "  --  presets de collie sin enlazar (corre 'make collie-install')"; \
+	fi
 	@if [ "$(IS_WSL)" = "1" ]; then \
 		command -v code >/dev/null \
 			&& echo "  ok  code (VS Code Windows desde WSL)" \
