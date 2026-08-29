@@ -1,3 +1,4 @@
 # component	local_path	upstream_url	upstream_ref	local_ref	notes
 herdr-skill	agents/.agents/skills/herdr	https://github.com/ogulcancelik/herdr.git	HEAD	6cbdba434fd15fc3818302a5843593da47db2eb4	Official herdr agent skill snapshot; refreshed manually from upstream metadata only.
 mattpocock-skills-adapted	agents/.agents/skills/{grilling,grill-me,grill-with-docs,domain-modeling,handoff}	https://github.com/mattpocock/skills.git	manual	unknown	Adapted local copies with no reliable pinned upstream commit; review manually.
+collie	collie/scripts/install.sh	https://github.com/AltanS/collie.git	HEAD	42b00f4378eea568ce8ef1c40103fda779ef0fa3	Plugin de herdr instalado por 'herdr plugin install', no vendorizado en el repo; el pin efectivo es PLUGIN_COMMIT en collie/scripts/install.sh.

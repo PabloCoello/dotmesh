@@ -45,6 +45,33 @@ export TAVILY_API_KEY="tvly-xxxxxxxxxxxxxxxxxxxxxxxx"
 exec zsh                 # recarga el shell para que opencode los vea
 ```
 
+## El `.env` de Collie
+
+`~/.zsh.secrets` no es el único sitio con secretos fuera del repo. El puente de Collie
+guarda los suyos en su propio `.env`, dentro del directorio que devuelve
+`herdr plugin config-dir herdr.collie`:
+
+```sh
+# NO COMMIT, NO STOW. Lo crea `make collie-install` a modo 600.
+COLLIE_PORT=8787
+COLLIE_TRUSTED_USER=tu-login@proveedor   # gate de escritura
+COLLIE_VAPID_PUBLIC=...                  # claves de web push
+COLLIE_VAPID_PRIVATE=...
+```
+
+Dos cosas que importan:
+
+- **`COLLIE_TRUSTED_USER` es el gate de escritura.** Un `.env` sin esa variable deja el
+  puente abierto a escritura mientras exista, así que el instalador la escribe antes del
+  primer arranque en lugar de dejar una ventana abierta.
+- **Las claves VAPID se generan en local** con `collie push-keys` y no salen de esa
+  máquina. Lo que sí sale es el `subject`, si lo pones: se incrusta en las peticiones que
+  van a los servicios push de Google y Mozilla.
+
+El paquete `collie/` enlaza los tres presets `.toml` de ese directorio, pero **nunca el
+`.env`**. Por eso el stow va con `--no-folding`: si el directorio entero se sustituyera
+por un symlink al repo, el `.env` dejaría de existir donde el puente lo busca.
+
 ## Notas
 
 - **OpenAlex** (búsqueda de papers) no necesita token.
