@@ -1,3 +1,4 @@
+onboarding = false
 # herdr — config de dotmesh.
 # Multiplexor de terminal consciente del estado de los agentes (claude, codex,
 # opencode). Corre dentro de Ghostty; hereda su paleta.
