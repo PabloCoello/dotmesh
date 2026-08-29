@@ -4,6 +4,12 @@ onboarding = false
 # opencode). Corre dentro de Ghostty; hereda su paleta.
 #
 # El esquema completo por defecto: `herdr --default-config`.
+#
+# Requiere herdr >= 0.8.2: `sidebar_bg`, `active_row_bg`, `selection_bg` y
+# `ui.status_indicators` se añadieron ahí, y el estilo por token de
+# `[ui.sidebar.*]` en 0.7.5. En versiones anteriores herdr los ignora en
+# silencio y cae a su cromo de fábrica, con la fila activa deliberadamente
+# tenue y los estados en puntos de color sin glifo.
 
 [theme]
 # `terminal` hace que herdr use la paleta ANSI del terminal anfitrión: con Ghostty
@@ -26,11 +32,20 @@ panel_bg      = "reset"
 # subía el suelo y apagaba todo el texto de encima; la separación la hace ya la
 # fila activa, que no necesita panel propio.
 sidebar_bg    = "reset"
-# Fila del espacio activo y del agente con foco: Ink-3, un realce tranquilo en
-# vez del bloque gris medio que pintaba `DarkGray`.
-active_row_bg = "#2a2a2a"
-# Cursor del modo navegar: un paso más marcado que la fila activa.
-selection_bg  = "#383838"
+# Fila del espacio activo y del agente con foco. Ink-3 (`#2a2a2a`) sobre Ink-0
+# daba 1,31:1: a un vistazo no se distinguía de las filas inactivas. Este teal
+# apagado sube a 1,66:1 y, sobre todo, cambia de tono; en visión periférica el
+# salto de color se lee antes que el de luminosidad. No se aclara más porque el
+# relleno y lo que se imprime encima tiran en sentidos opuestos: a #234643 la
+# fila llega a 1,81:1, pero la rama y el nombre de agente (`overlay0`) caen de
+# 4,21:1 a 3,86:1. Se prioriza leer la fila sobre notarla.
+active_row_bg = "#20403D"
+# Cursor del modo navegar: gris neutro, un escalón por encima de la fila activa
+# (2,40:1 sobre Ink-0 frente a 1,66:1). #3a3a3a no valía: cae en L=0,042, la
+# misma luminancia que el teal, y el cursor solo se habría distinguido por tono.
+# El escalón canónico de la escala, #5c5c5c, deja el texto en 4,25:1; este se
+# queda en 4,97:1, por encima del mínimo AA.
+selection_bg  = "#525252"
 # Superficies: pestaña inactiva (surface0), hover (surface1) y el contraste del
 # texto sobre el acento (surface_dim, casi negro sobre la pastilla teal).
 surface0      = "#202020"
