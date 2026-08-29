@@ -49,6 +49,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 | `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
+| `collie/` | `~/.config/herdr/plugins/config/herdr.collie/{commands,keys,quick-replies}.toml` (Linux/macOS, via `make collie-install`) | Collie, herdr's mobile bridge: a Bun bridge plus a PWA served over `tailscale serve` that drives herdr panes from a phone, with push when an agent blocks. Answers the `WAIT_FOR_USER` contract away from the desk. Pinned in `scripts/vendor/upstreams.tsv`; see `collie/README.md` |
 
 `Makefile:6` defines `PACKAGES` — keep this list in sync when adding or removing a package directory. `IS_WSL`, computed just below, drives WSL-aware conditional logic in `health`, `vscode-install` and `wsl-terminal`.
 
@@ -59,6 +60,8 @@ The `vscode/` package contains a `.stow-local-ignore` and `package.json` because
 The `gnome/` package is Linux-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make gnome-rice` both links its `gtk.css` (via `stow gnome`) and applies the dconf layer (`gnome/scripts/apply-rice.sh`). Its `.stow-local-ignore` keeps `scripts/` and `README.md` out of `$HOME`.
 
 The `windows-terminal/` package is WSL-only and intentionally **not** in `PACKAGES`: `make stow` skips it, and `make wsl-terminal` applies it from inside a WSL distro (`windows-terminal/scripts/install.sh`). It writes the dotmesh colour scheme into the Windows Terminal `LocalState/settings.json` on the Windows side.
+
+The `collie/` package is Linux/macOS-only and intentionally **not** in `PACKAGES` nor in `make install`: the bridge is remote shell access and is installed on purpose, never as a side effect. `make collie-install` runs `collie/scripts/install.sh`, which is idempotent, never uses sudo and never starts the bridge — the systemd unit is left installed but **disabled**, with no linger, so the bridge exists only while a session needs it. Its three preset files are stowed with `--no-folding` because the bridge's `.env` (VAPID push keys, never versioned) lives in the same directory. A preset row **replaces** Collie's shipped set on the panes it addresses rather than merging into it (Collie's ADR 0018), which is why `keys.toml` restates the six shipped chords and `commands.toml` leaves Codex panes unaddressed.
 
 ## Skills as the integration point
 

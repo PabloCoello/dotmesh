@@ -25,3 +25,8 @@ codex/.codex/history*
 codex/.codex/sessions/
 codex/.codex/log/
 opencode/.config/opencode/auth.json
+
+# Red de seguridad: el .env del puente de Collie vive fuera del repo, en el directorio de
+# config del plugin. Nunca debería aparecer aquí, pero si alguien lo copia al paquete
+# mientras depura, `git add .` se lo llevaría: lleva las claves VAPID.
+collie/.config/herdr/plugins/config/herdr.collie/.env

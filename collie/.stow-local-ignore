@@ -1,0 +1,4 @@
+# Solo se enlaza el subárbol .config (los tres presets del puente). El resto del
+# paquete es maquinaria que aplica `make collie-install` y no debe llegar a $HOME.
+^/scripts
+^/README\.md

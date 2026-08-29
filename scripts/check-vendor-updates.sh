@@ -7,6 +7,7 @@ is_allowed_upstream() {
   case "$1 $2" in
     'herdr-skill https://github.com/ogulcancelik/herdr.git') return 0 ;;
     'mattpocock-skills-adapted https://github.com/mattpocock/skills.git') return 0 ;;
+    'collie https://github.com/AltanS/collie.git') return 0 ;;
     *) return 1 ;;
   esac
 }
