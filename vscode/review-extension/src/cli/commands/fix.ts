@@ -132,6 +132,18 @@ export async function runFix(argv: string[]): Promise<void> {
     process.stderr.write('mesh-review fix: se requiere --body <respuesta>\n');
     process.exit(1);
   }
+  if (body.length > 10_000) {
+    process.stderr.write(
+      `mesh-review fix: --body supera el límite de 10000 caracteres (${body.length})\n`
+    );
+    process.exit(1);
+  }
+  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/.test(body)) {
+    process.stderr.write(
+      'mesh-review fix: --body contiene caracteres de control no permitidos\n'
+    );
+    process.exit(1);
+  }
   if (!isUuid(threadId)) {
     process.stderr.write(`mesh-review fix: thread_id no es un UUID válido: ${threadId}\n`);
     process.exit(1);

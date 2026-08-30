@@ -629,6 +629,36 @@ test('open: --body con tab y salto de línea permitidos → aceptado', async () 
   }
 });
 
+test('open: --body con DEL (\\x7F) → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'hola\x7Fmundo'])
+    );
+    assert.strictEqual(code, 1, 'DEL en body → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --body con carácter C1 (\\x80) → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'hola\x80mundo'])
+    );
+    assert.strictEqual(code, 1, 'C1 en body → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
 test('reply: --body con carácter de control → exit 1', async () => {
   const { gitRoot, cleanup } = await makeGitRepo();
   try {
@@ -882,6 +912,40 @@ test('readEvents + isPending: evento sin author es descartado; isPending no lanz
       // Calling isPending on an empty projection must not throw.
       const filtered = threads.filter(isPending);
       assert.strictEqual(filtered.length, 0, 'isPending devuelve vacío sin lanzar');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('readEvents: evento con author.kind "ai" sin model es descartado y emite console.warn', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-ai-nomodel-'));
+  try {
+    const id = randomUUID();
+    const eventNoModel = {
+      id,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: id,
+      author: { kind: 'ai' }, // missing required model field
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'hola', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'AI sin model.',
+    };
+    await writeFile(join(dir, `${id}.json`), JSON.stringify(eventNoModel, null, 2) + '\n', 'utf8');
+
+    const warnMessages: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnMessages.push(args.join(' ')); };
+    try {
+      const events = await readEvents(dir);
+      assert.strictEqual(events.length, 0, 'evento ai sin model es descartado');
+      assert.strictEqual(warnMessages.length, 1, 'se emite exactamente un console.warn');
     } finally {
       console.warn = origWarn;
     }
@@ -1449,6 +1513,69 @@ test('fix: --confidence con valor inválido → exit 1, sin evento emitido', asy
     );
 
     assert.strictEqual(code, 1, 'sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --body que supera 10 000 caracteres → exit 1, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--body', BODY_OVER_LIMIT])
+    );
+
+    assert.strictEqual(code, 1, 'body sobre el límite → sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --body con carácter de control DEL (\\x7F) → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--body', 'texto\x7Faqui'])
+    );
+
+    assert.strictEqual(code, 1, 'DEL en body → sale con código 1');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('fix: --body con carácter C1 (\\x80) → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+    const tid = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const code = await captureExit(() =>
+      runFix([docAbs, tid, '-m', 'fix: msg', '--body', 'texto\x80aqui'])
+    );
+
+    assert.strictEqual(code, 1, 'C1 en body → sale con código 1');
     const events = await readEvents(eventDir);
     assert.strictEqual(events.length, 0, 'ningún evento emitido');
   } finally {
@@ -2234,6 +2361,12 @@ test('parseCliArgs: --flag=value con flag desconocida → exit 1', async () => {
   assert.strictEqual(code, 1, 'flag desconocida con = → sale con código 1');
 });
 
+test('parseCliArgs: --body=a=b preserva el = interno como parte del valor', () => {
+  const known = new Set(['body']);
+  const result = parseCliArgs(['--body=a=b'], known, 'test');
+  assert.strictEqual(result.flags.get('body'), 'a=b', 'valor con = interno preservado');
+});
+
 test('open: --author human --model X → exit 1', async () => {
   const { gitRoot, cleanup } = await makeGitRepo();
   try {
@@ -2296,6 +2429,140 @@ test('retract: --author human --model X → exit 1', async () => {
       runRetract([docAbs, randomUUID(), randomUUID(), '--author', 'human', '--model', 'm1'])
     );
     assert.strictEqual(code, 1, '--author human --model → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// AI-only flags: --effort and --subagent must be rejected when --author is not ai
+
+test('open: --author human --effort X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([
+        docAbs,
+        '--offset', '0', '--end-offset', '5',
+        '--type', 'nota',
+        '--body', 'x',
+        '--effort', 'high',
+      ])
+    );
+    assert.strictEqual(code, 1, '--author human --effort → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --author human --subagent X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([
+        docAbs,
+        '--offset', '0', '--end-offset', '5',
+        '--type', 'nota',
+        '--body', 'x',
+        '--subagent', 'build',
+      ])
+    );
+    assert.strictEqual(code, 1, '--author human --subagent → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --author human --effort X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', 'x', '--effort', 'high'])
+    );
+    assert.strictEqual(code, 1, '--author human --effort → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --author human --subagent X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', 'x', '--subagent', 'build'])
+    );
+    assert.strictEqual(code, 1, '--author human --subagent → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: --author human --effort X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runResolve([docAbs, randomUUID(), '--effort', 'high'])
+    );
+    assert.strictEqual(code, 1, '--author human --effort → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: --author human --subagent X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runResolve([docAbs, randomUUID(), '--subagent', 'build'])
+    );
+    assert.strictEqual(code, 1, '--author human --subagent → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: --author human --effort X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), randomUUID(), '--effort', 'high'])
+    );
+    assert.strictEqual(code, 1, '--author human --effort → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: --author human --subagent X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), randomUUID(), '--subagent', 'build'])
+    );
+    assert.strictEqual(code, 1, '--author human --subagent → sale con código 1');
   } finally {
     await cleanup();
   }

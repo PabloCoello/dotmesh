@@ -624,6 +624,15 @@ export async function readEvents(
         discardedPaths.push(filePath);
         continue;
       }
+      // author.kind "ai" requires a string model: schema.json mandates it, and
+      // callers that read author.model expect a string (never undefined).
+      if (authorKind === 'ai') {
+        const authorModel = (parsed.author as Record<string, unknown>).model;
+        if (typeof authorModel !== 'string') {
+          discardedPaths.push(filePath);
+          continue;
+        }
+      }
       // Los campos del ancla también son datos de disco: un line_hint string
       // acabaría concatenado en etiquetas ("L" + hint) y un quote no-string
       // rompería escapeHtml, igual que el body.

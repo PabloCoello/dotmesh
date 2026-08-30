@@ -48,7 +48,7 @@ const MAX_REASON_CHARS = 10_000;
  * newline (\x0A) and carriage return (\x0D).
  * Stored review text has no legitimate use for other control characters.
  */
-const CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+const CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -126,6 +126,14 @@ export async function runRetract(argv: string[]): Promise<void> {
   }
   if (author !== 'ai' && model !== undefined) {
     process.stderr.write('mesh-review retract: --model solo es válido con --author ai\n');
+    process.exit(1);
+  }
+  if (author !== 'ai' && effort !== undefined) {
+    process.stderr.write('mesh-review retract: --effort solo es válido con --author ai\n');
+    process.exit(1);
+  }
+  if (author !== 'ai' && subagent !== undefined) {
+    process.stderr.write('mesh-review retract: --subagent solo es válido con --author ai\n');
     process.exit(1);
   }
 

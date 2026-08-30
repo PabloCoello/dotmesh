@@ -91,6 +91,14 @@ export async function runResolve(argv: string[]): Promise<void> {
     process.stderr.write('mesh-review resolve: --model solo es válido con --author ai\n');
     process.exit(1);
   }
+  if (author !== 'ai' && effort !== undefined) {
+    process.stderr.write('mesh-review resolve: --effort solo es válido con --author ai\n');
+    process.exit(1);
+  }
+  if (author !== 'ai' && subagent !== undefined) {
+    process.stderr.write('mesh-review resolve: --subagent solo es válido con --author ai\n');
+    process.exit(1);
+  }
 
   // --- Resolve doc path and git root ----------------------------------------
 

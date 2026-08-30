@@ -389,6 +389,8 @@ This skill uses only standard file and shell operations:
 | Write backlog task | file write to `<git-root>/.ai/backlog/<id>.json` |
 | Commit a single reviewed file and emit fix event | `mesh-review fix <doc> <thread_id> -m <msg> --body <reply> [--reanchor] [--already-done <sha>] [--model <id>] [--confidence ...]` |
 
+**`fix --body` validation:** `--body` is required, must not exceed 10,000 characters, and must not contain C0 control characters, DEL (`\x7F`), or C1 characters (`\x80`–`\x9F`); tab, LF and CR are allowed. These are the same rules as `open` and `reply`.
+
 No VS Code extension API, no agent-specific API, and no network access are required. The skill works identically in Claude Code, OpenCode, Codex, or any other agent with file access.
 
 ---
@@ -402,7 +404,7 @@ The four subcommands below let any editor or agent create and close review threa
 - The document must be inside a git repository. If `git rev-parse --show-toplevel` fails, the command exits 1.
 - Unknown `--flag` arguments are rejected immediately with exit 1. Both `--flag value` and `--flag=value` forms are accepted; the `=` form is parsed correctly for all flags.
 - `--author human` (default): reads `git config user.name` for the `name` field; omits `name` if not configured.
-- `--author ai`: requires `--model <id>`; optionally accepts `--effort <str>` and `--subagent <str>`. Passing `--model` when `--author` is `human` (or omitted) is an error: the command exits 1 with a message on stderr.
+- `--author ai`: requires `--model <id>`; optionally accepts `--effort <str>` and `--subagent <str>`. Passing `--model`, `--effort`, or `--subagent` when `--author` is `human` (or omitted) is an error: the command exits 1 with a message on stderr.
 - `reply`, `resolve`, and `retract` verify that the target thread exists before writing the event. `retract` additionally verifies that the `message_id` exists within that thread. A non-existent target exits 1 with a message on stderr; no event is written.
 - On any validation error the command writes a message to stderr and exits 1.
 
@@ -429,7 +431,7 @@ mesh-review open <doc>
 **Validation rules:**
 - Both offsets must be non-negative integers; `end-offset` must be strictly greater than `offset`; `end-offset` must be ≤ `text.length`.
 - `--type` must be one of: `edita | sugerencia | pregunta | verifica | nota | referencia | supuesto`.
-- `--body` must not be empty, must not exceed 10,000 characters, and must not contain C0 control characters (NUL, U+0001–U+0008, U+000B–U+000C, U+000E–U+001F); tab, LF and CR are allowed.
+- `--body` must not be empty, must not exceed 10,000 characters, and must not contain C0 control characters (NUL, U+0001–U+0008, U+000B–U+000C, U+000E–U+001F), DEL (U+007F), or C1 characters (U+0080–U+009F); tab, LF and CR are allowed.
 - `--type verifica` or `--type supuesto` requires `--confidence`.
 - `--author ai` requires `--model`.
 
@@ -466,7 +468,7 @@ mesh-review reply <doc> <thread_id>
     [--confidence alta|media|baja]
 ```
 
-**Validation:** `thread_id` must be a UUID v4. `--body` must not be empty, must not exceed 10,000 characters, and must not contain C0 control characters (same rules as `open`). `--author ai` requires `--model`.
+**Validation:** `thread_id` must be a UUID v4. `--body` must not be empty, must not exceed 10,000 characters, and must not contain C0 control characters, DEL, or C1 characters (same rules as `open`). `--author ai` requires `--model`.
 
 **stdout:** UUID of the new `message.posted` event, followed by a newline.
 
@@ -525,7 +527,7 @@ mesh-review retract <doc> <thread_id> <message_id>
     [--subagent <str>]
 ```
 
-**Validation:** both `thread_id` and `message_id` must be UUID v4s. If `--reason` is supplied it must not exceed 10,000 characters and must not contain C0 control characters (same rules as `--body` in `open`). `--author ai` requires `--model`.
+**Validation:** both `thread_id` and `message_id` must be UUID v4s. If `--reason` is supplied it must not exceed 10,000 characters and must not contain C0 control characters, DEL, or C1 characters (same rules as `--body` in `open`). `--author ai` requires `--model`.
 
 **stdout:** UUID of the new `message.retracted` event, followed by a newline.
 

@@ -189,6 +189,13 @@ async function readEvents(dir, onError) {
         discardedPaths.push(filePath);
         continue;
       }
+      if (authorKind === "ai") {
+        const authorModel = parsed.author.model;
+        if (typeof authorModel !== "string") {
+          discardedPaths.push(filePath);
+          continue;
+        }
+      }
       if ("anchor" in parsed && parsed.anchor !== null && typeof parsed.anchor === "object") {
         const anchorRec = parsed.anchor;
         const badField = ("line_hint" in anchorRec && typeof anchorRec.line_hint !== "number" ? "line_hint" : null) ?? ("char_offset" in anchorRec && typeof anchorRec.char_offset !== "number" ? "char_offset" : null) ?? ("quote" in anchorRec && typeof anchorRec.quote !== "string" ? "quote" : null);
@@ -583,6 +590,19 @@ async function runFix(argv) {
     process.stderr.write("mesh-review fix: se requiere --body <respuesta>\n");
     process.exit(1);
   }
+  if (body.length > 1e4) {
+    process.stderr.write(
+      `mesh-review fix: --body supera el l\xEDmite de 10000 caracteres (${body.length})
+`
+    );
+    process.exit(1);
+  }
+  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/.test(body)) {
+    process.stderr.write(
+      "mesh-review fix: --body contiene caracteres de control no permitidos\n"
+    );
+    process.exit(1);
+  }
   if (!isUuid(threadId)) {
     process.stderr.write(`mesh-review fix: thread_id no es un UUID v\xE1lido: ${threadId}
 `);
@@ -786,7 +806,7 @@ var OPEN_KNOWN_FLAGS = /* @__PURE__ */ new Set([
   "assignee"
 ]);
 var MAX_BODY_CHARS = 1e4;
-var CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+var CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/;
 async function runOpen(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage3();
@@ -872,6 +892,14 @@ async function runOpen(argv) {
   }
   if (author !== "ai" && model !== void 0) {
     process.stderr.write("mesh-review open: --model solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && effort !== void 0) {
+    process.stderr.write("mesh-review open: --effort solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && subagent !== void 0) {
+    process.stderr.write("mesh-review open: --subagent solo es v\xE1lido con --author ai\n");
     process.exit(1);
   }
   const typesRequiringConfidence = /* @__PURE__ */ new Set(["verifica", "supuesto"]);
@@ -997,7 +1025,7 @@ var REPLY_KNOWN_FLAGS = /* @__PURE__ */ new Set([
   "confidence"
 ]);
 var MAX_BODY_CHARS2 = 1e4;
-var CTRL_CHAR_RE2 = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+var CTRL_CHAR_RE2 = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/;
 async function runReply(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage4();
@@ -1053,6 +1081,14 @@ async function runReply(argv) {
   }
   if (author !== "ai" && model !== void 0) {
     process.stderr.write("mesh-review reply: --model solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && effort !== void 0) {
+    process.stderr.write("mesh-review reply: --effort solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && subagent !== void 0) {
+    process.stderr.write("mesh-review reply: --subagent solo es v\xE1lido con --author ai\n");
     process.exit(1);
   }
   if (confidence !== void 0 && !["alta", "media", "baja"].includes(confidence)) {
@@ -1177,6 +1213,14 @@ async function runResolve(argv) {
     process.stderr.write("mesh-review resolve: --model solo es v\xE1lido con --author ai\n");
     process.exit(1);
   }
+  if (author !== "ai" && effort !== void 0) {
+    process.stderr.write("mesh-review resolve: --effort solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && subagent !== void 0) {
+    process.stderr.write("mesh-review resolve: --subagent solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
   const docAbs = path8.resolve(doc);
   const gitRoot = await getGitRoot(path8.dirname(docAbs));
   if (!gitRoot) {
@@ -1251,7 +1295,7 @@ import { randomUUID as randomUUID7 } from "node:crypto";
 import * as path9 from "node:path";
 var RETRACT_KNOWN_FLAGS = /* @__PURE__ */ new Set(["reason", "author", "model", "effort", "subagent"]);
 var MAX_REASON_CHARS = 1e4;
-var CTRL_CHAR_RE3 = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+var CTRL_CHAR_RE3 = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/;
 async function runRetract(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage6();
@@ -1312,6 +1356,14 @@ async function runRetract(argv) {
   }
   if (author !== "ai" && model !== void 0) {
     process.stderr.write("mesh-review retract: --model solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && effort !== void 0) {
+    process.stderr.write("mesh-review retract: --effort solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && subagent !== void 0) {
+    process.stderr.write("mesh-review retract: --subagent solo es v\xE1lido con --author ai\n");
     process.exit(1);
   }
   const docAbs = path9.resolve(doc);
