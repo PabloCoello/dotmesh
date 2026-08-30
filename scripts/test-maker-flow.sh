@@ -60,6 +60,11 @@ ARMS="${MAKER_FLOW_ARMS:-both}"
 # CLAUDE.md que la importa. Sirve para aislar una sola variable: cuánto del
 # cumplimiento lo sostiene el AGENTS.md del proyecto y cuánto build.md.
 WITH_AGENTS="${MAKER_FLOW_AGENTS:-}"
+# MAKER_FLOW_HOOKS=1 copia los hooks del repo a la config aislada y los registra
+# con rutas absolutas a esa copia, nunca a los de la máquina. Solo los tres del
+# flujo: el guardarraíl de git y los dos recordatorios. Sirve para aislar cuánto
+# del cumplimiento lo sostiene el hook y cuánto la prosa.
+WITH_HOOKS="${MAKER_FLOW_HOOKS:-}"
 
 PASS=0
 FAIL=0
@@ -78,7 +83,7 @@ done
 echo "  claude: $(command -v claude)"
 echo "  node:   $(node --version)"
 echo "  modelo: $MODEL · timeout por run: ${TIMEOUT}s · runs por brazo: $RUNS"
-echo "  brazos: $ARMS · AGENTS.md en el árbol: ${WITH_AGENTS:-no}"
+echo "  brazos: $ARMS · AGENTS.md: ${WITH_AGENTS:-no} · hooks: ${WITH_HOOKS:-no}"
 
 REAL_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 if [ ! -d "$REPO_ROOT/claude/.claude/agents" ]; then
@@ -116,10 +121,35 @@ make_config_dir() {
   cp -rL "$REPO_ROOT/claude/.claude/agents" "$dir/agents"
   cp -rL "$REPO_ROOT/claude/.claude/output-styles" "$dir/output-styles"
   ln -s "$REPO_ROOT/agents/.agents/skills" "$dir/skills"
+  if [ -n "$WITH_HOOKS" ]; then
+    cp -rL "$REPO_ROOT/claude/.claude/hooks" "$dir/hooks"
+  fi
   if [ -e "$REAL_CONFIG/.credentials.json" ]; then
     ln -s "$REAL_CONFIG/.credentials.json" "$dir/.credentials.json"
   fi
   printf '%s' "$dir"
+}
+
+# ---------------------------------------------------------------------------
+# JSON de --settings para un brazo. $1 = output style (vacío para el control),
+# $2 = config dir. Se construye con node para no montar JSON a mano.
+# ---------------------------------------------------------------------------
+settings_json() {
+  node -e '
+const [style, config, withHooks] = process.argv.slice(1);
+const s = {};
+if (style) s.outputStyle = style;
+if (withHooks) {
+  const h = (name) => ({ type: "command", command: `${config}/hooks/${name}` });
+  s.hooks = {
+    PreToolUse: [
+      { matcher: "Bash", hooks: [h("block-dangerous-git.sh"), h("remind-review-gate.sh")] },
+      { matcher: "Write|Edit|MultiEdit|NotebookEdit", hooks: [h("remind-load-skills.sh")] },
+    ],
+  };
+}
+process.stdout.write(JSON.stringify(s));
+' "$1" "$2" "$WITH_HOOKS"
 }
 
 # ---------------------------------------------------------------------------
@@ -305,7 +335,7 @@ C_AGENTS=0; C_RUNS=0; C_SKILLS=0; C_NAMES="-"
 if [ "$ARMS" != "maker" ]; then
   section "Brazo CONTROL (estilo por defecto)"
   CONFIG_CONTROL=$(make_config_dir)
-  score_arm control '{}' "$CONFIG_CONTROL"
+  score_arm control "$(settings_json "" "$CONFIG_CONTROL")" "$CONFIG_CONTROL"
   C_AGENTS=$ARM_TOTAL; C_RUNS=$ARM_RUNS_DELEGATING
   read -r C_SKILLS C_NAMES <<< "$(count_skills "$ROOT_TMP"/stream-control-*.jsonl)"
   echo "  total: $C_AGENTS delegaciones en $C_RUNS/$RUNS runs · $C_SKILLS skills ($C_NAMES)"
@@ -315,7 +345,7 @@ M_AGENTS=0; M_RUNS=0; M_SKILLS=0; M_NAMES="-"
 if [ "$ARMS" != "control" ]; then
   section "Brazo TRATAMIENTO (persona maker)"
   CONFIG_MAKER=$(make_config_dir)
-  score_arm maker '{"outputStyle":"maker"}' "$CONFIG_MAKER"
+  score_arm maker "$(settings_json maker "$CONFIG_MAKER")" "$CONFIG_MAKER"
   M_AGENTS=$ARM_TOTAL; M_RUNS=$ARM_RUNS_DELEGATING
   read -r M_SKILLS M_NAMES <<< "$(count_skills "$ROOT_TMP"/stream-maker-*.jsonl)"
   echo "  total: $M_AGENTS delegaciones en $M_RUNS/$RUNS runs · $M_SKILLS skills ($M_NAMES)"
