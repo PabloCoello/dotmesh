@@ -117,7 +117,9 @@ del prompt. Cualquier ajuste de color empieza aquí.
 |---|---|---|
 | Editor | [`vscode/themes/dotmesh-color-theme.json`](../vscode/themes/dotmesh-color-theme.json) | tema `dotmesh` (cromo Ink monocromo + sintaxis) |
 | Editor | [`vscode/Library/Application Support/Code/User/settings.json`](../vscode/Library/Application%20Support/Code/User/settings.json) | activa el tema `dotmesh` y la fuente JetBrains Mono |
+| Editor | [`nvim/.config/nvim/colors/dotmesh.lua`](../nvim/.config/nvim/colors/dotmesh.lua) | colorscheme `dotmesh` de Neovim: paleta en `lua/dotmesh/palette.lua`, mismo mapa de sintaxis que el tema de VS Code, `g:terminal_color_0..15` iguales a los ANSI de Ghostty y tema de lualine a juego |
 | Revisión | [`vscode/review-extension/`](../vscode/review-extension/) | fondo `rgba(108,182,176,0.18)` (teal con alpha, compatible con tema claro) en el rango anclado; etiqueta de tipo al final de línea (rose `#E59A9A` edita · gold `#E3C58A` sugerencia · blue `#8FB4E3` pregunta · peach `#FFAA7A` verifica · teal `#6CB6B0` nota · sage `#A8CBA0` referencia · lilac `#CBAACB` supuesto); `#6e6e6e` en comentarios resueltos |
+| Revisión | [`nvim/.config/nvim/lua/mesh_review/`](../nvim/.config/nvim/lua/mesh_review/) | cliente Neovim con el mismo mapa tipo→color. Neovim no admite alpha en un grupo de resaltado, así que el 0.18 se precalcula mezclando el color del tipo sobre el fondo real de `Normal` (teal sobre Ink-0 da `#22302E`); en el signcolumn, la letra del tipo y una barra `▎` en su color; etiqueta `● tipo` al final de la línea anclada; `#6e6e6e` en hilos despegados |
 | Terminal | [`ghostty/.config/ghostty/themes/dotmesh`](../ghostty/.config/ghostty/themes/dotmesh) | tema de Ghostty (fondo Ink + ANSI de sintaxis); herdr lo hereda con `[theme] name = "terminal"` |
 | Multiplexor | [`herdr/.config/herdr/config.toml`](../herdr/.config/herdr/config.toml) | cromo de herdr sobre Ink-0: texto en tres escalones de grafito (`#cecece` · `#c6c6c6` · `#9e9e9e`), fila activa en teal apagado (`#20403D`, el único relleno con tono del cromo) y cursor de navegar en grafito (`#525252`), teal reservado al acento y estados de agente como señal, con glifo propio cada uno (`×` rose blocked · `◐` gold working · `✓` sage done · `○` grafito idle) |
 | Prompt | [`starship/.config/starship.toml`](../starship/.config/starship.toml) | paleta `dotmesh`: segmentos grafito + iconos de sintaxis |
@@ -139,6 +141,13 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
   el repo no llega a VS Code con solo recargar la ventana. Vuelve a ejecutar
   `vscode/scripts/install.sh` (refresca la copia instalada sin depender de la
   red) y recarga la ventana.
+- **Neovim**: se aplica al final de `nvim/.config/nvim/init.lua`, no como plugin:
+  el colorscheme vive dentro de la propia configuración, y declararlo como spec
+  de lazy con `dir = stdpath("config")` chocaba con la entrada local del plugin
+  mesh-review (mismo directorio, lazy funde ambas y ejecuta un solo `config`).
+  Para revertir en caliente, `:colorscheme material` (material.nvim sigue
+  instalado, sólo deja de cargarse al arranque); para hacerlo permanente, cambia
+  esa línea de `init.lua`.
 - **Ghostty**: activo vía `theme = dotmesh` en `ghostty/.config/ghostty/config`.
   Para revertir, cambia el valor `theme` y recarga Ghostty.
 - **Starship**: activo vía `palette = 'dotmesh'`. Para revertir, cámbialo a

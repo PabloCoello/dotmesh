@@ -3,7 +3,7 @@
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
-PACKAGES := shell git starship ghostty herdr opencode codex claude agents
+PACKAGES := shell git starship ghostty herdr opencode codex claude agents nvim
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
@@ -39,6 +39,7 @@ help:
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
 	@echo "  make collie-install - Instala Collie (puente móvil de herdr) y enlaza sus presets"
+	@echo "  make nvim-install   - Instala Neovim >= 0.11 en ~/.local/bin/nvim (sin sudo, idempotente)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
@@ -247,6 +248,10 @@ wsl-terminal:
 .PHONY: collie-install
 collie-install:
 	@bash "$(abspath collie/scripts/install.sh)"
+
+.PHONY: nvim-install
+nvim-install:
+	@bash "$(abspath nvim/scripts/install-nvim.sh)"
 
 .PHONY: health
 health:
