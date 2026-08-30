@@ -74,8 +74,14 @@ function listDirs(dir) {
 
 // Tool calls of one transcript, in order of appearance. Tolerates broken lines:
 // a half-written transcript must not break the measurement.
+//
+// A call carries `blocked`: a PreToolUse hook can exit 2 and stop the tool, so a
+// `git commit` that never ran must not count as a commit. Without this the
+// review gate would read as a failure exactly when it works, because the skill
+// is loaded between the blocked attempt and the retry.
 function toolCalls(file) {
   const calls = [];
+  const blocked = new Set();
   let text;
   try {
     text = readFileSync(file, 'utf8');
@@ -93,9 +99,14 @@ function toolCalls(file) {
     const content = rec?.message?.content;
     if (!Array.isArray(content)) continue;
     for (const block of content) {
-      if (block?.type === 'tool_use') calls.push({ name: block.name, input: block.input || {} });
+      if (block?.type === 'tool_use') {
+        calls.push({ id: block.id, name: block.name, input: block.input || {}, blocked: false });
+      } else if (block?.type === 'tool_result' && block.is_error && block.tool_use_id) {
+        blocked.add(block.tool_use_id);
+      }
     }
   }
+  for (const call of calls) if (call.id && blocked.has(call.id)) call.blocked = true;
   return calls;
 }
 
@@ -173,7 +184,7 @@ function main() {
         let committed = false;
         for (const call of toolCalls(path)) {
           if (call.name === 'Skill' && call.input.skill) before.add(call.input.skill);
-          if (call.name === 'Bash' && GIT_COMMIT.test(call.input.command || '')) {
+          if (call.name === 'Bash' && !call.blocked && GIT_COMMIT.test(call.input.command || '')) {
             committed = true;
             break;
           }

@@ -190,6 +190,28 @@ tpl="$REPO_ROOT/claude/.claude/settings.json"
 n=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | test("remind-load-skills"))] | length' "$tpl")
 [ "$n" -ge 1 ] && pass "remind-load-skills.sh está registrado en el matcher Bash" || fail "falta en el matcher Bash de la plantilla"
 
+section "métrica: un commit bloqueado no es un commit"
+# Con el gate bloqueando, la skill se carga entre el intento bloqueado y el
+# reintento. Si la métrica cuenta el intento, lee cero justo cuando el hook
+# funciona.
+proj="$TMP/projects/-un-proyecto"
+mkdir -p "$proj/sesion/subagents"
+printf '{"type":"user"}\n' > "$proj/sesion.jsonl"
+sub="$proj/sesion/subagents/agent-x.jsonl"
+printf '{"agentType":"build"}\n' > "$proj/sesion/subagents/agent-x.meta.json"
+{
+  printf '{"message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"git commit -m x"}}]}}\n'
+  printf '{"message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"Bloqueado por dotmesh"}]}}\n'
+  printf '{"message":{"content":[{"type":"tool_use","id":"t2","name":"Skill","input":{"skill":"code-review-and-quality"}}]}}\n'
+  printf '{"message":{"content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"git commit -m x"}}]}}\n'
+} > "$sub"
+
+out=$(node "$REPO_ROOT/scripts/maker-flow-stats.mjs" --dir "$TMP/projects" 2>&1)
+case "$out" in
+  *"code-review-and-quality        1/1"*) pass "la skill cargada tras el bloqueo cuenta como previa al commit" ;;
+  *) fail "la métrica no descuenta el intento bloqueado: $(printf '%s' "$out" | grep code-review || true)" ;;
+esac
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
