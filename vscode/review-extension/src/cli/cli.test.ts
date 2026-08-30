@@ -1476,6 +1476,21 @@ test('reply: happy path → message.posted sin commit nuevo en el repo', async (
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
     const tid = randomUUID();
 
+    // Pre-create the thread so the referential integrity check passes.
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
     const { stdout: commitsBefore } = await execFileAsync(
       'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
     );
@@ -1498,11 +1513,11 @@ test('reply: happy path → message.posted sin commit nuevo en el repo', async (
     );
     assert.strictEqual(commitsAfter.trim(), commitsBefore.trim(), 'sin commit nuevo');
 
-    // Event written and readable
+    // Event written and readable (eventDir now has thread.opened + message.posted)
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    const ev = events[0];
-    assert.strictEqual(ev.type, 'message.posted', 'tipo correcto');
+    assert.strictEqual(events.length, 2, 'thread.opened + message.posted emitidos');
+    const ev = events.find(e => e.type === 'message.posted')!;
+    assert.ok(ev, 'message.posted emitido');
     assert.strictEqual(ev.id, msgId, 'id coincide con stdout');
     assert.strictEqual(ev.thread_id, tid, 'thread_id correcto');
     assert.strictEqual(ev.body as string, 'Respuesta de prueba', 'body correcto');
@@ -1521,6 +1536,21 @@ test('reply: --author ai --model m1 --confidence media → campos correctos', as
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
     const tid = randomUUID();
 
+    // Pre-create the thread so the referential integrity check passes.
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
     await runReply([
       docAbs, tid,
       '--body', 'Respuesta IA',
@@ -1530,11 +1560,12 @@ test('reply: --author ai --model m1 --confidence media → campos correctos', as
     ]);
 
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    const author = events[0].author as { kind: string; model?: string };
+    const replyEv = events.find(e => e.type === 'message.posted')!;
+    assert.ok(replyEv, 'message.posted emitido');
+    const author = replyEv.author as { kind: string; model?: string };
     assert.strictEqual(author.kind, 'ai', 'author.kind ai');
     assert.strictEqual(author.model, 'claude-sonnet-4-6', 'author.model correcto');
-    assert.strictEqual(events[0].confidence, 'media', 'confidence correcto');
+    assert.strictEqual(replyEv.confidence, 'media', 'confidence correcto');
   } finally {
     await cleanup();
   }
@@ -1549,13 +1580,29 @@ test('reply: round-trip → el evento pasa readEvents sin descartarse', async ()
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
     const tid = randomUUID();
 
+    // Pre-create the thread so the referential integrity check passes.
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
     await runReply([docAbs, tid, '--body', 'Nota de prueba']);
 
     const events = await readEvents(eventDir);
-    // If the event were malformed it would be silently dropped
-    assert.strictEqual(events.length, 1, 'el evento sobrevive a readEvents');
-    assert.strictEqual(events[0].type, 'message.posted');
-    assert.strictEqual(events[0].thread_id, tid);
+    // If the event were malformed it would be silently dropped.
+    // eventDir now has thread.opened + message.posted.
+    const replyEv = events.find(e => e.type === 'message.posted');
+    assert.ok(replyEv, 'el evento message.posted sobrevive a readEvents');
+    assert.strictEqual(replyEv!.thread_id, tid);
   } finally {
     await cleanup();
   }
@@ -1782,6 +1829,120 @@ test('retract: message_id no UUID → exit 1', async () => {
       runRetract([docAbs, randomUUID(), 'no-es-uuid'])
     );
     assert.strictEqual(code, 1, 'message_id inválido → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Slice B: integridad referencial — reply, resolve, retract comprueban
+// que el hilo (y mensaje) existan antes de escribir.
+// ---------------------------------------------------------------------------
+
+test('reply: hilo inexistente → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', 'Respuesta'])
+    );
+    assert.strictEqual(code, 1, 'hilo inexistente → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: hilo inexistente → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runResolve([docAbs, randomUUID()])
+    );
+    assert.strictEqual(code, 1, 'hilo inexistente → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: hilo ya resuelto puede resolverse de nuevo (idempotente)', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    // Open a thread first.
+    const openWritten: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { openWritten.push(String(chunk)); return true; };
+    try {
+      await runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'Hilo']);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const tid = openWritten.join('').trim();
+
+    // Resolve once.
+    process.stdout.write = (_chunk: unknown) => true;
+    try { await runResolve([docAbs, tid]); } finally { process.stdout.write = origWrite; }
+
+    // Resolve again — must not fail.
+    process.stdout.write = (_chunk: unknown) => true;
+    let threw = false;
+    try {
+      await runResolve([docAbs, tid]);
+    } catch {
+      threw = true;
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    assert.strictEqual(threw, false, 'resolve en hilo ya resuelto no lanza');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: hilo inexistente → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), randomUUID()])
+    );
+    assert.strictEqual(code, 1, 'hilo inexistente → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: mensaje inexistente en el hilo → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    // Open a thread first.
+    const openWritten: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { openWritten.push(String(chunk)); return true; };
+    try {
+      await runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'Hilo']);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const tid = openWritten.join('').trim();
+
+    // Retract with a message_id that doesn't exist in this thread.
+    const code = await captureExit(() =>
+      runRetract([docAbs, tid, randomUUID()])
+    );
+    assert.strictEqual(code, 1, 'mensaje inexistente → sale con código 1');
   } finally {
     await cleanup();
   }

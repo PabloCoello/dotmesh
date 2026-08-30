@@ -23,6 +23,8 @@ import {
   getHeadSha,
   utcTimestampMs,
   isUuid,
+  readEvents,
+  project,
   type Author,
   type EventEnvelope,
 } from '../../sidecar.ts';
@@ -110,6 +112,23 @@ export async function runRetract(argv: string[]): Promise<void> {
     process.exit(1);
   }
   const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
+
+  // --- Referential integrity -------------------------------------------------
+  // Thread must exist; message_id must exist within that thread. A typo'd UUID
+  // would otherwise exit 0 while the orphan event is silently dropped.
+
+  const existingEvents = await readEvents(eventDir);
+  const threads = project(existingEvents);
+  const thread = threads.find(t => t.thread_id === threadId);
+  if (!thread) {
+    process.stderr.write(`mesh-review retract: el hilo ${threadId} no existe en este documento\n`);
+    process.exit(1);
+  }
+  const messageExists = thread.messages.some(m => m.id === messageId);
+  if (!messageExists) {
+    process.stderr.write(`mesh-review retract: el mensaje ${messageId} no existe en el hilo ${threadId}\n`);
+    process.exit(1);
+  }
 
   // --- Build author ----------------------------------------------------------
 

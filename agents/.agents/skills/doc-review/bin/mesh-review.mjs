@@ -1014,6 +1014,14 @@ async function runReply(argv) {
     process.exit(1);
   }
   const eventDir = path7.join(gitRoot, ".ai", "review", docRelPath);
+  const existingEvents = await readEvents(eventDir);
+  const threads = project(existingEvents);
+  const threadExists = threads.some((t) => t.thread_id === threadId);
+  if (!threadExists) {
+    process.stderr.write(`mesh-review reply: el hilo ${threadId} no existe en este documento
+`);
+    process.exit(1);
+  }
   let authorObj;
   if (author === "ai") {
     authorObj = {
@@ -1117,6 +1125,14 @@ async function runResolve(argv) {
     process.exit(1);
   }
   const eventDir = path8.join(gitRoot, ".ai", "review", docRelPath);
+  const existingEvents = await readEvents(eventDir);
+  const threads = project(existingEvents);
+  const threadExists = threads.some((t) => t.thread_id === threadId);
+  if (!threadExists) {
+    process.stderr.write(`mesh-review resolve: el hilo ${threadId} no existe en este documento
+`);
+    process.exit(1);
+  }
   let authorObj;
   if (author === "ai") {
     authorObj = {
@@ -1227,6 +1243,20 @@ async function runRetract(argv) {
     process.exit(1);
   }
   const eventDir = path9.join(gitRoot, ".ai", "review", docRelPath);
+  const existingEvents = await readEvents(eventDir);
+  const threads = project(existingEvents);
+  const thread = threads.find((t) => t.thread_id === threadId);
+  if (!thread) {
+    process.stderr.write(`mesh-review retract: el hilo ${threadId} no existe en este documento
+`);
+    process.exit(1);
+  }
+  const messageExists = thread.messages.some((m) => m.id === messageId);
+  if (!messageExists) {
+    process.stderr.write(`mesh-review retract: el mensaje ${messageId} no existe en el hilo ${threadId}
+`);
+    process.exit(1);
+  }
   let authorObj;
   if (author === "ai") {
     authorObj = {

@@ -24,6 +24,8 @@ import {
   getHeadSha,
   utcTimestampMs,
   isUuid,
+  readEvents,
+  project,
   type Author,
   type EventEnvelope,
 } from '../../sidecar.ts';
@@ -118,6 +120,18 @@ export async function runReply(argv: string[]): Promise<void> {
     process.exit(1);
   }
   const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
+
+  // --- Referential integrity -------------------------------------------------
+  // Verify the target thread exists before writing; a typo'd UUID would
+  // otherwise exit 0 while the orphan event is silently dropped by the reader.
+
+  const existingEvents = await readEvents(eventDir);
+  const threads = project(existingEvents);
+  const threadExists = threads.some(t => t.thread_id === threadId);
+  if (!threadExists) {
+    process.stderr.write(`mesh-review reply: el hilo ${threadId} no existe en este documento\n`);
+    process.exit(1);
+  }
 
   // --- Build author ----------------------------------------------------------
 
