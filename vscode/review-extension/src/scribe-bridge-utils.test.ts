@@ -20,19 +20,19 @@ const UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 // buildLaunchCommand
 // ---------------------------------------------------------------------------
 
-test('buildLaunchCommand incluye --style en el comando', () => {
+test('buildLaunchCommand fija la persona con --settings', () => {
   const cmd = buildLaunchCommand('scribe');
-  assert.ok(cmd.includes('--style'), 'el comando debe incluir --style');
+  assert.equal(cmd, `claude --settings '{"outputStyle":"scribe"}'`);
 });
 
-test('buildLaunchCommand incluye el estilo indicado', () => {
+test('buildLaunchCommand no usa --style (no existe en la CLI de Claude Code)', () => {
   const cmd = buildLaunchCommand('scribe');
-  assert.ok(cmd.includes('scribe'), 'el comando debe incluir el estilo "scribe"');
+  assert.ok(!cmd.includes('--style'), 'el comando no debe depender del wrapper de shell');
 });
 
 test('buildLaunchCommand con estilo diferente lo refleja en el resultado', () => {
   const cmd = buildLaunchCommand('maker');
-  assert.ok(cmd.includes('maker'), 'el comando debe incluir el estilo pasado');
+  assert.equal(cmd, `claude --settings '{"outputStyle":"maker"}'`);
 });
 
 // ---------------------------------------------------------------------------
@@ -92,6 +92,14 @@ test('buildLaunchCommand rechaza estilos con metacaracteres de shell', () => {
   assert.throws(() => buildLaunchCommand('scribe; rm -rf ~'), TypeError);
   assert.throws(() => buildLaunchCommand('scribe $(whoami)'), TypeError);
   assert.throws(() => buildLaunchCommand(''), TypeError);
+});
+
+test('buildLaunchCommand rechaza estilos que romperían el JSON de --settings', () => {
+  // Una comilla doble cerraría el valor del JSON; una simple, el entrecomillado
+  // del shell. Ninguna pasa el filtro de VALID_STYLE_RE.
+  assert.throws(() => buildLaunchCommand('scribe"'), TypeError);
+  assert.throws(() => buildLaunchCommand("scribe'"), TypeError);
+  assert.throws(() => buildLaunchCommand('scribe}'), TypeError);
 });
 
 test('buildSendAllPrompt entrecomilla la ruta con comillas simples POSIX', () => {
