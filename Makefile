@@ -54,6 +54,7 @@ help:
 	@echo "  make test-tool-error-recovery - Verifica la política común de reintentos de herramientas"
 	@echo "  make maker-flow-stats - Mide delegación y skills del flujo maker sobre transcripts reales"
 	@echo "  make test-maker-flow - Arnés headless maker: control vs persona (requiere claude autenticado)"
+	@echo "  make test-flow-hooks - Prueba los hooks del flujo con inputs sintéticos (sin red ni coste)"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
@@ -344,3 +345,8 @@ maker-flow-stats:
 test-maker-flow:
 	@echo "→ arnés headless maker (control/tratamiento)"
 	@bash scripts/test-maker-flow.sh
+
+.PHONY: test-flow-hooks
+test-flow-hooks:
+	@echo "→ hooks del flujo con inputs sintéticos"
+	@bash scripts/test-flow-hooks.sh

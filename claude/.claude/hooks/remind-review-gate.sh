@@ -11,6 +11,10 @@
 # start with git. Then it greps the transcript for a review subagent or the
 # code-review-and-quality skill; absent both, it injects a reminder.
 #
+# The reminder is agent-aware. A delegated subagent has no Agent tool, so asking
+# it to launch `review` asks for something it cannot do; it is asked to load the
+# skill over its own diff instead.
+#
 # It never blocks: non-blocking additionalContext + exit 0. No jq, no transcript,
 # or any error fails open so commits are never broken. The check is per-session
 # and lenient by design (once review has run, later commits pass) to avoid
@@ -55,24 +59,57 @@ while IFS= read -r seg; do
 done <<< "$scan"
 [ "$is_commit" -eq 1 ] || exit 0
 
-# Look for evidence the review gate ran this session. Fail open if we cannot read
-# the transcript.
+# Look for evidence the review gate ran. Fail open if we cannot read the
+# transcript.
 tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 [ -z "$tp" ] && exit 0
 [ -f "$tp" ] || exit 0
-# The bare string "code-review-and-quality" appears in the session from the
-# start (skill list, AGENTS.md). Only a real Skill tool invocation or a review
-# subagent proves the gate ran. Match the JSON key emitted by the Skill tool.
-if grep -qEm 1 '("subagent_type"[[:space:]]*:[[:space:]]*"review")|("skill"[[:space:]]*:[[:space:]]*"code-review-and-quality")' "$tp" 2>/dev/null; then
-  exit 0
-fi
 
-read -r -d '' msg <<'EOF' || true
+# Inside a subagent, transcript_path points at the PARENT session, not at the
+# subagent's own transcript. Measured 2026-08-31: a PreToolUse fired by a `build`
+# subagent carries agent_id and agent_type, and transcript_path is the parent's.
+# Reading the parent there is wrong in both directions. If the orchestrator ran
+# the gate once, every later subagent commit passes unchecked; if it did not, the
+# subagent is told to launch `review`, which is not in its allowlist.
+#
+# The subagent's own transcript is derivable, exists when the hook runs and is
+# written incrementally, so a skill loaded earlier in the same subagent is
+# already visible by the time it commits. agent_id is sanitised because it ends
+# up in a filesystem path.
+aid=$(printf '%s' "$input" | jq -r '.agent_id // empty' | tr -cd 'A-Za-z0-9_-')
+own=""
+[ -n "$aid" ] && own="${tp%.jsonl}/subagents/agent-${aid}.jsonl"
+
+# Degrade to the orchestrator branch when the subagent transcript is not where
+# it is expected, rather than going quiet. A silent check aimed at the wrong
+# file is exactly the defect this fixes, and it would come back unnoticed if the
+# layout ever changes.
+if [ -n "$own" ] && [ -f "$own" ]; then
+  tp="$own"
+  # A subagent cannot delegate, so only the skill counts as evidence here.
+  evidence='"skill"[[:space:]]*:[[:space:]]*"code-review-and-quality"'
+  read -r -d '' msg <<'EOF' || true
+Recordatorio dotmesh: vas a commitear y no consta que hayas cargado
+code-review-and-quality en esta tarea. Cárgala con la herramienta Skill sobre tu
+propio diff antes de commitear, y security-and-hardening si la superficie lo
+pide. No puedes delegar: el gate bloqueante lo corre el orquestador después.
+EOF
+else
+  # The bare string "code-review-and-quality" appears in the session from the
+  # start (skill list, AGENTS.md). Only a real Skill tool invocation or a review
+  # subagent proves the gate ran. Match the JSON key emitted by the Skill tool.
+  evidence='("subagent_type"[[:space:]]*:[[:space:]]*"review")|("skill"[[:space:]]*:[[:space:]]*"code-review-and-quality")'
+  read -r -d '' msg <<'EOF' || true
 Recordatorio dotmesh: vas a commitear y no consta que el gate de revisión haya
 corrido esta sesión. Antes de merge, lanza el subagente review sobre el diff (y
 security si la superficie lo pide); no des un veredicto propio. Si ya lo lanzaste
 y este aviso persiste, ignóralo.
 EOF
+fi
+
+if grep -qEm 1 "$evidence" "$tp" 2>/dev/null; then
+  exit 0
+fi
 
 jq -nc --arg ctx "$msg" \
   '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:$ctx}}'
