@@ -148,6 +148,19 @@ Requisitos: `HERDR_ENV=1` (dentro de un pane herdr), `herdr` y `claude` en el
 reutilizarla desde otro pane, ya estará disponible como target de
 `herdr agent prompt scribe …`.
 
+**Primera vez en una carpeta nueva:** Claude Code pide confirmación de confianza
+antes de trabajar en un directorio que no ha visto antes. Si eso ocurre, el pane
+scribe muestra el diálogo con las opciones «No, exit» / «Yes, I trust this folder»
+y el plugin detecta ese estado leyendo la pantalla. En ese caso:
+
+- El plugin enfoca el pane automáticamente para que veas el diálogo.
+- Aparece una notificación WARN en Neovim explicando que hay que aceptar.
+- El prompt **no se envía**: el plugin espera a que lo hagas tú.
+
+Acepta la confianza en el pane scribe («Yes, I trust this folder» + Enter) y vuelve
+a pulsar `<líder>rs`. El prompt se enviará en ese segundo intento, con la sesión
+ya en marcha.
+
 Todo el flujo es asíncrono: el editor no se congela mientras Claude arranca.
 
 ### Terminal

@@ -5,8 +5,8 @@
 --- de modo que las primeras sean verificables en headless sin proceso externo.
 ---
 --- Funciones puras exportadas: build_prompt, build_get_argv, build_split_argv,
---- build_start_argv, build_wait_argv, build_prompt_argv, pick_payload,
---- parse_herdr_response.
+--- build_start_argv, build_wait_argv, build_prompt_argv, build_read_pane_argv,
+--- build_focus_agent_argv, is_trust_dialog, pick_payload, parse_herdr_response.
 --- Función impura principal: ensure_and_prompt.
 ---
 --- Por qué ruta absoluta en el prompt: el prompt se ejecuta en un pane cuyo
@@ -139,6 +139,77 @@ end
 --- @return table
 function M.build_prompt_argv(text)
   return { "herdr", "agent", "prompt", "scribe", text }
+end
+
+--- Construye el argv para leer el contenido visible de un pane.
+---
+--- La salida es texto plano, no JSON: no debe pasar por parse_herdr_response.
+--- Se usa para detectar el diálogo de confianza de carpeta de Claude Code
+--- antes de enviar el prompt, ya que herdr devuelve idle aunque ese diálogo
+--- esté delante.
+---
+--- @param pane_id string   ID del pane a leer.
+--- @param lines   integer  Número de líneas visibles a leer.
+--- @return table
+function M.build_read_pane_argv(pane_id, lines)
+  return { "herdr", "pane", "read", pane_id, "--source", "visible", "--lines", tostring(lines) }
+end
+
+--- Construye el argv para enfocar el agente scribe.
+---
+--- Se usa herdr agent focus (no herdr pane focus, que solo acepta --direction
+--- y no un ID, por lo que no sirve para apuntar a un pane concreto).
+--- El enfoque permite que el usuario vea el diálogo de confianza sin buscar
+--- el pane manualmente.
+---
+--- @return table
+function M.build_focus_agent_argv()
+  return { "herdr", "agent", "focus", "scribe" }
+end
+
+--- Detecta el diálogo de confianza de carpeta de Claude Code en la pantalla
+--- de un pane.
+---
+--- Claude Code pide confirmación antes de acceder a un directorio que no ha
+--- visto antes. Con ese diálogo delante, herdr devuelve idle e
+--- interactive_ready = true de todas formas, de modo que build_wait_argv da
+--- luz verde en falso. Hay que leer la pantalla y comprobar explícitamente.
+---
+--- La detección exige al menos dos marcadores independientes para evitar
+--- falsos positivos por documentos que casualmente contengan una frase.
+--- La pantalla puede venir envuelta al ancho del pane, así que los marcadores
+--- son cadenas cortas que no dependan de líneas completas.
+---
+--- Marcadores fiables del diálogo real:
+---   "Yes, I trust this folder"
+---   "No, exit"
+---   "Enter to confirm"
+---
+--- IMPORTANTE: este plugin nunca responde al diálogo ni envía teclas. Confiar
+--- en un directorio es una decisión de seguridad del humano. La tentación de
+--- mandar «Y\n» o similar debe resistirse: el plugin solo detecta y avisa.
+---
+--- @param screen string  Texto plano leído del pane (salida de herdr pane read).
+--- @return boolean       true si el diálogo está presente, false en cualquier otro caso.
+function M.is_trust_dialog(screen)
+  if type(screen) ~= "string" or screen == "" then
+    return false
+  end
+  local markers = {
+    "Yes, I trust this folder",
+    "No, exit",
+    "Enter to confirm",
+  }
+  local found = 0
+  for _, marker in ipairs(markers) do
+    if screen:find(marker, 1, true) then
+      found = found + 1
+      if found >= 2 then
+        return true
+      end
+    end
+  end
+  return false
 end
 
 -- ---------------------------------------------------------------------------
@@ -293,7 +364,51 @@ local function create_session_and_prompt(prompt_text, pane_id, cwd)
           notify_error("agent wait: " .. (wait_result.stderr or "error"))
           return
         end
-        do_prompt(prompt_text, true)
+        -- Antes de enviar el prompt, leer la pantalla del pane recién creado.
+        -- herdr agent wait devuelve idle aunque Claude muestre el diálogo de
+        -- confianza de carpeta (interactive_ready = true en ese estado), por lo
+        -- que hay que comprobarlo explícitamente. La salida de pane read es
+        -- texto plano, no JSON: no pasa por parse_herdr_response.
+        vim.system(M.build_read_pane_argv(new_pane_id, 30), { text = true }, function(read_result)
+          local screen = vim.trim(read_result.stdout or "")
+          if M.is_trust_dialog(screen) then
+            -- Enfocar el pane para que el usuario vea el diálogo sin buscarlo.
+            -- NUNCA responder al diálogo por cuenta propia: confiar en un
+            -- directorio es una decisión de seguridad del humano. Ni teclas,
+            -- ni config, ni banderas de Claude. Solo detectar y avisar.
+            vim.system(M.build_focus_agent_argv(), { text = true }, function() end)
+            vim.schedule(function()
+              vim.notify(
+                "[mesh-review] scribe: Claude pide confirmación de confianza en la carpeta."
+                .. " Acepta el diálogo en el pane scribe y vuelve a pulsar <líder>rs.",
+                vim.log.levels.WARN
+              )
+            end)
+            return
+          end
+          do_prompt(prompt_text, true)
+          -- Red de seguridad barata: si el diálogo no se detectó pero el
+          -- agente desaparece poco después de recibir el prompt, es probable
+          -- que el texto del diálogo haya cambiado y la detección haya fallado.
+          -- Comprobar unos segundos más tarde sin bloquear el editor.
+          vim.schedule(function()
+            vim.defer_fn(function()
+              vim.system(M.build_get_argv(), { text = true }, function(chk)
+                local p = M.parse_herdr_response(M.pick_payload(chk.stdout, chk.stderr))
+                if not p.ok and p.error_code == "agent_not_found" then
+                  vim.schedule(function()
+                    vim.notify(
+                      "[mesh-review] scribe: la sesión desapareció al recibir el prompt."
+                      .. " Causa probable: diálogo de confianza de carpeta no aceptado."
+                      .. " Acepta la confianza en el pane scribe y vuelve a pulsar <líder>rs.",
+                      vim.log.levels.WARN
+                    )
+                  end)
+                end
+              end)
+            end, 4000)
+          end)
+        end)
       end)
     end)
   end)

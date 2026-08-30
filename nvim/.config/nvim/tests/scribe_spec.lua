@@ -310,6 +310,117 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- build_read_pane_argv
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== build_read_pane_argv ===\n")
+
+do
+  local got = scribe.build_read_pane_argv("wB:p3", 30)
+  eq_argv("argv de read_pane",
+    got,
+    { "herdr", "pane", "read", "wB:p3", "--source", "visible", "--lines", "30" })
+end
+
+-- El número de líneas se convierte a cadena (argv no acepta enteros).
+do
+  local got = scribe.build_read_pane_argv("x:p1", 20)
+  eq("read_pane: lines como string", got[8], "20")
+  eq("longitud de read_pane argv = 8", #got, 8)
+end
+
+-- El pane_id llega como cuarto elemento.
+do
+  local got = scribe.build_read_pane_argv("mi-pane", 10)
+  eq("read_pane: pane_id en posición 4", got[4], "mi-pane")
+end
+
+-- ---------------------------------------------------------------------------
+-- build_focus_agent_argv
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== build_focus_agent_argv ===\n")
+
+do
+  local got = scribe.build_focus_agent_argv()
+  eq_argv("argv de focus agent",
+    got,
+    { "herdr", "agent", "focus", "scribe" })
+end
+
+eq("longitud de focus_agent argv = 4", #scribe.build_focus_agent_argv(), 4)
+
+-- ---------------------------------------------------------------------------
+-- is_trust_dialog
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== is_trust_dialog ===\n")
+
+-- Fixture real: pantalla del diálogo de confianza de Claude Code.
+-- Captura literal tomada del pane cuando el directorio aún no era de confianza.
+local TRUST_DIALOG_SCREEN = table.concat({
+  " or work from your team). If",
+  " not, take a moment to review",
+  " what's in this folder first.",
+  " Claude Code'll be able to read,",
+  " edit, and execute files here.",
+  " Security guide",
+  " \xe2\x9d\xaf No, exit",
+  "   Yes, I trust this folder",
+  " Enter to confirm \xc2\xb7 Esc to",
+  " cancel",
+}, "\n")
+
+-- Fixture real: pantalla de una sesión ya lista (directorio de confianza).
+local READY_SESSION_SCREEN = table.concat({
+  "               \xe2\x97\x89 xhigh \xc2\xb7 /effort",
+  "\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80",
+  "\xe2\x9d\xaf",
+  "\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80",
+  "   Opus 5 (1M context) \xe2\x97\x87 scrib\xe2\x80\xa6",
+  "  \xe2\x8f\xb5\xe2\x8f\xb5 auto mode on (shift+tab  \xc2\xb7",
+}, "\n")
+
+-- Diálogo real detectado.
+eq("diálogo: detectado (fixture real)", scribe.is_trust_dialog(TRUST_DIALOG_SCREEN), true)
+
+-- Sesión ya lista: no debe dar positivo.
+eq("sesión lista: no detectado (fixture real)", scribe.is_trust_dialog(READY_SESSION_SCREEN), false)
+
+-- Pantalla vacía: no debe dar positivo.
+eq("vacío: no detectado", scribe.is_trust_dialog(""), false)
+
+-- nil no es string: función defensiva, no debe fallar.
+-- (La función exige string; nil representa fallo upstream al leer el pane.)
+eq("nil: no detectado (tipo inválido)", scribe.is_trust_dialog(nil), false)
+
+-- Un solo marcador no basta para dar positivo: exige al menos dos.
+eq("un marcador (No, exit): no detectado",
+  scribe.is_trust_dialog("Texto cualquiera con No, exit sin más contexto"),
+  false)
+eq("un marcador (Yes, I trust this folder): no detectado",
+  scribe.is_trust_dialog("Línea que dice Yes, I trust this folder aquí"),
+  false)
+eq("un marcador (Enter to confirm): no detectado",
+  scribe.is_trust_dialog("Pulsa Enter to confirm para continuar"),
+  false)
+
+-- Dos marcadores son suficientes para dar positivo.
+eq("dos marcadores (No, exit + Enter to confirm): detectado",
+  scribe.is_trust_dialog("No, exit\nEnter to confirm"),
+  true)
+eq("dos marcadores (Yes, I trust this folder + No, exit): detectado",
+  scribe.is_trust_dialog("Yes, I trust this folder\nNo, exit"),
+  true)
+
+-- Los tres marcadores juntos: positivo.
+eq("tres marcadores: detectado",
+  scribe.is_trust_dialog("No, exit\nYes, I trust this folder\nEnter to confirm"),
+  true)
+
+-- Documento que contiene texto de revisión pero sin los marcadores del diálogo.
+eq("texto de revisión sin marcadores: no detectado",
+  scribe.is_trust_dialog("## Revisión\nEste documento analiza el código del proyecto.\nVer los hilos pendientes."),
+  false)
+
+-- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------
 io.stderr:write(string.format("\n%d passed, %d failed\n", pass, fail))
