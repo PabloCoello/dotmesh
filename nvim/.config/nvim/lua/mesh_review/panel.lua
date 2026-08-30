@@ -17,6 +17,11 @@
 local M = {}
 
 --- Estado del panel (singleton: solo un panel abierto a la vez).
+--- Prefijo del nombre de los buffers del panel. Sirve para reconocerlos: el
+--- panel es un buffer con nombre, y sin esto `<leader>rp` pulsado desde dentro
+--- del propio panel lo tomaría por un documento y volvería a prefijarlo.
+M.PANEL_PREFIX = "mesh-review://"
+
 local _state = {
   bufnr        = nil,  -- número de buffer del panel
   winid        = nil,  -- ventana del panel
@@ -27,6 +32,24 @@ local _state = {
 
 local SEPARATOR_THREAD = string.rep("═", 46)
 local SEPARATOR_HDR    = string.rep("─", 20)
+
+--- ¿Es este buffer el panel? Se usa para que los comandos que parten del buffer
+--- actual sepan reconducirse al documento fuente.
+---
+--- @param bufnr number|nil  Buffer a comprobar (por defecto, el actual).
+--- @return boolean
+function M.is_panel(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(bufnr) then return false end
+  return vim.api.nvim_buf_get_name(bufnr):sub(1, #M.PANEL_PREFIX) == M.PANEL_PREFIX
+end
+
+--- Documento que originó el panel abierto, o nil si no hay ninguno.
+---
+--- @return string|nil
+function M.source_doc()
+  return _state.source_doc
+end
 
 --- Devuelve el thread_id del hilo cuyo bloque contiene la línea actual del cursor.
 --- Busca hacia atrás desde el cursor la última línea registrada en _line_to_thread.
@@ -73,6 +96,29 @@ end
 ---
 --- @param threads table  Array de hilos (salida de cli.project).
 --- @return string[], table, table  lines, highlights, line_to_thread
+--- Parte un texto en líneas aptas para nvim_buf_set_lines, que rechaza cualquier
+--- cadena con saltos de línea. Un cuerpo multilínea es normal: `mesh-review open
+--- --body` acepta saltos de línea, así que llegan por la vía corriente, no solo
+--- desde un sidecar manipulado. Sin esto, un único comentario de dos líneas
+--- aborta el render del panel entero.
+---
+--- Los caracteres de control restantes (tabuladores, retornos de carro sueltos)
+--- se sustituyen por espacios para no descuadrar las columnas.
+---
+--- @param texto string|nil
+--- @return string[]  Al menos un elemento.
+local function _split_lines(texto)
+  local limpio = (texto or ""):gsub("\r\n", "\n"):gsub("[\r\t]", " ")
+  limpio = limpio:gsub("%c", function(c) return c == "\n" and c or " " end)
+
+  local partes = {}
+  for trozo in (limpio .. "\n"):gmatch("([^\n]*)\n") do
+    table.insert(partes, trozo)
+  end
+  if #partes == 0 then partes = { "" } end
+  return partes
+end
+
 local function _build_content(threads)
   local lines         = {}
   local highlights    = {}
@@ -103,7 +149,10 @@ local function _build_content(threads)
 
     -- Línea de encabezado: [open] <tid_short> (tipo · autor · fecha)
     local hdr_lnum = #lines  -- 0-indexed
-    local hdr = string.format("[open] %s (%s · %s · %s)", tid_short, ctype, author, date)
+    local hdr = string.format("[open] %s (%s · %s · %s)", tid_short,
+      table.concat(_split_lines(ctype), " "),
+      table.concat(_split_lines(author), " "),
+      table.concat(_split_lines(date), " "))
     table.insert(lines, hdr)
     line_to_thread[hdr_lnum] = thread.thread_id
 
@@ -113,7 +162,9 @@ local function _build_content(threads)
 
     -- Cita (si existe).
     if quote ~= "" then
-      local quote_line = '  "' .. quote .. '"'
+      -- La cita se colapsa a una línea: en una tarjeta de hilo interesa el
+      -- fragmento anclado, no su maquetación.
+      local quote_line = '  "' .. table.concat(_split_lines(quote), " ") .. '"'
       table.insert(lines, quote_line)
       table.insert(highlights, { "String", #lines - 1, 0, #quote_line })
     end
@@ -127,10 +178,17 @@ local function _build_content(threads)
       if not msg.retracted then
         local msg_author = _fmt_author(msg.author)
         local prefix     = "  [" .. msg_author .. "] "
-        local body_line  = prefix .. (msg.body or "")
-        table.insert(lines, body_line)
-        -- Author en "Comment", body en "Normal" (sin highlight adicional).
+        local cuerpo     = _split_lines(msg.body)
+
+        -- Primera línea con el autor delante; las siguientes, indentadas hasta
+        -- donde empieza el texto, para que el cuerpo se lea como un bloque.
+        table.insert(lines, prefix .. cuerpo[1])
         table.insert(highlights, { "Comment", #lines - 1, 0, #prefix })
+
+        local sangria = string.rep(" ", #prefix)
+        for i = 2, #cuerpo do
+          table.insert(lines, sangria .. cuerpo[i])
+        end
       end
     end
 
@@ -249,7 +307,7 @@ end
 --- @param doc string  Ruta del documento fuente.
 function M.open(doc)
   local source_bufnr = vim.api.nvim_get_current_buf()
-  local buf_name     = "mesh-review://" .. doc
+  local buf_name     = M.PANEL_PREFIX .. doc
 
   -- Buscar si ya existe un buffer con ese nombre.
   local existing_bufnr = nil
@@ -297,7 +355,6 @@ function M.open(doc)
   end
 
   _state.bufnr        = panel_bufnr
-  _state.source_bufnr = source_bufnr
   _state.source_doc   = doc
 
   -- Registrar keymaps del panel.

@@ -22,8 +22,17 @@ local utf    = require("mesh_review.utf")
 --- Evita registrar los keymaps y comandos más de una vez.
 local _setup_done = false
 
---- Obtiene la ruta absoluta del buffer actual. Devuelve nil si no es un fichero real.
+--- Obtiene la ruta absoluta del documento sobre el que operar. Devuelve nil si el
+--- buffer actual no corresponde a ningún fichero.
+---
+--- Si el buffer actual ES el panel, devuelve el documento que lo originó. Sin
+--- esto, pulsar el atajo del panel estando dentro del panel tomaría su nombre
+--- ("mesh-review://<ruta>") por un documento, lo volvería a prefijar y acabaría
+--- pidiendo los hilos de una ruta inexistente: el panel se vaciaba.
 local function _current_doc()
+  if panel.is_panel(0) then
+    return panel.source_doc()
+  end
   local name = vim.api.nvim_buf_get_name(0)
   if name == "" then return nil end
   return name
@@ -102,9 +111,9 @@ function M.prompt_scribe()
     return
   end
   local doc = _current_doc() or ""
-  -- Forma de lista: doc es un argumento argv separado, sin pasar por shell.
-  -- La concatenación construye el texto del prompt en Lua, que herdr recibe como
-  -- un único argumento de argv (no hay inyección posible).
+  -- Forma de lista: la concatenación arma el texto del prompt en Lua y herdr lo
+  -- recibe como UN solo argumento de argv. No pasa por el shell, así que una ruta
+  -- con espacios o comillas viaja intacta y no hay inyección posible.
   vim.system({ "herdr", "agent", "prompt", "scribe", "Revisa " .. doc },
     { text = true },
     function(result)

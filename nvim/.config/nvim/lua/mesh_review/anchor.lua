@@ -89,8 +89,15 @@ end
 --- Refresca los extmarks del buffer: llama a cli.project y recoloca las marcas.
 --- Llamado desde panel.open() y después de operaciones de escritura.
 ---
+--- El buffer puede haber dejado de existir: el panel sigue abierto cuando se
+--- cierra el documento que lo originó, y sus atajos siguen llamando aquí. La
+--- guarda va en refresh y no en cada punto de llamada para que valga también
+--- para los que se añadan después.
+---
 --- @param bufnr number  Buffer de Neovim.
 function M.refresh(bufnr)
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then return end
+
   local doc = vim.api.nvim_buf_get_name(bufnr)
   if doc == "" then return end
 
