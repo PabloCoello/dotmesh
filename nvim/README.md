@@ -81,11 +81,28 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 
 ### Revisión (mesh-review)
 
-| Atajo | Modo | Acción |
+**Modo normal:**
+
+| Atajo | Acción |
+|---|---|
+| `<Espacio>rp` | Abrir panel de revisión del fichero actual |
+| `<Espacio>rs` | Enviar prompt a scribe (requiere `HERDR_ENV=1`) |
+
+**Modo visual** (sobre una selección de texto):
+
+| Atajo | Tipo | Confianza requerida |
 |---|---|---|
-| `<Espacio>rp` | Normal | Abrir panel de revisión del fichero actual |
-| `<Espacio>ro` | Visual | Abrir hilo de revisión en la selección |
-| `<Espacio>rs` | Normal | Enviar prompt a scribe (requiere `HERDR_ENV=1`) |
+| `<Espacio>ro` | Selector interactivo (leyenda + una tecla) | según tipo |
+| `<Espacio>re` | edita | no |
+| `<Espacio>rs` | sugerencia | no |
+| `<Espacio>rp` | pregunta | no |
+| `<Espacio>rv` | verifica | sí (segunda tecla: `a` alta · `m` media · `b` baja) |
+| `<Espacio>rn` | nota | no |
+| `<Espacio>rr` | referencia | no |
+| `<Espacio>ru` | supuesto | sí (segunda tecla: `a` alta · `m` media · `b` baja) |
+
+`<Espacio>rs` y `<Espacio>rp` existen en modo normal y visual con acciones
+distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 
 **Keymaps locales del panel** (buffer `mesh-review://…`):
 
