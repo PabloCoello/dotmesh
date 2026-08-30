@@ -284,6 +284,36 @@ do
   eq("v:maxcol (2147483647) acota a fin de línea", utf.to_utf16(b, 0, 2147483647), 5)
 end
 
+-- Posición a mitad de un carácter multibyte. No es un caso teórico: el CLI
+-- guarda offsets calculados sobre otra copia del documento, así que un fichero
+-- editado por fuera puede devolver una posición que ya no cae en un límite de
+-- carácter. Ambas funciones redondean hacia el siguiente límite en vez de fallar.
+do
+  local b = make_buf({ "a\240\159\142\137b" })   -- "a🎉b": a=1 byte, 🎉=4, b=1
+  -- Bytes 2 y 3 están dentro de los cuatro del emoji; el límite siguiente es
+  -- el final del emoji, en la unidad UTF-16 número 3.
+  eq("to_utf16 a mitad de emoji (col=2)", utf.to_utf16(b, 0, 2), 3)
+  eq("to_utf16 a mitad de emoji (col=3)", utf.to_utf16(b, 0, 3), 3)
+end
+
+-- El emoji ocupa DOS unidades UTF-16 (par sustituto): los índices 1 y 2. Un
+-- offset de 2 apunta al segundo código del par, es decir, a mitad del carácter.
+-- str_byteindex redondea al byte donde empieza el carácter siguiente: el 5.
+do
+  local b = make_buf({ "a\240\159\142\137b" })
+  eq_pos("from_utf16 en el 2.o codigo del par (2)", utf.from_utf16(b, 2), { row = 0, col = 5 })
+  eq_pos("from_utf16 justo antes del emoji (1)", utf.from_utf16(b, 1), { row = 0, col = 1 })
+end
+
+-- Última posición del buffer: el offset del final del último carácter tiene que
+-- volver a su sitio, no caerse por el borde ni devolver nil.
+do
+  local b = make_buf({ "hello" })
+  local off = utf.to_utf16(b, 0, 5)
+  eq("offset del final del buffer", off, 5)
+  eq_pos("ida y vuelta en el final del buffer", utf.from_utf16(b, off), { row = 0, col = 5 })
+end
+
 -- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------

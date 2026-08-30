@@ -76,10 +76,12 @@ end
 --- último carácter). Esto es simétrico con to_utf16: entradas inválidas no propagan
 --- errores.
 ---
---- Redondeo en mitad de par sustituto: si offset cae en el segundo código del par
---- sustituto de un emoji (p. ej. offset=2 para el 🎉 de "a🎉b"), str_byteindex
---- devuelve el byte de inicio del siguiente carácter, redondeando hacia adelante.
---- El comportamiento es simétrico con to_utf16.
+--- Un carácter fuera del BMP ocupa DOS unidades UTF-16 (par sustituto), así que
+--- hay offsets enteros que apuntan a su segunda mitad. En "a🎉b" el emoji ocupa
+--- las unidades 1 y 2: un offset de 2 señala el segundo código del par, es decir,
+--- el interior del carácter. En ese caso str_byteindex redondea hacia adelante y
+--- devuelve el byte donde empieza el carácter siguiente (aquí, 5). to_utf16 hace
+--- lo simétrico con una columna que cae dentro de un carácter multibyte.
 ---
 --- @param bufnr  number  Número de buffer de Neovim.
 --- @param offset number  Offset en unidades de código UTF-16 desde el inicio del fichero.
