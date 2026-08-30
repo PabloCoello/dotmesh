@@ -370,12 +370,27 @@ local function create_session_and_prompt(prompt_text, pane_id, cwd)
         -- que hay que comprobarlo explícitamente. La salida de pane read es
         -- texto plano, no JSON: no pasa por parse_herdr_response.
         vim.system(M.build_read_pane_argv(new_pane_id, 30), { text = true }, function(read_result)
+          -- Si la lectura falla no se puede saber si hay diálogo, y una pantalla
+          -- vacía se leería como «no hay»: el prompt saldría a ciegas y su Enter
+          -- confirmaría el «No, exit» que el diálogo trae preseleccionado,
+          -- matando la sesión. Ante la duda no se envía; el usuario decide.
+          if read_result.code ~= 0 then
+            notify_error(
+              "no se pudo leer la pantalla del pane ("
+              .. vim.trim(read_result.stderr or ("código " .. tostring(read_result.code)))
+              .. "). No se ha enviado nada: comprueba el pane scribe y vuelve a pulsar <líder>rs."
+            )
+            return
+          end
           local screen = vim.trim(read_result.stdout or "")
           if M.is_trust_dialog(screen) then
             -- Enfocar el pane para que el usuario vea el diálogo sin buscarlo.
             -- NUNCA responder al diálogo por cuenta propia: confiar en un
             -- directorio es una decisión de seguridad del humano. Ni teclas,
             -- ni config, ni banderas de Claude. Solo detectar y avisar.
+            -- Callback vacío a propósito: enfocar es una cortesía, no un paso
+            -- del que dependa nada. Si falla, el aviso de abajo sigue diciendo
+            -- al usuario dónde mirar.
             vim.system(M.build_focus_agent_argv(), { text = true }, function() end)
             vim.schedule(function()
               vim.notify(

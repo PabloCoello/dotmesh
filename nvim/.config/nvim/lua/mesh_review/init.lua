@@ -264,7 +264,14 @@ function M.prompt_scribe()
     vim.notify("[mesh-review] HERDR_ENV no está activo", vim.log.levels.WARN)
     return
   end
-  local doc = _current_doc() or ""
+  -- Sin documento no hay nada que pedirle a scribe: un buffer sin nombre
+  -- generaría el prompt absurdo «los hilos pendientes del documento ''» y
+  -- levantaría una sesión para nada.
+  local doc = _current_doc()
+  if not doc or doc == "" then
+    vim.notify("[mesh-review] El buffer no tiene nombre de fichero", vim.log.levels.WARN)
+    return
+  end
   scribe.ensure_and_prompt(doc)
 end
 
