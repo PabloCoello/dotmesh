@@ -45,15 +45,27 @@ make_transcripts() {
 }
 
 # Ejecuta el hook. $1 = comando, $2 = transcript del padre, $3 = agent_id (vacío
-# para el orquestador). Devuelve el additionalContext, o cadena vacía.
+# para el orquestador), $4 = TMPDIR (opcional, para encadenar dos intentos del
+# mismo agente). Devuelve el additionalContext por stdout.
+#
+# El código de salida y el stderr van a fichero, no a variables: la función se
+# llama dentro de una sustitución de comandos, que es una subshell, y una
+# asignación ahí no llega al proceso de la prueba.
 run_gate() {
-  local cmd="$1" tp="$2" aid="${3:-}" input out
+  local cmd="$1" tp="$2" aid="${3:-}" td="${4:-}" input out errf
+  [ -z "$td" ] && td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
+  errf="$TMP/last_err"
   input=$(jq -nc --arg c "$cmd" --arg t "$tp" --arg a "$aid" \
-    '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c},transcript_path:$t}
+    '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c},transcript_path:$t,session_id:"sesion-1"}
      + (if $a == "" then {} else {agent_id:$a,agent_type:"build"} end)')
-  out=$(printf '%s' "$input" | bash "$GATE" 2>/dev/null || true)
+  set +e
+  out=$(printf '%s' "$input" | TMPDIR="$td" bash "$GATE" 2>"$errf")
+  printf '%s' "$?" > "$TMP/last_rc"
+  set -e
   printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null || printf ''
 }
+gate_rc() { cat "$TMP/last_rc" 2>/dev/null || echo 0; }
+gate_err() { cat "$TMP/last_err" 2>/dev/null || true; }
 
 section "sintaxis"
 if bash -n "$GATE"; then pass "remind-review-gate.sh compila"; else fail "remind-review-gate.sh no compila"; fi
@@ -79,26 +91,38 @@ msg=$(run_gate 'git commit -m "esto no es un git commit de verdad"' "$tp")
 [ -n "$msg" ] && pass "el commit se detecta pese al mensaje que lo menciona" || fail "el mensaje entrecomillado tapó el commit"
 
 section "subagente"
+# Bloquea el primer commit sin autocomprobación: additionalContext llega después
+# de que la herramienta haya corrido, así que no sirve como gate.
+td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
 tp=$(make_transcripts no no)
-msg=$(run_gate 'git commit -m "algo"' "$tp" abc123)
-case "$msg" in
-  *code-review-and-quality*)
-    case "$msg" in
-      *"lanza el subagente"*) fail "al subagente se le pide delegar, y no puede" ;;
-      *) pass "sin evidencia, pide cargar la skill sobre su propio diff" ;;
-    esac ;;
-  "") fail "subagente sin evidencia, no avisó" ;;
-  *) fail "mensaje inesperado: $msg" ;;
-esac
+msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+if [ "$(gate_rc)" -eq 2 ]; then
+  case "$(gate_err)" in
+    *"lanza el subagente"*) fail "al subagente se le pide delegar, y no puede" ;;
+    *code-review-and-quality*) pass "sin evidencia, bloquea y pide cargar la skill" ;;
+    *) fail "bloqueó con un mensaje inesperado: $(gate_err)" ;;
+  esac
+else
+  fail "sin evidencia, no bloqueó (rc=$(gate_rc))"
+fi
+
+# El segundo intento del mismo agente pasa: bloquear en bucle sería peor que no
+# bloquear.
+msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+if [ "$(gate_rc)" -eq 0 ] && [ -n "$msg" ]; then
+  pass "el segundo intento pasa con aviso, sin bucle"
+else
+  fail "el segundo intento no debería bloquear (rc=$(gate_rc))"
+fi
 
 # La regresión que motiva el arreglo: la evidencia del padre no vale por el hijo.
 tp=$(make_transcripts si no)
 msg=$(run_gate 'git commit -m "algo"' "$tp" abc123)
-[ -n "$msg" ] && pass "la evidencia del padre no exime al subagente" || fail "el subagente pasó con la evidencia del padre"
+[ "$(gate_rc)" -eq 2 ] && pass "la evidencia del padre no exime al subagente" || fail "el subagente pasó con la evidencia del padre"
 
 tp=$(make_transcripts no si)
 msg=$(run_gate 'git commit -m "algo"' "$tp" abc123)
-[ -z "$msg" ] && pass "con la skill en su propio transcript, calla" || fail "avisó pese a la evidencia propia"
+{ [ "$(gate_rc)" -eq 0 ] && [ -z "$msg" ]; } && pass "con la skill en su propio transcript, calla" || fail "avisó pese a la evidencia propia"
 
 section "fallo abierto"
 tp=$(make_transcripts no no)

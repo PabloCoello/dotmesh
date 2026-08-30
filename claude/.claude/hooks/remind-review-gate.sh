@@ -15,10 +15,12 @@
 # it to launch `review` asks for something it cannot do; it is asked to load the
 # skill over its own diff instead.
 #
-# It never blocks: non-blocking additionalContext + exit 0. No jq, no transcript,
-# or any error fails open so commits are never broken. The check is per-session
-# and lenient by design (once review has run, later commits pass) to avoid
-# nagging the per-slice commit flow.
+# For the orchestrator it never blocks: non-blocking additionalContext + exit 0.
+# Inside a subagent it blocks the first commit that lacks the self-check, and
+# only the first: additionalContext arrives after the tool has already run, so it
+# cannot gate a commit. No jq, no transcript, or any error fails open so commits
+# are never broken. The check is lenient by design (once the gate has run, later
+# commits pass) to avoid nagging the per-slice commit flow.
 #
 # Stowed by claude/ to ~/.claude/hooks/ and registered in settings.json under
 # hooks.PreToolUse (matcher "Bash"), after block-dangerous-git.sh.
@@ -78,6 +80,7 @@ tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 # up in a filesystem path.
 aid=$(printf '%s' "$input" | jq -r '.agent_id // empty' | tr -cd 'A-Za-z0-9_-')
 own=""
+is_subagent=0
 [ -n "$aid" ] && own="${tp%.jsonl}/subagents/agent-${aid}.jsonl"
 
 # Degrade to the orchestrator branch when the subagent transcript is not where
@@ -86,13 +89,15 @@ own=""
 # layout ever changes.
 if [ -n "$own" ] && [ -f "$own" ]; then
   tp="$own"
+  is_subagent=1
   # A subagent cannot delegate, so only the skill counts as evidence here.
   evidence='"skill"[[:space:]]*:[[:space:]]*"code-review-and-quality"'
   read -r -d '' msg <<'EOF' || true
-Recordatorio dotmesh: vas a commitear y no consta que hayas cargado
-code-review-and-quality en esta tarea. Cárgala con la herramienta Skill sobre tu
-propio diff antes de commitear, y security-and-hardening si la superficie lo
-pide. No puedes delegar: el gate bloqueante lo corre el orquestador después.
+Bloqueado por dotmesh: vas a commitear y no consta que hayas cargado
+code-review-and-quality en esta tarea. Carga la skill con la herramienta Skill,
+revisa tu propio diff con ella (y security-and-hardening si la superficie lo
+pide) y repite el commit. No puedes delegar: el gate bloqueante lo corre el
+orquestador después. Este bloqueo ocurre una sola vez por tarea.
 EOF
 else
   # The bare string "code-review-and-quality" appears in the session from the
@@ -109,6 +114,36 @@ fi
 
 if grep -qEm 1 "$evidence" "$tp" 2>/dev/null; then
   exit 0
+fi
+
+# Inside a subagent the reminder has to block, once. Measured 2026-08-31 with the
+# harness: with a non-blocking reminder the nine delegated `build` all loaded
+# code-review-and-quality, but eight of the nine loaded it in the step right
+# after their first commit. additionalContext lands after the tool has already
+# run, so a commit gate cannot be built on it. Exit 2 stops the commit and hands
+# stderr back to the agent, which then loads the skill and retries.
+#
+# Only the first attempt blocks: the marker is written before exiting, so an
+# agent that will not load the skill still gets its commit through on the retry
+# and nothing deadlocks. The orchestrator is never blocked; it owns the decision
+# and has the review subagent for it.
+if [ "$is_subagent" -eq 1 ]; then
+  sid=$(printf '%s' "$input" | jq -r '.session_id // empty' | tr -cd 'A-Za-z0-9_-')
+  [ -z "$sid" ] && sid="nosession"
+  marker="${TMPDIR:-/tmp}/dotmesh-review-gate-${sid}-${aid}"
+  # Honour the marker only if it is ours, so a world-writable /tmp cannot be
+  # pre-seeded to disable the block. When stat cannot tell (portability), trust
+  # the marker: repeating the block is worse than skipping it.
+  owner=$(stat -c %u "$marker" 2>/dev/null || stat -f %u "$marker" 2>/dev/null || true)
+  blocked_before=0
+  if [ -e "$marker" ] && { [ -z "$owner" ] || [ "$owner" = "$(id -u)" ]; }; then
+    blocked_before=1
+  fi
+  if [ "$blocked_before" -eq 0 ]; then
+    : > "$marker" 2>/dev/null || true
+    printf '%s\n' "$msg" >&2
+    exit 2
+  fi
 fi
 
 jq -nc --arg ctx "$msg" \
