@@ -1058,6 +1058,218 @@ function printUsage4() {
   );
 }
 
+// src/cli/commands/resolve.ts
+import { randomUUID as randomUUID6 } from "node:crypto";
+import * as path8 from "node:path";
+var RESOLVE_KNOWN_FLAGS = /* @__PURE__ */ new Set(["author", "model", "effort", "subagent"]);
+async function runResolve(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage5();
+    return;
+  }
+  const { flags, positionals } = parseCliArgs(argv, RESOLVE_KNOWN_FLAGS, "resolve");
+  const doc = positionals[0];
+  const threadId = positionals[1];
+  const author = flags.get("author") ?? "human";
+  const model = flags.get("model");
+  const effort = flags.get("effort");
+  const subagent = flags.get("subagent");
+  if (!doc) {
+    process.stderr.write("mesh-review resolve: se requiere <doc>\n");
+    process.exit(1);
+  }
+  if (!threadId) {
+    process.stderr.write("mesh-review resolve: se requiere <thread_id>\n");
+    process.exit(1);
+  }
+  if (!isUuid(threadId)) {
+    process.stderr.write(`mesh-review resolve: thread_id no es un UUID v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  if (author !== "human" && author !== "ai") {
+    process.stderr.write(`mesh-review resolve: --author debe ser "human" o "ai": ${author}
+`);
+    process.exit(1);
+  }
+  if (author === "ai" && !model) {
+    process.stderr.write("mesh-review resolve: --author ai requiere --model\n");
+    process.exit(1);
+  }
+  const docAbs = path8.resolve(doc);
+  const gitRoot = await getGitRoot(path8.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const docRelPath = path8.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const eventDir = path8.join(gitRoot, ".ai", "review", docRelPath);
+  let authorObj;
+  if (author === "ai") {
+    authorObj = {
+      kind: "ai",
+      model,
+      ...effort !== void 0 ? { effort } : {},
+      ...subagent !== void 0 ? { subagent } : {}
+    };
+  } else {
+    const name = await getUserName(path8.dirname(docAbs));
+    authorObj = name !== void 0 ? { kind: "human", name } : { kind: "human" };
+  }
+  const id = randomUUID6();
+  const ev = {
+    id,
+    version: 2,
+    type: "thread.status-changed",
+    thread_id: threadId,
+    author: authorObj,
+    created_at: utcTimestampMs(),
+    commit: await getHeadSha(gitRoot),
+    dirty: false,
+    to: "resolved"
+  };
+  await emitEvent(eventDir, ev);
+  process.stdout.write(`${id}
+`);
+}
+function printUsage5() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review resolve <doc> <thread_id>",
+      "         [--author human|ai] [--model <id>]",
+      "         [--effort <str>] [--subagent <str>]",
+      "",
+      "Cierra un hilo de revisi\xF3n emitiendo thread.status-changed to=resolved.",
+      "Imprime el UUID del nuevo evento en stdout.",
+      "",
+      "  --author ai requiere --model.",
+      "",
+      "Salida:",
+      "  stdout: UUID del evento thread.status-changed",
+      "",
+      "Ejemplo:",
+      "  mesh-review resolve docs/SPEC.md <uuid>"
+    ].join("\n") + "\n"
+  );
+}
+
+// src/cli/commands/retract.ts
+import { randomUUID as randomUUID7 } from "node:crypto";
+import * as path9 from "node:path";
+var RETRACT_KNOWN_FLAGS = /* @__PURE__ */ new Set(["reason", "author", "model", "effort", "subagent"]);
+async function runRetract(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage6();
+    return;
+  }
+  const { flags, positionals } = parseCliArgs(argv, RETRACT_KNOWN_FLAGS, "retract");
+  const doc = positionals[0];
+  const threadId = positionals[1];
+  const messageId = positionals[2];
+  const reason = flags.get("reason");
+  const author = flags.get("author") ?? "human";
+  const model = flags.get("model");
+  const effort = flags.get("effort");
+  const subagent = flags.get("subagent");
+  if (!doc) {
+    process.stderr.write("mesh-review retract: se requiere <doc>\n");
+    process.exit(1);
+  }
+  if (!threadId) {
+    process.stderr.write("mesh-review retract: se requiere <thread_id>\n");
+    process.exit(1);
+  }
+  if (!isUuid(threadId)) {
+    process.stderr.write(`mesh-review retract: thread_id no es un UUID v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  if (!messageId) {
+    process.stderr.write("mesh-review retract: se requiere <message_id>\n");
+    process.exit(1);
+  }
+  if (!isUuid(messageId)) {
+    process.stderr.write(`mesh-review retract: message_id no es un UUID v\xE1lido: ${messageId}
+`);
+    process.exit(1);
+  }
+  if (author !== "human" && author !== "ai") {
+    process.stderr.write(`mesh-review retract: --author debe ser "human" o "ai": ${author}
+`);
+    process.exit(1);
+  }
+  if (author === "ai" && !model) {
+    process.stderr.write("mesh-review retract: --author ai requiere --model\n");
+    process.exit(1);
+  }
+  const docAbs = path9.resolve(doc);
+  const gitRoot = await getGitRoot(path9.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const docRelPath = path9.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const eventDir = path9.join(gitRoot, ".ai", "review", docRelPath);
+  let authorObj;
+  if (author === "ai") {
+    authorObj = {
+      kind: "ai",
+      model,
+      ...effort !== void 0 ? { effort } : {},
+      ...subagent !== void 0 ? { subagent } : {}
+    };
+  } else {
+    const name = await getUserName(path9.dirname(docAbs));
+    authorObj = name !== void 0 ? { kind: "human", name } : { kind: "human" };
+  }
+  const id = randomUUID7();
+  const ev = {
+    id,
+    version: 2,
+    type: "message.retracted",
+    thread_id: threadId,
+    author: authorObj,
+    created_at: utcTimestampMs(),
+    commit: await getHeadSha(gitRoot),
+    dirty: false,
+    target_message_id: messageId,
+    ...reason !== void 0 ? { reason } : {}
+  };
+  await emitEvent(eventDir, ev);
+  process.stdout.write(`${id}
+`);
+}
+function printUsage6() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review retract <doc> <thread_id> <message_id>",
+      "         [--reason <texto>]",
+      "         [--author human|ai] [--model <id>]",
+      "         [--effort <str>] [--subagent <str>]",
+      "",
+      "Retracta un mensaje del hilo emitiendo message.retracted.",
+      "Imprime el UUID del nuevo evento en stdout.",
+      "",
+      "  --author ai requiere --model.",
+      "  --reason es opcional.",
+      "",
+      "Salida:",
+      "  stdout: UUID del evento message.retracted",
+      "",
+      "Ejemplo:",
+      '  mesh-review retract docs/SPEC.md <thread-uuid> <msg-uuid> --reason "Error tipogr\xE1fico"'
+    ].join("\n") + "\n"
+  );
+}
+
 // src/cli/main.ts
 async function main(argv = process.argv.slice(2)) {
   const [subcommand, ...rest] = argv;
@@ -1080,13 +1292,19 @@ async function main(argv = process.argv.slice(2)) {
     case "reply":
       await runReply(rest);
       break;
+    case "resolve":
+      await runResolve(rest);
+      break;
+    case "retract":
+      await runRetract(rest);
+      break;
     default:
-      printUsage5();
+      printUsage7();
       if (subcommand !== void 0) process.exit(1);
       break;
   }
 }
-function printUsage5() {
+function printUsage7() {
   process.stderr.write(
     [
       "Uso: mesh-review <subcomando> [argumentos]",

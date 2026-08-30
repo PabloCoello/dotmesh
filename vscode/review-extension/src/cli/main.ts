@@ -11,6 +11,8 @@ import { runReanchor } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
 import { runReply } from './commands/reply.ts';
+import { runResolve } from './commands/resolve.ts';
+import { runRetract } from './commands/retract.ts';
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const [subcommand, ...rest] = argv;
@@ -33,6 +35,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'reply':
       await runReply(rest);
+      break;
+    case 'resolve':
+      await runResolve(rest);
+      break;
+    case 'retract':
+      await runRetract(rest);
       break;
     default:
       printUsage();

@@ -26,6 +26,8 @@ import { reanchorThreads } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
 import { runReply } from './commands/reply.ts';
+import { runResolve } from './commands/resolve.ts';
+import { runRetract } from './commands/retract.ts';
 import { writeFile } from 'node:fs/promises';
 
 const execFileAsync = promisify(execFile);
@@ -1470,6 +1472,265 @@ test('reply: thread_id no UUID → exit 1', async () => {
       runReply([docAbs, 'no-es-uuid', '--body', 'Respuesta'])
     );
     assert.strictEqual(code, 1, 'thread_id inválido → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// resolve (Fase 4)
+// ---------------------------------------------------------------------------
+
+test('resolve: happy path → project muestra status resolved', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+
+    // Open a thread first so the event dir and thread exist
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
+    let evId: string | undefined;
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const written: string[] = [];
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runResolve([docAbs, tid]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    evId = written.join('').trim();
+    assert.ok(evId && evId.length > 0, 'imprime event id');
+
+    const events = await readEvents(eventDir);
+    const threads = project(events);
+    assert.strictEqual(threads[0].status, 'resolved', 'status resolved');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: doble llamada no lanza, hilo queda resuelto', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
+    await runResolve([docAbs, tid]);
+    // Second call must not throw
+    await runResolve([docAbs, tid]);
+
+    const events = await readEvents(eventDir);
+    const threads = project(events);
+    assert.strictEqual(threads[0].status, 'resolved', 'sigue resuelto tras doble llamada');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: thread_id no UUID → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runResolve([docAbs, 'no-es-uuid'])
+    );
+    assert.strictEqual(code, 1, 'thread_id inválido → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// retract (Fase 4)
+// ---------------------------------------------------------------------------
+
+test('retract: happy path → project muestra mensaje con retracted true', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+    // For thread.opened, id === thread_id (same UUID), so first message id === tid
+    const firstMsgId = tid;
+
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
+    let evId: string | undefined;
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const written: string[] = [];
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runRetract([docAbs, tid, firstMsgId]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    evId = written.join('').trim();
+    assert.ok(evId && evId.length > 0, 'imprime event id');
+
+    const events = await readEvents(eventDir);
+    const threads = project(events);
+    assert.ok(threads[0].messages[0].retracted, 'mensaje marcado como retractado');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: con --reason → reason presente en el evento', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+
+    await emitEvent(eventDir, {
+      id: tid,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'Conte', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Nota inicial',
+    } satisfies import('../sidecar.ts').EventEnvelope);
+
+    await runRetract([docAbs, tid, tid, '--reason', 'Error tipográfico']);
+
+    const events = await readEvents(eventDir);
+    const retractEv = events.find(e => e.type === 'message.retracted');
+    assert.ok(retractEv, 'evento message.retracted emitido');
+    assert.strictEqual(retractEv!.reason as string, 'Error tipográfico', 'reason correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: message_id no UUID → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), 'no-es-uuid'])
+    );
+    assert.strictEqual(code, 1, 'message_id inválido → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Integración Fase 4: open → reply → resolve → project
+// ---------------------------------------------------------------------------
+
+test('integración: open → reply → resolve → project muestra hilo resuelto con dos mensajes', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Texto del documento de integración\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    // 1. Open a thread
+    const openWritten: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { openWritten.push(String(chunk)); return true; };
+    try {
+      await runOpen([
+        docAbs,
+        '--offset', '0', '--end-offset', '5',
+        '--type', 'nota',
+        '--body', 'Nota de integración',
+      ]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const tid = openWritten.join('').trim();
+    assert.ok(tid && tid.length > 0, 'open imprime thread_id');
+
+    // 2. Reply
+    const replyWritten: string[] = [];
+    process.stdout.write = (chunk: unknown) => { replyWritten.push(String(chunk)); return true; };
+    try {
+      await runReply([docAbs, tid, '--body', 'Corrección aplicada sin commit']);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const replyId = replyWritten.join('').trim();
+    assert.ok(replyId && replyId.length > 0, 'reply imprime event id');
+
+    // 3. Resolve
+    process.stdout.write = (_chunk: unknown) => true; // discard output
+    try {
+      await runResolve([docAbs, tid]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    // 4. Project → resolved thread with two messages
+    const events = await readEvents(eventDir);
+    const threads = project(events);
+
+    assert.strictEqual(threads.length, 1, '1 hilo en la proyección');
+    assert.strictEqual(threads[0].status, 'resolved', 'hilo resuelto');
+    assert.strictEqual(threads[0].thread_id, tid, 'thread_id correcto');
+    // messages: the initial thread.opened message + the reply
+    assert.strictEqual(threads[0].messages.length, 2, '2 mensajes (opened + reply)');
+    assert.strictEqual(threads[0].messages[1].body, 'Corrección aplicada sin commit', 'body del reply correcto');
   } finally {
     await cleanup();
   }
