@@ -358,6 +358,7 @@ Duplicate `thread.reanchored` events for the same thread are innocuous: the proj
 | `version !== 2` | File predates V2 or was written incorrectly; the entire file is skipped. |
 | `id` or `thread_id` is not a UUID v4 | Field missing, not a string, or wrong format; the event is ignored. |
 | `body` is present but not a string | Type mismatch (`null`, number, or object); the event is ignored. |
+| `author` is missing, not an object, or `author.kind` is not `"human"` or `"ai"` | Required field absent or invalid; the event is ignored. A single aggregated `console.warn` is emitted per `readEvents` call listing the count of discarded events. |
 
 For the badge and diff to work correctly in the VS Code extension, a fix `message.posted` must also satisfy:
 
@@ -398,9 +399,10 @@ The four subcommands below let any editor or agent create and close review threa
 **Shared behaviour across `open`, `reply`, `resolve`, `retract`:**
 
 - The document must be inside a git repository. If `git rev-parse --show-toplevel` fails, the command exits 1.
-- Unknown `--flag` arguments are rejected immediately with exit 1.
+- Unknown `--flag` arguments are rejected immediately with exit 1. Both `--flag value` and `--flag=value` forms are accepted; the `=` form is parsed correctly for all flags.
 - `--author human` (default): reads `git config user.name` for the `name` field; omits `name` if not configured.
-- `--author ai`: requires `--model <id>`; optionally accepts `--effort <str>` and `--subagent <str>`.
+- `--author ai`: requires `--model <id>`; optionally accepts `--effort <str>` and `--subagent <str>`. Passing `--model` when `--author` is `human` (or omitted) is an error: the command exits 1 with a message on stderr.
+- `reply`, `resolve`, and `retract` verify that the target thread exists before writing the event. `retract` additionally verifies that the `message_id` exists within that thread. A non-existent target exits 1 with a message on stderr; no event is written.
 - On any validation error the command writes a message to stderr and exits 1.
 
 ### 13.1 `open`
