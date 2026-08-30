@@ -28,6 +28,7 @@ local M = {}
 
 local cli    = require("mesh_review.cli")
 local anchor = require("mesh_review.anchor")
+local hl     = require("mesh_review.hl")
 local panel  = require("mesh_review.panel")
 local utf    = require("mesh_review.utf")
 local types  = require("mesh_review.types")
@@ -361,6 +362,20 @@ function M.setup(opts)
   end, {
     nargs = "+",
     desc  = "Retractar un mensaje de hilo",
+  })
+
+  -- Grupos de highlight del plugin (fondo tintado por tipo, signo y etiqueta).
+  -- Se definen aquí y no solo en el colorscheme porque el tinte se calcula sobre
+  -- el fondo real de Normal: con otro tema activo (o con el del usuario), el
+  -- valor correcto es distinto. El autocmd los recalcula en cada cambio de tema,
+  -- que es cuando ese fondo cambia; sin él, los rangos quedarían tintados sobre
+  -- el fondo del tema anterior.
+  hl.setup()
+  local aug_hl = vim.api.nvim_create_augroup("MeshReviewHL", { clear = true })
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group    = aug_hl,
+    pattern  = "*",
+    callback = function() hl.setup() end,
   })
 
   -- Autocmd global para inicializar extmarks en cada buffer que tenga un
