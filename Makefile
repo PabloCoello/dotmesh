@@ -52,6 +52,7 @@ help:
 	@echo "  make test-wait-for-user - Verifica el contrato WAIT_FOR_USER en agentes y docs"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
 	@echo "  make test-tool-error-recovery - Verifica la política común de reintentos de herramientas"
+	@echo "  make maker-flow-stats - Mide delegación y skills del flujo maker sobre transcripts reales"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
@@ -333,3 +334,7 @@ clean:
 .PHONY: test-wait-for-user
 test-wait-for-user:
 	@bash scripts/check-wait-for-user.sh
+
+.PHONY: maker-flow-stats
+maker-flow-stats:
+	@node scripts/maker-flow-stats.mjs --project "$(subst /,-,$(CURDIR))"
