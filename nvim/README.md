@@ -118,6 +118,33 @@ ecosistema de Neovim y no tener arreglo proporcionado:
 - **markdown-preview.nvim** ejecuta `npm install` como paso de construcción, con el
   `package-lock.json` que trae el commit fijado.
 
+## Plugin mesh-review
+
+El módulo `lua/mesh_review/utf.lua` implementa la conversión bidireccional entre
+posiciones `{row, col_bytes}` de Neovim y offsets en unidades de código UTF-16 que
+usa el CLI de mesh-review.
+
+### Ejecutar los tests de conversión UTF-16
+
+Los tests corren en Neovim headless sin necesidad de plugins ni de stow. La única
+dependencia es la API estándar de Neovim (>= 0.11):
+
+```bash
+# Desde la raíz del repositorio dotmesh:
+SPEC=$(realpath nvim/.config/nvim/tests/utf_spec.lua)
+~/.local/bin/nvim --headless -u NONE -c "luafile $SPEC" -c "qa"
+```
+
+Salida esperada: `30 passed, 0 failed` en stderr y código de salida 0.
+Con cualquier fallo, el código de salida es 1.
+
+Tras `make stow` también funciona la forma corta:
+
+```bash
+~/.local/bin/nvim --headless -u NONE \
+  -c "luafile $HOME/.config/nvim/tests/utf_spec.lua" -c "qa"
+```
+
 ## Más información
 
 - [Documentación de Neovim](https://neovim.io/doc/)
