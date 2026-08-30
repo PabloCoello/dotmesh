@@ -578,6 +578,9 @@ export async function readEvents(
     return [];
   }
   const results: EventEnvelope[] = [];
+  // Paths of events discarded due to malformed anchor fields, for a single
+  // aggregated warning emitted after the loop (one warn per readEvents call).
+  const malformedAnchorPaths: string[] = [];
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
     const filePath = path.join(dir, name);
@@ -603,7 +606,7 @@ export async function readEvents(
           ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number' ? 'char_offset' : null) ??
           ('quote' in anchorRec && typeof anchorRec.quote !== 'string' ? 'quote' : null);
         if (badField !== null) {
-          console.warn(`mesh-review: descartando evento ${filePath}: anchor.${badField} tiene tipo incorrecto (esperado ${badField === 'quote' ? 'string' : 'number'}, encontrado ${typeof anchorRec[badField]})`);
+          malformedAnchorPaths.push(filePath);
           continue;
         }
       }
@@ -622,6 +625,13 @@ export async function readEvents(
         }
       }
     }
+  }
+  // One aggregated warning per readEvents call: avoids a warn flood when the
+  // extension processes the same directory on every file-watcher event.
+  if (malformedAnchorPaths.length > 0) {
+    console.warn(
+      `mesh-review: descartando ${malformedAnchorPaths.length} evento(s) con ancla mal tipada en ${dir}; ejemplo: ${malformedAnchorPaths[0]}`
+    );
   }
   results.sort(compareEvents);
   return results;

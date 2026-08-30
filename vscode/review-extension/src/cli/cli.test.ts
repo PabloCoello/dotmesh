@@ -346,11 +346,12 @@ test('parseKvPairs: integer coercion — anchor.char_offset=100 → number 100',
   assert.strictEqual(typeof anchor.char_offset, 'number');
 });
 
-test('parseKvPairs: float coercion — anchor.char_offset=3.5 → number 3.5', () => {
-  const result = parseKvPairs(['anchor.char_offset=3.5']);
-  const anchor = result.anchor as Record<string, unknown>;
-  assert.strictEqual(anchor.char_offset, 3.5);
-  assert.strictEqual(typeof anchor.char_offset, 'number');
+test('parseKvPairs: float en clave numérica lanza error — anchor.char_offset=3.5', () => {
+  assert.throws(
+    () => parseKvPairs(['anchor.char_offset=3.5']),
+    /anchor\.char_offset/,
+    'debe lanzar error para valor float en clave numérica'
+  );
 });
 
 test('parseKvPairs: cadena arbitraria no se coerciona a número', () => {
@@ -359,11 +360,40 @@ test('parseKvPairs: cadena arbitraria no se coerciona a número', () => {
   assert.strictEqual(typeof result.body, 'string');
 });
 
-test('parseKvPairs: entero negativo — anchor.line_hint=-1 → number -1', () => {
-  const result = parseKvPairs(['anchor.line_hint=-1']);
-  const anchor = result.anchor as Record<string, unknown>;
-  assert.strictEqual(anchor.line_hint, -1);
-  assert.strictEqual(typeof anchor.line_hint, 'number');
+test('parseKvPairs: entero negativo en clave numérica lanza error — anchor.line_hint=-1', () => {
+  assert.throws(
+    () => parseKvPairs(['anchor.line_hint=-1']),
+    /anchor\.line_hint/,
+    'debe lanzar error para valor negativo en clave numérica'
+  );
+});
+
+test('parseKvPairs: body=42 se mantiene como string "42"', () => {
+  const result = parseKvPairs(['body=42']);
+  assert.strictEqual(result.body, '42');
+  assert.strictEqual(typeof result.body, 'string');
+});
+
+test('parseKvPairs: agent=123 se mantiene como string "123"', () => {
+  const result = parseKvPairs(['agent=123']);
+  assert.strictEqual(result.agent, '123');
+  assert.strictEqual(typeof result.agent, 'string');
+});
+
+test('parseKvPairs: anchor.line_hint=3.5 lanza error con exit 1', () => {
+  assert.throws(
+    () => parseKvPairs(['anchor.line_hint=3.5']),
+    /anchor\.line_hint/,
+    'debe lanzar error para float en anchor.line_hint'
+  );
+});
+
+test('parseKvPairs: anchor.char_offset=-1 lanza error con exit 1', () => {
+  assert.throws(
+    () => parseKvPairs(['anchor.char_offset=-1']),
+    /anchor\.char_offset/,
+    'debe lanzar error para negativo en anchor.char_offset'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -397,8 +427,84 @@ test('readEvents: evento con anchor.line_hint string emite console.warn y lo des
     try {
       const events = await readEvents(dir);
       assert.strictEqual(events.length, 0, 'evento con ancla mal tipada es descartado');
-      assert.ok(warnMessages.length >= 1, 'se emitió al menos un console.warn');
-      assert.ok(warnMessages[0].includes('line_hint'), 'el aviso menciona el campo problemático');
+      assert.strictEqual(warnMessages.length, 1, 'se emite exactamente un console.warn agregado por llamada');
+      assert.ok(warnMessages[0].includes('1'), 'el aviso indica el número de eventos descartados');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// readEvents: aviso agregado — varios eventos malformados → un solo warn
+// ---------------------------------------------------------------------------
+
+test('readEvents: varios eventos con ancla mal tipada emiten un único console.warn agregado', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-multiwarn-'));
+  try {
+    // Write three events each with a bad anchor field (line_hint as string)
+    for (let i = 0; i < 3; i++) {
+      const id = randomUUID();
+      const tid = randomUUID();
+      const bad = {
+        id,
+        version: 2,
+        type: 'thread.opened',
+        thread_id: tid,
+        author: { kind: 'human' },
+        created_at: new Date().toISOString(),
+        commit: null,
+        dirty: false,
+        anchor: { quote: 'texto', line_hint: String(i), char_offset: 0 },
+        commentType: 'nota',
+        body: 'Evento malformado.',
+      };
+      await writeFile(join(dir, `${id}.json`), JSON.stringify(bad, null, 2) + '\n', 'utf8');
+    }
+    const warnMessages: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnMessages.push(args.join(' ')); };
+    try {
+      const events = await readEvents(dir);
+      assert.strictEqual(events.length, 0, 'todos los eventos malformados son descartados');
+      assert.strictEqual(warnMessages.length, 1, 'exactamente un console.warn por llamada a readEvents');
+      assert.ok(warnMessages[0].includes('3'), 'el aviso indica el recuento de 3 eventos descartados');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('readEvents: directorio limpio no emite ningún console.warn', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-nowarn-'));
+  try {
+    const id = randomUUID();
+    const tid = randomUUID();
+    const good: EventEnvelope = {
+      id,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'texto', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Evento bien formado.',
+    };
+    await writeFile(join(dir, `${id}.json`), JSON.stringify(good, null, 2) + '\n', 'utf8');
+    const warnMessages: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnMessages.push(args.join(' ')); };
+    try {
+      const events = await readEvents(dir);
+      assert.strictEqual(events.length, 1, 'el evento bien formado es aceptado');
+      assert.strictEqual(warnMessages.length, 0, 'no se emite ningún console.warn para directorio limpio');
     } finally {
       console.warn = origWarn;
     }

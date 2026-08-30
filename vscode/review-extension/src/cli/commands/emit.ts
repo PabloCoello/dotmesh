@@ -45,7 +45,13 @@ export async function runEmit(argv: string[]): Promise<void> {
 
   const id = randomUUID();
   const created_at = utcTimestampMs();
-  const kvData = parseKvPairs(pairs);
+  let kvData: Record<string, unknown>;
+  try {
+    kvData = parseKvPairs(pairs);
+  } catch (err) {
+    process.stderr.write(`${(err as Error).message}\n`);
+    process.exit(1);
+  }
 
   // El id, version y created_at siempre vienen del CLI; el resto del k=v puede sobreescribir
   // otros campos (excepto id/version/created_at que son siempre autoritativos del CLI).
@@ -101,15 +107,27 @@ export async function emitEvent(eventDir: string, event: EventEnvelope): Promise
 }
 
 /**
+ * Keys whose values must be coerced to a non-negative integer.
+ * Derived directly from the two numeric fields in schema.json ($defs/anchor).
+ * Any other key is never coerced to a number regardless of value shape.
+ */
+const NUMERIC_KV_PATHS = new Set(['anchor.line_hint', 'anchor.char_offset']);
+
+/**
  * Convierte pares `clave=valor` en un objeto anidado.
  *
  * Tipos de valor reconocidos:
- *   - "null"   → null
- *   - "true"   → true
- *   - "false"  → false
- *   - integer  → number (parseInt), e.g. "20" → 20, "-1" → -1
- *   - float    → number (parseFloat), e.g. "3.5" → 3.5
- *   - resto    → string
+ *   - "null"        → null    (cualquier clave)
+ *   - "true"        → true    (cualquier clave)
+ *   - "false"       → false   (cualquier clave)
+ *   - entero ≥ 0    → number  (solo anchor.line_hint y anchor.char_offset)
+ *   - resto         → string
+ *
+ * Las dos claves numéricas del esquema (anchor.line_hint, anchor.char_offset)
+ * solo aceptan enteros no negativos. Cualquier otro valor (float, negativo,
+ * notación científica, cadena vacía) lanza un Error — el llamante debe
+ * traducirlo a stderr + exit 1. Nunca se coerciona ninguna otra clave a número,
+ * aunque su valor tenga forma de dígitos.
  *
  * Notación de punto para objetos anidados:
  *   author.kind=ai  →  { author: { kind: "ai" } }
@@ -123,12 +141,24 @@ export function parseKvPairs(pairs: string[]): Record<string, unknown> {
     const rawValue = pair.slice(idx + 1);
 
     let value: unknown;
-    if (rawValue === 'null') value = null;
-    else if (rawValue === 'true') value = true;
-    else if (rawValue === 'false') value = false;
-    else if (/^-?\d+$/.test(rawValue)) value = parseInt(rawValue, 10);
-    else if (/^-?\d*\.\d+$/.test(rawValue)) value = parseFloat(rawValue);
-    else value = rawValue;
+    if (rawValue === 'null') {
+      value = null;
+    } else if (rawValue === 'true') {
+      value = true;
+    } else if (rawValue === 'false') {
+      value = false;
+    } else if (NUMERIC_KV_PATHS.has(key)) {
+      // Numeric keys must be non-negative integers. Reject floats, negatives,
+      // scientific notation, and empty strings with a hard error.
+      if (!/^\d+$/.test(rawValue)) {
+        throw new Error(
+          `mesh-review emit: ${key} debe ser un entero no negativo, pero se recibió: "${rawValue}"`
+        );
+      }
+      value = parseInt(rawValue, 10);
+    } else {
+      value = rawValue;
+    }
 
     // Soporte de notación de punto: author.kind=ai → { author: { kind: "ai" } }
     const parts = key.split('.');

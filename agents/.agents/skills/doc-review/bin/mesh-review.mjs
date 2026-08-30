@@ -163,6 +163,7 @@ async function readEvents(dir, onError) {
     return [];
   }
   const results = [];
+  const malformedAnchorPaths = [];
   for (const name of entries) {
     if (!name.endsWith(".json")) continue;
     const filePath = path.join(dir, name);
@@ -177,7 +178,7 @@ async function readEvents(dir, onError) {
         const anchorRec = parsed.anchor;
         const badField = ("line_hint" in anchorRec && typeof anchorRec.line_hint !== "number" ? "line_hint" : null) ?? ("char_offset" in anchorRec && typeof anchorRec.char_offset !== "number" ? "char_offset" : null) ?? ("quote" in anchorRec && typeof anchorRec.quote !== "string" ? "quote" : null);
         if (badField !== null) {
-          console.warn(`mesh-review: descartando evento ${filePath}: anchor.${badField} tiene tipo incorrecto (esperado ${badField === "quote" ? "string" : "number"}, encontrado ${typeof anchorRec[badField]})`);
+          malformedAnchorPaths.push(filePath);
           continue;
         }
       }
@@ -192,6 +193,11 @@ async function readEvents(dir, onError) {
         }
       }
     }
+  }
+  if (malformedAnchorPaths.length > 0) {
+    console.warn(
+      `mesh-review: descartando ${malformedAnchorPaths.length} evento(s) con ancla mal tipada en ${dir}; ejemplo: ${malformedAnchorPaths[0]}`
+    );
   }
   results.sort(compareEvents);
   return results;
@@ -259,7 +265,14 @@ async function runEmit(argv) {
   const eventDir = path3.join(gitRoot, ".ai", "review", docRelPath);
   const id = randomUUID();
   const created_at = utcTimestampMs();
-  const kvData = parseKvPairs(pairs);
+  let kvData;
+  try {
+    kvData = parseKvPairs(pairs);
+  } catch (err) {
+    process.stderr.write(`${err.message}
+`);
+    process.exit(1);
+  }
   const event = {
     dirty: false,
     ...kvData,
@@ -299,6 +312,7 @@ async function emitEvent(eventDir, event) {
   await writeFile2(tmp, JSON.stringify(event, null, 2) + "\n", "utf8");
   await rename(tmp, final);
 }
+var NUMERIC_KV_PATHS = /* @__PURE__ */ new Set(["anchor.line_hint", "anchor.char_offset"]);
 function parseKvPairs(pairs) {
   const result = {};
   for (const pair of pairs) {
@@ -307,12 +321,22 @@ function parseKvPairs(pairs) {
     const key = pair.slice(0, idx);
     const rawValue = pair.slice(idx + 1);
     let value;
-    if (rawValue === "null") value = null;
-    else if (rawValue === "true") value = true;
-    else if (rawValue === "false") value = false;
-    else if (/^-?\d+$/.test(rawValue)) value = parseInt(rawValue, 10);
-    else if (/^-?\d*\.\d+$/.test(rawValue)) value = parseFloat(rawValue);
-    else value = rawValue;
+    if (rawValue === "null") {
+      value = null;
+    } else if (rawValue === "true") {
+      value = true;
+    } else if (rawValue === "false") {
+      value = false;
+    } else if (NUMERIC_KV_PATHS.has(key)) {
+      if (!/^\d+$/.test(rawValue)) {
+        throw new Error(
+          `mesh-review emit: ${key} debe ser un entero no negativo, pero se recibi\xF3: "${rawValue}"`
+        );
+      }
+      value = parseInt(rawValue, 10);
+    } else {
+      value = rawValue;
+    }
     const parts = key.split(".");
     let obj = result;
     for (let i = 0; i < parts.length - 1; i++) {
