@@ -151,9 +151,11 @@ async function readEvents(dir, onError) {
       if ("body" in parsed && typeof parsed.body !== "string") continue;
       if ("anchor" in parsed && parsed.anchor !== null && typeof parsed.anchor === "object") {
         const anchorRec = parsed.anchor;
-        if ("line_hint" in anchorRec && typeof anchorRec.line_hint !== "number") continue;
-        if ("char_offset" in anchorRec && typeof anchorRec.char_offset !== "number") continue;
-        if ("quote" in anchorRec && typeof anchorRec.quote !== "string") continue;
+        const badField = ("line_hint" in anchorRec && typeof anchorRec.line_hint !== "number" ? "line_hint" : null) ?? ("char_offset" in anchorRec && typeof anchorRec.char_offset !== "number" ? "char_offset" : null) ?? ("quote" in anchorRec && typeof anchorRec.quote !== "string" ? "quote" : null);
+        if (badField !== null) {
+          console.warn(`mesh-review: descartando evento ${filePath}: anchor.${badField} tiene tipo incorrecto (esperado ${badField === "quote" ? "string" : "number"}, encontrado ${typeof anchorRec[badField]})`);
+          continue;
+        }
       }
       results.push(parsed);
     } catch (err) {
@@ -284,6 +286,8 @@ function parseKvPairs(pairs) {
     if (rawValue === "null") value = null;
     else if (rawValue === "true") value = true;
     else if (rawValue === "false") value = false;
+    else if (/^-?\d+$/.test(rawValue)) value = parseInt(rawValue, 10);
+    else if (/^-?\d*\.\d+$/.test(rawValue)) value = parseFloat(rawValue);
     else value = rawValue;
     const parts = key.split(".");
     let obj = result;

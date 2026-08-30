@@ -598,9 +598,14 @@ export async function readEvents(
       // rompería escapeHtml, igual que el body.
       if ('anchor' in parsed && parsed.anchor !== null && typeof parsed.anchor === 'object') {
         const anchorRec = parsed.anchor as Record<string, unknown>;
-        if ('line_hint' in anchorRec && typeof anchorRec.line_hint !== 'number') continue;
-        if ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number') continue;
-        if ('quote' in anchorRec && typeof anchorRec.quote !== 'string') continue;
+        const badField =
+          ('line_hint' in anchorRec && typeof anchorRec.line_hint !== 'number' ? 'line_hint' : null) ??
+          ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number' ? 'char_offset' : null) ??
+          ('quote' in anchorRec && typeof anchorRec.quote !== 'string' ? 'quote' : null);
+        if (badField !== null) {
+          console.warn(`mesh-review: descartando evento ${filePath}: anchor.${badField} tiene tipo incorrecto (esperado ${badField === 'quote' ? 'string' : 'number'}, encontrado ${typeof anchorRec[badField]})`);
+          continue;
+        }
       }
       results.push(parsed as unknown as EventEnvelope);
     } catch (err) {

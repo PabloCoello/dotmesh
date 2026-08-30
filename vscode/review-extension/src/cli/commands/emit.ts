@@ -104,10 +104,12 @@ export async function emitEvent(eventDir: string, event: EventEnvelope): Promise
  * Convierte pares `clave=valor` en un objeto anidado.
  *
  * Tipos de valor reconocidos:
- *   - "null"  → null
- *   - "true"  → true
- *   - "false" → false
- *   - resto   → string
+ *   - "null"   → null
+ *   - "true"   → true
+ *   - "false"  → false
+ *   - integer  → number (parseInt), e.g. "20" → 20, "-1" → -1
+ *   - float    → number (parseFloat), e.g. "3.5" → 3.5
+ *   - resto    → string
  *
  * Notación de punto para objetos anidados:
  *   author.kind=ai  →  { author: { kind: "ai" } }
@@ -124,6 +126,8 @@ export function parseKvPairs(pairs: string[]): Record<string, unknown> {
     if (rawValue === 'null') value = null;
     else if (rawValue === 'true') value = true;
     else if (rawValue === 'false') value = false;
+    else if (/^-?\d+$/.test(rawValue)) value = parseInt(rawValue, 10);
+    else if (/^-?\d*\.\d+$/.test(rawValue)) value = parseFloat(rawValue);
     else value = rawValue;
 
     // Soporte de notación de punto: author.kind=ai → { author: { kind: "ai" } }

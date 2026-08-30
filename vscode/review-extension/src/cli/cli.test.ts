@@ -331,6 +331,114 @@ test('parseKvPairs: string ordinario', () => {
   assert.strictEqual(result.body, 'Texto de prueba');
 });
 
+test('parseKvPairs: integer coercion — anchor.line_hint=20 → number 20', () => {
+  const result = parseKvPairs(['anchor.line_hint=20']);
+  const anchor = result.anchor as Record<string, unknown>;
+  assert.strictEqual(anchor.line_hint, 20);
+  assert.strictEqual(typeof anchor.line_hint, 'number');
+});
+
+test('parseKvPairs: integer coercion — anchor.char_offset=100 → number 100', () => {
+  const result = parseKvPairs(['anchor.char_offset=100']);
+  const anchor = result.anchor as Record<string, unknown>;
+  assert.strictEqual(anchor.char_offset, 100);
+  assert.strictEqual(typeof anchor.char_offset, 'number');
+});
+
+test('parseKvPairs: float coercion — anchor.char_offset=3.5 → number 3.5', () => {
+  const result = parseKvPairs(['anchor.char_offset=3.5']);
+  const anchor = result.anchor as Record<string, unknown>;
+  assert.strictEqual(anchor.char_offset, 3.5);
+  assert.strictEqual(typeof anchor.char_offset, 'number');
+});
+
+test('parseKvPairs: cadena arbitraria no se coerciona a número', () => {
+  const result = parseKvPairs(['body=texto']);
+  assert.strictEqual(result.body, 'texto');
+  assert.strictEqual(typeof result.body, 'string');
+});
+
+test('parseKvPairs: entero negativo — anchor.line_hint=-1 → number -1', () => {
+  const result = parseKvPairs(['anchor.line_hint=-1']);
+  const anchor = result.anchor as Record<string, unknown>;
+  assert.strictEqual(anchor.line_hint, -1);
+  assert.strictEqual(typeof anchor.line_hint, 'number');
+});
+
+// ---------------------------------------------------------------------------
+// readEvents: aviso cuando anchor tiene campos con tipo incorrecto
+// ---------------------------------------------------------------------------
+
+test('readEvents: evento con anchor.line_hint string emite console.warn y lo descarta', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-warn-'));
+  try {
+    const id = randomUUID();
+    const tid = randomUUID();
+    // Event with line_hint as string (simulates old broken emit output)
+    const badEvent = {
+      id,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'texto', line_hint: '20', char_offset: 0 },
+      commentType: 'nota',
+      body: 'Evento con ancla mal tipada.',
+    };
+    await writeFile(join(dir, `${id}.json`), JSON.stringify(badEvent, null, 2) + '\n', 'utf8');
+
+    const warnMessages: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnMessages.push(args.join(' ')); };
+    try {
+      const events = await readEvents(dir);
+      assert.strictEqual(events.length, 0, 'evento con ancla mal tipada es descartado');
+      assert.ok(warnMessages.length >= 1, 'se emitió al menos un console.warn');
+      assert.ok(warnMessages[0].includes('line_hint'), 'el aviso menciona el campo problemático');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Integración: emit con anchor numérico → readEvents no descarta
+// ---------------------------------------------------------------------------
+
+test('integración: emit con anchor.line_hint=20 escribe número; readEvents no lo descarta', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-num-'));
+  try {
+    const tid = randomUUID();
+    const event: EventEnvelope = {
+      id: randomUUID(),
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: utcTimestampMs(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'hola', line_hint: 20, char_offset: 100 },
+      commentType: 'nota',
+      body: 'Prueba de coerción numérica.',
+    };
+    await emitEvent(dir, event);
+
+    const events = await readEvents(dir);
+    assert.strictEqual(events.length, 1, 'readEvents no descarta el evento con ancla numérica');
+    const anchor = (events[0] as unknown as Record<string, unknown>).anchor as Record<string, unknown>;
+    assert.strictEqual(typeof anchor.line_hint, 'number', 'line_hint es number en el evento leído');
+    assert.strictEqual(anchor.line_hint, 20);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // readEvents ignora ficheros .json.tmp (escritura atómica en curso)
 // ---------------------------------------------------------------------------
