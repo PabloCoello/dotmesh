@@ -62,6 +62,15 @@ function M.check_binary()
   return vim.fn.filereadable(_cli_path) == 1
 end
 
+--- Tope de espera de una llamada síncrona al CLI, en milisegundos.
+---
+--- `:wait()` bloquea el hilo principal de Neovim, y `project` se llama desde el
+--- autocmd BufReadPost: sin tope, un CLI que no termina (un sidecar corrupto en
+--- un repo ajeno, un fallo del propio bundle) congela el editor sin que puedas
+--- ni interrumpir con Ctrl-C. Diez segundos son holgados para un proyecto real
+--- —mil hilos se proyectan muy por debajo de eso— y cortos para un cuelgue.
+local TIMEOUT_MS = 10000
+
 --- Ejecuta el CLI de forma síncrona. Devuelve (stdout_string, nil) o (nil, stderr).
 ---
 --- @param args string[]  Argumentos ADICIONALES al par {"node", _cli_path}. Ninguno
@@ -73,9 +82,15 @@ local function _run(args)
   for _, a in ipairs(args) do
     table.insert(cmd, a)
   end
-  local result = vim.system(cmd, { text = true }):wait()
+  local result = vim.system(cmd, { text = true, timeout = TIMEOUT_MS }):wait()
   if result.code ~= 0 then
-    return nil, result.stderr or ("exit code " .. result.code)
+    local err = result.stderr
+    if err == nil or err == "" then
+      -- Al vencer el tope, vim.system mata el proceso y stderr suele venir
+      -- vacío: sin este caso el usuario vería un "exit code 124" mudo.
+      err = ("el CLI no respondió en %d s (código %d)"):format(TIMEOUT_MS / 1000, result.code)
+    end
+    return nil, err
   end
   return result.stdout, nil
 end

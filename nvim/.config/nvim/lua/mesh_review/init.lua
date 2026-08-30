@@ -262,6 +262,13 @@ function M.prompt_scribe()
     return
   end
   local doc = _current_doc() or ""
+  -- La ruta acaba dentro del texto del prompt que lee un agente. `herdr agent
+  -- prompt` toma el texto como UN argumento, así que la ruta no puede ir aparte;
+  -- lo que sí se puede es impedir que un nombre de fichero con saltos de línea
+  -- o caracteres de control finja un turno nuevo dentro del prompt. El texto
+  -- suelto de un nombre raro sigue llegando, pero ya no puede maquetarse como
+  -- instrucción separada.
+  doc = doc:gsub("%c", " ")
   -- Lista de argumentos: la ruta viaja como argv independiente, sin shell.
   vim.system({ "herdr", "agent", "prompt", "scribe", "Revisa " .. doc },
     { text = true },
