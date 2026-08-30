@@ -141,9 +141,13 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
   el repo no llega a VS Code con solo recargar la ventana. Vuelve a ejecutar
   `vscode/scripts/install.sh` (refresca la copia instalada sin depender de la
   red) y recarga la ventana.
-- **Neovim**: activo vía `lua/plugins/colorscheme.lua`. Para revertir en
-  caliente, `:colorscheme material` (material.nvim sigue instalado, sólo deja de
-  cargarse al arranque); para hacerlo permanente, cambia ese fichero.
+- **Neovim**: se aplica al final de `nvim/.config/nvim/init.lua`, no como plugin:
+  el colorscheme vive dentro de la propia configuración, y declararlo como spec
+  de lazy con `dir = stdpath("config")` chocaba con la entrada local del plugin
+  mesh-review (mismo directorio, lazy funde ambas y ejecuta un solo `config`).
+  Para revertir en caliente, `:colorscheme material` (material.nvim sigue
+  instalado, sólo deja de cargarse al arranque); para hacerlo permanente, cambia
+  esa línea de `init.lua`.
 - **Ghostty**: activo vía `theme = dotmesh` en `ghostty/.config/ghostty/config`.
   Para revertir, cambia el valor `theme` y recarga Ghostty.
 - **Starship**: activo vía `palette = 'dotmesh'`. Para revertir, cámbialo a
