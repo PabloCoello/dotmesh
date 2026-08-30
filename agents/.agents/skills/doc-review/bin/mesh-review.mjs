@@ -712,64 +712,65 @@ function printUsage2() {
 import { readFile as readFile4 } from "node:fs/promises";
 import { randomUUID as randomUUID4 } from "node:crypto";
 import * as path6 from "node:path";
-function parseArgs2(argv) {
-  const positional = [];
-  let offset;
-  let endOffset;
-  let type;
-  let body;
-  let author = "human";
-  let model;
-  let effort;
-  let subagent;
-  let confidence;
-  let assignee;
+
+// src/cli/args.ts
+function parseCliArgs(argv, knownFlags, subcommand) {
+  const flags = /* @__PURE__ */ new Map();
+  const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--offset") {
-      offset = argv[++i];
-    } else if (arg === "--end-offset") {
-      endOffset = argv[++i];
-    } else if (arg === "--type") {
-      type = argv[++i];
-    } else if (arg === "--body") {
-      body = argv[++i];
-    } else if (arg === "--author") {
-      author = argv[++i] ?? "human";
-    } else if (arg === "--model") {
-      model = argv[++i];
-    } else if (arg === "--effort") {
-      effort = argv[++i];
-    } else if (arg === "--subagent") {
-      subagent = argv[++i];
-    } else if (arg === "--confidence") {
-      confidence = argv[++i];
-    } else if (arg === "--assignee") {
-      assignee = argv[++i];
-    } else if (!arg.startsWith("-")) {
-      positional.push(arg);
+    if (arg.startsWith("--")) {
+      const name = arg.slice(2);
+      if (!knownFlags.has(name)) {
+        process.stderr.write(`mesh-review ${subcommand}: flag desconocida: ${arg}
+`);
+        process.exit(1);
+      }
+      const value = argv[i + 1];
+      if (value === void 0) {
+        process.stderr.write(`mesh-review ${subcommand}: la flag ${arg} requiere un valor
+`);
+        process.exit(1);
+      }
+      flags.set(name, value);
+      i++;
+    } else {
+      positionals.push(arg);
     }
   }
-  return {
-    doc: positional[0],
-    offset,
-    endOffset,
-    type,
-    body,
-    author,
-    model,
-    effort,
-    subagent,
-    confidence,
-    assignee
-  };
+  return { flags, positionals };
 }
+
+// src/cli/commands/open.ts
+var OPEN_KNOWN_FLAGS = /* @__PURE__ */ new Set([
+  "offset",
+  "end-offset",
+  "type",
+  "body",
+  "author",
+  "model",
+  "effort",
+  "subagent",
+  "confidence",
+  "assignee"
+]);
 async function runOpen(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage3();
     return;
   }
-  const { doc, offset: offsetStr, endOffset: endOffsetStr, type, body, author, model, effort, subagent, confidence, assignee } = parseArgs2(argv);
+  const { flags, positionals } = parseCliArgs(argv, OPEN_KNOWN_FLAGS, "open");
+  const doc = positionals[0];
+  const offsetStr = flags.get("offset");
+  const endOffsetStr = flags.get("end-offset");
+  const type = flags.get("type");
+  const body = flags.get("body");
+  const author = flags.get("author") ?? "human";
+  const model = flags.get("model");
+  const effort = flags.get("effort");
+  const subagent = flags.get("subagent");
+  const confidence = flags.get("confidence");
+  const assignee = flags.get("assignee");
   if (!doc) {
     process.stderr.write("mesh-review open: se requiere <doc>\n");
     process.exit(1);

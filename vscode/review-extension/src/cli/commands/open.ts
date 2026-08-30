@@ -32,79 +32,16 @@ import {
 } from '../../sidecar.ts';
 import { createAnchor } from '../../anchor.ts';
 import { emitEvent } from './emit.ts';
+import { parseCliArgs } from '../args.ts';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
 // ---------------------------------------------------------------------------
 
-interface OpenArgs {
-  doc: string | undefined;
-  offset: string | undefined;
-  endOffset: string | undefined;
-  type: string | undefined;
-  body: string | undefined;
-  author: string;
-  model: string | undefined;
-  effort: string | undefined;
-  subagent: string | undefined;
-  confidence: string | undefined;
-  assignee: string | undefined;
-}
-
-function parseArgs(argv: string[]): OpenArgs {
-  const positional: string[] = [];
-  let offset: string | undefined;
-  let endOffset: string | undefined;
-  let type: string | undefined;
-  let body: string | undefined;
-  let author = 'human';
-  let model: string | undefined;
-  let effort: string | undefined;
-  let subagent: string | undefined;
-  let confidence: string | undefined;
-  let assignee: string | undefined;
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--offset') {
-      offset = argv[++i];
-    } else if (arg === '--end-offset') {
-      endOffset = argv[++i];
-    } else if (arg === '--type') {
-      type = argv[++i];
-    } else if (arg === '--body') {
-      body = argv[++i];
-    } else if (arg === '--author') {
-      author = argv[++i] ?? 'human';
-    } else if (arg === '--model') {
-      model = argv[++i];
-    } else if (arg === '--effort') {
-      effort = argv[++i];
-    } else if (arg === '--subagent') {
-      subagent = argv[++i];
-    } else if (arg === '--confidence') {
-      confidence = argv[++i];
-    } else if (arg === '--assignee') {
-      assignee = argv[++i];
-    } else if (!arg.startsWith('-')) {
-      positional.push(arg);
-    }
-  }
-
-  return {
-    doc: positional[0],
-    offset,
-    endOffset,
-    type,
-    body,
-    author,
-    model,
-    effort,
-    subagent,
-    confidence,
-    assignee,
-  };
-}
+const OPEN_KNOWN_FLAGS = new Set([
+  'offset', 'end-offset', 'type', 'body', 'author', 'model',
+  'effort', 'subagent', 'confidence', 'assignee',
+]);
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -121,8 +58,18 @@ export async function runOpen(argv: string[]): Promise<void> {
     return;
   }
 
-  const { doc, offset: offsetStr, endOffset: endOffsetStr, type, body, author, model, effort, subagent, confidence, assignee } =
-    parseArgs(argv);
+  const { flags, positionals } = parseCliArgs(argv, OPEN_KNOWN_FLAGS, 'open');
+  const doc = positionals[0];
+  const offsetStr = flags.get('offset');
+  const endOffsetStr = flags.get('end-offset');
+  const type = flags.get('type');
+  const body = flags.get('body');
+  const author = flags.get('author') ?? 'human';
+  const model = flags.get('model');
+  const effort = flags.get('effort');
+  const subagent = flags.get('subagent');
+  const confidence = flags.get('confidence');
+  const assignee = flags.get('assignee');
 
   // --- Presence checks -------------------------------------------------------
 

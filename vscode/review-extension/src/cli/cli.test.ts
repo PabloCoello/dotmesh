@@ -1310,3 +1310,38 @@ test('open: --author ai sin --model → exit 1', async () => {
     await cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Slice A — shared parser: unknown-flag rejection
+// ---------------------------------------------------------------------------
+
+test('open: flag desconocida → exit 1 (parseCliArgs rechaza flags desconocidas)', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido de prueba\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'x', '--unknown-flag', 'val'])
+    );
+    assert.strictEqual(code, 1, 'flag desconocida → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: flag sin valor al final de argv → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido de prueba\n', 'utf8');
+
+    // --body is the last token with no value following
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body'])
+    );
+    assert.strictEqual(code, 1, 'flag sin valor → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
