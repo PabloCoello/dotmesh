@@ -935,6 +935,129 @@ function printUsage3() {
   );
 }
 
+// src/cli/commands/reply.ts
+import { randomUUID as randomUUID5 } from "node:crypto";
+import * as path7 from "node:path";
+var REPLY_KNOWN_FLAGS = /* @__PURE__ */ new Set([
+  "body",
+  "author",
+  "model",
+  "effort",
+  "subagent",
+  "confidence"
+]);
+async function runReply(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage4();
+    return;
+  }
+  const { flags, positionals } = parseCliArgs(argv, REPLY_KNOWN_FLAGS, "reply");
+  const doc = positionals[0];
+  const threadId = positionals[1];
+  const body = flags.get("body");
+  const author = flags.get("author") ?? "human";
+  const model = flags.get("model");
+  const effort = flags.get("effort");
+  const subagent = flags.get("subagent");
+  const confidence = flags.get("confidence");
+  if (!doc) {
+    process.stderr.write("mesh-review reply: se requiere <doc>\n");
+    process.exit(1);
+  }
+  if (!threadId) {
+    process.stderr.write("mesh-review reply: se requiere <thread_id>\n");
+    process.exit(1);
+  }
+  if (!isUuid(threadId)) {
+    process.stderr.write(`mesh-review reply: thread_id no es un UUID v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  if (!body || body.length === 0) {
+    process.stderr.write("mesh-review reply: se requiere --body y no puede estar vac\xEDo\n");
+    process.exit(1);
+  }
+  if (author !== "human" && author !== "ai") {
+    process.stderr.write(`mesh-review reply: --author debe ser "human" o "ai": ${author}
+`);
+    process.exit(1);
+  }
+  if (author === "ai" && !model) {
+    process.stderr.write("mesh-review reply: --author ai requiere --model\n");
+    process.exit(1);
+  }
+  if (confidence !== void 0 && !["alta", "media", "baja"].includes(confidence)) {
+    process.stderr.write(
+      `mesh-review reply: --confidence debe ser alta, media o baja: ${confidence}
+`
+    );
+    process.exit(1);
+  }
+  const docAbs = path7.resolve(doc);
+  const gitRoot = await getGitRoot(path7.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const docRelPath = path7.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith("..")) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const eventDir = path7.join(gitRoot, ".ai", "review", docRelPath);
+  let authorObj;
+  if (author === "ai") {
+    authorObj = {
+      kind: "ai",
+      model,
+      ...effort !== void 0 ? { effort } : {},
+      ...subagent !== void 0 ? { subagent } : {}
+    };
+  } else {
+    const name = await getUserName(path7.dirname(docAbs));
+    authorObj = name !== void 0 ? { kind: "human", name } : { kind: "human" };
+  }
+  const id = randomUUID5();
+  const ev = {
+    id,
+    version: 2,
+    type: "message.posted",
+    thread_id: threadId,
+    author: authorObj,
+    created_at: utcTimestampMs(),
+    commit: await getHeadSha(gitRoot),
+    dirty: false,
+    body
+  };
+  if (confidence !== void 0) ev.confidence = confidence;
+  await emitEvent(eventDir, ev);
+  process.stdout.write(`${id}
+`);
+}
+function printUsage4() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review reply <doc> <thread_id>",
+      "         --body <texto>",
+      "         [--author human|ai] [--model <id>]",
+      "         [--effort <str>] [--subagent <str>]",
+      "         [--confidence alta|media|baja]",
+      "",
+      "Publica un mensaje en el hilo sin hacer commit de git. El campo commit",
+      "captura el SHA corto del HEAD actual (o null). Imprime el UUID del",
+      "evento message.posted en stdout.",
+      "",
+      "  --author ai requiere --model.",
+      "",
+      "Salida:",
+      "  stdout: UUID del evento message.posted",
+      "",
+      "Ejemplo:",
+      '  mesh-review reply docs/SPEC.md <uuid> --body "Correcci\xF3n aplicada"'
+    ].join("\n") + "\n"
+  );
+}
+
 // src/cli/main.ts
 async function main(argv = process.argv.slice(2)) {
   const [subcommand, ...rest] = argv;
@@ -954,13 +1077,16 @@ async function main(argv = process.argv.slice(2)) {
     case "open":
       await runOpen(rest);
       break;
+    case "reply":
+      await runReply(rest);
+      break;
     default:
-      printUsage4();
+      printUsage5();
       if (subcommand !== void 0) process.exit(1);
       break;
   }
 }
-function printUsage4() {
+function printUsage5() {
   process.stderr.write(
     [
       "Uso: mesh-review <subcomando> [argumentos]",

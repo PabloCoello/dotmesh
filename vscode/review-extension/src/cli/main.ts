@@ -10,6 +10,7 @@ import { runEmit } from './commands/emit.ts';
 import { runReanchor } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
+import { runReply } from './commands/reply.ts';
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const [subcommand, ...rest] = argv;
@@ -29,6 +30,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'open':
       await runOpen(rest);
+      break;
+    case 'reply':
+      await runReply(rest);
       break;
     default:
       printUsage();

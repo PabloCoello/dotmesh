@@ -25,6 +25,7 @@ import { emitEvent, parseKvPairs } from './commands/emit.ts';
 import { reanchorThreads } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
+import { runReply } from './commands/reply.ts';
 import { writeFile } from 'node:fs/promises';
 
 const execFileAsync = promisify(execFile);
@@ -1341,6 +1342,134 @@ test('open: flag sin valor al final de argv → exit 1', async () => {
       runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body'])
     );
     assert.strictEqual(code, 1, 'flag sin valor → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// reply (Fase 3)
+// ---------------------------------------------------------------------------
+
+test('reply: happy path → message.posted sin commit nuevo en el repo', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido para revisar\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+
+    const { stdout: commitsBefore } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+
+    let msgId: string | undefined;
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const written: string[] = [];
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runReply([docAbs, tid, '--body', 'Respuesta de prueba']);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    msgId = written.join('').trim();
+    assert.ok(msgId && msgId.length > 0, 'imprime event id');
+
+    // No new commit
+    const { stdout: commitsAfter } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    assert.strictEqual(commitsAfter.trim(), commitsBefore.trim(), 'sin commit nuevo');
+
+    // Event written and readable
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const ev = events[0];
+    assert.strictEqual(ev.type, 'message.posted', 'tipo correcto');
+    assert.strictEqual(ev.id, msgId, 'id coincide con stdout');
+    assert.strictEqual(ev.thread_id, tid, 'thread_id correcto');
+    assert.strictEqual(ev.body as string, 'Respuesta de prueba', 'body correcto');
+    assert.strictEqual(ev.dirty, false, 'dirty false');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --author ai --model m1 --confidence media → campos correctos', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+
+    await runReply([
+      docAbs, tid,
+      '--body', 'Respuesta IA',
+      '--author', 'ai',
+      '--model', 'claude-sonnet-4-6',
+      '--confidence', 'media',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const author = events[0].author as { kind: string; model?: string };
+    assert.strictEqual(author.kind, 'ai', 'author.kind ai');
+    assert.strictEqual(author.model, 'claude-sonnet-4-6', 'author.model correcto');
+    assert.strictEqual(events[0].confidence, 'media', 'confidence correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: round-trip → el evento pasa readEvents sin descartarse', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = randomUUID();
+
+    await runReply([docAbs, tid, '--body', 'Nota de prueba']);
+
+    const events = await readEvents(eventDir);
+    // If the event were malformed it would be silently dropped
+    assert.strictEqual(events.length, 1, 'el evento sobrevive a readEvents');
+    assert.strictEqual(events[0].type, 'message.posted');
+    assert.strictEqual(events[0].thread_id, tid);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --body vacío → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', ''])
+    );
+    assert.strictEqual(code, 1, 'body vacío → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: thread_id no UUID → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, 'no-es-uuid', '--body', 'Respuesta'])
+    );
+    assert.strictEqual(code, 1, 'thread_id inválido → sale con código 1');
   } finally {
     await cleanup();
   }
