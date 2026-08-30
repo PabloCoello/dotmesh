@@ -19,11 +19,28 @@ local M = {}
 --- el carácter '\n' que las separa. Después añade el desplazamiento parcial dentro
 --- de la línea objetivo.
 ---
+--- Entradas fuera de rango se acoten en lugar de propagar un error:
+---   - row se acota a [0, num_lines-1].
+---   - col se acota a [0, #line]. Esto convierte v:maxcol (2147483647), que Neovim
+---     asigna a '> en selecciones por línea completa (modo V), en el final de línea,
+---     que es la semántica correcta para «hasta el último byte».
+---
+--- Redondeo en mitad de carácter multibyte: si col cae dentro de un carácter
+--- multi-byte (p. ej. en medio de los 4 bytes de un emoji), str_utfindex extiende
+--- al siguiente límite de carácter completo. El comportamiento es determinista y
+--- consistente con str_byteindex en from_utf16.
+---
 --- @param bufnr number  Número de buffer de Neovim.
---- @param row   number  Fila 0-indexed.
+--- @param row   number  Fila 0-indexed. Se acota al rango válido del buffer.
 --- @param col   number  Columna en bytes desde el inicio de la línea (0-indexed).
+---                      Se acota a [0, #line]. v:maxcol (2147483647) es seguro.
 --- @return      number  Offset en unidades de código UTF-16 desde el inicio del fichero.
 function M.to_utf16(bufnr, row, col)
+  -- Obtener el número de líneas para acotar row antes de pedir las líneas.
+  local num_lines = vim.api.nvim_buf_line_count(bufnr)
+  if num_lines == 0 then return 0 end
+  row = math.max(0, math.min(row, num_lines - 1))
+
   -- Recuperar las líneas 0..row (inclusive). nvim_buf_get_lines es 0-indexed y
   -- el extremo superior es exclusivo, por lo que row+1 incluye la fila objetivo.
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, row + 1, false)
@@ -41,6 +58,9 @@ function M.to_utf16(bufnr, row, col)
   -- str_utfindex(str, "utf-16", byte_idx) devuelve el número de unidades UTF-16
   -- en str[0..byte_idx-1], que es exactamente el offset dentro de la línea.
   local current_line = lines[row + 1] or ""
+  -- Acotar col a [0, #current_line]: valores negativos van a 0, valores mayores que
+  -- #line (incluido v:maxcol) van al final de la línea.
+  col = math.max(0, math.min(col, #current_line))
   offset = offset + vim.str_utfindex(current_line, "utf-16", col)
 
   return offset
@@ -52,11 +72,24 @@ end
 --- Cuando la acumulación supera el offset objetivo, la posición cae en esa línea;
 --- str_byteindex convierte el resto del offset al desplazamiento en bytes.
 ---
+--- Devuelve nil para offsets fuera del rango del buffer (negativos o más allá del
+--- último carácter). Esto es simétrico con to_utf16: entradas inválidas no propagan
+--- errores.
+---
+--- Redondeo en mitad de par sustituto: si offset cae en el segundo código del par
+--- sustituto de un emoji (p. ej. offset=2 para el 🎉 de "a🎉b"), str_byteindex
+--- devuelve el byte de inicio del siguiente carácter, redondeando hacia adelante.
+--- El comportamiento es simétrico con to_utf16.
+---
 --- @param bufnr  number  Número de buffer de Neovim.
 --- @param offset number  Offset en unidades de código UTF-16 desde el inicio del fichero.
---- @return       table   {row: number, col: number} con col en bytes (0-indexed).
----                       Devuelve nil si el offset está fuera del rango del buffer.
+---                       Un valor negativo devuelve nil.
+--- @return       table|nil  {row: number, col: number} con col en bytes (0-indexed),
+---                          o nil si el offset está fuera del rango del buffer.
 function M.from_utf16(bufnr, offset)
+  -- Offset negativo: fuera de rango, igual que un offset pasado del final.
+  if offset < 0 then return nil end
+
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local acum = 0
 

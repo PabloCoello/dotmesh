@@ -238,6 +238,53 @@ roundtrip("Tercera línea",        { "a", "b", "c" }, 2, 1)
 roundtrip("Una línea inicio",     { "hola" },        0, 0)
 
 -- ---------------------------------------------------------------------------
+-- Casos límite y entradas fuera de rango
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== casos límite ===\n")
+
+-- row fuera del buffer: se acota al último row válido.
+-- Buffer {"a","b","c"} tiene filas 0-2. row=5 → acota a row=2.
+-- to_utf16(row=2, col=0): línea 0 "a"→1+1=2; línea 1 "b"→1+1=4; "c"[0..0)=0 → 4
+do
+  local b = make_buf({ "a", "b", "c" })
+  eq("row fuera de rango (5→2), sin error", utf.to_utf16(b, 5, 0), 4)
+end
+
+-- col más allá del fin de línea: se acota a #line.
+-- "hello" tiene 5 bytes. col=9 → acota a 5 → offset 5.
+do
+  local b = make_buf({ "hello" })
+  eq("col mayor que línea (9→5), sin error", utf.to_utf16(b, 0, 9), 5)
+end
+
+-- col negativo: se acota a 0.
+do
+  local b = make_buf({ "hello" })
+  eq("col negativo (-1→0), sin error", utf.to_utf16(b, 0, -1), 0)
+end
+
+-- offset negativo en from_utf16: devuelve nil (mismo contrato que pasado del final).
+do
+  local b = make_buf({ "hello" })
+  eq("offset negativo (-1→nil)", utf.from_utf16(b, -1), nil)
+end
+
+-- offset pasado del final: devuelve nil.
+do
+  local b = make_buf({ "hello" })
+  eq("offset pasado del final (999→nil)", utf.from_utf16(b, 999), nil)
+end
+
+-- v:maxcol (2147483647): en modo V Neovim asigna esta columna a la marca '>.
+-- El plugin (PR C) pasa esa columna directamente a to_utf16 al abrir un hilo.
+-- Con "hello" (5 bytes), debe acotar a 5 y devolver el offset del fin de línea,
+-- que es la semántica correcta para «hasta el último byte de la línea».
+do
+  local b = make_buf({ "hello" })
+  eq("v:maxcol (2147483647) acota a fin de línea", utf.to_utf16(b, 0, 2147483647), 5)
+end
+
+-- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------
 io.stderr:write(string.format("\n%d passed, %d failed\n", pass, fail))
