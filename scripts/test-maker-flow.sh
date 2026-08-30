@@ -65,6 +65,11 @@ WITH_AGENTS="${MAKER_FLOW_AGENTS:-}"
 # flujo: el guardarraíl de git y los dos recordatorios. Sirve para aislar cuánto
 # del cumplimiento lo sostiene el hook y cuánto la prosa.
 WITH_HOOKS="${MAKER_FLOW_HOOKS:-}"
+# MAKER_FLOW_MODE fija permissions.defaultMode en los dos brazos. Vacío deja el
+# valor por defecto de claude -p, que es lo que el arnés midió hasta ahora. La
+# máquina del usuario corre en "auto", y ese modo trae instrucciones propias del
+# harness que el arnés no reproducía. Sirve para medir la condición real.
+MODE="${MAKER_FLOW_MODE:-}"
 
 PASS=0
 FAIL=0
@@ -83,7 +88,7 @@ done
 echo "  claude: $(command -v claude)"
 echo "  node:   $(node --version)"
 echo "  modelo: $MODEL · timeout por run: ${TIMEOUT}s · runs por brazo: $RUNS"
-echo "  brazos: $ARMS · AGENTS.md: ${WITH_AGENTS:-no} · hooks: ${WITH_HOOKS:-no}"
+echo "  brazos: $ARMS · AGENTS.md: ${WITH_AGENTS:-no} · hooks: ${WITH_HOOKS:-no} · modo: ${MODE:-por defecto}"
 
 REAL_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 if [ ! -d "$REPO_ROOT/claude/.claude/agents" ]; then
@@ -136,20 +141,29 @@ make_config_dir() {
 # ---------------------------------------------------------------------------
 settings_json() {
   node -e '
-const [style, config, withHooks] = process.argv.slice(1);
+const fs = require("fs");
+const [style, config, withHooks, tpl, mode] = process.argv.slice(1);
 const s = {};
 if (style) s.outputStyle = style;
+if (mode) s.permissions = { defaultMode: mode };
 if (withHooks) {
-  const h = (name) => ({ type: "command", command: `${config}/hooks/${name}` });
-  s.hooks = {
-    PreToolUse: [
-      { matcher: "Bash", hooks: [h("block-dangerous-git.sh"), h("remind-review-gate.sh")] },
-      { matcher: "Write|Edit|MultiEdit|NotebookEdit", hooks: [h("remind-load-skills.sh")] },
-    ],
-  };
+  // El registro se deriva de la plantilla del repo en vez de escribirse a mano,
+  // para que el arnés no se quede atrás cuando cambie dónde va cada hook. Se
+  // filtran los tres del flujo: el resto de entradas apuntan al puente de la
+  // máquina y no deben alcanzar a ningún brazo.
+  const FLOW = /^~\/\.claude\/hooks\/(block-dangerous-git|remind-review-gate|remind-load-skills)\.sh$/;
+  const src = JSON.parse(fs.readFileSync(tpl, "utf8")).hooks?.PreToolUse ?? [];
+  const out = [];
+  for (const entry of src) {
+    const hooks = (entry.hooks ?? [])
+      .filter((h) => FLOW.test(h.command))
+      .map((h) => ({ type: "command", command: h.command.replace("~/.claude/hooks/", `${config}/hooks/`) }));
+    if (hooks.length) out.push({ matcher: entry.matcher, hooks });
+  }
+  if (out.length) s.hooks = { PreToolUse: out };
 }
 process.stdout.write(JSON.stringify(s));
-' "$1" "$2" "$WITH_HOOKS"
+' "$1" "$2" "$WITH_HOOKS" "$REPO_ROOT/claude/.claude/settings.json" "$MODE"
 }
 
 # ---------------------------------------------------------------------------
