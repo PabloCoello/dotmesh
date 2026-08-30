@@ -5,7 +5,8 @@
 --- de modo que las primeras sean verificables en headless sin proceso externo.
 ---
 --- Funciones puras exportadas: build_prompt, build_get_argv, build_split_argv,
---- build_start_argv, build_wait_argv, build_prompt_argv, parse_herdr_response.
+--- build_start_argv, build_wait_argv, build_prompt_argv, pick_payload,
+--- parse_herdr_response.
 --- Función impura principal: ensure_and_prompt.
 ---
 --- Por qué ruta absoluta en el prompt: el prompt se ejecuta en un pane cuyo
@@ -141,6 +142,34 @@ function M.build_prompt_argv(text)
 end
 
 -- ---------------------------------------------------------------------------
+-- Selección de la carga útil de un proceso herdr
+-- ---------------------------------------------------------------------------
+
+--- Devuelve el flujo que trae el JSON de una invocación de herdr.
+---
+--- herdr imprime el resultado en stdout, pero el JSON de **error** va a stderr
+--- y el proceso sale con código distinto de cero:
+---
+---   $ herdr agent get scribe        # sin sesión scribe
+---   (stdout vacío)
+---   (stderr) {"error":{"code":"agent_not_found",…},"id":"cli:agent:get"}
+---   $ echo $?
+---   1
+---
+--- Leer solo stdout convertía un «agent_not_found» legítimo —la señal de que
+--- hay que crear la sesión— en «respuesta vacía», y el puente se paraba en vez
+--- de levantar scribe. Se prefiere stdout cuando trae algo; si no, stderr.
+---
+--- @param stdout string|nil
+--- @param stderr string|nil
+--- @return string  Cadena a parsear (vacía si ambos flujos lo están).
+function M.pick_payload(stdout, stderr)
+  local out = vim.trim(stdout or "")
+  if out ~= "" then return out end
+  return vim.trim(stderr or "")
+end
+
+-- ---------------------------------------------------------------------------
 -- Parseador de respuestas herdr (puro, testeable sin proceso externo)
 -- ---------------------------------------------------------------------------
 
@@ -208,7 +237,7 @@ end
 local function do_prompt(prompt_text, is_new_session)
   vim.system(M.build_prompt_argv(prompt_text), { text = true }, function(result)
     if result.code ~= 0 then
-      local parsed = M.parse_herdr_response(result.stdout or "")
+      local parsed = M.parse_herdr_response(M.pick_payload(result.stdout, result.stderr))
       if not parsed.ok and parsed.error_code == "agent_blocked" then
         notify_error("el agente está ocupado (agent_blocked); vuelve a intentarlo más tarde")
       else
@@ -239,7 +268,7 @@ local function create_session_and_prompt(prompt_text, pane_id, cwd)
       notify_error("pane split: " .. (split_result.stderr or "error"))
       return
     end
-    local split_parsed = M.parse_herdr_response(split_result.stdout or "")
+    local split_parsed = M.parse_herdr_response(M.pick_payload(split_result.stdout, split_result.stderr))
     if not split_parsed.ok then
       local msg = split_parsed.raw_error or split_parsed.error_code or "error"
       notify_error("pane split: " .. msg)
@@ -298,9 +327,11 @@ function M.ensure_and_prompt(doc_abs)
   local prompt_text = M.build_prompt(doc_abs)
 
   vim.system(M.build_get_argv(), { text = true }, function(get_result)
-    -- No confiar en el exit code de «herdr agent get»: devuelve 0 incluso
-    -- cuando el agente no existe. Parsear el JSON y comprobar el campo error.
-    local parsed = M.parse_herdr_response(get_result.stdout or "")
+    -- Se parsea el JSON en vez de mirar solo el exit code porque hace falta el
+    -- código concreto: «agent_not_found» significa «crea la sesión» y cualquier
+    -- otro es un fallo que reportar. Ese JSON llega por stderr, no por stdout
+    -- (ver pick_payload).
+    local parsed = M.parse_herdr_response(M.pick_payload(get_result.stdout, get_result.stderr))
     if parsed.ok then
       -- La sesión ya existe: enviar el prompt directamente.
       do_prompt(prompt_text, false)

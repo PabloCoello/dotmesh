@@ -223,6 +223,31 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- pick_payload
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== pick_payload ===\n")
+
+do
+  local err_json = '{"error":{"code":"agent_not_found","message":"agent target scribe not found"},"id":"cli:agent:get"}'
+
+  eq("stdout con contenido gana",        scribe.pick_payload('{"result":{}}', err_json), '{"result":{}}')
+  eq("stdout vacío cae a stderr",        scribe.pick_payload("", err_json),              err_json)
+  eq("stdout nil cae a stderr",          scribe.pick_payload(nil, err_json),             err_json)
+  eq("solo espacios cae a stderr",       scribe.pick_payload("  \n ", err_json),         err_json)
+  eq("ambos vacíos → cadena vacía",      scribe.pick_payload("", ""),                    "")
+  eq("ambos nil → cadena vacía",         scribe.pick_payload(nil, nil),                  "")
+
+  -- El caso que motivó la función: herdr manda el JSON de error por stderr y
+  -- sale con código 1. Leyendo solo stdout, un «agent_not_found» —la señal de
+  -- que hay que crear la sesión— se degradaba a «respuesta vacía» y el puente
+  -- se paraba en vez de levantar scribe.
+  local r = scribe.parse_herdr_response(scribe.pick_payload("", err_json))
+  eq("error de stderr: ok = false",      r.ok,                                           false)
+  eq("error de stderr: código",          r.error_code,                                   "agent_not_found")
+  eq("error de stderr: sin raw_error",   r.raw_error,                                    nil)
+end
+
+-- ---------------------------------------------------------------------------
 -- parse_herdr_response
 -- ---------------------------------------------------------------------------
 io.stderr:write("\n=== parse_herdr_response ===\n")
