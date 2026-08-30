@@ -52,6 +52,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODEL="${MAKER_FLOW_MODEL:-sonnet}"
 TIMEOUT="${MAKER_FLOW_TIMEOUT:-900}"
 RUNS="${MAKER_FLOW_RUNS:-3}"
+# both | maker | control. Correr un solo brazo sirve para comparar contra una
+# ejecución de aceptación previa sin repetir el brazo que no cambia.
+ARMS="${MAKER_FLOW_ARMS:-both}"
+# MAKER_FLOW_AGENTS=1 planta un AGENTS.md en el árbol temporal con la sección de
+# refuerzo del flujo copiada literalmente del AGENTS.md de este repo, y el
+# CLAUDE.md que la importa. Sirve para aislar una sola variable: cuánto del
+# cumplimiento lo sostiene el AGENTS.md del proyecto y cuánto build.md.
+WITH_AGENTS="${MAKER_FLOW_AGENTS:-}"
 
 PASS=0
 FAIL=0
@@ -70,7 +78,7 @@ done
 echo "  claude: $(command -v claude)"
 echo "  node:   $(node --version)"
 echo "  modelo: $MODEL · timeout por run: ${TIMEOUT}s · runs por brazo: $RUNS"
-echo "  tiempo estimado: $((RUNS * 2 * 4)) min aproximadamente"
+echo "  brazos: $ARMS · AGENTS.md en el árbol: ${WITH_AGENTS:-no}"
 
 REAL_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 if [ ! -d "$REPO_ROOT/claude/.claude/agents" ]; then
@@ -172,6 +180,19 @@ Tres fases dependientes en orden. Cada una se commitea por separado.
 
 `bash tests/run.sh` sale con código 0.
 EOP
+
+  if [ -n "$WITH_AGENTS" ]; then
+    {
+      echo "# Guía de agente"
+      echo
+      echo "Proyecto: un CLI de notas en bash."
+      echo
+      # Literal del AGENTS.md de este repo, para que no derive.
+      awk '/^## Skill flow is the default/{f=1} f&&/^## /&&!/^## Skill flow is the default/{exit} f' \
+        "$REPO_ROOT/AGENTS.md"
+    } > "$dir/AGENTS.md"
+    printf '@AGENTS.md\n' > "$dir/CLAUDE.md"
+  fi
 
   git -C "$dir" init -q
   git -C "$dir" config user.email "test@example.com"
@@ -280,33 +301,43 @@ score_arm() {
 }
 
 # ===========================================================================
-section "Brazo CONTROL (estilo por defecto)"
-CONFIG_CONTROL=$(make_config_dir)
-score_arm control '{}' "$CONFIG_CONTROL"
-C_AGENTS=$ARM_TOTAL; C_RUNS=$ARM_RUNS_DELEGATING
-read -r C_SKILLS C_NAMES <<< "$(count_skills "$ROOT_TMP"/stream-control-*.jsonl)"
-echo "  total: $C_AGENTS delegaciones en $C_RUNS/$RUNS runs · $C_SKILLS skills ($C_NAMES)"
+C_AGENTS=0; C_RUNS=0; C_SKILLS=0; C_NAMES="-"
+if [ "$ARMS" != "maker" ]; then
+  section "Brazo CONTROL (estilo por defecto)"
+  CONFIG_CONTROL=$(make_config_dir)
+  score_arm control '{}' "$CONFIG_CONTROL"
+  C_AGENTS=$ARM_TOTAL; C_RUNS=$ARM_RUNS_DELEGATING
+  read -r C_SKILLS C_NAMES <<< "$(count_skills "$ROOT_TMP"/stream-control-*.jsonl)"
+  echo "  total: $C_AGENTS delegaciones en $C_RUNS/$RUNS runs · $C_SKILLS skills ($C_NAMES)"
+fi
 
-section "Brazo TRATAMIENTO (persona maker)"
-CONFIG_MAKER=$(make_config_dir)
-score_arm maker '{"outputStyle":"maker"}' "$CONFIG_MAKER"
-M_AGENTS=$ARM_TOTAL; M_RUNS=$ARM_RUNS_DELEGATING
-read -r M_SKILLS M_NAMES <<< "$(count_skills "$ROOT_TMP"/stream-maker-*.jsonl)"
-echo "  total: $M_AGENTS delegaciones en $M_RUNS/$RUNS runs · $M_SKILLS skills ($M_NAMES)"
+M_AGENTS=0; M_RUNS=0; M_SKILLS=0; M_NAMES="-"
+if [ "$ARMS" != "control" ]; then
+  section "Brazo TRATAMIENTO (persona maker)"
+  CONFIG_MAKER=$(make_config_dir)
+  score_arm maker '{"outputStyle":"maker"}' "$CONFIG_MAKER"
+  M_AGENTS=$ARM_TOTAL; M_RUNS=$ARM_RUNS_DELEGATING
+  read -r M_SKILLS M_NAMES <<< "$(count_skills "$ROOT_TMP"/stream-maker-*.jsonl)"
+  echo "  total: $M_AGENTS delegaciones en $M_RUNS/$RUNS runs · $M_SKILLS skills ($M_NAMES)"
+fi
 
 # ===========================================================================
 section "Rúbrica"
 
-if [ "$M_RUNS" -gt $((RUNS / 2)) ]; then
+if [ "$ARMS" = "control" ]; then
+  :
+elif [ "$M_RUNS" -gt $((RUNS / 2)) ]; then
   pass "el tratamiento delega en la mayoría de sus runs ($M_RUNS/$RUNS)"
 else
   fail "el tratamiento delegó solo en $M_RUNS/$RUNS runs"
 fi
 
-if [ "$M_AGENTS" -gt "$C_AGENTS" ]; then
-  pass "la persona discrimina en delegación (tratamiento $M_AGENTS > control $C_AGENTS)"
-else
-  fail "la persona no discrimina: tratamiento $M_AGENTS, control $C_AGENTS"
+if [ "$ARMS" = "both" ]; then
+  if [ "$M_AGENTS" -gt "$C_AGENTS" ]; then
+    pass "la persona discrimina en delegación (tratamiento $M_AGENTS > control $C_AGENTS)"
+  else
+    fail "la persona no discrimina: tratamiento $M_AGENTS, control $C_AGENTS"
+  fi
 fi
 
 # Medición, no puerta: ver la cabecera. Un cero aquí es señal, no fallo.
@@ -318,8 +349,10 @@ fi
 
 # Detalle de la autocomprobación de build, con la misma medición que usa
 # `make maker-flow-stats` sobre el histórico real.
-section "Autocomprobación de build (tratamiento)"
-node "$SCRIPT_DIR/maker-flow-stats.mjs" --dir "$CONFIG_MAKER/projects" | tail -n +2
+if [ "$ARMS" != "control" ]; then
+  section "Autocomprobación de build (tratamiento)"
+  node "$SCRIPT_DIR/maker-flow-stats.mjs" --dir "$CONFIG_MAKER/projects" | tail -n +2
+fi
 
 section "Resumen"
 echo "  control:     $C_AGENTS delegaciones en $C_RUNS/$RUNS runs, $C_SKILLS skills"
