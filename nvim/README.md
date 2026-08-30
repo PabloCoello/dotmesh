@@ -79,6 +79,33 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 | `<Espacio>ai` | Seleccionar acción |
 | `<Espacio>at` | Mostrar/ocultar UI |
 
+### Revisión (mesh-review)
+
+| Atajo | Modo | Acción |
+|---|---|---|
+| `<Espacio>rp` | Normal | Abrir panel de revisión del fichero actual |
+| `<Espacio>ro` | Visual | Abrir hilo de revisión en la selección |
+| `<Espacio>rs` | Normal | Enviar prompt a scribe (requiere `HERDR_ENV=1`) |
+
+**Keymaps locales del panel** (buffer `mesh-review://…`):
+
+| Atajo | Acción |
+|---|---|
+| `r` | Responder al hilo bajo el cursor |
+| `x` | Resolver el hilo bajo el cursor |
+| `q` / `<Esc>` | Cerrar el panel |
+
+**Comandos:**
+
+| Comando | Acción |
+|---|---|
+| `:MeshPanel` | Igual que `<Espacio>rp` |
+| `:MeshRetract <thread_id> <msg_id> [reason]` | Retractar un mensaje |
+
+El plugin resuelve el CLI de mesh-review en este orden: opción `cli` de `setup()`,
+variable de entorno `MESH_REVIEW_CLI`, ruta `~/.claude/skills/doc-review/bin/mesh-review.mjs`.
+Si no se encuentra el CLI, los keymaps no se registran y aparece una advertencia.
+
 ### Terminal
 
 | Atajo | Acción |
