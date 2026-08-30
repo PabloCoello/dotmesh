@@ -1,0 +1,320 @@
+/**
+ * open.ts — subcomando `open` del CLI mesh-review.
+ *
+ * Crea un evento `thread.opened` con ancla bien formada a partir de los
+ * offsets de cadena JS (unidades de código UTF-16) suministrados por el
+ * llamante. El ancla se construye con `createAnchor` de anchor.ts — el
+ * mismo camino de código que `addCommentImpl` en la extensión VS Code,
+ * para que los dos clientes no puedan divergir.
+ *
+ * Salida (stdout): el UUID del nuevo hilo (= id del evento `thread.opened`).
+ * En caso de error de validación: mensaje en stderr + exit 1.
+ *
+ * Sin dependencias de `vscode`. Reutiliza:
+ *   - `createAnchor` de anchor.ts
+ *   - `getGitRoot`, `getUserName`, `getHeadSha`, `utcTimestampMs`,
+ *     `VALID_COMMENT_TYPES`, `type EventEnvelope` de sidecar.ts
+ *   - `emitEvent` de commands/emit.ts
+ */
+
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
+
+import {
+  getGitRoot,
+  getUserName,
+  getHeadSha,
+  utcTimestampMs,
+  VALID_COMMENT_TYPES,
+  type Author,
+  type EventEnvelope,
+} from '../../sidecar.ts';
+import { createAnchor } from '../../anchor.ts';
+import { emitEvent } from './emit.ts';
+
+// ---------------------------------------------------------------------------
+// Arg parsing
+// ---------------------------------------------------------------------------
+
+interface OpenArgs {
+  doc: string | undefined;
+  offset: string | undefined;
+  endOffset: string | undefined;
+  type: string | undefined;
+  body: string | undefined;
+  author: string;
+  model: string | undefined;
+  effort: string | undefined;
+  subagent: string | undefined;
+  confidence: string | undefined;
+  assignee: string | undefined;
+}
+
+function parseArgs(argv: string[]): OpenArgs {
+  const positional: string[] = [];
+  let offset: string | undefined;
+  let endOffset: string | undefined;
+  let type: string | undefined;
+  let body: string | undefined;
+  let author = 'human';
+  let model: string | undefined;
+  let effort: string | undefined;
+  let subagent: string | undefined;
+  let confidence: string | undefined;
+  let assignee: string | undefined;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--offset') {
+      offset = argv[++i];
+    } else if (arg === '--end-offset') {
+      endOffset = argv[++i];
+    } else if (arg === '--type') {
+      type = argv[++i];
+    } else if (arg === '--body') {
+      body = argv[++i];
+    } else if (arg === '--author') {
+      author = argv[++i] ?? 'human';
+    } else if (arg === '--model') {
+      model = argv[++i];
+    } else if (arg === '--effort') {
+      effort = argv[++i];
+    } else if (arg === '--subagent') {
+      subagent = argv[++i];
+    } else if (arg === '--confidence') {
+      confidence = argv[++i];
+    } else if (arg === '--assignee') {
+      assignee = argv[++i];
+    } else if (!arg.startsWith('-')) {
+      positional.push(arg);
+    }
+  }
+
+  return {
+    doc: positional[0],
+    offset,
+    endOffset,
+    type,
+    body,
+    author,
+    model,
+    effort,
+    subagent,
+    confidence,
+    assignee,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Core logic of `mesh-review open`, extracted for unit tests.
+ *
+ * @param argv  Argument vector (everything after the `open` subcommand token).
+ */
+export async function runOpen(argv: string[]): Promise<void> {
+  if (argv.includes('--help') || argv.length === 0) {
+    printUsage();
+    return;
+  }
+
+  const { doc, offset: offsetStr, endOffset: endOffsetStr, type, body, author, model, effort, subagent, confidence, assignee } =
+    parseArgs(argv);
+
+  // --- Presence checks -------------------------------------------------------
+
+  if (!doc) {
+    process.stderr.write('mesh-review open: se requiere <doc>\n');
+    process.exit(1);
+  }
+  if (offsetStr === undefined) {
+    process.stderr.write('mesh-review open: se requiere --offset\n');
+    process.exit(1);
+  }
+  if (endOffsetStr === undefined) {
+    process.stderr.write('mesh-review open: se requiere --end-offset\n');
+    process.exit(1);
+  }
+  if (!type) {
+    process.stderr.write('mesh-review open: se requiere --type\n');
+    process.exit(1);
+  }
+  if (!body || body.length === 0) {
+    process.stderr.write('mesh-review open: se requiere --body y no puede estar vacío\n');
+    process.exit(1);
+  }
+
+  // --- Offset validation -----------------------------------------------------
+
+  const offset = Number(offsetStr);
+  const endOffset = Number(endOffsetStr);
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    process.stderr.write(`mesh-review open: --offset debe ser un entero no negativo: ${offsetStr}\n`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(endOffset) || endOffset < 0) {
+    process.stderr.write(`mesh-review open: --end-offset debe ser un entero no negativo: ${endOffsetStr}\n`);
+    process.exit(1);
+  }
+  if (endOffset <= offset) {
+    process.stderr.write(`mesh-review open: --end-offset (${endOffset}) debe ser mayor que --offset (${offset})\n`);
+    process.exit(1);
+  }
+
+  // --- Type validation -------------------------------------------------------
+
+  if (!VALID_COMMENT_TYPES.has(type)) {
+    process.stderr.write(
+      `mesh-review open: --type inválido: ${type}. Debe ser uno de: ${[...VALID_COMMENT_TYPES].join(', ')}\n`
+    );
+    process.exit(1);
+  }
+
+  // --- Author validation -----------------------------------------------------
+
+  if (author !== 'human' && author !== 'ai') {
+    process.stderr.write(`mesh-review open: --author debe ser "human" o "ai": ${author}\n`);
+    process.exit(1);
+  }
+  if (author === 'ai' && !model) {
+    process.stderr.write('mesh-review open: --author ai requiere --model\n');
+    process.exit(1);
+  }
+
+  // --- Confidence validation -------------------------------------------------
+
+  const typesRequiringConfidence = new Set(['verifica', 'supuesto']);
+  if (typesRequiringConfidence.has(type) && !confidence) {
+    process.stderr.write(
+      `mesh-review open: --type ${type} requiere --confidence (alta|media|baja)\n`
+    );
+    process.exit(1);
+  }
+  if (confidence !== undefined && !['alta', 'media', 'baja'].includes(confidence)) {
+    process.stderr.write(
+      `mesh-review open: --confidence debe ser alta, media o baja: ${confidence}\n`
+    );
+    process.exit(1);
+  }
+
+  // --- Resolve doc path and git root ----------------------------------------
+
+  const docAbs = path.resolve(doc);
+  const gitRoot = await getGitRoot(path.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write('mesh-review: el documento no está dentro de un repositorio git\n');
+    process.exit(1);
+  }
+
+  const docRelPath = path.relative(gitRoot, docAbs);
+  if (docRelPath.startsWith('..')) {
+    process.stderr.write('mesh-review: el documento no está dentro del git root\n');
+    process.exit(1);
+  }
+  const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
+
+  // --- Read file and validate offsets ----------------------------------------
+
+  let text: string;
+  try {
+    text = await readFile(docAbs, 'utf8');
+  } catch (err) {
+    process.stderr.write(
+      `mesh-review open: no se puede leer el documento: ${err instanceof Error ? err.message : String(err)}\n`
+    );
+    process.exit(1);
+  }
+
+  if (offset >= text.length) {
+    process.stderr.write(
+      `mesh-review open: --offset (${offset}) fuera del documento (longitud ${text.length})\n`
+    );
+    process.exit(1);
+  }
+  if (endOffset > text.length) {
+    process.stderr.write(
+      `mesh-review open: --end-offset (${endOffset}) fuera del documento (longitud ${text.length})\n`
+    );
+    process.exit(1);
+  }
+
+  // --- Build anchor (same code path as addCommentImpl) ----------------------
+
+  const anchor = createAnchor(text, offset, endOffset);
+
+  // --- Build author ----------------------------------------------------------
+
+  let authorObj: Author;
+  if (author === 'ai') {
+    authorObj = {
+      kind: 'ai',
+      model: model!,
+      ...(effort !== undefined ? { effort } : {}),
+      ...(subagent !== undefined ? { subagent } : {}),
+    };
+  } else {
+    const name = await getUserName(path.dirname(docAbs));
+    authorObj = name !== undefined ? { kind: 'human', name } : { kind: 'human' };
+  }
+
+  // --- Build event (id === thread_id, same pattern as addCommentImpl) -------
+
+  const threadId = randomUUID();
+  const ev: EventEnvelope = {
+    id: threadId,
+    version: 2,
+    type: 'thread.opened',
+    thread_id: threadId,
+    author: authorObj,
+    created_at: utcTimestampMs(),
+    commit: await getHeadSha(gitRoot),
+    dirty: false,
+    anchor,
+    commentType: type,
+    body,
+  };
+
+  if (confidence !== undefined) ev.confidence = confidence;
+  if (assignee !== undefined) ev.assignee = assignee;
+
+  // --- Write event atomically -----------------------------------------------
+
+  await emitEvent(eventDir, ev);
+
+  process.stdout.write(`${threadId}\n`);
+}
+
+// ---------------------------------------------------------------------------
+// Usage
+// ---------------------------------------------------------------------------
+
+function printUsage(): void {
+  process.stderr.write(
+    [
+      'Uso: mesh-review open <doc>',
+      '         --offset <n> --end-offset <n>',
+      '         --type <commentType> --body <texto>',
+      '         [--author human|ai] [--model <id>]',
+      '         [--effort <str>] [--subagent <str>]',
+      '         [--confidence alta|media|baja] [--assignee <nombre>]',
+      '',
+      'Crea un hilo de revisión anclado a la selección [offset, end-offset) del',
+      'documento. Los offsets son índices de unidades de código UTF-16 (índices',
+      'de cadena JS). Imprime el UUID del nuevo hilo en stdout.',
+      '',
+      'Tipos válidos: edita, sugerencia, pregunta, verifica, nota, referencia, supuesto',
+      '  --type verifica|supuesto requiere --confidence.',
+      '  --author ai requiere --model.',
+      '',
+      'Salida:',
+      '  stdout: UUID del nuevo hilo (thread_id)',
+      '',
+      'Ejemplo:',
+      '  mesh-review open docs/SPEC.md --offset 0 --end-offset 5 --type nota --body "Revisar"',
+    ].join('\n') + '\n'
+  );
+}

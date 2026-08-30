@@ -24,6 +24,7 @@ import { isPending } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
 import { reanchorThreads } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
+import { runOpen } from './commands/open.ts';
 import { writeFile } from 'node:fs/promises';
 
 const execFileAsync = promisify(execFile);
@@ -967,6 +968,238 @@ test('fix: --confidence con valor inválido → exit 1, sin evento emitido', asy
     assert.strictEqual(code, 1, 'sale con código 1');
     const events = await readEvents(eventDir);
     assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// open
+// ---------------------------------------------------------------------------
+
+test('open: happy path ASCII → crea thread.opened con cita y status open', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Hello world\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    let tid: string | undefined;
+    const origWrite = process.stdout.write.bind(process.stdout);
+    const written: string[] = [];
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'Revisar']);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    tid = written.join('').trim();
+    assert.ok(tid && tid.length > 0, 'imprime thread_id');
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const ev = events[0];
+    assert.strictEqual(ev.type, 'thread.opened', 'tipo correcto');
+    assert.strictEqual(ev.id, tid, 'id === thread_id (mismo UUID)');
+    assert.strictEqual(ev.thread_id, tid, 'thread_id igual al stdout');
+    assert.strictEqual(ev.commentType, 'nota', 'commentType correcto');
+    assert.strictEqual(ev.body, 'Revisar', 'body correcto');
+    const anchor = ev.anchor as { quote: string; line_hint: number; char_offset: number };
+    assert.strictEqual(anchor.quote, 'Hello', 'cita correcta');
+    assert.strictEqual(anchor.char_offset, 0, 'char_offset correcto');
+
+    const threads = project(events);
+    assert.strictEqual(threads.length, 1, '1 hilo en project');
+    assert.strictEqual(threads[0].status, 'open', 'status open');
+    assert.strictEqual(threads[0].thread_id, tid, 'thread_id coincide');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --author ai --model m1 → author.kind ai en el evento', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido para revisar\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runOpen([
+      docAbs,
+      '--offset', '0', '--end-offset', '9',
+      '--type', 'sugerencia',
+      '--body', 'Sugiero cambiar',
+      '--author', 'ai',
+      '--model', 'claude-sonnet-4-6',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const author = events[0].author as { kind: string; model?: string };
+    assert.strictEqual(author.kind, 'ai', 'author.kind es ai');
+    assert.strictEqual(author.model, 'claude-sonnet-4-6', 'author.model correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --type verifica --confidence alta → confidence en el evento', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Verificar este punto\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runOpen([
+      docAbs,
+      '--offset', '0', '--end-offset', '8',
+      '--type', 'verifica',
+      '--body', 'Revisar con detalle',
+      '--confidence', 'alta',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    assert.strictEqual(events[0].confidence, 'alta', 'confidence correcto');
+    assert.strictEqual(events[0].commentType, 'verifica', 'commentType correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: evento pasa readEvents sin descartarse (round-trip)', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Texto del documento para test\n', 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    await runOpen([
+      docAbs,
+      '--offset', '0', '--end-offset', '5',
+      '--type', 'nota',
+      '--body', 'Nota de prueba',
+    ]);
+
+    const events = await readEvents(eventDir);
+    // If the event were malformed it would be silently dropped
+    assert.strictEqual(events.length, 1, 'el evento sobrevive a readEvents');
+    // Verify anchor fields have correct types (not discarded for bad types)
+    const anchor = events[0].anchor as { quote: string; line_hint: number; char_offset: number };
+    assert.strictEqual(typeof anchor.line_hint, 'number', 'line_hint es número');
+    assert.strictEqual(typeof anchor.char_offset, 'number', 'char_offset es número');
+    assert.strictEqual(typeof anchor.quote, 'string', 'quote es cadena');
+
+    const threads = project(events);
+    assert.strictEqual(threads.length, 1, '1 hilo en project tras round-trip');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: fichero con emoji — offsets para texto ASCII a su derecha', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    // '😀' ocupa 2 unidades de código UTF-16 (indices 0 y 1 en JS)
+    // El texto ASCII 'hola' empieza en offset 2
+    const content = '😀hola\n';
+    await writeFile(docAbs, content, 'utf8');
+
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    // offset 2 → inicio de 'hola', end-offset 6 → fin de 'hola' (4 chars)
+    await runOpen([
+      docAbs,
+      '--offset', '2', '--end-offset', '6',
+      '--type', 'nota',
+      '--body', 'Texto tras emoji',
+    ]);
+
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 1, '1 evento emitido');
+    const anchor = events[0].anchor as { quote: string; line_hint: number; char_offset: number };
+    assert.strictEqual(anchor.quote, 'hola', 'cita correcta tras emoji');
+    assert.strictEqual(anchor.char_offset, 2, 'char_offset es la unidad UTF-16 correcta');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --end-offset < --offset → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '5', '--end-offset', '3', '--type', 'nota', '--body', 'x'])
+    );
+    assert.strictEqual(code, 1, 'sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --offset fuera del fichero → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'abc\n', 'utf8');  // length 4
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '10', '--end-offset', '15', '--type', 'nota', '--body', 'x'])
+    );
+    assert.strictEqual(code, 1, 'sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --type inválido → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido largo de prueba\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'invalido', '--body', 'x'])
+    );
+    assert.strictEqual(code, 1, 'sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --type verifica sin --confidence → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido largo de prueba\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'verifica', '--body', 'x'])
+    );
+    assert.strictEqual(code, 1, 'sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --author ai sin --model → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido de prueba\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'x', '--author', 'ai'])
+    );
+    assert.strictEqual(code, 1, 'sale con código 1');
   } finally {
     await cleanup();
   }

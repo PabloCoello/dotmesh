@@ -9,6 +9,7 @@ import { runProject } from './commands/project.ts';
 import { runEmit } from './commands/emit.ts';
 import { runReanchor } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
+import { runOpen } from './commands/open.ts';
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const [subcommand, ...rest] = argv;
@@ -26,6 +27,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     case 'fix':
       await runFix(rest);
       break;
+    case 'open':
+      await runOpen(rest);
+      break;
     default:
       printUsage();
       if (subcommand !== undefined) process.exit(1);
@@ -40,6 +44,8 @@ function printUsage(): void {
       '',
       'Subcomandos:',
       '  project [--pending] <doc>         Proyecta los hilos abiertos del documento',
+      '  open <doc> --offset <n> --end-offset <n> --type <t> --body <txt>',
+      '                                    Abre un hilo de revisión desde cualquier editor',
       '  emit <doc> <tipo> [clave=valor…]  Emite un evento de revisión para el documento',
       '  reanchor <doc>                    Re-resuelve anclas y emite thread.reanchored',
       '  fix <doc> <thread_id> -m <msg> --body <texto>',
