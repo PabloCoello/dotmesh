@@ -36,16 +36,25 @@ export async function runEmit(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const docRelPath = path.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith('..')) {
+  // Use path.resolve + path.sep prefix check — same pattern as sidecarPathForDoc
+  // in sidecar.ts — to catch embedded traversal (e.g. foo/../../bar) that the
+  // simpler startsWith('..') check misses.
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const eventDir  = path.resolve(reviewDir, path.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path.sep)) {
     process.stderr.write('mesh-review: el documento no está dentro del git root\n');
     process.exit(1);
   }
-  const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
 
   const id = randomUUID();
   const created_at = utcTimestampMs();
-  const kvData = parseKvPairs(pairs);
+  let kvData: Record<string, unknown>;
+  try {
+    kvData = parseKvPairs(pairs);
+  } catch (err) {
+    process.stderr.write(`${(err as Error).message}\n`);
+    process.exit(1);
+  }
 
   // El id, version y created_at siempre vienen del CLI; el resto del k=v puede sobreescribir
   // otros campos (excepto id/version/created_at que son siempre autoritativos del CLI).
@@ -101,13 +110,41 @@ export async function emitEvent(eventDir: string, event: EventEnvelope): Promise
 }
 
 /**
+ * Keys whose values must be coerced to a non-negative integer.
+ * Derived directly from the two numeric fields in schema.json ($defs/anchor).
+ * Any other key is never coerced to a number regardless of value shape.
+ */
+const NUMERIC_KV_PATHS = new Set(['anchor.line_hint', 'anchor.char_offset']);
+
+/**
+ * Dot-key segments that must never be traversed to prevent prototype pollution.
+ *
+ * Primary defence: reject and throw so the caller (runEmit) surfaces stderr +
+ * exit 1 immediately. Secondary defence: intermediate nodes are built with
+ * Object.create(null) so there is no inherited __proto__ accessor to exploit
+ * even if a future code path bypasses the explicit check.
+ *
+ * Checked case-insensitively because __PROTO__, Constructor and PROTOTYPE are
+ * benign as property names on null-prototype objects but would confuse readers
+ * and are never legitimate in a review-event key.
+ */
+const FORBIDDEN_KEY_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
  * Convierte pares `clave=valor` en un objeto anidado.
  *
  * Tipos de valor reconocidos:
- *   - "null"  → null
- *   - "true"  → true
- *   - "false" → false
- *   - resto   → string
+ *   - "null"        → null    (cualquier clave)
+ *   - "true"        → true    (cualquier clave)
+ *   - "false"       → false   (cualquier clave)
+ *   - entero ≥ 0    → number  (solo anchor.line_hint y anchor.char_offset)
+ *   - resto         → string
+ *
+ * Las dos claves numéricas del esquema (anchor.line_hint, anchor.char_offset)
+ * solo aceptan enteros no negativos. Cualquier otro valor (float, negativo,
+ * notación científica, cadena vacía) lanza un Error — el llamante debe
+ * traducirlo a stderr + exit 1. Nunca se coerciona ninguna otra clave a número,
+ * aunque su valor tenga forma de dígitos.
  *
  * Notación de punto para objetos anidados:
  *   author.kind=ai  →  { author: { kind: "ai" } }
@@ -121,18 +158,42 @@ export function parseKvPairs(pairs: string[]): Record<string, unknown> {
     const rawValue = pair.slice(idx + 1);
 
     let value: unknown;
-    if (rawValue === 'null') value = null;
-    else if (rawValue === 'true') value = true;
-    else if (rawValue === 'false') value = false;
-    else value = rawValue;
+    if (rawValue === 'null') {
+      value = null;
+    } else if (rawValue === 'true') {
+      value = true;
+    } else if (rawValue === 'false') {
+      value = false;
+    } else if (NUMERIC_KV_PATHS.has(key)) {
+      // Numeric keys must be non-negative integers. Reject floats, negatives,
+      // scientific notation, and empty strings with a hard error.
+      if (!/^\d+$/.test(rawValue)) {
+        throw new Error(
+          `mesh-review emit: ${key} debe ser un entero no negativo, pero se recibió: "${rawValue}"`
+        );
+      }
+      value = parseInt(rawValue, 10);
+    } else {
+      value = rawValue;
+    }
 
     // Soporte de notación de punto: author.kind=ai → { author: { kind: "ai" } }
     const parts = key.split('.');
+    // Reject reserved prototype-chain segments before any traversal.
+    for (const seg of parts) {
+      if (FORBIDDEN_KEY_SEGMENTS.has(seg.toLowerCase())) {
+        throw new Error(
+          `mesh-review emit: clave reservada rechazada ("${seg}"); no se admiten __proto__, constructor ni prototype`
+        );
+      }
+    }
     let obj: Record<string, unknown> = result;
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
       if (typeof obj[part] !== 'object' || obj[part] === null) {
-        obj[part] = {};
+        // Object.create(null) avoids an inherited __proto__ accessor on the
+        // intermediate node — defense-in-depth on top of the explicit rejection.
+        obj[part] = Object.create(null) as Record<string, unknown>;
       }
       obj = obj[part] as Record<string, unknown>;
     }

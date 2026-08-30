@@ -578,10 +578,25 @@ export async function readEvents(
     return [];
   }
   const results: EventEnvelope[] = [];
+  // Paths of events discarded due to malformed anchor fields, for a single
+  // aggregated warning emitted after the loop (one warn per readEvents call).
+  // Paths of events discarded due to malformed/missing required fields, for a
+  // single aggregated warning emitted after the loop (one warn per call).
+  const discardedPaths: string[] = [];
+  // Skip event files larger than this threshold. A legitimate event is a few
+  // hundred bytes; 1 MiB is already far beyond any real event. Files arriving
+  // through a git clone of a repo that versions .ai/review/ are not trusted.
+  const MAX_EVENT_FILE_BYTES = 1 * 1024 * 1024;
+
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
     const filePath = path.join(dir, name);
     try {
+      const fileStat = await stat(filePath);
+      if (fileStat.size > MAX_EVENT_FILE_BYTES) {
+        discardedPaths.push(filePath);
+        continue;
+      }
       const content = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
       if (parsed?.version !== 2) continue;
@@ -593,14 +608,44 @@ export async function readEvents(
       if (typeof parsed.id !== 'string' || !isUuid(parsed.id)) continue;
       if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
       if ('body' in parsed && typeof parsed.body !== 'string') continue;
+      // author es obligatorio en todos los eventos: su ausencia o kind inválido
+      // haría fallar isPending (que lee lastMsg.author.kind) y la proyección
+      // (que lee openedBy). Se valida al mínimo: presencia y kind reconocido.
+      if (
+        !parsed.author ||
+        typeof parsed.author !== 'object' ||
+        Array.isArray(parsed.author)
+      ) {
+        discardedPaths.push(filePath);
+        continue;
+      }
+      const authorKind = (parsed.author as Record<string, unknown>).kind;
+      if (authorKind !== 'human' && authorKind !== 'ai') {
+        discardedPaths.push(filePath);
+        continue;
+      }
+      // author.kind "ai" requires a string model: schema.json mandates it, and
+      // callers that read author.model expect a string (never undefined).
+      if (authorKind === 'ai') {
+        const authorModel = (parsed.author as Record<string, unknown>).model;
+        if (typeof authorModel !== 'string') {
+          discardedPaths.push(filePath);
+          continue;
+        }
+      }
       // Los campos del ancla también son datos de disco: un line_hint string
       // acabaría concatenado en etiquetas ("L" + hint) y un quote no-string
       // rompería escapeHtml, igual que el body.
       if ('anchor' in parsed && parsed.anchor !== null && typeof parsed.anchor === 'object') {
         const anchorRec = parsed.anchor as Record<string, unknown>;
-        if ('line_hint' in anchorRec && typeof anchorRec.line_hint !== 'number') continue;
-        if ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number') continue;
-        if ('quote' in anchorRec && typeof anchorRec.quote !== 'string') continue;
+        const badField =
+          ('line_hint' in anchorRec && typeof anchorRec.line_hint !== 'number' ? 'line_hint' : null) ??
+          ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number' ? 'char_offset' : null) ??
+          ('quote' in anchorRec && typeof anchorRec.quote !== 'string' ? 'quote' : null);
+        if (badField !== null) {
+          discardedPaths.push(filePath);
+          continue;
+        }
       }
       results.push(parsed as unknown as EventEnvelope);
     } catch (err) {
@@ -617,6 +662,13 @@ export async function readEvents(
         }
       }
     }
+  }
+  // One aggregated warning per readEvents call: avoids a warn flood when the
+  // extension processes the same directory on every file-watcher event.
+  if (discardedPaths.length > 0) {
+    console.warn(
+      `mesh-review: descartando ${discardedPaths.length} evento(s) malformado(s) en ${dir}; ejemplo: ${discardedPaths[0]}`
+    );
   }
   results.sort(compareEvents);
   return results;
