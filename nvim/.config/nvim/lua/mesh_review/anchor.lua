@@ -1,12 +1,21 @@
 --- mesh_review.anchor — Gestión de extmarks para hilos de revisión
 ---
---- Un extmark por hilo abierto, colocado en la fila line_hint (0-indexed).
+--- Un extmark por hilo abierto, colocado sobre el fragmento resuelto o, si
+--- la cita no se encuentra, en la fila line_hint (0-indexed).
 --- El namespace es "mesh_review" (compartido por todos los buffers).
 --- En BufWritePost se llama a cli.reanchor para actualizar los offsets en disco.
+---
+--- Exposición de API interna para tests:
+---   M._place_extmarks(bufnr, threads) — función local expuesta con prefijo _
+---   para que los specs puedan llamarla con datos de prueba sin depender del CLI.
+---   El guión bajo señala que es un hook de test, no parte de la API pública.
+---   Documentado aquí para que quede claro ante cualquier lector.
 
 local M = {}
 
-local cli = require("mesh_review.cli")
+local cli     = require("mesh_review.cli")
+local resolve = require("mesh_review.resolve")
+local types   = require("mesh_review.types")
 
 --- Namespace de Neovim para todos los extmarks de mesh-review.
 --- Se crea una sola vez y reutiliza en todos los buffers.
@@ -34,6 +43,24 @@ end
 --- Coloca extmarks para los hilos dados en el buffer.
 --- Limpia todos los extmarks anteriores en el namespace antes de colocar los nuevos.
 ---
+--- Para cada hilo abierto con ancla:
+---
+---   Caso detached: signo gris "? " (MeshReviewDetached) sin rango ni virt_text.
+---   El hilo no tiene texto anclado; marcar con "?" indica que se perdió el ancla.
+---
+---   Caso normal: se intenta resolver la cita con resolve.find_quote.
+---   — Cita encontrada, cierta: rango tintado con hl_group del tipo + virt_text.
+---   — Cita encontrada, incierta: rango con MeshReviewDetached (bg degradado) para
+---     no señalar la posición como exacta; signo y virt_text mantienen el tipo.
+---   — Cita no encontrada: extmark en line_hint sin rango; sign + virt_text del tipo.
+---
+--- El signo usa dos celdas: letra del tipo + barra sólida (▎).
+--- La combinación supera al triángulo fino anterior (▸) porque:
+---   1. La letra identifica el tipo a golpe de vista sin iconos externos.
+---   2. ▎ (U+258E, un cuarto de bloque vertical) da cuerpo a la marca con suficiente
+---      contraste sobre el fondo oscuro (#121212) sin tapar la letra adyacente.
+---   3. El color del tipo en sign_hl_group añade la señal cromática que faltaba.
+---
 --- @param bufnr   number   Buffer de Neovim.
 --- @param threads table    Array de hilos devuelto por cli.project.
 local function _place_extmarks(bufnr, threads)
@@ -48,20 +75,75 @@ local function _place_extmarks(bufnr, threads)
 
   for _, thread in ipairs(threads) do
     if thread.status == "open" and thread.anchor then
-      local row = thread.anchor.line_hint or 0
-      -- Acotar la fila al rango válido del buffer.
-      row = math.max(0, math.min(row, num_lines - 1))
+      local anchor = thread.anchor
+      local ctype  = thread.commentType or "?"
+      local tipo   = types.by_label[ctype]  -- nil si tipo desconocido
 
       local eid = _next_id()
-      vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, {
-        id            = eid,
-        sign_text     = "▸",
-        sign_hl_group = "Identifier",
-      })
+
+      if anchor.detached then
+        -- Hilo desanclado: el usuario eliminó el texto o el ancla nunca tuvo cita.
+        -- Marcar con "?" en gris para que se distinga de los comentarios normales.
+        local row = math.max(0, math.min(anchor.line_hint or 0, num_lines - 1))
+        vim.api.nvim_buf_set_extmark(bufnr, ns, row, 0, {
+          id            = eid,
+          sign_text     = "? ",
+          sign_hl_group = "MeshReviewDetached",
+        })
+      else
+        -- Grupo de highlight del tipo (o Detached si tipo desconocido).
+        local hl_group = tipo and tipo.hl or "MeshReviewDetached"
+        -- sign_text: letra del tipo + barra sólida para rellenar la segunda celda.
+        -- Tipo desconocido → "? " (dos celdas, sin barra, para no confundir).
+        local sign_text = tipo and (tipo.letter .. "▎") or "? "
+
+        -- Fila y columna de respaldo: line_hint acotada al rango válido del buffer.
+        local row = math.max(0, math.min(anchor.line_hint or 0, num_lines - 1))
+        local col = 0
+
+        -- Intentar resolver la cita en el buffer.
+        local pos = resolve.find_quote(bufnr, anchor.quote, anchor.char_offset)
+
+        local opts = {
+          id            = eid,
+          sign_text     = sign_text,
+          sign_hl_group = hl_group,
+          virt_text     = { { "● " .. ctype, hl_group } },
+          virt_text_pos = "eol",
+        }
+
+        if pos then
+          -- Cita resuelta: el extmark arranca en la posición exacta del fragmento.
+          -- La columna inicial (pos.start_col) es importante: nvim_buf_set_extmark
+          -- usa el par (row, col) como origen del rango de hl_group. Si se coloca
+          -- en col=0 con end_col=7, el fondo tintado cubriría desde la columna 0
+          -- en lugar del fragmento real. El signo se muestra en la línea del extmark
+          -- independientemente de col, así que mover col a start_col no lo afecta.
+          row = pos.start_row
+          col = pos.start_col
+          -- Incertidumbre alta: el fondo tintado se degrada a Detached para no
+          -- señalar como exacta una posición en la que tenemos poca confianza.
+          -- El signo y el virt_text mantienen el color del tipo: el usuario sigue
+          -- viendo qué tipo de comentario es, aunque el ancla sea aproximada.
+          local range_hl = pos.uncertain and "MeshReviewDetached" or hl_group
+          opts.hl_group  = range_hl
+          opts.end_row   = pos.end_row
+          opts.end_col   = pos.end_col
+        end
+        -- Cita no resuelta: opts sin end_row/end_col ni hl_group (solo sign + virt_text).
+
+        vim.api.nvim_buf_set_extmark(bufnr, ns, row, col, opts)
+      end
+
       _extmark_to_thread[bufnr][eid] = thread.thread_id
     end
   end
 end
+
+--- Hook de test: expone _place_extmarks para que los specs puedan llamarla
+--- directamente con datos de prueba sin necesitar el CLI ni un sidecar real.
+--- El prefijo _ indica que no es parte de la API pública del módulo.
+M._place_extmarks = _place_extmarks
 
 --- Inicializa el seguimiento de extmarks para un buffer:
 --- coloca extmarks iniciales y registra el autocmd BufWritePost.
