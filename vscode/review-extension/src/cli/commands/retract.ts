@@ -43,6 +43,13 @@ const RETRACT_KNOWN_FLAGS = new Set(['reason', 'author', 'model', 'effort', 'sub
  */
 const MAX_REASON_CHARS = 10_000;
 
+/**
+ * Rejects NUL and the C0 control characters, allowing tab (\x09),
+ * newline (\x0A) and carriage return (\x0D).
+ * Stored review text has no legitimate use for other control characters.
+ */
+const CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -97,6 +104,12 @@ export async function runRetract(argv: string[]): Promise<void> {
   if (reason !== undefined && reason.length > MAX_REASON_CHARS) {
     process.stderr.write(
       `mesh-review retract: --reason supera el límite de ${MAX_REASON_CHARS} caracteres (${reason.length})\n`
+    );
+    process.exit(1);
+  }
+  if (reason !== undefined && CTRL_CHAR_RE.test(reason)) {
+    process.stderr.write(
+      'mesh-review retract: --reason contiene caracteres de control no permitidos\n'
     );
     process.exit(1);
   }

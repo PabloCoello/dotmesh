@@ -786,6 +786,7 @@ var OPEN_KNOWN_FLAGS = /* @__PURE__ */ new Set([
   "assignee"
 ]);
 var MAX_BODY_CHARS = 1e4;
+var CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
 async function runOpen(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage3();
@@ -827,6 +828,12 @@ async function runOpen(argv) {
     process.stderr.write(
       `mesh-review open: --body supera el l\xEDmite de ${MAX_BODY_CHARS} caracteres (${body.length})
 `
+    );
+    process.exit(1);
+  }
+  if (CTRL_CHAR_RE.test(body)) {
+    process.stderr.write(
+      "mesh-review open: --body contiene caracteres de control no permitidos\n"
     );
     process.exit(1);
   }
@@ -990,6 +997,7 @@ var REPLY_KNOWN_FLAGS = /* @__PURE__ */ new Set([
   "confidence"
 ]);
 var MAX_BODY_CHARS2 = 1e4;
+var CTRL_CHAR_RE2 = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
 async function runReply(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage4();
@@ -1025,6 +1033,12 @@ async function runReply(argv) {
     process.stderr.write(
       `mesh-review reply: --body supera el l\xEDmite de ${MAX_BODY_CHARS2} caracteres (${body.length})
 `
+    );
+    process.exit(1);
+  }
+  if (CTRL_CHAR_RE2.test(body)) {
+    process.stderr.write(
+      "mesh-review reply: --body contiene caracteres de control no permitidos\n"
     );
     process.exit(1);
   }
@@ -1237,6 +1251,7 @@ import { randomUUID as randomUUID7 } from "node:crypto";
 import * as path9 from "node:path";
 var RETRACT_KNOWN_FLAGS = /* @__PURE__ */ new Set(["reason", "author", "model", "effort", "subagent"]);
 var MAX_REASON_CHARS = 1e4;
+var CTRL_CHAR_RE3 = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
 async function runRetract(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage6();
@@ -1277,6 +1292,12 @@ async function runRetract(argv) {
     process.stderr.write(
       `mesh-review retract: --reason supera el l\xEDmite de ${MAX_REASON_CHARS} caracteres (${reason.length})
 `
+    );
+    process.exit(1);
+  }
+  if (reason !== void 0 && CTRL_CHAR_RE3.test(reason)) {
+    process.stderr.write(
+      "mesh-review retract: --reason contiene caracteres de control no permitidos\n"
     );
     process.exit(1);
   }

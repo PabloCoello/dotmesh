@@ -46,6 +46,13 @@ const REPLY_KNOWN_FLAGS = new Set([
  */
 const MAX_BODY_CHARS = 10_000;
 
+/**
+ * Rejects NUL and the C0 control characters, allowing tab (\x09),
+ * newline (\x0A) and carriage return (\x0D).
+ * Stored review text has no legitimate use for other control characters.
+ */
+const CTRL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -93,6 +100,12 @@ export async function runReply(argv: string[]): Promise<void> {
   if (body.length > MAX_BODY_CHARS) {
     process.stderr.write(
       `mesh-review reply: --body supera el límite de ${MAX_BODY_CHARS} caracteres (${body.length})\n`
+    );
+    process.exit(1);
+  }
+  if (CTRL_CHAR_RE.test(body)) {
+    process.stderr.write(
+      'mesh-review reply: --body contiene caracteres de control no permitidos\n'
     );
     process.exit(1);
   }

@@ -573,6 +573,93 @@ test('readEvents: fichero de evento mayor de 1 MiB se descarta (con console.warn
 });
 
 // ---------------------------------------------------------------------------
+// Slice C: caracteres de control en body/reason
+// ---------------------------------------------------------------------------
+
+test('open: --body con NUL → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'hola\x00mundo'])
+    );
+    assert.strictEqual(code, 1, 'NUL en body → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --body con C0 de control (\x01) → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota', '--body', 'hola\x01mundo'])
+    );
+    assert.strictEqual(code, 1, 'C0 en body → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --body con tab y salto de línea permitidos → aceptado', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const written: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runOpen([
+        docAbs, '--offset', '0', '--end-offset', '5', '--type', 'nota',
+        '--body', 'línea1\t con tab\nlínea2\r\n',
+      ]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    assert.ok(written.join('').trim().length > 0, 'tab y newline son aceptados');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --body con carácter de control → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', 'texto\x0Emalo'])
+    );
+    assert.strictEqual(code, 1, 'carácter C0 en reply → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: --reason con carácter de control → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), randomUUID(), '--reason', 'mal\x08control'])
+    );
+    assert.strictEqual(code, 1, 'carácter C0 en --reason → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // readEvents: aviso cuando anchor tiene campos con tipo incorrecto
 // ---------------------------------------------------------------------------
 
