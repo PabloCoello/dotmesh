@@ -450,6 +450,129 @@ test('parseKvPairs: notación de punto legítima sigue funcionando', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Slice B: límite de longitud de cuerpo y tamaño de fichero de evento
+// ---------------------------------------------------------------------------
+
+const BODY_OVER_LIMIT = 'x'.repeat(10_001);
+const BODY_AT_LIMIT   = 'x'.repeat(10_000);
+
+test('open: --body que supera 10 000 caracteres → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([
+        docAbs,
+        '--offset', '0', '--end-offset', '5',
+        '--type', 'nota',
+        '--body', BODY_OVER_LIMIT,
+      ])
+    );
+    assert.strictEqual(code, 1, 'body sobre el límite → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('open: --body exactamente en el límite (10 000 chars) → accepted', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, BODY_AT_LIMIT + '\n', 'utf8');
+
+    const written: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runOpen([
+        docAbs,
+        '--offset', '0', '--end-offset', '5',
+        '--type', 'nota',
+        '--body', BODY_AT_LIMIT,
+      ]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const tid = written.join('').trim();
+    assert.ok(tid && tid.length > 0, 'body en el límite exacto es aceptado');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --body que supera 10 000 caracteres → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', BODY_OVER_LIMIT])
+    );
+    assert.strictEqual(code, 1, 'body sobre el límite → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: --reason que supera 10 000 caracteres → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), randomUUID(), '--reason', BODY_OVER_LIMIT])
+    );
+    assert.strictEqual(code, 1, '--reason sobre el límite → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('readEvents: fichero de evento mayor de 1 MiB se descarta (con console.warn)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-oversize-'));
+  try {
+    const id = randomUUID();
+    const tid = randomUUID();
+    // Build a valid-looking event and pad it beyond 1 MiB.
+    const base = JSON.stringify({
+      id,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'q', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'ok',
+    });
+    const padding = ' '.repeat(1 * 1024 * 1024 + 1);
+    const bigContent = base.slice(0, -1) + ',"padding":"' + padding + '"}';
+    await writeFile(join(dir, `${id}.json`), bigContent, 'utf8');
+
+    const warnings: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+    let events: import('../sidecar.ts').EventEnvelope[];
+    try {
+      events = await readEvents(dir);
+    } finally {
+      console.warn = origWarn;
+    }
+    assert.strictEqual(events.length, 0, 'evento sobredimensionado debe descartarse');
+    assert.ok(warnings.length > 0, 'debe emitir un console.warn');
+    assert.ok(warnings[0].includes('malformado'), 'warn menciona "malformado"');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // readEvents: aviso cuando anchor tiene campos con tipo incorrecto
 // ---------------------------------------------------------------------------
 

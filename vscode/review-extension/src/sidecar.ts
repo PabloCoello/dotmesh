@@ -583,10 +583,20 @@ export async function readEvents(
   // Paths of events discarded due to malformed/missing required fields, for a
   // single aggregated warning emitted after the loop (one warn per call).
   const discardedPaths: string[] = [];
+  // Skip event files larger than this threshold. A legitimate event is a few
+  // hundred bytes; 1 MiB is already far beyond any real event. Files arriving
+  // through a git clone of a repo that versions .ai/review/ are not trusted.
+  const MAX_EVENT_FILE_BYTES = 1 * 1024 * 1024;
+
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
     const filePath = path.join(dir, name);
     try {
+      const fileStat = await stat(filePath);
+      if (fileStat.size > MAX_EVENT_FILE_BYTES) {
+        discardedPaths.push(filePath);
+        continue;
+      }
       const content = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(content) as Record<string, unknown>;
       if (parsed?.version !== 2) continue;

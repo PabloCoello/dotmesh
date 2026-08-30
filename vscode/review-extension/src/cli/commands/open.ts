@@ -43,6 +43,12 @@ const OPEN_KNOWN_FLAGS = new Set([
   'effort', 'subagent', 'confidence', 'assignee',
 ]);
 
+/**
+ * Maximum body length in UTF-16 code units.
+ * Matches the VS Code webview composer cap so CLI and UI stay consistent.
+ */
+const MAX_BODY_CHARS = 10_000;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -91,6 +97,12 @@ export async function runOpen(argv: string[]): Promise<void> {
   }
   if (!body || body.length === 0) {
     process.stderr.write('mesh-review open: se requiere --body y no puede estar vacío\n');
+    process.exit(1);
+  }
+  if (body.length > MAX_BODY_CHARS) {
+    process.stderr.write(
+      `mesh-review open: --body supera el límite de ${MAX_BODY_CHARS} caracteres (${body.length})\n`
+    );
     process.exit(1);
   }
 

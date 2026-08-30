@@ -40,6 +40,12 @@ const REPLY_KNOWN_FLAGS = new Set([
   'body', 'author', 'model', 'effort', 'subagent', 'confidence',
 ]);
 
+/**
+ * Maximum body length in UTF-16 code units.
+ * Matches the VS Code webview composer cap so CLI and UI stay consistent.
+ */
+const MAX_BODY_CHARS = 10_000;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -82,6 +88,12 @@ export async function runReply(argv: string[]): Promise<void> {
   }
   if (!body || body.length === 0) {
     process.stderr.write('mesh-review reply: se requiere --body y no puede estar vacío\n');
+    process.exit(1);
+  }
+  if (body.length > MAX_BODY_CHARS) {
+    process.stderr.write(
+      `mesh-review reply: --body supera el límite de ${MAX_BODY_CHARS} caracteres (${body.length})\n`
+    );
     process.exit(1);
   }
 

@@ -37,6 +37,12 @@ import { parseCliArgs } from '../args.ts';
 
 const RETRACT_KNOWN_FLAGS = new Set(['reason', 'author', 'model', 'effort', 'subagent']);
 
+/**
+ * Maximum reason length in UTF-16 code units.
+ * Matches the VS Code webview composer cap so CLI and UI stay consistent.
+ */
+const MAX_REASON_CHARS = 10_000;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -83,6 +89,15 @@ export async function runRetract(argv: string[]): Promise<void> {
   }
   if (!isUuid(messageId)) {
     process.stderr.write(`mesh-review retract: message_id no es un UUID válido: ${messageId}\n`);
+    process.exit(1);
+  }
+
+  // --- Reason length cap -------------------------------------------------------
+
+  if (reason !== undefined && reason.length > MAX_REASON_CHARS) {
+    process.stderr.write(
+      `mesh-review retract: --reason supera el límite de ${MAX_REASON_CHARS} caracteres (${reason.length})\n`
+    );
     process.exit(1);
   }
 

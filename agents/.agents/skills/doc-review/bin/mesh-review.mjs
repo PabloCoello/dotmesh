@@ -164,10 +164,16 @@ async function readEvents(dir, onError) {
   }
   const results = [];
   const discardedPaths = [];
+  const MAX_EVENT_FILE_BYTES = 1 * 1024 * 1024;
   for (const name of entries) {
     if (!name.endsWith(".json")) continue;
     const filePath = path.join(dir, name);
     try {
+      const fileStat = await stat(filePath);
+      if (fileStat.size > MAX_EVENT_FILE_BYTES) {
+        discardedPaths.push(filePath);
+        continue;
+      }
       const content = await readFile(filePath, "utf8");
       const parsed = JSON.parse(content);
       if (parsed?.version !== 2) continue;
@@ -779,6 +785,7 @@ var OPEN_KNOWN_FLAGS = /* @__PURE__ */ new Set([
   "confidence",
   "assignee"
 ]);
+var MAX_BODY_CHARS = 1e4;
 async function runOpen(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage3();
@@ -814,6 +821,13 @@ async function runOpen(argv) {
   }
   if (!body || body.length === 0) {
     process.stderr.write("mesh-review open: se requiere --body y no puede estar vac\xEDo\n");
+    process.exit(1);
+  }
+  if (body.length > MAX_BODY_CHARS) {
+    process.stderr.write(
+      `mesh-review open: --body supera el l\xEDmite de ${MAX_BODY_CHARS} caracteres (${body.length})
+`
+    );
     process.exit(1);
   }
   const offset = Number(offsetStr);
@@ -975,6 +989,7 @@ var REPLY_KNOWN_FLAGS = /* @__PURE__ */ new Set([
   "subagent",
   "confidence"
 ]);
+var MAX_BODY_CHARS2 = 1e4;
 async function runReply(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage4();
@@ -1004,6 +1019,13 @@ async function runReply(argv) {
   }
   if (!body || body.length === 0) {
     process.stderr.write("mesh-review reply: se requiere --body y no puede estar vac\xEDo\n");
+    process.exit(1);
+  }
+  if (body.length > MAX_BODY_CHARS2) {
+    process.stderr.write(
+      `mesh-review reply: --body supera el l\xEDmite de ${MAX_BODY_CHARS2} caracteres (${body.length})
+`
+    );
     process.exit(1);
   }
   if (author !== "human" && author !== "ai") {
@@ -1214,6 +1236,7 @@ function printUsage5() {
 import { randomUUID as randomUUID7 } from "node:crypto";
 import * as path9 from "node:path";
 var RETRACT_KNOWN_FLAGS = /* @__PURE__ */ new Set(["reason", "author", "model", "effort", "subagent"]);
+var MAX_REASON_CHARS = 1e4;
 async function runRetract(argv) {
   if (argv.includes("--help") || argv.length === 0) {
     printUsage6();
@@ -1248,6 +1271,13 @@ async function runRetract(argv) {
   if (!isUuid(messageId)) {
     process.stderr.write(`mesh-review retract: message_id no es un UUID v\xE1lido: ${messageId}
 `);
+    process.exit(1);
+  }
+  if (reason !== void 0 && reason.length > MAX_REASON_CHARS) {
+    process.stderr.write(
+      `mesh-review retract: --reason supera el l\xEDmite de ${MAX_REASON_CHARS} caracteres (${reason.length})
+`
+    );
     process.exit(1);
   }
   if (author !== "human" && author !== "ai") {
