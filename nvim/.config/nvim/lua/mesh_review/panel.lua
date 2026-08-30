@@ -13,8 +13,15 @@
 ---   ══════════════════════════════════════════════
 ---
 --- Los hilos resueltos se omiten (solo status=="open").
+---
+--- APIs modernas usadas en este fichero:
+---   vim.bo[bufnr].xxx    en lugar de nvim_buf_set_option (deprecada desde 0.10)
+---   vim.wo[winid].xxx    en lugar de nvim_win_set_option (deprecada desde 0.10)
+---   nvim_buf_set_extmark en lugar de nvim_buf_add_highlight (deprecada desde 0.10)
 
 local M = {}
+
+local types = require("mesh_review.types")
 
 --- Estado del panel (singleton: solo un panel abierto a la vez).
 --- Prefijo del nombre de los buffers del panel. Sirve para reconocerlos: el
@@ -147,18 +154,38 @@ local function _build_content(threads)
     local date      = _fmt_date(thread.openedAt)
     local quote     = (thread.anchor and thread.anchor.quote) or ""
 
+    -- La subcadena del tipo en el encabezado puede contener saltos (raro pero
+    -- posible si el sidecar viene de una herramienta externa). Se limpia igual
+    -- que el resto del texto para que la búsqueda de posición funcione.
+    local ctype_clean = table.concat(_split_lines(ctype), " ")
+
     -- Línea de encabezado: [open] <tid_short> (tipo · autor · fecha)
     local hdr_lnum = #lines  -- 0-indexed
     local hdr = string.format("[open] %s (%s · %s · %s)", tid_short,
-      table.concat(_split_lines(ctype), " "),
+      ctype_clean,
       table.concat(_split_lines(author), " "),
       table.concat(_split_lines(date), " "))
     table.insert(lines, hdr)
     line_to_thread[hdr_lnum] = thread.thread_id
 
-    -- Highlight: "Identifier" para "[open]" y "Comment" para el resto del encabezado.
+    -- Highlight: "Identifier" para "[open]" y "Comment" para el resto.
     table.insert(highlights, { "Identifier", hdr_lnum, 0, 6 })
     table.insert(highlights, { "Comment", hdr_lnum, 7, #hdr })
+
+    -- Highlight del tipo dentro del encabezado: buscar la subcadena del tipo
+    -- en el encabezado empezando desde la posición 8 (tras "[open] ").
+    -- Esto permite que la etiqueta del tipo aparezca en su color específico
+    -- mientras el resto del encabezado queda en "Comment".
+    -- Tipo desconocido o no reconocido → grupo atenuado "MeshReviewDetached".
+    local tipo_entry = types.by_label[ctype]
+    local tipo_hl    = tipo_entry and tipo_entry.hl or "MeshReviewDetached"
+    if ctype_clean ~= "" then
+      local tipo_s, tipo_e = string.find(hdr, ctype_clean, 8, true)
+      if tipo_s then
+        -- tipo_e es el índice del último byte (1-indexed); col_e es exclusivo.
+        table.insert(highlights, { tipo_hl, hdr_lnum, tipo_s - 1, tipo_e })
+      end
+    end
 
     -- Cita (si existe).
     if quote ~= "" then
@@ -201,6 +228,9 @@ local function _build_content(threads)
 end
 
 --- Aplica highlights a un buffer ya escrito.
+--- Usa nvim_buf_set_extmark (API moderna) en lugar de nvim_buf_add_highlight
+--- (deprecada desde Neovim 0.10). Cada highlight es un extmark de rango sin
+--- posición de cursor ni virt_text: solo hl_group sobre un intervalo de bytes.
 ---
 --- @param bufnr      number   Buffer.
 --- @param highlights table    Array de { group, lnum, col_s, col_e }.
@@ -210,11 +240,15 @@ local function _apply_highlights(bufnr, highlights)
   for _, hl in ipairs(highlights) do
     local group, lnum, col_s, col_e = hl[1], hl[2], hl[3], hl[4]
     if col_e == -1 then
-      -- Hasta el final de la línea.
+      -- Hasta el final de la línea: calcular la longitud real en bytes.
       local line = vim.api.nvim_buf_get_lines(bufnr, lnum, lnum + 1, false)[1] or ""
       col_e = #line
     end
-    vim.api.nvim_buf_add_highlight(bufnr, ns, group, lnum, col_s, col_e)
+    vim.api.nvim_buf_set_extmark(bufnr, ns, lnum, col_s, {
+      end_row  = lnum,
+      end_col  = col_e,
+      hl_group = group,
+    })
   end
 end
 
@@ -294,9 +328,9 @@ function M.render(bufnr, threads)
   local lines, highlights, l2t = _build_content(threads)
 
   -- Desbloquear el buffer temporalmente para escribir.
-  vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
+  vim.bo[bufnr].modifiable = true
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-  vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+  vim.bo[bufnr].modifiable = false
 
   _apply_highlights(bufnr, highlights)
   _state.line_to_thread = l2t
@@ -326,10 +360,10 @@ function M.open(doc)
     vim.cmd("botright " .. height .. "split")
     local winid = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(winid, bufnr)
-    vim.api.nvim_win_set_option(winid, "number", false)
-    vim.api.nvim_win_set_option(winid, "relativenumber", false)
-    vim.api.nvim_win_set_option(winid, "signcolumn", "no")
-    vim.api.nvim_win_set_option(winid, "wrap", false)
+    vim.wo[winid].number         = false
+    vim.wo[winid].relativenumber = false
+    vim.wo[winid].signcolumn     = "no"
+    vim.wo[winid].wrap           = false
     _state.winid = winid
   end
 
@@ -346,10 +380,10 @@ function M.open(doc)
     -- Crear nuevo buffer.
     panel_bufnr = vim.api.nvim_create_buf(false, true)  -- unlisted, scratch
     vim.api.nvim_buf_set_name(panel_bufnr, buf_name)
-    vim.api.nvim_buf_set_option(panel_bufnr, "filetype", "mesh-review")
-    vim.api.nvim_buf_set_option(panel_bufnr, "buftype", "nofile")
-    vim.api.nvim_buf_set_option(panel_bufnr, "swapfile", false)
-    vim.api.nvim_buf_set_option(panel_bufnr, "modifiable", false)
+    vim.bo[panel_bufnr].filetype  = "mesh-review"
+    vim.bo[panel_bufnr].buftype   = "nofile"
+    vim.bo[panel_bufnr].swapfile  = false
+    vim.bo[panel_bufnr].modifiable = false
 
     _open_window(panel_bufnr)
   end
