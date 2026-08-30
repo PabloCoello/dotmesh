@@ -580,7 +580,9 @@ export async function readEvents(
   const results: EventEnvelope[] = [];
   // Paths of events discarded due to malformed anchor fields, for a single
   // aggregated warning emitted after the loop (one warn per readEvents call).
-  const malformedAnchorPaths: string[] = [];
+  // Paths of events discarded due to malformed/missing required fields, for a
+  // single aggregated warning emitted after the loop (one warn per call).
+  const discardedPaths: string[] = [];
   for (const name of entries) {
     if (!name.endsWith('.json')) continue;
     const filePath = path.join(dir, name);
@@ -596,6 +598,22 @@ export async function readEvents(
       if (typeof parsed.id !== 'string' || !isUuid(parsed.id)) continue;
       if (typeof parsed.thread_id !== 'string' || !isUuid(parsed.thread_id)) continue;
       if ('body' in parsed && typeof parsed.body !== 'string') continue;
+      // author es obligatorio en todos los eventos: su ausencia o kind inválido
+      // haría fallar isPending (que lee lastMsg.author.kind) y la proyección
+      // (que lee openedBy). Se valida al mínimo: presencia y kind reconocido.
+      if (
+        !parsed.author ||
+        typeof parsed.author !== 'object' ||
+        Array.isArray(parsed.author)
+      ) {
+        discardedPaths.push(filePath);
+        continue;
+      }
+      const authorKind = (parsed.author as Record<string, unknown>).kind;
+      if (authorKind !== 'human' && authorKind !== 'ai') {
+        discardedPaths.push(filePath);
+        continue;
+      }
       // Los campos del ancla también son datos de disco: un line_hint string
       // acabaría concatenado en etiquetas ("L" + hint) y un quote no-string
       // rompería escapeHtml, igual que el body.
@@ -606,7 +624,7 @@ export async function readEvents(
           ('char_offset' in anchorRec && typeof anchorRec.char_offset !== 'number' ? 'char_offset' : null) ??
           ('quote' in anchorRec && typeof anchorRec.quote !== 'string' ? 'quote' : null);
         if (badField !== null) {
-          malformedAnchorPaths.push(filePath);
+          discardedPaths.push(filePath);
           continue;
         }
       }
@@ -628,9 +646,9 @@ export async function readEvents(
   }
   // One aggregated warning per readEvents call: avoids a warn flood when the
   // extension processes the same directory on every file-watcher event.
-  if (malformedAnchorPaths.length > 0) {
+  if (discardedPaths.length > 0) {
     console.warn(
-      `mesh-review: descartando ${malformedAnchorPaths.length} evento(s) con ancla mal tipada en ${dir}; ejemplo: ${malformedAnchorPaths[0]}`
+      `mesh-review: descartando ${discardedPaths.length} evento(s) malformado(s) en ${dir}; ejemplo: ${discardedPaths[0]}`
     );
   }
   results.sort(compareEvents);

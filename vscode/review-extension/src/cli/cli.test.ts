@@ -517,6 +517,120 @@ test('readEvents: directorio limpio no emite ningún console.warn', async () => 
 });
 
 // ---------------------------------------------------------------------------
+// Slice A: readEvents — validación de author
+// ---------------------------------------------------------------------------
+
+test('readEvents: evento sin author es descartado y emite console.warn', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-noauthor-'));
+  try {
+    const id = randomUUID();
+    const eventWithoutAuthor = {
+      id,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: id,
+      // author field deliberately omitted
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'hola', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Sin author.',
+    };
+    await writeFile(join(dir, `${id}.json`), JSON.stringify(eventWithoutAuthor, null, 2) + '\n', 'utf8');
+
+    const warnMessages: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnMessages.push(args.join(' ')); };
+    try {
+      const events = await readEvents(dir);
+      assert.strictEqual(events.length, 0, 'evento sin author es descartado');
+      assert.strictEqual(warnMessages.length, 1, 'se emite exactamente un console.warn');
+      assert.ok(warnMessages[0].includes('1'), 'el aviso indica el número de eventos descartados');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('readEvents: evento con author.kind inválido es descartado y emite console.warn', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-badkind-'));
+  try {
+    const id = randomUUID();
+    const eventBadKind = {
+      id,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: id,
+      author: { kind: 'bot' }, // not 'human' or 'ai'
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'hola', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Author kind desconocido.',
+    };
+    await writeFile(join(dir, `${id}.json`), JSON.stringify(eventBadKind, null, 2) + '\n', 'utf8');
+
+    const warnMessages: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnMessages.push(args.join(' ')); };
+    try {
+      const events = await readEvents(dir);
+      assert.strictEqual(events.length, 0, 'evento con kind inválido es descartado');
+      assert.strictEqual(warnMessages.length, 1, 'se emite exactamente un console.warn');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test('readEvents + isPending: evento sin author es descartado; isPending no lanza', async () => {
+  // Reproduce the live bug: a thread.opened written via `emit` without an
+  // `author` field must not crash project --pending when isPending reads
+  // lastMsg.author.kind.
+  const dir = await mkdtemp(join(tmpdir(), 'mr-cli-pending-crash-'));
+  try {
+    // Write one event without author (the buggy event) and one valid event.
+    const badId = randomUUID();
+    const badEvent = {
+      id: badId,
+      version: 2,
+      type: 'thread.opened',
+      thread_id: badId,
+      // no author field
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'test', line_hint: 0, char_offset: 0 },
+      commentType: 'nota',
+      body: 'Hilo sin author.',
+    };
+    await writeFile(join(dir, `${badId}.json`), JSON.stringify(badEvent, null, 2) + '\n', 'utf8');
+
+    const origWarn = console.warn;
+    console.warn = () => { /* suppress */ };
+    try {
+      const events = await readEvents(dir);
+      // The bad event is filtered out; project + isPending must not throw.
+      const threads = project(events);
+      assert.strictEqual(threads.length, 0, 'hilo sin author no llega a la proyección');
+      // Calling isPending on an empty projection must not throw.
+      const filtered = threads.filter(isPending);
+      assert.strictEqual(filtered.length, 0, 'isPending devuelve vacío sin lanzar');
+    } finally {
+      console.warn = origWarn;
+    }
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Integración: emit con anchor numérico → readEvents no descarta
 // ---------------------------------------------------------------------------
 

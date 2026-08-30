@@ -163,7 +163,7 @@ async function readEvents(dir, onError) {
     return [];
   }
   const results = [];
-  const malformedAnchorPaths = [];
+  const discardedPaths = [];
   for (const name of entries) {
     if (!name.endsWith(".json")) continue;
     const filePath = path.join(dir, name);
@@ -174,11 +174,20 @@ async function readEvents(dir, onError) {
       if (typeof parsed.id !== "string" || !isUuid(parsed.id)) continue;
       if (typeof parsed.thread_id !== "string" || !isUuid(parsed.thread_id)) continue;
       if ("body" in parsed && typeof parsed.body !== "string") continue;
+      if (!parsed.author || typeof parsed.author !== "object" || Array.isArray(parsed.author)) {
+        discardedPaths.push(filePath);
+        continue;
+      }
+      const authorKind = parsed.author.kind;
+      if (authorKind !== "human" && authorKind !== "ai") {
+        discardedPaths.push(filePath);
+        continue;
+      }
       if ("anchor" in parsed && parsed.anchor !== null && typeof parsed.anchor === "object") {
         const anchorRec = parsed.anchor;
         const badField = ("line_hint" in anchorRec && typeof anchorRec.line_hint !== "number" ? "line_hint" : null) ?? ("char_offset" in anchorRec && typeof anchorRec.char_offset !== "number" ? "char_offset" : null) ?? ("quote" in anchorRec && typeof anchorRec.quote !== "string" ? "quote" : null);
         if (badField !== null) {
-          malformedAnchorPaths.push(filePath);
+          discardedPaths.push(filePath);
           continue;
         }
       }
@@ -194,9 +203,9 @@ async function readEvents(dir, onError) {
       }
     }
   }
-  if (malformedAnchorPaths.length > 0) {
+  if (discardedPaths.length > 0) {
     console.warn(
-      `mesh-review: descartando ${malformedAnchorPaths.length} evento(s) con ancla mal tipada en ${dir}; ejemplo: ${malformedAnchorPaths[0]}`
+      `mesh-review: descartando ${discardedPaths.length} evento(s) malformado(s) en ${dir}; ejemplo: ${discardedPaths[0]}`
     );
   }
   results.sort(compareEvents);
