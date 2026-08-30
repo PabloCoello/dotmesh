@@ -729,20 +729,28 @@ function parseCliArgs(argv, knownFlags, subcommand) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
-      const name = arg.slice(2);
-      if (!knownFlags.has(name)) {
-        process.stderr.write(`mesh-review ${subcommand}: flag desconocida: ${arg}
+      const eqIdx = arg.indexOf("=", 2);
+      let name;
+      let value;
+      if (eqIdx !== -1) {
+        name = arg.slice(2, eqIdx);
+        value = arg.slice(eqIdx + 1);
+      } else {
+        name = arg.slice(2);
+        if (argv[i + 1] === void 0) {
+          process.stderr.write(`mesh-review ${subcommand}: la flag --${name} requiere un valor
 `);
-        process.exit(1);
+          process.exit(1);
+        }
+        value = argv[i + 1];
+        i++;
       }
-      const value = argv[i + 1];
-      if (value === void 0) {
-        process.stderr.write(`mesh-review ${subcommand}: la flag ${arg} requiere un valor
+      if (!knownFlags.has(name)) {
+        process.stderr.write(`mesh-review ${subcommand}: flag desconocida: --${name}
 `);
         process.exit(1);
       }
       flags.set(name, value);
-      i++;
     } else {
       positionals.push(arg);
     }
@@ -831,6 +839,10 @@ async function runOpen(argv) {
   }
   if (author === "ai" && !model) {
     process.stderr.write("mesh-review open: --author ai requiere --model\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && model !== void 0) {
+    process.stderr.write("mesh-review open: --model solo es v\xE1lido con --author ai\n");
     process.exit(1);
   }
   const typesRequiringConfidence = /* @__PURE__ */ new Set(["verifica", "supuesto"]);
@@ -995,6 +1007,10 @@ async function runReply(argv) {
     process.stderr.write("mesh-review reply: --author ai requiere --model\n");
     process.exit(1);
   }
+  if (author !== "ai" && model !== void 0) {
+    process.stderr.write("mesh-review reply: --model solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
   if (confidence !== void 0 && !["alta", "media", "baja"].includes(confidence)) {
     process.stderr.write(
       `mesh-review reply: --confidence debe ser alta, media o baja: ${confidence}
@@ -1113,6 +1129,10 @@ async function runResolve(argv) {
     process.stderr.write("mesh-review resolve: --author ai requiere --model\n");
     process.exit(1);
   }
+  if (author !== "ai" && model !== void 0) {
+    process.stderr.write("mesh-review resolve: --model solo es v\xE1lido con --author ai\n");
+    process.exit(1);
+  }
   const docAbs = path8.resolve(doc);
   const gitRoot = await getGitRoot(path8.dirname(docAbs));
   if (!gitRoot) {
@@ -1229,6 +1249,10 @@ async function runRetract(argv) {
   }
   if (author === "ai" && !model) {
     process.stderr.write("mesh-review retract: --author ai requiere --model\n");
+    process.exit(1);
+  }
+  if (author !== "ai" && model !== void 0) {
+    process.stderr.write("mesh-review retract: --model solo es v\xE1lido con --author ai\n");
     process.exit(1);
   }
   const docAbs = path9.resolve(doc);

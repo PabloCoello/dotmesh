@@ -22,6 +22,7 @@ import { promisify } from 'node:util';
 import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
 import { isPending } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
+import { parseCliArgs } from './args.ts';
 import { reanchorThreads } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
@@ -1943,6 +1944,99 @@ test('retract: mensaje inexistente en el hilo → exit 1', async () => {
       runRetract([docAbs, tid, randomUUID()])
     );
     assert.strictEqual(code, 1, 'mensaje inexistente → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Slice C: parseCliArgs — forma --flag=value y rechazo --author human --model
+// ---------------------------------------------------------------------------
+
+test('parseCliArgs: --flag=value es equivalente a --flag value', () => {
+  const known = new Set(['body', 'type', 'author']);
+  const result = parseCliArgs(['doc.md', '--type=nota', '--body=hola mundo'], known, 'test');
+  assert.strictEqual(result.flags.get('type'), 'nota', '--type=nota extraído');
+  assert.strictEqual(result.flags.get('body'), 'hola mundo', '--body=hola mundo extraído');
+  assert.deepStrictEqual(result.positionals, ['doc.md'], 'posicionales correctos');
+});
+
+test('parseCliArgs: --flag= (valor vacío) es aceptado', () => {
+  const known = new Set(['reason']);
+  const result = parseCliArgs(['--reason='], known, 'test');
+  assert.strictEqual(result.flags.get('reason'), '', 'valor vacío aceptado');
+});
+
+test('parseCliArgs: --flag=value con flag desconocida → exit 1', async () => {
+  const known = new Set(['body']);
+  const code = await captureExit(async () => {
+    parseCliArgs(['--unknown=x'], known, 'test');
+  });
+  assert.strictEqual(code, 1, 'flag desconocida con = → sale con código 1');
+});
+
+test('open: --author human --model X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runOpen([
+        docAbs,
+        '--offset', '0', '--end-offset', '5',
+        '--type', 'nota',
+        '--body', 'x',
+        '--author', 'human',
+        '--model', 'claude-sonnet-4-6',
+      ])
+    );
+    assert.strictEqual(code, 1, '--author human --model → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reply: --author human --model X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runReply([docAbs, randomUUID(), '--body', 'x', '--author', 'human', '--model', 'm1'])
+    );
+    assert.strictEqual(code, 1, '--author human --model → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('resolve: --author human --model X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runResolve([docAbs, randomUUID(), '--author', 'human', '--model', 'm1'])
+    );
+    assert.strictEqual(code, 1, '--author human --model → sale con código 1');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('retract: --author human --model X → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const code = await captureExit(() =>
+      runRetract([docAbs, randomUUID(), randomUUID(), '--author', 'human', '--model', 'm1'])
+    );
+    assert.strictEqual(code, 1, '--author human --model → sale con código 1');
   } finally {
     await cleanup();
   }

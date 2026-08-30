@@ -95,6 +95,10 @@ export async function runReply(argv: string[]): Promise<void> {
     process.stderr.write('mesh-review reply: --author ai requiere --model\n');
     process.exit(1);
   }
+  if (author !== 'ai' && model !== undefined) {
+    process.stderr.write('mesh-review reply: --model solo es válido con --author ai\n');
+    process.exit(1);
+  }
 
   // --- Confidence validation -------------------------------------------------
 

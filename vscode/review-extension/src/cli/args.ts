@@ -47,20 +47,32 @@ export function parseCliArgs(
     const arg = argv[i];
 
     if (arg.startsWith('--')) {
-      const name = arg.slice(2);
-      if (!knownFlags.has(name)) {
-        process.stderr.write(`mesh-review ${subcommand}: flag desconocida: ${arg}\n`);
-        process.exit(1);
+      // Support both '--flag value' and '--flag=value' forms.
+      const eqIdx = arg.indexOf('=', 2); // skip past '--'
+      let name: string;
+      let value: string | undefined;
+
+      if (eqIdx !== -1) {
+        name = arg.slice(2, eqIdx);
+        value = arg.slice(eqIdx + 1);
+      } else {
+        name = arg.slice(2);
+        // Space-separated form: consume the next token as the value.
+        if (argv[i + 1] === undefined) {
+          process.stderr.write(`mesh-review ${subcommand}: la flag --${name} requiere un valor\n`);
+          process.exit(1);
+        }
+        value = argv[i + 1];
+        i++; // consume value token
       }
-      const value = argv[i + 1];
-      if (value === undefined) {
-        process.stderr.write(`mesh-review ${subcommand}: la flag ${arg} requiere un valor\n`);
+
+      if (!knownFlags.has(name)) {
+        process.stderr.write(`mesh-review ${subcommand}: flag desconocida: --${name}\n`);
         process.exit(1);
       }
       // A value beginning with '-' (e.g. --body "-1 punto") is accepted as-is.
       // Repeated flags: last value wins.
       flags.set(name, value);
-      i++; // consume value token
     } else {
       positionals.push(arg);
     }

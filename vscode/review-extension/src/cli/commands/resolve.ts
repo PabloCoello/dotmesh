@@ -87,6 +87,10 @@ export async function runResolve(argv: string[]): Promise<void> {
     process.stderr.write('mesh-review resolve: --author ai requiere --model\n');
     process.exit(1);
   }
+  if (author !== 'ai' && model !== undefined) {
+    process.stderr.write('mesh-review resolve: --model solo es válido con --author ai\n');
+    process.exit(1);
+  }
 
   // --- Resolve doc path and git root ----------------------------------------
 
