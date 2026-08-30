@@ -22,7 +22,7 @@ import { VALID_COMMENT_TYPES } from './sidecar.ts';
 /** Etiqueta neutra cuando el commentType del sidecar no está en la lista blanca. */
 const FALLBACK_COMMENT_LABEL = 'comentario';
 
-/** Mismo conjunto de caracteres que valida el wrapper zsh para `--style`. */
+/** Mismo conjunto de caracteres que valida el wrapper de shell para `--style`. */
 const VALID_STYLE_RE = /^[a-zA-Z0-9._-]+$/;
 
 /**
@@ -51,7 +51,20 @@ function shellQuote(value: string): string {
 /**
  * Devuelve el comando de shell para lanzar Claude Code en la persona indicada.
  *
- * Ejemplo: buildLaunchCommand('scribe') → 'claude --style scribe'
+ * Ejemplo: buildLaunchCommand('scribe')
+ *   → `claude --settings '{"outputStyle":"scribe"}'`
+ *
+ * Por qué --settings y no --style: `--style` no existe en la CLI de Claude Code
+ * (comprobado con 2.1.251, "error: unknown option --style"); es azúcar del
+ * wrapper de shell de dotmesh (`shell/.config/shell/claude-session.zsh`), que
+ * lo traduce justamente a este `--settings`. El terminal integrado no garantiza
+ * ese wrapper: basta un perfil de shell distinto, un contenedor o un WSL sin
+ * los dotfiles para que el lanzamiento muera con "unknown option". Hablar
+ * directamente el idioma de la CLI quita esa dependencia.
+ *
+ * El JSON va entre comillas simples POSIX porque el comando se teclea en un
+ * shell: sin ellas, las llaves y las comillas dobles quedarían a merced del
+ * globbing y del entrecomillado del shell.
  *
  * El caller (extension.ts) pasa siempre una constante de cadena ('scribe'),
  * nunca un valor del webview; la validación con VALID_STYLE_RE convierte un
@@ -59,9 +72,9 @@ function shellQuote(value: string): string {
  */
 export function buildLaunchCommand(style: string): string {
   if (!VALID_STYLE_RE.test(style)) {
-    throw new TypeError(`estilo inválido para --style: "${style}" (solo [a-zA-Z0-9._-])`);
+    throw new TypeError(`estilo inválido para la persona: "${style}" (solo [a-zA-Z0-9._-])`);
   }
-  return `claude --style ${style}`;
+  return `claude --settings '{"outputStyle":"${style}"}'`;
 }
 
 // ---------------------------------------------------------------------------
