@@ -401,6 +401,55 @@ test('parseKvPairs: anchor.char_offset=-1 lanza error con exit 1', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Slice A: parseKvPairs — prototype pollution guard
+// ---------------------------------------------------------------------------
+
+test('parseKvPairs: __proto__.x=y lanza error y no contamina Object.prototype', () => {
+  // The call must throw before any traversal touches Object.prototype.
+  assert.throws(
+    () => parseKvPairs(['__proto__.x=y']),
+    /reservada/,
+    'debe lanzar error al encontrar __proto__'
+  );
+  // Primary assertion: Object.prototype must be clean.
+  assert.strictEqual(
+    (Object.prototype as Record<string, unknown>)['x'],
+    undefined,
+    'Object.prototype no debe estar contaminado tras el intento de ataque'
+  );
+});
+
+test('parseKvPairs: constructor.prototype=evil lanza error (case-insensitive)', () => {
+  assert.throws(
+    () => parseKvPairs(['constructor.prototype=evil']),
+    /reservada/,
+    'debe lanzar error al encontrar constructor'
+  );
+  assert.strictEqual(
+    (Object.prototype as Record<string, unknown>)['prototype'],
+    undefined,
+    'Object.prototype no contaminado'
+  );
+});
+
+test('parseKvPairs: PROTOTYPE.toString=evil lanza error (case-insensitive)', () => {
+  assert.throws(
+    () => parseKvPairs(['PROTOTYPE.toString=evil']),
+    /reservada/,
+    'debe lanzar error al encontrar PROTOTYPE en mayúsculas'
+  );
+});
+
+test('parseKvPairs: notación de punto legítima sigue funcionando', () => {
+  const result = parseKvPairs(['author.kind=ai', 'author.model=test-model']);
+  assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(result)),
+    { author: { kind: 'ai', model: 'test-model' } },
+    'objeto anidado se serializa igual que antes'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // readEvents: aviso cuando anchor tiene campos con tipo incorrecto
 // ---------------------------------------------------------------------------
 

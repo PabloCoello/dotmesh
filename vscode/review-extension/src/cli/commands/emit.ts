@@ -114,6 +114,20 @@ export async function emitEvent(eventDir: string, event: EventEnvelope): Promise
 const NUMERIC_KV_PATHS = new Set(['anchor.line_hint', 'anchor.char_offset']);
 
 /**
+ * Dot-key segments that must never be traversed to prevent prototype pollution.
+ *
+ * Primary defence: reject and throw so the caller (runEmit) surfaces stderr +
+ * exit 1 immediately. Secondary defence: intermediate nodes are built with
+ * Object.create(null) so there is no inherited __proto__ accessor to exploit
+ * even if a future code path bypasses the explicit check.
+ *
+ * Checked case-insensitively because __PROTO__, Constructor and PROTOTYPE are
+ * benign as property names on null-prototype objects but would confuse readers
+ * and are never legitimate in a review-event key.
+ */
+const FORBIDDEN_KEY_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
  * Convierte pares `clave=valor` en un objeto anidado.
  *
  * Tipos de valor reconocidos:
@@ -162,11 +176,21 @@ export function parseKvPairs(pairs: string[]): Record<string, unknown> {
 
     // Soporte de notación de punto: author.kind=ai → { author: { kind: "ai" } }
     const parts = key.split('.');
+    // Reject reserved prototype-chain segments before any traversal.
+    for (const seg of parts) {
+      if (FORBIDDEN_KEY_SEGMENTS.has(seg.toLowerCase())) {
+        throw new Error(
+          `mesh-review emit: clave reservada rechazada ("${seg}"); no se admiten __proto__, constructor ni prototype`
+        );
+      }
+    }
     let obj: Record<string, unknown> = result;
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
       if (typeof obj[part] !== 'object' || obj[part] === null) {
-        obj[part] = {};
+        // Object.create(null) avoids an inherited __proto__ accessor on the
+        // intermediate node — defense-in-depth on top of the explicit rejection.
+        obj[part] = Object.create(null) as Record<string, unknown>;
       }
       obj = obj[part] as Record<string, unknown>;
     }

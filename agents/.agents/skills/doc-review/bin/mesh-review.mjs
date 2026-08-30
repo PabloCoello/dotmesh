@@ -322,6 +322,7 @@ async function emitEvent(eventDir, event) {
   await rename(tmp, final);
 }
 var NUMERIC_KV_PATHS = /* @__PURE__ */ new Set(["anchor.line_hint", "anchor.char_offset"]);
+var FORBIDDEN_KEY_SEGMENTS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function parseKvPairs(pairs) {
   const result = {};
   for (const pair of pairs) {
@@ -347,11 +348,18 @@ function parseKvPairs(pairs) {
       value = rawValue;
     }
     const parts = key.split(".");
+    for (const seg of parts) {
+      if (FORBIDDEN_KEY_SEGMENTS.has(seg.toLowerCase())) {
+        throw new Error(
+          `mesh-review emit: clave reservada rechazada ("${seg}"); no se admiten __proto__, constructor ni prototype`
+        );
+      }
+    }
     let obj = result;
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
       if (typeof obj[part] !== "object" || obj[part] === null) {
-        obj[part] = {};
+        obj[part] = /* @__PURE__ */ Object.create(null);
       }
       obj = obj[part];
     }
