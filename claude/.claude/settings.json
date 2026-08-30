@@ -21,6 +21,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/remind-review-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/remind-load-skills.sh"
           }
         ]
       },

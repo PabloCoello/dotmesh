@@ -118,6 +118,54 @@ tp=$(make_transcripts no si)
 msg=$(run_gate 'git commit -m "algo"' "$tp" '../../abc123')
 [ -z "$msg" ] && pass "agent_id con travesía queda saneado a abc123" || fail "el saneado de agent_id cambió el fichero leído"
 
+SKILLS="$HOOKS/remind-load-skills.sh"
+
+# Ejecuta el recordatorio de skills en un TMPDIR propio, para que el marcador de
+# un caso no contamine el siguiente. $1 = tool_name, $2 = comando o ruta,
+# $3 = agent_id (vacío para el orquestador), $4 = TMPDIR (opcional, para
+# encadenar dos llamadas en el mismo "agente").
+run_skills() {
+  local tool="$1" arg="$2" aid="${3:-}" td="${4:-}" input out
+  [ -z "$td" ] && td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+  input=$(jq -nc --arg t "$tool" --arg a "$arg" --arg g "$aid" \
+    '{hook_event_name:"PreToolUse",tool_name:$t,session_id:"sesion-1"}
+     + (if $t == "Bash" then {tool_input:{command:$a}} else {tool_input:{file_path:$a}} end)
+     + (if $g == "" then {} else {agent_id:$g,agent_type:"build"} end)')
+  out=$(printf '%s' "$input" | TMPDIR="$td" bash "$SKILLS" 2>/dev/null || true)
+  printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null || printf ''
+}
+
+section "recordatorio de skills: sintaxis y una vez por agente"
+if bash -n "$SKILLS"; then pass "remind-load-skills.sh compila"; else fail "remind-load-skills.sh no compila"; fi
+
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+msg=$(run_skills Write /tmp/x.txt "" "$td")
+[ -n "$msg" ] && pass "la primera escritura avisa" || fail "la primera escritura no avisó"
+msg=$(run_skills Write /tmp/y.txt "" "$td")
+[ -z "$msg" ] && pass "la segunda escritura del mismo agente calla" || fail "avisó dos veces al mismo agente"
+
+# La regresión que motiva el arreglo: el subagente hereda el session_id.
+msg=$(run_skills Write /tmp/z.txt agente-build "$td")
+[ -n "$msg" ] && pass "un subagente del mismo session_id recibe el suyo" || fail "el marcador del padre silenció al subagente"
+msg=$(run_skills Write /tmp/z2.txt agente-build "$td")
+[ -z "$msg" ] && pass "el subagente tampoco recibe dos" || fail "avisó dos veces al subagente"
+
+section "recordatorio de skills: qué cuenta como escritura por Bash"
+for cmd in 'cat > notas.txt' 'tee -a notas.txt' 'sed -i s/a/b/ notas.txt' 'python x.py >> salida.log' 'mkdir -p x >/dev/null && cat > notas.txt'; do
+  msg=$(run_skills Bash "$cmd")
+  [ -n "$msg" ] && pass "escribe: $cmd" || fail "no lo detectó como escritura: $cmd"
+done
+
+for cmd in 'ls -la' 'git status --porcelain' 'grep -r foo .' 'echo hola > /dev/null' 'git commit -m "usa > para redirigir"'; do
+  msg=$(run_skills Bash "$cmd")
+  [ -z "$msg" ] && pass "no escribe: $cmd" || fail "gastó el aviso en un comando de lectura: $cmd"
+done
+
+section "registro en la plantilla de settings.json"
+tpl="$REPO_ROOT/claude/.claude/settings.json"
+n=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | test("remind-load-skills"))] | length' "$tpl")
+[ "$n" -ge 1 ] && pass "remind-load-skills.sh está registrado en el matcher Bash" || fail "falta en el matcher Bash de la plantilla"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
