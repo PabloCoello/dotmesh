@@ -36,12 +36,15 @@ export async function runEmit(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const docRelPath = path.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith('..')) {
+  // Use path.resolve + path.sep prefix check — same pattern as sidecarPathForDoc
+  // in sidecar.ts — to catch embedded traversal (e.g. foo/../../bar) that the
+  // simpler startsWith('..') check misses.
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const eventDir  = path.resolve(reviewDir, path.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path.sep)) {
     process.stderr.write('mesh-review: el documento no está dentro del git root\n');
     process.exit(1);
   }
-  const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
 
   const id = randomUUID();
   const created_at = utcTimestampMs();
