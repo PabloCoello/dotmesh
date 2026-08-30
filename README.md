@@ -60,6 +60,7 @@ dotmesh/
 ├── codex/      .codex/{config.toml,AGENTS.md}
 ├── claude/     .claude/{CLAUDE.md,AGENTS.md,settings.json,hooks/,statusline.sh,agents/,commands/,mcp/}
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
+├── nvim/       .config/nvim/   (Neovim; instalar con make nvim-install + make stow)
 ├── gnome/      .config/gtk-{3,4}.0/gtk.css   (rice GNOME, Linux; fuera de PACKAGES)
 ├── windows-terminal/  themes/dotmesh.json + scripts/install.sh   (esquema WT, solo WSL; fuera de PACKAGES)
 ├── scripts/    backup-current-config.sh
