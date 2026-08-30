@@ -359,6 +359,7 @@ Duplicate `thread.reanchored` events for the same thread are innocuous: the proj
 | `id` or `thread_id` is not a UUID v4 | Field missing, not a string, or wrong format; the event is ignored. |
 | `body` is present but not a string | Type mismatch (`null`, number, or object); the event is ignored. |
 | `author` is missing, not an object, or `author.kind` is not `"human"` or `"ai"` | Required field absent or invalid; the event is ignored. A single aggregated `console.warn` is emitted per `readEvents` call listing the count of discarded events. |
+| File size exceeds 1 MiB | The file is skipped without reading. Folded into the same aggregated `console.warn`. A legitimate event is a few hundred bytes; any file larger than 1 MiB is assumed malformed or malicious. |
 
 For the badge and diff to work correctly in the VS Code extension, a fix `message.posted` must also satisfy:
 
@@ -428,7 +429,7 @@ mesh-review open <doc>
 **Validation rules:**
 - Both offsets must be non-negative integers; `end-offset` must be strictly greater than `offset`; `end-offset` must be ≤ `text.length`.
 - `--type` must be one of: `edita | sugerencia | pregunta | verifica | nota | referencia | supuesto`.
-- `--body` must not be empty.
+- `--body` must not be empty, must not exceed 10,000 characters, and must not contain C0 control characters (NUL, U+0001–U+0008, U+000B–U+000C, U+000E–U+001F); tab, LF and CR are allowed.
 - `--type verifica` or `--type supuesto` requires `--confidence`.
 - `--author ai` requires `--model`.
 
@@ -465,7 +466,7 @@ mesh-review reply <doc> <thread_id>
     [--confidence alta|media|baja]
 ```
 
-**Validation:** `thread_id` must be a UUID v4. `--body` must not be empty. `--author ai` requires `--model`.
+**Validation:** `thread_id` must be a UUID v4. `--body` must not be empty, must not exceed 10,000 characters, and must not contain C0 control characters (same rules as `open`). `--author ai` requires `--model`.
 
 **stdout:** UUID of the new `message.posted` event, followed by a newline.
 
@@ -524,7 +525,7 @@ mesh-review retract <doc> <thread_id> <message_id>
     [--subagent <str>]
 ```
 
-**Validation:** both `thread_id` and `message_id` must be UUID v4s. `--author ai` requires `--model`.
+**Validation:** both `thread_id` and `message_id` must be UUID v4s. If `--reason` is supplied it must not exceed 10,000 characters and must not contain C0 control characters (same rules as `--body` in `open`). `--author ai` requires `--model`.
 
 **stdout:** UUID of the new `message.retracted` event, followed by a newline.
 
