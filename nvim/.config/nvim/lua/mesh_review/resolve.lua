@@ -87,6 +87,13 @@ function M.find_quote(bufnr, quote, char_offset)
   -- (la cadena vacía siempre aparece en cualquier posición) y carece de sentido.
   if not quote or quote == "" then return nil end
 
+  -- El ancla llega de un sidecar en disco: un fichero de `.ai/review/` escrito a
+  -- mano, o venido en un repo ajeno, puede no traer char_offset. Sin esta
+  -- coerción la resta de la comparación de distancias reventaría con un error de
+  -- Lua en mitad del refresco. Con 0 la búsqueda sigue siendo útil: gana la
+  -- primera ocurrencia, que es la mejor conjetura sin más información.
+  char_offset = tonumber(char_offset) or 0
+
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   -- Buffer sin líneas: nada que buscar.
   if #lines == 0 then return nil end
