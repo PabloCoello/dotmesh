@@ -1,17 +1,9 @@
-return {
-  -- Colorscheme dotmesh — fuente canónica en colors/dotmesh.lua.
-  -- Carga sin dependencias externas; la paleta vive en lua/dotmesh/palette.lua.
-  -- priority = 1000 asegura que se aplique antes que cualquier otro plugin.
-  {
-    dir      = vim.fn.stdpath("config"),
-    name     = "dotmesh-colorscheme",
-    lazy     = false,
-    priority = 1000,
-    config   = function()
-      vim.cmd.colorscheme("dotmesh")
-    end,
-  },
+-- El tema dotmesh NO se declara aquí: `colors/dotmesh.lua` forma parte de esta
+-- configuración y se aplica desde init.lua tras lazy.setup. Un spec con
+-- dir = stdpath("config") competiría con la entrada local de mesh-review, que
+-- apunta al mismo directorio, y lazy solo ejecutaría uno de los dos `config`.
 
+return {
   -- material.nvim conserva su entrada pero pasa a lazy = true para no cargarse
   -- al arranque. Se puede activar manualmente con :colorscheme material si se
   -- quiere comparar o hacer fallback.
