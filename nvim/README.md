@@ -37,7 +37,7 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 | Markdown | markdown-preview.nvim |
 | Plegado | nvim-ufo |
 | IA | opencode.nvim |
-| Tema | material.nvim (oceanic) |
+| Tema | dotmesh (propio, `colors/dotmesh.lua`); material.nvim disponible como fallback manual |
 
 ## Atajos principales
 

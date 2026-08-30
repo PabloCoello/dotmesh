@@ -30,7 +30,7 @@ require("lazy").setup("plugins", {
     version = false,
   },
   install = {
-    colorscheme = { "material", "habamax" },
+    colorscheme = { "dotmesh", "habamax" },
   },
   checker = {
     enabled = true,

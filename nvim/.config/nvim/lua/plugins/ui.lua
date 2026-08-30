@@ -9,7 +9,7 @@ return {
     dependencies = { "nvim-tree/nvim-web-devicons" },
     opts = {
       options = {
-        theme = "auto",
+        theme = require("dotmesh.palette").lualine,
         component_separators = { left = "|", right = "|" },
         section_separators = { left = "", right = "" },
       },
