@@ -37,16 +37,30 @@ M.FALLBACK_HL = "MeshReviewDetached"
 --- @field letter          string   Tecla de atajo de una sola pulsación.
 --- @field color           string   Color hex copiado literalmente de TYPE_COLORS.
 --- @field needs_confidence boolean true si el CLI requiere --confidence.
---- @field hl              string   Nombre del grupo de highlight (p.ej. "MeshReviewNota").
+--- @field hl              string   Nombre del grupo de rango (p.ej. "MeshReviewNota"):
+---                                 solo `bg` (mezcla 0.18). Uso: hl_group del extmark de rango.
+--- @field mark_hl         string   Nombre del grupo de marca (p.ej. "MeshReviewNotaMark"):
+---                                 solo `fg` = color del tipo, sin `bg`. Uso: sign_hl_group
+---                                 y el hl de virt_text; da el color canónico sin teñir fondo.
 
---- Construye el nombre del grupo de highlight a partir de una etiqueta.
+--- Construye el nombre del grupo de rango a partir de una etiqueta.
 --- Capitaliza el primer carácter: "nota" → "MeshReviewNota".
---- Se expone como M.hl_group para que los módulos que reciben un label
---- arbitrario puedan construir el nombre sin reimplementar la lógica.
+--- Solo bg (mezcla al 0.18). Se expone como M.hl_group para que los módulos que
+--- reciben un label arbitrario puedan construir el nombre sin reimplementar la lógica.
 --- @param label string
 --- @return string
 function M.hl_group(label)
   return "MeshReview" .. label:sub(1, 1):upper() .. label:sub(2)
+end
+
+--- Construye el nombre del grupo de marca a partir de una etiqueta.
+--- "nota" → "MeshReviewNotaMark". Solo fg = color del tipo, sin bg.
+--- Se usa para sign_hl_group y el hl de virt_text: el color del tipo debe
+--- aparecer como texto visible, no como fondo tintado.
+--- @param label string
+--- @return string
+function M.mark_hl_group(label)
+  return "MeshReview" .. label:sub(1, 1):upper() .. label:sub(2) .. "Mark"
 end
 
 --- Array con los 7 tipos en orden canónico.
@@ -54,13 +68,13 @@ end
 --- Solo verifica y supuesto requieren --confidence al abrir un hilo.
 --- @type MeshReviewType[]
 M.list = {
-  { label = "edita",      letter = "e", color = "#E59A9A", needs_confidence = false, hl = M.hl_group("edita")      },
-  { label = "sugerencia", letter = "s", color = "#E3C58A", needs_confidence = false, hl = M.hl_group("sugerencia") },
-  { label = "pregunta",   letter = "p", color = "#8FB4E3", needs_confidence = false, hl = M.hl_group("pregunta")   },
-  { label = "verifica",   letter = "v", color = "#FFAA7A", needs_confidence = true,  hl = M.hl_group("verifica")   },
-  { label = "nota",       letter = "n", color = "#6CB6B0", needs_confidence = false, hl = M.hl_group("nota")       },
-  { label = "referencia", letter = "r", color = "#A8CBA0", needs_confidence = false, hl = M.hl_group("referencia") },
-  { label = "supuesto",   letter = "u", color = "#CBAACB", needs_confidence = true,  hl = M.hl_group("supuesto")   },
+  { label = "edita",      letter = "e", color = "#E59A9A", needs_confidence = false, hl = M.hl_group("edita"),      mark_hl = M.mark_hl_group("edita")      },
+  { label = "sugerencia", letter = "s", color = "#E3C58A", needs_confidence = false, hl = M.hl_group("sugerencia"), mark_hl = M.mark_hl_group("sugerencia") },
+  { label = "pregunta",   letter = "p", color = "#8FB4E3", needs_confidence = false, hl = M.hl_group("pregunta"),   mark_hl = M.mark_hl_group("pregunta")   },
+  { label = "verifica",   letter = "v", color = "#FFAA7A", needs_confidence = true,  hl = M.hl_group("verifica"),   mark_hl = M.mark_hl_group("verifica")   },
+  { label = "nota",       letter = "n", color = "#6CB6B0", needs_confidence = false, hl = M.hl_group("nota"),       mark_hl = M.mark_hl_group("nota")       },
+  { label = "referencia", letter = "r", color = "#A8CBA0", needs_confidence = false, hl = M.hl_group("referencia"), mark_hl = M.mark_hl_group("referencia") },
+  { label = "supuesto",   letter = "u", color = "#CBAACB", needs_confidence = true,  hl = M.hl_group("supuesto"),   mark_hl = M.mark_hl_group("supuesto")   },
 }
 
 --- Mapa etiqueta → tipo. Acceso O(1) por nombre canónico.

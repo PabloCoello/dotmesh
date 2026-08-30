@@ -112,9 +112,9 @@ eq("referencia needs_confidence = false", types.list[6].needs_confidence, false)
 eq("supuesto   needs_confidence = true",  types.list[7].needs_confidence, true)
 
 -- ---------------------------------------------------------------------------
--- Grupos de highlight (campo hl)
+-- Grupos de highlight de rango (campo hl) — solo bg
 -- ---------------------------------------------------------------------------
-io.stderr:write("\n=== hl groups ===\n")
+io.stderr:write("\n=== hl groups (rango) ===\n")
 
 eq("edita      hl = MeshReviewEdita",      types.list[1].hl, "MeshReviewEdita")
 eq("sugerencia hl = MeshReviewSugerencia", types.list[2].hl, "MeshReviewSugerencia")
@@ -123,6 +123,19 @@ eq("verifica   hl = MeshReviewVerifica",   types.list[4].hl, "MeshReviewVerifica
 eq("nota       hl = MeshReviewNota",       types.list[5].hl, "MeshReviewNota")
 eq("referencia hl = MeshReviewReferencia", types.list[6].hl, "MeshReviewReferencia")
 eq("supuesto   hl = MeshReviewSupuesto",   types.list[7].hl, "MeshReviewSupuesto")
+
+-- ---------------------------------------------------------------------------
+-- Grupos de highlight de marca (campo mark_hl) — solo fg
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== mark_hl groups (marca) ===\n")
+
+eq("edita      mark_hl = MeshReviewEditaMark",          types.list[1].mark_hl, "MeshReviewEditaMark")
+eq("sugerencia mark_hl = MeshReviewSugerenciaMark",     types.list[2].mark_hl, "MeshReviewSugerenciaMark")
+eq("pregunta   mark_hl = MeshReviewPreguntaMark",       types.list[3].mark_hl, "MeshReviewPreguntaMark")
+eq("verifica   mark_hl = MeshReviewVerificaMark",       types.list[4].mark_hl, "MeshReviewVerificaMark")
+eq("nota       mark_hl = MeshReviewNotaMark",           types.list[5].mark_hl, "MeshReviewNotaMark")
+eq("referencia mark_hl = MeshReviewReferenciaMark",     types.list[6].mark_hl, "MeshReviewReferenciaMark")
+eq("supuesto   mark_hl = MeshReviewSupuestoMark",       types.list[7].mark_hl, "MeshReviewSupuestoMark")
 
 -- ---------------------------------------------------------------------------
 -- M.by_label
@@ -151,15 +164,18 @@ eq("by_letter tiene 7 entradas", (function()
 end)(), 7)
 
 -- ---------------------------------------------------------------------------
--- M.hl_group y constantes de fallback
+-- M.hl_group, M.mark_hl_group y constantes de fallback
 -- ---------------------------------------------------------------------------
-io.stderr:write("\n=== hl_group y fallback ===\n")
+io.stderr:write("\n=== hl_group, mark_hl_group y fallback ===\n")
 
-eq("hl_group('nota') = MeshReviewNota",     types.hl_group("nota"),     "MeshReviewNota")
-eq("hl_group('edita') = MeshReviewEdita",   types.hl_group("edita"),    "MeshReviewEdita")
-eq("hl_group('supuesto') = MeshReviewSupuesto", types.hl_group("supuesto"), "MeshReviewSupuesto")
-eq("FALLBACK_HL = MeshReviewDetached",      types.FALLBACK_HL,          "MeshReviewDetached")
-eq("FALLBACK_COLOR = #9e9e9e",             types.FALLBACK_COLOR,        "#9e9e9e")
+eq("hl_group('nota') = MeshReviewNota",          types.hl_group("nota"),          "MeshReviewNota")
+eq("hl_group('edita') = MeshReviewEdita",         types.hl_group("edita"),         "MeshReviewEdita")
+eq("hl_group('supuesto') = MeshReviewSupuesto",   types.hl_group("supuesto"),      "MeshReviewSupuesto")
+eq("mark_hl_group('nota') = MeshReviewNotaMark",  types.mark_hl_group("nota"),     "MeshReviewNotaMark")
+eq("mark_hl_group('edita') = MeshReviewEditaMark",types.mark_hl_group("edita"),    "MeshReviewEditaMark")
+eq("mark_hl_group('supuesto') = MeshReviewSupuestoMark", types.mark_hl_group("supuesto"), "MeshReviewSupuestoMark")
+eq("FALLBACK_HL = MeshReviewDetached",           types.FALLBACK_HL,               "MeshReviewDetached")
+eq("FALLBACK_COLOR = #9e9e9e",                   types.FALLBACK_COLOR,            "#9e9e9e")
 
 -- ---------------------------------------------------------------------------
 -- Resultado

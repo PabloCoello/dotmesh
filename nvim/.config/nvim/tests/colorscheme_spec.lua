@@ -194,6 +194,39 @@ eq("MeshReviewDetached.bg = nil (sin fondo)",
   nil)
 
 -- ---------------------------------------------------------------------------
+-- Grupos MeshReview*Mark — solo fg = color canónico del tipo, sin bg
+-- El signo y el virt_text usan estos grupos para ser visibles como texto.
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== MeshReview*Mark (fg del tipo, sin bg) ===\n")
+
+-- MeshReviewNotaMark: fg = teal (#6CB6B0), sin bg
+eq("MeshReviewNotaMark.fg = teal (#6CB6B0)",
+  get_hl("MeshReviewNotaMark", "fg"),
+  hex2num("#6CB6B0"))
+
+eq("MeshReviewNotaMark.bg = nil (sin fondo)",
+  get_hl("MeshReviewNotaMark", "bg"),
+  nil)
+
+-- MeshReviewEditaMark: fg = rose (#E59A9A), sin bg
+eq("MeshReviewEditaMark.fg = rose (#E59A9A)",
+  get_hl("MeshReviewEditaMark", "fg"),
+  hex2num("#E59A9A"))
+
+eq("MeshReviewEditaMark.bg = nil (sin fondo)",
+  get_hl("MeshReviewEditaMark", "bg"),
+  nil)
+
+-- MeshReviewVerificaMark: fg = peach (#FFAA7A), sin bg
+eq("MeshReviewVerificaMark.fg = peach (#FFAA7A)",
+  get_hl("MeshReviewVerificaMark", "fg"),
+  hex2num("#FFAA7A"))
+
+eq("MeshReviewVerificaMark.bg = nil (sin fondo)",
+  get_hl("MeshReviewVerificaMark", "bg"),
+  nil)
+
+-- ---------------------------------------------------------------------------
 -- Colores de terminal
 -- ---------------------------------------------------------------------------
 io.stderr:write("\n=== terminal colors ===\n")

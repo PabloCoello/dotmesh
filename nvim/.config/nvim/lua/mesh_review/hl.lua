@@ -1,6 +1,6 @@
 --- lua/mesh_review/hl.lua — Grupos de highlight del plugin en runtime.
 ---
---- M.setup() define (o redefine) los 8 grupos de highlight del plugin
+--- M.setup() define (o redefine) los 15 grupos de highlight del plugin
 --- adaptados al fondo real del colorscheme activo. El fondo de Normal se
 --- lee en runtime para que el tintado funcione con cualquier tema, no solo
 --- con dotmesh.
@@ -9,7 +9,7 @@
 --- para que este módulo sea autocontenido y no tenga efectos secundarios al
 --- cargarse. Basta con dejarlo listo, idempotente y documentado.
 ---
---- Grupos definidos:
+--- Grupos de rango (uno por tipo) — solo `bg`, sin `fg`:
 ---   MeshReviewEdita      — bg = blend(#E59A9A, Normal.bg, 0.18)
 ---   MeshReviewSugerencia — bg = blend(#E3C58A, Normal.bg, 0.18)
 ---   MeshReviewPregunta   — bg = blend(#8FB4E3, Normal.bg, 0.18)
@@ -17,7 +17,23 @@
 ---   MeshReviewNota       — bg = blend(#6CB6B0, Normal.bg, 0.18)
 ---   MeshReviewReferencia — bg = blend(#A8CBA0, Normal.bg, 0.18)
 ---   MeshReviewSupuesto   — bg = blend(#CBAACB, Normal.bg, 0.18)
----   MeshReviewDetached   — fg = #6e6e6e, sin bg (hilos desanclados o tipo desconocido)
+--- Sin `fg` porque el texto del rango debe heredar el color de sintaxis activo;
+--- recolorear la prosa del documento sería intrusivo.
+---
+--- Grupos de marca (uno por tipo) — solo `fg`, sin `bg`:
+---   MeshReviewEditaMark      — fg = #E59A9A
+---   MeshReviewSugerenciaMark — fg = #E3C58A
+---   MeshReviewPreguntaMark   — fg = #8FB4E3
+---   MeshReviewVerificaMark   — fg = #FFAA7A
+---   MeshReviewNotaMark       — fg = #6CB6B0
+---   MeshReviewReferenciaMark — fg = #A8CBA0
+---   MeshReviewSupuestoMark   — fg = #CBAACB
+--- Se usan para sign_hl_group y el hl de virt_text, donde el color del tipo
+--- debe aparecer como texto visible. Sin `bg` para no interferir con el fondo
+--- del signcolumn ni con la línea del documento.
+---
+--- Grupo de fallback:
+---   MeshReviewDetached — fg = #6e6e6e, sin bg (hilos desanclados o tipo desconocido)
 
 local M = {}
 
@@ -67,16 +83,29 @@ function M.setup()
     bg_hex = FALLBACK_BG
   end
 
-  -- Un grupo por tipo: fondo tintado al 18 %, sin fg explícito (el texto
-  -- hereda el color del colorscheme activo sobre el rango tintado).
+  -- Grupos de rango: fondo tintado al 18 %, sin fg explícito.
+  -- Sin fg porque el texto del rango debe heredar el color de sintaxis del
+  -- colorscheme activo; recolorear la prosa del documento sería intrusivo.
   for _, t in ipairs(types.list) do
     local bg_blended = blend.blend_hex(t.color, bg_hex, ALPHA)
     vim.api.nvim_set_hl(0, t.hl, { bg = bg_blended })
   end
 
+  -- Grupos de marca: fg = color canónico del tipo, sin bg.
+  -- sign_hl_group y el hl de virt_text usan estos grupos para que la letra
+  -- del signo y la etiqueta de fin de línea aparezcan en el color del tipo,
+  -- con contraste real sobre el fondo oscuro. Sin bg para no interferir con
+  -- el fondo del signcolumn ni con la línea donde descansa el virt_text.
+  for _, t in ipairs(types.list) do
+    vim.api.nvim_set_hl(0, t.mark_hl, { fg = t.color })
+  end
+
   -- Grupo para anclas perdidas o tipos desconocidos: gris tenue sin fondo.
   -- No tintamos porque no sabemos dónde está el fragmento; el fg dim
   -- distingue estas marcas de las normales sin ocupar fondo.
+  -- MeshReviewDetached no necesita gemelo Mark: su fg ya sirve tanto para
+  -- rangos inciertos como para sign_hl_group; el gris uniforme transmite
+  -- la pérdida de ancla sin dar una señal cromática falsa.
   vim.api.nvim_set_hl(0, "MeshReviewDetached", { fg = DETACHED_FG })
 end
 

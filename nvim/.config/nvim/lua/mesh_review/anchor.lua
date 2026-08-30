@@ -91,8 +91,13 @@ local function _place_extmarks(bufnr, threads)
           sign_hl_group = "MeshReviewDetached",
         })
       else
-        -- Grupo de highlight del tipo (o Detached si tipo desconocido).
+        -- Grupo de rango: solo `bg` (mezcla al 0.18). Se usa para hl_group del
+        -- extmark de rango; no lleva `fg` para no recolorear la prosa del documento.
         local hl_group = tipo and tipo.hl or "MeshReviewDetached"
+        -- Grupo de marca: solo `fg` = color canónico del tipo, sin `bg`.
+        -- Se usa para sign_hl_group y el hl de virt_text para que la letra del
+        -- signo y la etiqueta de fin de línea se vean en el color del tipo.
+        local mark_hl  = tipo and tipo.mark_hl or "MeshReviewDetached"
         -- sign_text: letra del tipo + barra sólida para rellenar la segunda celda.
         -- Tipo desconocido → "? " (dos celdas, sin barra, para no confundir).
         local sign_text = tipo and (tipo.letter .. "▎") or "? "
@@ -107,8 +112,8 @@ local function _place_extmarks(bufnr, threads)
         local opts = {
           id            = eid,
           sign_text     = sign_text,
-          sign_hl_group = hl_group,
-          virt_text     = { { "● " .. ctype, hl_group } },
+          sign_hl_group = mark_hl,   -- color del tipo como fg; sin bg intrusivo
+          virt_text     = { { "● " .. ctype, mark_hl } },  -- ídem para la etiqueta eol
           virt_text_pos = "eol",
         }
 
@@ -123,8 +128,9 @@ local function _place_extmarks(bufnr, threads)
           col = pos.start_col
           -- Incertidumbre alta: el fondo tintado se degrada a Detached para no
           -- señalar como exacta una posición en la que tenemos poca confianza.
-          -- El signo y el virt_text mantienen el color del tipo: el usuario sigue
-          -- viendo qué tipo de comentario es, aunque el ancla sea aproximada.
+          -- El signo y el virt_text mantienen el color del tipo (mark_hl): el
+          -- usuario sigue viendo qué tipo de comentario es aunque el ancla sea
+          -- aproximada; solo el rango de fondo pierde el tinte canónico.
           local range_hl = pos.uncertain and "MeshReviewDetached" or hl_group
           opts.hl_group  = range_hl
           opts.end_row   = pos.end_row

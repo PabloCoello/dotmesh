@@ -123,14 +123,16 @@ do
     eq("caso 1: start_col",      col,             4)
     eq("caso 1: end_row",        d.end_row,       0)
     eq("caso 1: end_col",        d.end_col,       7)
+    -- hl_group es el grupo de rango (solo bg); sign y virt_text usan el grupo
+    -- de marca (solo fg) para que el color del tipo sea visible como texto.
     eq("caso 1: hl_group",       d.hl_group,      "MeshReviewNota")
     eq("caso 1: sign_text",      d.sign_text,     "n▎")
-    eq("caso 1: sign_hl_group",  d.sign_hl_group, "MeshReviewNota")
-    -- virt_text = { {"● nota", "MeshReviewNota"} }
+    eq("caso 1: sign_hl_group",  d.sign_hl_group, "MeshReviewNotaMark")
+    -- virt_text = { {"● nota", "MeshReviewNotaMark"} }
     ok_check("caso 1: virt_text existe",       d.virt_text ~= nil and #d.virt_text >= 1)
     if d.virt_text and #d.virt_text >= 1 then
       eq("caso 1: virt_text texto",   d.virt_text[1][1], "● nota")
-      eq("caso 1: virt_text hl",      d.virt_text[1][2], "MeshReviewNota")
+      eq("caso 1: virt_text hl",      d.virt_text[1][2], "MeshReviewNotaMark")
     end
     eq("caso 1: virt_text_pos",  d.virt_text_pos, "eol")
   end
@@ -164,11 +166,13 @@ do
     ok_check("caso 2: sin end_col", d.end_col == nil)
     ok_check("caso 2: sin hl_group de rango", d.hl_group == nil)
     eq("caso 2: sign_text",     d.sign_text,     "e▎")
-    eq("caso 2: sign_hl_group", d.sign_hl_group, "MeshReviewEdita")
+    -- sign_hl_group usa el grupo de marca (solo fg) para visibilidad del tipo.
+    eq("caso 2: sign_hl_group", d.sign_hl_group, "MeshReviewEditaMark")
     -- virt_text sigue presente (tipo conocido, aunque sin rango).
     ok_check("caso 2: virt_text existe", d.virt_text ~= nil and #d.virt_text >= 1)
     if d.virt_text and #d.virt_text >= 1 then
       eq("caso 2: virt_text texto", d.virt_text[1][1], "● edita")
+      eq("caso 2: virt_text hl",    d.virt_text[1][2], "MeshReviewEditaMark")
     end
   end
 end
@@ -203,13 +207,13 @@ do
     eq("caso 3: hl_group = MeshReviewDetached", d.hl_group, "MeshReviewDetached")
     eq("caso 3: end_row existe",  d.end_row, 0)
     eq("caso 3: end_col existe",  d.end_col, 7)
-    -- Signo mantiene el tipo.
+    -- Signo mantiene el tipo con el grupo de marca (solo fg).
     eq("caso 3: sign_text",      d.sign_text,     "n▎")
-    eq("caso 3: sign_hl_group",  d.sign_hl_group, "MeshReviewNota")
-    -- virt_text con color del tipo (no Detached).
+    eq("caso 3: sign_hl_group",  d.sign_hl_group, "MeshReviewNotaMark")
+    -- virt_text con color del tipo (grupo de marca, no Detached).
     ok_check("caso 3: virt_text existe", d.virt_text ~= nil and #d.virt_text >= 1)
     if d.virt_text and #d.virt_text >= 1 then
-      eq("caso 3: virt_text hl = MeshReviewNota", d.virt_text[1][2], "MeshReviewNota")
+      eq("caso 3: virt_text hl = MeshReviewNotaMark", d.virt_text[1][2], "MeshReviewNotaMark")
     end
   end
 end

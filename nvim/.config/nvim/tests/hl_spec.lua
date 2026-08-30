@@ -85,20 +85,46 @@ local ok_setup, err_setup = pcall(function() hl.setup() end)
 eq("setup() no lanza error", ok_setup, true)
 
 -- ---------------------------------------------------------------------------
--- C10-2: MeshReviewNota tiene .bg != nil y != 0
+-- C10-2: grupos de rango (MeshReview<Tipo>) tienen bg y no tienen fg
 -- ---------------------------------------------------------------------------
-io.stderr:write("\n=== grupos MeshReview* tienen bg ===\n")
+io.stderr:write("\n=== grupos de rango: bg sí, fg no ===\n")
 
 do
   local hl_nota = vim.api.nvim_get_hl(0, { name = "MeshReviewNota", link = false })
   ok("MeshReviewNota.bg existe",    hl_nota.bg ~= nil)
   ok("MeshReviewNota.bg es no cero", hl_nota.bg ~= 0)
+  -- Sin fg: el rango no debe recolorear la prosa del documento.
+  ok("MeshReviewNota sin fg explícito", not hl_nota.fg or hl_nota.fg == 0)
 end
 
--- Todos los tipos deben tener un bg definido tras setup().
+-- Todos los tipos: bg definido, sin fg (rango solo tinta el fondo).
 for _, t in ipairs(types.list) do
   local h = vim.api.nvim_get_hl(0, { name = t.hl, link = false })
   ok(t.hl .. " tiene bg", h.bg ~= nil and h.bg ~= 0)
+  ok(t.hl .. " sin fg explícito", not h.fg or h.fg == 0)
+end
+
+-- ---------------------------------------------------------------------------
+-- C10-2b: grupos de marca (MeshReview<Tipo>Mark) tienen fg y no tienen bg
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== grupos de marca: fg sí, bg no ===\n")
+
+do
+  local h = vim.api.nvim_get_hl(0, { name = "MeshReviewNotaMark", link = false })
+  ok("MeshReviewNotaMark.fg existe",     h.fg ~= nil)
+  ok("MeshReviewNotaMark.fg es no cero", h.fg ~= 0)
+  -- Sin bg: el signo y el virt_text no deben interferir con el fondo.
+  ok("MeshReviewNotaMark sin bg explícito", not h.bg or h.bg == 0)
+  -- El fg del grupo de marca debe coincidir con el color canónico del tipo.
+  -- nota → #6CB6B0 = 0x6CB6B0 = 7124656
+  eq("MeshReviewNotaMark.fg = #6CB6B0", h.fg, 0x6CB6B0)
+end
+
+-- Todos los tipos: fg definido, sin bg (marca solo tinta el texto).
+for _, t in ipairs(types.list) do
+  local h = vim.api.nvim_get_hl(0, { name = t.mark_hl, link = false })
+  ok(t.mark_hl .. " tiene fg", h.fg ~= nil and h.fg ~= 0)
+  ok(t.mark_hl .. " sin bg explícito", not h.bg or h.bg == 0)
 end
 
 -- ---------------------------------------------------------------------------

@@ -449,16 +449,24 @@ hl("NotifyTRACEBody",         { fg = txt.primary })
 -- ===========================================================================
 -- Grupos MeshReview* — colores del sistema de revisión de código
 --
--- Cada tipo tiene un fondo calculado como blend_hex(tipo.color, ink._0, 0.18),
--- equivalente a «rgba(tipo_color, 0.18) compuesto sobre ink._0» sin canal
--- alpha real (Neovim no admite alpha en highlight groups).
+-- Cada tipo tiene DOS grupos con responsabilidades separadas:
+--
+--   MeshReview<Tipo>     — solo `bg` = blend_hex(tipo.color, ink._0, 0.18).
+--                          Uso: hl_group del extmark de rango sobre el documento.
+--                          Sin `fg` para no recolorear la prosa; el texto hereda
+--                          el color de sintaxis activo sobre el fondo tintado.
+--
+--   MeshReview<Tipo>Mark — solo `fg` = color canónico del tipo, sin `bg`.
+--                          Uso: sign_hl_group y el hl de virt_text. El color
+--                          del tipo debe aparecer como texto visible (letra del
+--                          signo, etiqueta «● nota»), no como fondo tintado.
 --
 -- Se itera mesh_review.types para no copiar constantes a mano: la fuente de
 -- verdad es la tabla de tipos, no este fichero. Si blend o types no están
 -- disponibles en el rtp actual, se omiten los grupos graciosamente;
--- hl.lua (C10) los recalcula en runtime en cualquier caso.
+-- hl.lua los recalcula en runtime en cualquier caso.
 --
--- Valores precalculados para referencia (blend_hex, round-half-up):
+-- Valores precalculados para los grupos de rango (blend_hex, round-half-up):
 --   edita      #E59A9A 0.18 → #382A2A
 --   sugerencia #E3C58A 0.18 → #383228
 --   pregunta   #8FB4E3 0.18 → #292F38
@@ -474,14 +482,18 @@ local ok_types, types = pcall(require, "mesh_review.types")
 if ok_blend and ok_types then
   for _, t in ipairs(types.list) do
     local bg = blend.blend_hex(t.color, ink._0, 0.18)
-    -- Solo bg: el texto del rango hereda el fg del cursor/sintaxis activo.
-    -- El fg del tipo (sign_hl_group, virt_text) lo gestiona hl.lua en runtime.
+    -- Grupo de rango: solo bg; el fg del texto se hereda del colorscheme activo.
     hl(t.hl, { bg = bg })
+    -- Grupo de marca: solo fg = color canónico; sin bg para no interferir con
+    -- el fondo del signcolumn ni con la línea donde descansa el virt_text.
+    hl(t.mark_hl, { fg = t.color })
   end
 end
 
 -- MeshReviewDetached — hilo sin ancla resuelta.
 -- fg = text.dim (#6e6e6e): visible pero claramente atenuado; sin bg.
+-- No necesita gemelo Mark: su fg ya vale tanto para rangos inciertos como
+-- para sign_hl_group; el gris uniforme transmite la pérdida de ancla.
 hl("MeshReviewDetached", { fg = txt.dim })
 
 -- ===========================================================================

@@ -176,9 +176,12 @@ local function _build_content(threads)
     -- en el encabezado empezando desde la posición 8 (tras "[open] ").
     -- Esto permite que la etiqueta del tipo aparezca en su color específico
     -- mientras el resto del encabezado queda en "Comment".
+    -- Se usa mark_hl (solo fg, color canónico) en lugar de hl (solo bg): en un
+    -- buffer de texto el fondo tintado quedaría invisible sobre el fondo de Normal,
+    -- mientras que el fg del tipo resalta la etiqueta exactamente como en VS Code.
     -- Tipo desconocido o no reconocido → grupo atenuado "MeshReviewDetached".
     local tipo_entry = types.by_label[ctype]
-    local tipo_hl    = tipo_entry and tipo_entry.hl or "MeshReviewDetached"
+    local tipo_hl    = tipo_entry and tipo_entry.mark_hl or "MeshReviewDetached"
     if ctype_clean ~= "" then
       local tipo_s, tipo_e = string.find(hdr, ctype_clean, 8, true)
       if tipo_s then
