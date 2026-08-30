@@ -86,7 +86,7 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 | Atajo | Acción |
 |---|---|
 | `<Espacio>rp` | Abrir panel de revisión del fichero actual |
-| `<Espacio>rs` | Enviar prompt a scribe (requiere `HERDR_ENV=1`) |
+| `<Espacio>rs` | Levantar la sesión scribe (si no existe) y enviarle los hilos pendientes del documento actual |
 
 **Modo visual** (sobre una selección de texto):
 
@@ -122,6 +122,33 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 El plugin resuelve el CLI de mesh-review en este orden: opción `cli` de `setup()`,
 variable de entorno `MESH_REVIEW_CLI`, ruta `~/.claude/skills/doc-review/bin/mesh-review.mjs`.
 Si no se encuentra el CLI, los keymaps no se registran y aparece una advertencia.
+
+#### Puente con scribe (`<Espacio>rs` en modo normal)
+
+`<Espacio>rs` envía los hilos pendientes del documento actual a la persona
+`scribe` de Claude Code, que los procesa de forma autónoma en un pane lateral
+de herdr. El flujo es:
+
+1. Comprueba que `HERDR_ENV=1` (el atajo no hace nada fuera de herdr).
+2. Consulta `herdr agent get scribe`:
+   - Si la sesión existe, envía el prompt directamente.
+   - Si no existe (`agent_not_found`), abre un pane a la derecha del actual
+     (sin robar el foco), arranca `claude --settings '{"outputStyle":"scribe"}'`
+     en él como agente llamado `scribe`, espera a que esté listo (hasta 60 s)
+     y envía el prompt.
+3. El texto del prompt es el mismo que el botón «enviar pendientes» de la
+   extensión de VS Code:
+   ```
+   Procesa los hilos pendientes del documento '<ruta>'. Ejecuta: mesh-review project --pending '<ruta>'
+   ```
+   La ruta viaja entrecomillada (POSIX) y colapsada a una sola línea.
+
+Requisitos: `HERDR_ENV=1` (dentro de un pane herdr), `herdr` y `claude` en el
+`PATH`. La sesión se registra en herdr con el nombre `scribe`; si quieres
+reutilizarla desde otro pane, ya estará disponible como target de
+`herdr agent prompt scribe …`.
+
+Todo el flujo es asíncrono: el editor no se congela mientras Claude arranca.
 
 ### Terminal
 

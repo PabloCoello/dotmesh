@@ -32,6 +32,7 @@ local hl     = require("mesh_review.hl")
 local panel  = require("mesh_review.panel")
 local utf    = require("mesh_review.utf")
 local types  = require("mesh_review.types")
+local scribe = require("mesh_review.scribe")
 
 --- Evita registrar los keymaps y comandos más de una vez.
 local _setup_done = false
@@ -253,33 +254,18 @@ function M.open_thread_selector()
   _open_with_type(tipo, bufnr, doc, offset, end_offset)
 end
 
---- Envía un prompt a scribe vía herdr.
---- Solo actúa si HERDR_ENV=1; en caso contrario avisa.
---- El argumento del prompt pasa como argv separado, sin interpolación de shell.
+--- Asegura que existe una sesión scribe y le envía los hilos pendientes.
+---
+--- Solo actúa si HERDR_ENV=1; en caso contrario avisa. Delega en
+--- mesh_review.scribe.ensure_and_prompt para el flujo completo asíncrono:
+--- herdr agent get → (si no existe) split + start + wait → agent prompt.
 function M.prompt_scribe()
   if vim.env.HERDR_ENV ~= "1" then
     vim.notify("[mesh-review] HERDR_ENV no está activo", vim.log.levels.WARN)
     return
   end
   local doc = _current_doc() or ""
-  -- La ruta acaba dentro del texto del prompt que lee un agente. `herdr agent
-  -- prompt` toma el texto como UN argumento, así que la ruta no puede ir aparte;
-  -- lo que sí se puede es impedir que un nombre de fichero con saltos de línea
-  -- o caracteres de control finja un turno nuevo dentro del prompt. El texto
-  -- suelto de un nombre raro sigue llegando, pero ya no puede maquetarse como
-  -- instrucción separada.
-  doc = doc:gsub("%c", " ")
-  -- Lista de argumentos: la ruta viaja como argv independiente, sin shell.
-  vim.system({ "herdr", "agent", "prompt", "scribe", "Revisa " .. doc },
-    { text = true },
-    function(result)
-      if result.code ~= 0 then
-        vim.schedule(function()
-          vim.notify("[mesh-review] herdr: " .. (result.stderr or "error"),
-            vim.log.levels.WARN)
-        end)
-      end
-    end)
+  scribe.ensure_and_prompt(doc)
 end
 
 --- Inicializa el plugin.
