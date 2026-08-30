@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 #
-# Instala Neovim >= 0.11 en ~/.local/bin/nvim sin sudo.
+# Instala Neovim en ~/.local/bin/nvim sin sudo.
 #
 # Idempotente: si nvim ya cumple el umbral de versión, termina en ok sin
-# descargar nada. Si hay una versión inferior (o ausente), descarga el
-# AppImage oficial de la última release de GitHub.
+# descargar nada.
 #
-# Ubuntu 24.04.4 incluye FUSE 3 por defecto. Si el AppImage no arranca
-# (error de FUSE), el script detecta el fallo y da las instrucciones de
-# extracción manual (--appimage-extract).
+# La release está fijada (tag + SHA-256), no se resuelve a "latest". Neovim no
+# publica checksums ni firmas junto a sus artefactos, así que el pin de este
+# fichero ES la referencia de integridad: se verificó a mano al adoptarlo y se
+# repite en scripts/vendor/upstreams.tsv. Un binario que no case con el hash
+# aborta la instalación. Para subir de versión, cambia NVIM_TAG, descarga el
+# AppImage, comprueba su sha256sum y actualiza NVIM_SHA256 y el TSV.
+#
+# Ubuntu 24.04.4 incluye FUSE 3 por defecto. Si el AppImage no arranca (error
+# de FUSE), el script lo extrae y deja un wrapper en su lugar.
 #
 # Códigos de salida: 0 ok · 1 error
 set -e
@@ -17,8 +22,13 @@ set -o pipefail
 MIN_MAJOR=0
 MIN_MINOR=11
 
+NVIM_TAG="v0.12.5"
+NVIM_SHA256="d429822f6994770e3bb10330e0baf21e72b0afe66e0507cb3c631c1c65f4bf41"
+NVIM_ASSET="nvim-linux-x86_64.appimage"
+
 INSTALL_DIR="$HOME/.local/bin"
 BINARY="$INSTALL_DIR/nvim"
+EXTRACT_DIR="$HOME/.local/share/nvim-appimage"
 
 ok()   { echo "  ok  $*"; }
 info() { echo "→ $*"; }
@@ -29,18 +39,16 @@ die()  { echo "  --  $1" >&2; exit 1; }
 # --------------------------------------------------------------------------
 version_ok() {
   local bin="$1"
-  # Extrae la línea "NVIM v0.11.2" y parsea major.minor.patch
-  local ver
+  local ver major minor
   ver="$("$bin" --version 2>/dev/null | grep -m1 '^NVIM v' | sed 's/^NVIM v//')" || return 1
-  local major minor
   major="$(echo "$ver" | cut -d. -f1)"
   minor="$(echo "$ver" | cut -d. -f2)"
+  case "$major$minor" in *[!0-9]*|'') return 1 ;; esac
   [ "$major" -gt "$MIN_MAJOR" ] && return 0
   [ "$major" -eq "$MIN_MAJOR" ] && [ "$minor" -ge "$MIN_MINOR" ] && return 0
   return 1
 }
 
-# Buscar en el PATH y en INSTALL_DIR
 for candidate in "$BINARY" "$(command -v nvim 2>/dev/null || true)"; do
   [ -z "$candidate" ] && continue
   if version_ok "$candidate"; then
@@ -51,62 +59,69 @@ for candidate in "$BINARY" "$(command -v nvim 2>/dev/null || true)"; do
 done
 
 # --------------------------------------------------------------------------
-# 2. Determinar la última release
+# 2. Descargar el AppImage fijado
 # --------------------------------------------------------------------------
-info "consultando la última release de Neovim en GitHub..."
-RELEASE_JSON="$(curl -sf https://api.github.com/repos/neovim/neovim/releases/latest)" \
-  || die "no se ha podido contactar con la API de GitHub (¿sin conexión?)"
+command -v curl     >/dev/null 2>&1 || die "curl no está instalado"
+command -v sha256sum >/dev/null 2>&1 || die "sha256sum no está instalado"
 
-TAG="$(echo "$RELEASE_JSON" | grep -m1 '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
-[ -n "$TAG" ] || die "no se ha podido extraer el tag de la release"
-info "versión a instalar: $TAG"
+# Todo el trabajo sucio ocurre fuera del PATH: si el script muere a medias no
+# deja un ejecutable huérfano en ~/.local/bin.
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
 
-# --------------------------------------------------------------------------
-# 3. Descargar el AppImage
-# --------------------------------------------------------------------------
-mkdir -p "$INSTALL_DIR"
-APPIMAGE_URL="https://github.com/neovim/neovim/releases/download/$TAG/nvim-linux-x86_64.appimage"
-APPIMAGE_TMP="$INSTALL_DIR/nvim-linux-x86_64.appimage"
+APPIMAGE_URL="https://github.com/neovim/neovim/releases/download/$NVIM_TAG/$NVIM_ASSET"
+APPIMAGE="$WORK/$NVIM_ASSET"
 
-info "descargando $APPIMAGE_URL..."
-curl -fL --progress-bar -o "$APPIMAGE_TMP" "$APPIMAGE_URL" \
+info "descargando Neovim $NVIM_TAG..."
+curl -fL --proto '=https' --tlsv1.2 --progress-bar -o "$APPIMAGE" "$APPIMAGE_URL" \
   || die "fallo al descargar el AppImage desde $APPIMAGE_URL"
 
-chmod +x "$APPIMAGE_TMP"
+# --------------------------------------------------------------------------
+# 3. Verificar integridad ANTES de hacerlo ejecutable
+# --------------------------------------------------------------------------
+GOT_SHA="$(sha256sum "$APPIMAGE" | cut -d' ' -f1)"
+if [ "$GOT_SHA" != "$NVIM_SHA256" ]; then
+  die "SHA-256 inesperado para $NVIM_ASSET ($NVIM_TAG).
+      esperado: $NVIM_SHA256
+      obtenido: $GOT_SHA
+      El artefacto no coincide con el pin del repositorio. No se instala nada."
+fi
+ok "SHA-256 verificado contra el pin de dotmesh"
+
+chmod +x "$APPIMAGE"
+mkdir -p "$INSTALL_DIR"
 
 # --------------------------------------------------------------------------
-# 4. Probar que el AppImage arranca (FUSE)
+# 4. Instalar; con extracción de respaldo si falta FUSE
 # --------------------------------------------------------------------------
-if "$APPIMAGE_TMP" --version >/dev/null 2>&1; then
-  mv -f "$APPIMAGE_TMP" "$BINARY"
+if "$APPIMAGE" --version >/dev/null 2>&1; then
+  mv -f "$APPIMAGE" "$BINARY"
   ok "nvim instalado en $BINARY"
 else
-  # FUSE no disponible: extraer el contenido del AppImage
-  info "FUSE no disponible; extrayendo el AppImage en $INSTALL_DIR/squashfs-root..."
-  PREV_DIR="$(pwd)"
-  cd "$INSTALL_DIR"
-  "$APPIMAGE_TMP" --appimage-extract >/dev/null 2>&1 \
-    || die "la extracción del AppImage también falló. Consulta la documentación de Neovim para instalación manual."
-  cd "$PREV_DIR"
+  info "FUSE no disponible; extrayendo el AppImage en $EXTRACT_DIR..."
+  ( cd "$WORK" && "$APPIMAGE" --appimage-extract >/dev/null 2>&1 ) \
+    || die "la extracción del AppImage también falló. Instala FUSE o descarga nvim a mano."
 
-  EXTRACTED_BIN="$INSTALL_DIR/squashfs-root/usr/bin/nvim"
-  [ -x "$EXTRACTED_BIN" ] \
-    || die "extracción completada pero no se ha encontrado el binario en $EXTRACTED_BIN"
+  [ -x "$WORK/squashfs-root/usr/bin/nvim" ] \
+    || die "extracción completada pero no hay binario en squashfs-root/usr/bin/nvim"
 
-  # Crear un wrapper que apunte al binario extraído
+  mkdir -p "$EXTRACT_DIR"
+  rm -rf "${EXTRACT_DIR:?}/squashfs-root"
+  mv "$WORK/squashfs-root" "$EXTRACT_DIR/squashfs-root"
+
   cat > "$BINARY" <<EOF
 #!/usr/bin/env bash
-exec "$EXTRACTED_BIN" "\$@"
+exec "$EXTRACT_DIR/squashfs-root/usr/bin/nvim" "\$@"
 EOF
   chmod +x "$BINARY"
-  rm -f "$APPIMAGE_TMP"
-  ok "nvim instalado (sin FUSE) vía squashfs-root en $BINARY"
+  ok "nvim instalado (sin FUSE) vía $EXTRACT_DIR en $BINARY"
 fi
 
 # --------------------------------------------------------------------------
 # 5. Verificación final
 # --------------------------------------------------------------------------
 "$BINARY" --version | grep -m1 '^NVIM v'
+version_ok "$BINARY" || die "el binario instalado no alcanza la versión mínima $MIN_MAJOR.$MIN_MINOR"
 ok "instalación completada"
 
 # --------------------------------------------------------------------------

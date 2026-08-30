@@ -45,7 +45,7 @@ return {
         keymap("n", "K", vim.lsp.buf.hover, opts)
         keymap("n", "gi", vim.lsp.buf.implementation, opts)
         keymap("n", "<C-k>", vim.lsp.buf.signature_help, opts)
-        keymap("n", "<leader>rn", vim.lsp.buf.rename, opts)
+        keymap("n", "<leader>cr", vim.lsp.buf.rename, opts)
         keymap({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)
         keymap("n", "gr", vim.lsp.buf.references, opts)
         keymap("n", "<leader>f", function()

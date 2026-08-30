@@ -131,7 +131,7 @@ return {
       show_keys = false,
       -- Group leader prefixes to make the popup easier to scan
       spec = {
-        { "<leader>a", group = "AI / CodeCompanion" },
+        { "<leader>a", group = "IA (OpenCode)" },
         { "<leader>b", group = "Buffers" },
         { "<leader>c", group = "Code / LSP" },
         { "<leader>d", group = "Diagnostics" },
@@ -139,7 +139,6 @@ return {
         { "<leader>g", group = "Git" },
         { "<leader>gh", group = "Git Hunks" },
         { "<leader>m", group = "Markdown / Preview" },
-        { "<leader>o", group = "Obsidian" },
         { "<leader>q", group = "Quit / Session" },
         { "<leader>t", group = "Terminal / Toggles" },
       },

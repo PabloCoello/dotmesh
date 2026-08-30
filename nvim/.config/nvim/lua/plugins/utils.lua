@@ -81,7 +81,7 @@ return {
     },
   },
 
-  -- OpenCode client (experimental; alongside CodeCompanion)
+  -- OpenCode client
   {
     "NickvanDyke/opencode.nvim",
     event = "VeryLazy",

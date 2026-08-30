@@ -57,7 +57,7 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 | `gd` | Ir a la definición |
 | `gr` | Referencias |
 | `K` | Documentación (hover) |
-| `<Espacio>rn` | Renombrar símbolo |
+| `<Espacio>cr` | Renombrar símbolo |
 | `<Espacio>ca` | Acciones de código |
 | `<Espacio>f` | Formatear el documento |
 | `[d` / `]d` | Diagnóstico anterior / siguiente |
@@ -95,6 +95,28 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 ## Stow
 
 `make stow` enlaza `nvim/.config/nvim/` en `~/.config/nvim/`. El directorio `scripts/` queda excluido (véase `.stow-local-ignore`).
+
+## Integridad de la instalación
+
+Neovim no publica checksums ni firmas junto a sus artefactos de release, así que el
+script no puede verificar nada contra el proveedor. En su lugar, `install-nvim.sh`
+**fija el tag y el SHA-256** del AppImage y aborta si el binario descargado no casa.
+El pin se repite en `scripts/vendor/upstreams.tsv`, junto al resto de dependencias
+externas del repositorio.
+
+Para subir de versión: cambia `NVIM_TAG`, descarga el AppImage, comprueba su
+`sha256sum` y actualiza `NVIM_SHA256` y el TSV.
+
+Tres riesgos quedan aceptados a conciencia, por ser la superficie normal del
+ecosistema de Neovim y no tener arreglo proporcionado:
+
+- **lazy.nvim** se clona en el primer arranque desde su rama `stable`, sin commit
+  fijado. Es el arranque que documenta el propio proyecto; fijarlo a mano crearía una
+  trampa de mantenimiento a cambio de poco.
+- **Mason** resuelve los servidores LSP contra sus registros en tiempo de arranque;
+  esos binarios no entran en `lazy-lock.json`.
+- **markdown-preview.nvim** ejecuta `npm install` como paso de construcción, con el
+  `package-lock.json` que trae el commit fijado.
 
 ## Más información
 
