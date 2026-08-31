@@ -353,7 +353,7 @@ Duplicate `thread.reanchored` events for the same thread are innocuous: the proj
 
 ## 11. Fix event checklist
 
-`readEvents` silently discards any event that fails one of these predicates. Emit events that pass all three or they will not appear in the projection:
+`readEvents` silently discards any event that fails one of these predicates. Emit events that pass all of them or they will not appear in the projection:
 
 | Discard condition | Effect |
 |---|---|
@@ -361,7 +361,11 @@ Duplicate `thread.reanchored` events for the same thread are innocuous: the proj
 | `id` or `thread_id` is not a UUID v4 | Field missing, not a string, or wrong format; the event is ignored. |
 | `body` is present but not a string | Type mismatch (`null`, number, or object); the event is ignored. |
 | `author` is missing, not an object, or `author.kind` is not `"human"` or `"ai"` | Required field absent or invalid; the event is ignored. A single aggregated `console.warn` is emitted per `readEvents` call listing the count of discarded events. |
+| `author.kind === "ai"` and `author.model` is missing or not a string | AI events without a model identifier are discarded; the model field is required for AI authorship. Folded into the aggregated `console.warn`. |
+| `anchor` is present and any of: `anchor.line_hint` or `anchor.char_offset` is not a number, or `anchor.quote` is not a string | Malformed anchor; the event is ignored. Folded into the aggregated `console.warn`. |
 | File size exceeds 1 MiB | The file is skipped without reading. Folded into the same aggregated `console.warn`. A legitimate event is a few hundred bytes; any file larger than 1 MiB is assumed malformed or malicious. |
+
+**Default `author.model` for `fix` and `reanchor`.** When these subcommands are invoked without an explicit `--model` flag, they write `author.model: "mesh-review-cli"` on AI-authored events. This value passes the discard predicate above and appears in the author pill of the VS Code extension.
 
 For the badge and diff to work correctly in the VS Code extension, a fix `message.posted` must also satisfy:
 
