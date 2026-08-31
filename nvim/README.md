@@ -118,6 +118,8 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 |---|---|
 | `:MeshPanel` | Igual que `<Espacio>rp` |
 | `:MeshRetract <thread_id> <msg_id> [reason]` | Retractar un mensaje |
+| `:MeshAssign <thread_id> [agente]` | Asignar un hilo a un subagente |
+| `:MeshFocusThread <thread_id> [tipo] [linea]` | Enviar un hilo concreto a scribe |
 
 El plugin resuelve el CLI de mesh-review en este orden: opción `cli` de `setup()`,
 variable de entorno `MESH_REVIEW_CLI`, ruta `~/.claude/skills/doc-review/bin/mesh-review.mjs`.
@@ -162,6 +164,37 @@ a pulsar `<líder>rs`. El prompt se enviará en ese segundo intento, con la sesi
 ya en marcha.
 
 Todo el flujo es asíncrono: el editor no se congela mientras Claude arranca.
+
+#### Asignación de hilos (`:MeshAssign`)
+
+`:MeshAssign <thread_id>` abre un selector interactivo (`vim.ui.select`) con los
+cuatro subagentes disponibles: `security`, `maths`, `reviser` y `editor`. Al
+confirmar, invoca `mesh-review assign` y emite el evento `thread.assigned` en el
+sidecar. El hilo queda marcado como pendiente para ese agente en `project --pending`.
+
+Si pasas el agente directamente (`:MeshAssign <thread_id> reviser`), el selector
+no se muestra y el evento se escribe sin interacción.
+
+La función `M.assign_thread(thread_id, doc)` está disponible para llamarla desde
+otros plugins o desde el panel.
+
+#### Puente por hilo a scribe (`:MeshFocusThread`)
+
+`:MeshFocusThread <thread_id> [tipo] [linea]` envía a la sesión scribe un prompt
+que la dirige a centrarse únicamente en ese hilo. Equivale al botón de foco de hilo
+de la extensión de VS Code.
+
+El prompt que llega a scribe incluye el identificador del hilo, el tipo de
+comentario y la etiqueta de línea, y pide a scribe que ejecute
+`mesh-review project '<ruta>'` para el contexto completo. No usa `--pending` ni
+`--thread`: la instrucción explícita al agente lo enfoca en el hilo pedido, pero
+scribe tiene el contexto de los demás para decidir si hay dependencias.
+
+Solo actúa si `HERDR_ENV=1`. Si la sesión scribe no existe, la crea siguiendo el
+mismo flujo que `<Espacio>rs`.
+
+La función `M.focus_scribe_thread(thread_id, doc, type_label, line_label)` está
+disponible para llamarla desde otros plugins o desde el panel.
 
 ### Terminal
 

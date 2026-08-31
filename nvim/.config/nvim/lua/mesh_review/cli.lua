@@ -253,4 +253,43 @@ function M.reanchor(doc)
   _run_async({ "reanchor", doc }, "[mesh-review] reanchor")
 end
 
+--- Asigna un hilo a un subagente conocido.
+--- Equivale a: node <cli> assign <doc> <thread_id> --agent <agent>
+---
+--- El CLI valida que el hilo exista y que el agente sea uno de
+--- security|maths|reviser|editor antes de emitir el evento.
+---
+--- @param doc       string  Ruta al documento.
+--- @param thread_id string  UUID del hilo.
+--- @param agent     string  Nombre del subagente (security|maths|reviser|editor).
+--- @return string|nil, string|nil  event_id o nil + mensaje de error.
+function M.assign(doc, thread_id, agent)
+  local args = { "assign", doc, thread_id, "--agent", agent }
+  local out, err = _run(args)
+  if out == nil then return nil, err end
+  local event_id = vim.trim(out)
+  if event_id == "" then return nil, "assign no devolvió event_id" end
+  return event_id, nil
+end
+
+--- Proyecta un único hilo del documento.
+--- Equivale a: node <cli> project --thread <thread_id> <doc>
+--- Devuelve un array de un elemento o un array vacío si el hilo no existe.
+---
+--- @param doc       string  Ruta al documento.
+--- @param thread_id string  UUID del hilo.
+--- @return table|nil, string|nil  Array (0 ó 1 elementos) o nil + error.
+function M.project_thread(doc, thread_id)
+  local out, err = _run({ "project", "--thread", thread_id, doc })
+  if out == nil then return nil, err end
+  local ok, data = pcall(vim.fn.json_decode, out)
+  if not ok then
+    return nil, "Error al parsear JSON de project --thread: " .. tostring(data)
+  end
+  if type(data) ~= "table" then
+    return nil, "Salida inesperada de project --thread: " .. vim.inspect(data)
+  end
+  return data, nil
+end
+
 return M
