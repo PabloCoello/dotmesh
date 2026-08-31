@@ -96,6 +96,9 @@ Load these skills as relevant:
 - `tool-error-recovery` before retrying any failed tool call.
 - `wait-for-user` when blocked on a human decision. As a subagent, never call a native question tool. Emit `WAIT_FOR_USER: <concrete decision>` and stop.
 
+## Self-check and gates
+Load `code-review-and-quality` over your own latest diff before each commit, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find first. No hook enforces this here, unlike Claude Code — the discipline is yours. It lowers how often the orchestrator's gate finds something; it does not replace it.
+
 ## After each significant block
 Do not invoke subagents from `build`: OpenCode's default `subagent_depth=1` means gates belong to the parent orchestrator. Return a concise summary with changed files, verification commands, risks, and any maths/security surface so `maker` can run `review`, `maths`, and `security` gates.
 
