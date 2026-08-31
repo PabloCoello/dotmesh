@@ -316,10 +316,20 @@ async function runEmit(argv) {
       process.exit(1);
     }
   }
-  if ("body" in event && typeof event.body !== "string") {
-    process.stderr.write(`mesh-review emit: body debe ser una cadena de texto
+  if ("body" in event) {
+    if (typeof event.body !== "string") {
+      process.stderr.write(`mesh-review emit: body debe ser una cadena de texto
 `);
-    process.exit(1);
+      process.exit(1);
+    }
+    if (event.body.length === 0) {
+      process.stderr.write("mesh-review emit: body no puede ser una cadena vac\xEDa (minLength: 1)\n");
+      process.exit(1);
+    }
+    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/.test(event.body)) {
+      process.stderr.write("mesh-review emit: body contiene caracteres de control no permitidos\n");
+      process.exit(1);
+    }
   }
   await emitEvent(eventDir, event);
   process.stdout.write(`${id}

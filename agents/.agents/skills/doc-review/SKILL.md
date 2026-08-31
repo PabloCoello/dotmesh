@@ -556,3 +556,28 @@ node ~/.claude/skills/doc-review/bin/mesh-review.mjs reply docs/SPEC.md "$THREAD
   --author ai --model "claude-sonnet-4-5" \
   --body "Corrección: la afirmación es incorrecta según [fuente]."
 ```
+
+### 13.5 `emit` (vía de bajo nivel)
+
+Writes a raw V2 event to the event directory without the argument ergonomics of the typed subcommands. Intended for **harness scripts, integration tests, and external tooling** that construct events programmatically. Prefer `open`, `reply`, `resolve`, or `retract` whenever possible — they validate types, enforce anchor shapes, and guard invariants. Use `emit` only when you need to write an event type that none of the typed subcommands cover (e.g. `thread.assigned` before `assign` ships, or testing unusual event sequences).
+
+```
+mesh-review emit <doc> <event-type> [key=value ...]
+```
+
+Key-value pairs are merged into the event after the fixed fields (`id`, `version`, `type`, `created_at`, `dirty: false`). Dot-notation builds nested objects: `author.kind=ai author.model=my-model`. The two numeric anchor fields (`anchor.line_hint`, `anchor.char_offset`) are coerced to non-negative integers; all other values remain strings unless the literal is `null`, `true`, or `false`.
+
+**Validation:** `id` and `thread_id` (if present) must be UUID v4. If `body` is present it must be a non-empty string (≥ 1 character) and must not contain C0 control characters (U+0001–U+0008, U+000B–U+000C, U+000E–U+001F), DEL (U+007F), or C1 characters (U+0080–U+009F); tab, LF and CR are allowed.
+
+**stdout:** UUID of the written event, followed by a newline.
+
+**Example:**
+
+```bash
+# Emit a thread.assigned event (until assign ships as a typed subcommand)
+node ~/.claude/skills/doc-review/bin/mesh-review.mjs emit docs/SPEC.md thread.assigned \
+  thread_id="$THREAD_ID" \
+  agent=reviser \
+  author.kind=human \
+  commit=null
+```

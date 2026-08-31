@@ -21,7 +21,7 @@ import { promisify } from 'node:util';
 
 import { readEvents, project, utcTimestampMs, isUuid, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
 import { isPending, runProject } from './commands/project.ts';
-import { emitEvent, parseKvPairs } from './commands/emit.ts';
+import { emitEvent, parseKvPairs, runEmit } from './commands/emit.ts';
 import { parseCliArgs } from './args.ts';
 import { reanchorThreads, runReanchor } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
@@ -1281,6 +1281,51 @@ async function makeGitRepo(): Promise<{ gitRoot: string; cleanup: () => Promise<
   await execFileAsync('git', ['commit', '-m', 'init'], { cwd: gitRoot });
   return { gitRoot, cleanup: () => rm(gitRoot, { recursive: true }) };
 }
+
+// ---------------------------------------------------------------------------
+// emit: validaciones de body (A5)
+// ---------------------------------------------------------------------------
+
+test('emit: body vacío → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const tid = randomUUID();
+    const code = await captureExit(() =>
+      runEmit([docAbs, 'message.posted',
+        `thread_id=${tid}`,
+        'author.kind=human',
+        `commit=null`,
+        'body=',
+      ])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con body vacío');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('emit: body con caracteres de control → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const tid = randomUUID();
+    // \x01 is a control character (ASCII SOH); the kv parser passes it as-is
+    const code = await captureExit(() =>
+      runEmit([docAbs, 'message.posted',
+        `thread_id=${tid}`,
+        'author.kind=human',
+        `commit=null`,
+        `body=texto\x01malo`,
+      ])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con body con caracteres de control');
+  } finally {
+    await cleanup();
+  }
+});
 
 test('fix: caso nominal → crea commit y emite message.posted con SHA', async () => {
   const { gitRoot, cleanup } = await makeGitRepo();
