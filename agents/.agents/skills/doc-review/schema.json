@@ -147,7 +147,7 @@
         "created_at": { "$ref": "#/$defs/isoTs" },
         "commit":     { "type": ["string","null"] },
         "dirty":      { "type": "boolean" },
-        "agent":      { "type": "string", "minLength": 1 }
+        "agent":      { "type": "string", "enum": ["security", "maths", "reviser", "editor"] }
       }
     }
   ],

@@ -561,6 +561,8 @@ node ~/.claude/skills/doc-review/bin/mesh-review.mjs reply docs/SPEC.md "$THREAD
 
 Writes a raw V2 event to the event directory without the argument ergonomics of the typed subcommands. Intended for **harness scripts, integration tests, and external tooling** that construct events programmatically. Prefer `open`, `reply`, `resolve`, or `retract` whenever possible — they validate types, enforce anchor shapes, and guard invariants. Use `emit` only when you need to write an event type that none of the typed subcommands cover (e.g. `thread.assigned` before `assign` ships, or testing unusual event sequences).
 
+> **Advertencia:** `emit` es una vía de bajo nivel que puede escribir valores **fuera de las allowlists** de los subcomandos de alto nivel. Por ejemplo, el campo `agent` de `thread.assigned` está restringido por `assign` a `security | maths | reviser | editor`, pero `emit` acepta cualquier cadena que supere las guardas de `body`. Úsalo solo cuando lo que necesites no cabe en un subcomando tipado.
+
 ```
 mesh-review emit <doc> <event-type> [key=value ...]
 ```
