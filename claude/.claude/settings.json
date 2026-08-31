@@ -129,6 +129,18 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "build",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/verify-phase-close.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "enableWorkflows": true,

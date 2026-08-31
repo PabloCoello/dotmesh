@@ -153,8 +153,12 @@ The agent system has two layers, identical in concept across the three tools.
 - **Seven subagents** — the workers a persona delegates to, never switched into by
   hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
-  situation, not on the user naming them. The `remind-load-skills` and
-  `remind-review-gate` hooks are the safety net under that delegation.
+  situation, not on the user naming them. The `remind-load-skills`,
+  `remind-review-gate` and `verify-phase-close` hooks are the safety net under
+  that delegation: the first two gate a subagent before it commits, the third
+  fires on `SubagentStop` and hands the orchestrator the state of the working
+  tree plus the last commits, so a phase is accepted against the repository
+  rather than against the subagent’s own summary.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
@@ -184,7 +188,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
 | Per-agent bash granularity | yes (e.g. `npm audit*`) | tools on/off per agent; within agents with Bash, sub-restrictions are by judgment (agent instructions), not enforced by the permission system | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
-| Destructive-git guardrail | per-agent bash permission frontmatter | `PreToolUse` hook → `~/.claude/hooks/block-dangerous-git.sh` (blocks `reset --hard`, `clean -f`, `branch -D`, `checkout/restore .`, force-push; allows normal push) | sandbox + approval prompts gate destructive commands |
+| Destructive-git guardrail | per-agent bash permission frontmatter | `PreToolUse` hook → `~/.claude/hooks/block-dangerous-git.sh` (blocks `reset --hard`, `clean -f`, `branch -D`, `checkout/restore .`, force-push, and any push whose target is the default branch; allows a normal push of a work branch) | sandbox + approval prompts gate destructive commands |
 | Context counter | built-in context indicator in the TUI | custom `statusLine` → `~/.claude/statusline.sh` (modelo · persona activa · barra de contexto · rama · coste, paleta dotmesh) | built-in token/context indicator in the TUI |
 
 ## Conventions to respect

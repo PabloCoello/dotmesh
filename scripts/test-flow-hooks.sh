@@ -419,6 +419,66 @@ guard_allows "git push origin main" "sin origin/HEAD no se puede afirmar cuál e
 GUARD_CWD="$huerfano"
 guard_blocks "git -C $repo push origin main" "el destino se resuelve en el repositorio que dice -C"
 GUARD_CWD=""
+
+section "cierre de fase: el orquestador recibe con qué contrastar el resumen"
+# 5.6 del diagnóstico: la fase se daba por commiteada leyendo el resumen del
+# subagente, sin mirar el repositorio.
+CLOSE="$HOOKS/verify-phase-close.sh"
+
+run_close() {
+  jq -nc --arg t "$1" --arg d "$2" \
+    '{hook_event_name:"SubagentStop",session_id:"s1",agent_id:"a1",agent_type:$t,cwd:$d}' \
+    | bash "$CLOSE" 2>/dev/null
+}
+close_context() { run_close "$@" | jq -r '.hookSpecificOutput.additionalContext // empty'; }
+
+fase="$TMP/repo-fase"
+git init -q -b main "$fase"
+git -C "$fase" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "primera fase"
+
+out=$(close_context build "$fase")
+case "$out" in
+  *"árbol de trabajo limpio"*) pass "con el árbol limpio lo dice" ;;
+  *) fail "árbol limpio, contexto: $out" ;;
+esac
+case "$out" in
+  *"primera fase"*) pass "lista los últimos commits" ;;
+  *) fail "no lista commits: $out" ;;
+esac
+
+printf 'a\n' > "$fase/pendiente.txt"
+printf 'b\n' > "$fase/otro.txt"
+out=$(close_context build "$fase")
+case "$out" in
+  *"2 fichero(s) sin commitear"*) pass "cuenta los ficheros sin commitear" ;;
+  *) fail "no cuenta los pendientes: $out" ;;
+esac
+case "$out" in
+  *pendiente.txt*) pass "nombra los ficheros sin commitear" ;;
+  *) fail "no nombra los pendientes: $out" ;;
+esac
+
+# Solo para build: review y security no commitean, y el aviso sería ruido.
+[ -z "$(close_context review "$fase")" ] \
+  && pass "no dice nada de un subagente que no commitea" \
+  || fail "habla de un agente que no es build"
+
+# Fuera de un repositorio no hay nada que afirmar.
+[ -z "$(close_context build "$TMP")" ] \
+  && pass "fuera de un repositorio se calla" \
+  || fail "habla fuera de un repositorio"
+[ -z "$(close_context build "$TMP/no-existe")" ] \
+  && pass "con un cwd inexistente se calla" \
+  || fail "habla con un cwd inexistente"
+
+# El hook tiene que estar registrado, o no corre nunca.
+if jq -e '.hooks.SubagentStop[] | select(.matcher == "build") | .hooks[]
+          | select(.command | test("verify-phase-close"))' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null; then
+  pass "verify-phase-close.sh está registrado en SubagentStop con matcher build"
+else
+  fail "verify-phase-close.sh no está registrado en la plantilla"
+fi
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
