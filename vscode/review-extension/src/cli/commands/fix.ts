@@ -172,6 +172,16 @@ export async function runFix(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // Verify the target thread exists before committing — a typo'd UUID would
+  // otherwise produce a real commit + an orphan event silently dropped by the reader.
+  // (Same referential integrity check as reply/resolve/retract.)
+  const existingEvents = await readEvents(eventDir);
+  const existingThreads = project(existingEvents);
+  if (!existingThreads.some(t => t.thread_id === threadId)) {
+    process.stderr.write(`mesh-review fix: el hilo ${threadId} no existe en este documento\n`);
+    process.exit(1);
+  }
+
   const sha = await resolveCommit({ gitRoot, docAbs, commitMsg, alreadyDone });
 
   // Build and emit the message.posted event

@@ -634,6 +634,13 @@ async function runFix(argv) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
     process.exit(1);
   }
+  const existingEvents = await readEvents(eventDir);
+  const existingThreads = project(existingEvents);
+  if (!existingThreads.some((t) => t.thread_id === threadId)) {
+    process.stderr.write(`mesh-review fix: el hilo ${threadId} no existe en este documento
+`);
+    process.exit(1);
+  }
   const sha = await resolveCommit({ gitRoot, docAbs, commitMsg, alreadyDone });
   const ev = {
     id: randomUUID3(),

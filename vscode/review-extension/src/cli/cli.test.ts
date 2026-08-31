@@ -1261,22 +1261,23 @@ test('fix: caso nominal → crea commit y emite message.posted con SHA', async (
     // Stage the file so it appears in git status --porcelain and can be committed
     await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
 
-    const tid = randomUUID();
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: fix now verifies the thread exists before committing; open a thread first.
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido para revisar', 0, 0);
 
     await runFix([docAbs, tid, '-m', 'fix(doc): corrige contenido', '--body', 'Corrección aplicada']);
 
-    // Event was emitted
+    // Event was emitted (1 thread.opened + 1 message.posted)
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    const ev = events[0];
-    assert.strictEqual(ev.type, 'message.posted');
-    assert.strictEqual(ev.thread_id, tid);
-    assert.strictEqual(ev.body as string, 'Corrección aplicada');
-    assert.strictEqual((ev.author as { kind: string }).kind, 'ai');
-    assert.ok(ev.commit, 'el evento tiene commit');
-    assert.strictEqual(typeof ev.commit, 'string', 'commit es string');
-    assert.strictEqual(ev.dirty, false);
+    assert.ok(events.length >= 2, 'al menos 2 eventos emitidos (opened + fix)');
+    const ev = events.find(e => e.type === 'message.posted');
+    assert.ok(ev, 'hay un evento message.posted');
+    assert.strictEqual(ev!.thread_id, tid);
+    assert.strictEqual(ev!.body as string, 'Corrección aplicada');
+    assert.strictEqual((ev!.author as { kind: string }).kind, 'ai');
+    assert.ok(ev!.commit, 'el evento tiene commit');
+    assert.strictEqual(typeof ev!.commit, 'string', 'commit es string');
+    assert.strictEqual(ev!.dirty, false);
 
     // A new commit was created
     const { stdout: logOut } = await execFileAsync('git', ['log', '--oneline'], { cwd: gitRoot });
@@ -1329,9 +1330,10 @@ test('fix: --already-done <sha> → sin commit nuevo, evento con ese SHA', async
     await writeFile(docAbs, 'contenido\n', 'utf8');
     // File is NOT staged: --already-done should not require pending changes
 
-    const tid = randomUUID();
     const alreadyDoneSha = 'abc1234';
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: open a thread so fix can find it
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido', 0, 0);
 
     const { stdout: logBefore } = await execFileAsync(
       'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
@@ -1346,10 +1348,11 @@ test('fix: --already-done <sha> → sin commit nuevo, evento con ese SHA', async
     );
     assert.strictEqual(parseInt(logAfter.trim(), 10), commitsBefore, 'sin commit nuevo');
 
-    // Event emitted with the supplied SHA
+    // Event emitted with the supplied SHA (filter out the thread.opened)
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    assert.strictEqual(events[0].commit, alreadyDoneSha, 'commit es el SHA de --already-done');
+    const fixEv = events.find(e => e.type === 'message.posted');
+    assert.ok(fixEv, 'hay evento message.posted');
+    assert.strictEqual(fixEv!.commit, alreadyDoneSha, 'commit es el SHA de --already-done');
   } finally {
     await cleanup();
   }
@@ -1389,10 +1392,12 @@ test('fix: --confidence alta → el campo aparece en el evento emitido', async (
   try {
     const docAbs = join(gitRoot, 'doc.md');
     await writeFile(docAbs, 'contenido a revisar\n', 'utf8');
-    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
-
-    const tid = randomUUID();
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: open a thread so fix can find it
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido a revisar', 0, 0);
+
+    // Stage the document (fix needs pending changes for -m commit path)
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
 
     await runFix([
       docAbs, tid,
@@ -1402,8 +1407,9 @@ test('fix: --confidence alta → el campo aparece en el evento emitido', async (
     ]);
 
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    assert.strictEqual(events[0].confidence, 'alta', 'campo confidence presente y correcto');
+    const fixEv = events.find(e => e.type === 'message.posted');
+    assert.ok(fixEv, 'hay evento message.posted');
+    assert.strictEqual(fixEv!.confidence, 'alta', 'campo confidence presente y correcto');
   } finally {
     await cleanup();
   }
@@ -1414,8 +1420,9 @@ test('fix: --model <id> → aparece como author.model en el evento emitido', asy
   try {
     const docAbs = join(gitRoot, 'doc.md');
     await writeFile(docAbs, 'contenido\n', 'utf8');
-    const tid = randomUUID();
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: open a thread so fix can find it
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido', 0, 0);
 
     await runFix([
       docAbs, tid,
@@ -1425,8 +1432,9 @@ test('fix: --model <id> → aparece como author.model en el evento emitido', asy
     ]);
 
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    const author = events[0].author as { kind: string; model?: string };
+    const fixEv = events.find(e => e.type === 'message.posted');
+    assert.ok(fixEv, 'hay evento message.posted');
+    const author = fixEv!.author as { kind: string; model?: string };
     assert.strictEqual(author.model, 'claude-opus-4', 'author.model coincide con --model');
   } finally {
     await cleanup();
@@ -2713,6 +2721,46 @@ test('isUuid: UUID válido v4 con variante 9 → true', () => {
 
 test('isUuid: UUID válido v4 con variante b → true', () => {
   assert.strictEqual(isUuid('550e8400-e29b-41d4-b716-446655440000'), true);
+});
+
+// ---------------------------------------------------------------------------
+// T2.4 — B2: fix verifica existencia del hilo antes de commitear
+// ---------------------------------------------------------------------------
+
+test('fix: thread_id inexistente → exit 1, sin commit nuevo, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido para revisar\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+
+    // UUID válido v4 pero que no corresponde a ningún hilo abierto
+    const nonExistentThreadId = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const { stdout: logBefore } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    const commitsBefore = parseInt(logBefore.trim(), 10);
+
+    const code = await captureExit(() =>
+      runFix([docAbs, nonExistentThreadId, '-m', 'fix(doc): aplicado', '--body', 'Corrección aplicada'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1 cuando el hilo no existe');
+
+    // No se debe haber creado un commit nuevo
+    const { stdout: logAfter } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    assert.strictEqual(parseInt(logAfter.trim(), 10), commitsBefore, 'sin commit nuevo');
+
+    // No se debe haber emitido ningún evento
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
 });
 
 // ---------------------------------------------------------------------------
