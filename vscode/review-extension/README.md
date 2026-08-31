@@ -59,7 +59,7 @@ El panel de hilos incluye tres botones para interactuar con la persona `scribe` 
 |---|---|
 | **Lanzar sesión scribe** | Abre un terminal integrado de VS Code con `claude --settings '{"outputStyle":"scribe"}'` y lo registra como sesión scribe activa. El terminal se lanza con `hideFromUser: true`, de modo que no aparece en la lista de terminales del panel; queda en segundo plano esperando prompts. |
 | **Enviar pendientes** | Envía a la sesión scribe activa el prompt para procesar todos los hilos pendientes del documento activo (`mesh-review project --pending '<ruta>'`). Si no hay sesión activa, la lanza primero. |
-| **Enviar hilo** | (Próximamente) Envía a la sesión scribe el contexto de un único hilo seleccionado. |
+| **Enviar hilo** | Botón por hilo en cada tarjeta abierta (icono scribe). Envía a la sesión scribe el contexto de ese único hilo, con `mesh-review project` sin `--pending` para que un hilo ya respondido por la IA pero reabierto siga visible. Si no hay sesión activa, la lanza primero. |
 
 **Comando de lanzamiento.** La sesión se arranca con:
 

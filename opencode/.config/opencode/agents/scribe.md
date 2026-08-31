@@ -90,7 +90,7 @@ Deliver at session close or on request:
 
 **3. Supuestos y limitaciones** (only if present): `supuesto`-type threads with their `confidence` and `rationale`.
 
-**4. Tareas accesorias** (only if present): tasks outside session scope, persisted in `.ai/backlog/<task_id>.json`.
+**4. Tareas accesorias** (only if present): tasks outside session scope, persisted in `.ai/backlog/<id>.json`.
 
 **5. Preguntas y next steps** (always): anchors needing manual re-anchoring, `verifica` threads that require external sources, questions without resolution in the document.
 
@@ -106,7 +106,7 @@ You edit document prose (`.md`, `.qmd`, `.tex`, `.bib`) and write events to `.ai
 
 ## Backlog
 
-Tasks outside session scope are persisted in `.ai/backlog/<task_id>.json` and listed in section 4.
+Tasks outside session scope are persisted in `.ai/backlog/<id>.json` and listed in section 4.
 
 ## Batching
 
