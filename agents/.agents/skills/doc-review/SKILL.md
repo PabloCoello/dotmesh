@@ -107,7 +107,7 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 
 | Event type | Fold action |
 |---|---|
-| `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
+| `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `rationale`, `refs` if present on the event. |
 | `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. If the event carries `confidence`, propagates it to the message projection. |
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
@@ -131,6 +131,7 @@ ThreadProjection {
   assignee?      : string
   assignedAt?    : ISO timestamp          // created_at of the most recent thread.assigned event; drives the --pending predicate
   confidence?    : "alta" | "media" | "baja"
+  rationale?     : string                 // copied from thread.opened; justification for supuesto/verifica threads
   refs?          : Array<{ title, url?, note? }>
   messages       : MessageProjection[]   // [0] = opening text
   openedAt       : ISO timestamp
@@ -148,6 +149,8 @@ MessageProjection {
   confidence? : "alta" | "media" | "baja" // optional; emitted by the reviser subagent; shown in the review panel next to the author label
 }
 ```
+
+**Reserved envelope fields (not projected):** `dirty` is a metadata flag written by every command (`dirty: false`) to indicate the event was emitted against a clean worktree; it is preserved in raw events for forensic use but is never surfaced in `ThreadProjection`. `parent_id` appears in the `message.posted` schema as a reserved slot for future nested-threading support; it has no current effect and is silently ignored during projection — do not use it in new events.
 
 Derived fields used by the card UI:
 

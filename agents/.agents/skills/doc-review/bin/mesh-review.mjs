@@ -68,6 +68,7 @@ function project(events) {
       };
       if (ev.assignee !== void 0) proj2.assignee = ev.assignee;
       if (ev.confidence !== void 0) proj2.confidence = ev.confidence;
+      if (ev.rationale !== void 0) proj2.rationale = ev.rationale;
       if (ev.refs !== void 0) proj2.refs = ev.refs;
       map.set(tid, proj2);
       order.push(tid);

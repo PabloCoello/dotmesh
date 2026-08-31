@@ -134,6 +134,35 @@ test('project devuelve la proyección correcta de un fixture V2', async () => {
   }
 });
 
+// A4: rationale projected from thread.opened
+test('project: rationale del thread.opened aparece en ThreadProjection', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-proj-rationale-'));
+  try {
+    const tid = randomUUID();
+    const openedEv: EventEnvelope = {
+      id: randomUUID(),
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'texto', line_hint: 0, char_offset: 0 },
+      commentType: 'supuesto',
+      body: 'Supuesto sobre la API',
+      rationale: 'Basado en la documentación de la v3',
+    };
+    await emitEvent(dir, openedEv);
+    const threads = project(await readEvents(dir));
+    assert.strictEqual(threads.length, 1);
+    assert.strictEqual(threads[0].rationale, 'Basado en la documentación de la v3',
+      'rationale copiado desde thread.opened');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // isPending — regla base: accionable salvo que el último no retractado sea IA
 // ---------------------------------------------------------------------------

@@ -110,6 +110,8 @@ export interface ThreadProjection {
   assignee?: string;
   assignedAt?: string;  // created_at del último thread.assigned (recencia para --pending)
   confidence?: 'alta' | 'media' | 'baja';
+  /** Justificación del supuesto o comentario, copiada del thread.opened (campo opcional del schema). */
+  rationale?: string;
   refs?: Array<{ title: string; url?: string; note?: string }>;
   messages: MessageProjection[];
   openedAt: string;
@@ -311,6 +313,7 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
       };
       if (ev.assignee !== undefined) proj.assignee = ev.assignee as string;
       if (ev.confidence !== undefined) proj.confidence = ev.confidence as 'alta' | 'media' | 'baja';
+      if (ev.rationale !== undefined) proj.rationale = ev.rationale as string;
       if (ev.refs !== undefined) proj.refs = ev.refs as Array<{ title: string; url?: string; note?: string }>;
       map.set(tid, proj);
       order.push(tid);
