@@ -212,6 +212,98 @@ case "$out" in
   *) fail "la métrica no descuenta el intento bloqueado: $(printf '%s' "$out" | grep code-review || true)" ;;
 esac
 
+section "propagación: el bloque hooks de la plantilla llega al vivo"
+# Sin esto, un hook nuevo en el repo no alcanza jamás a una máquina ya
+# instalada: settings.json se siembra una vez y nunca se sobreescribe.
+SYNC="$REPO_ROOT/scripts/sync-claude-hooks.sh"
+SYNC_HOME="$TMP/home"
+mkdir -p "$SYNC_HOME/.claude"
+
+# Plantilla mínima con dos hooks; el vivo empieza con uno solo y con una clave
+# propia de la máquina que la fusión no debe tocar.
+tpl="$TMP/plantilla.json"
+cat > "$tpl" <<'JSON'
+{
+  "outputStyle": "maker",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "command", "command": "~/.claude/hooks/uno.sh" },
+        { "type": "command", "command": "~/.claude/hooks/dos.sh" }
+      ] }
+    ]
+  }
+}
+JSON
+
+vivo_inicial="$TMP/vivo-inicial.json"
+cat > "$vivo_inicial" <<'JSON'
+{
+  "outputStyle": "scribe",
+  "effortLevel": "xhigh",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "command", "command": "~/.claude/hooks/uno.sh" }
+      ] }
+    ]
+  }
+}
+JSON
+
+run_sync() {
+  local dst="$1"; shift
+  HOME="$SYNC_HOME" CLAUDE_SETTINGS_SRC="$tpl" CLAUDE_SETTINGS_DST="$dst" \
+    bash "$SYNC" "$@" > "$TMP/sync_out" 2>&1
+}
+
+dst="$SYNC_HOME/.claude/settings.json"
+cp "$vivo_inicial" "$dst"
+
+run_sync "$dst" --check && rc=0 || rc=$?
+[ "$rc" = 1 ] && pass "--check detecta la deriva (rc=1)" || fail "--check devolvió rc=$rc con deriva"
+grep -q '+ PreToolUse \[Bash\] ~/.claude/hooks/dos.sh' "$TMP/sync_out" \
+  && pass "--check nombra el hook que falta" \
+  || fail "--check no nombra el hook que falta: $(cat "$TMP/sync_out")"
+diff -q "$vivo_inicial" "$dst" >/dev/null \
+  && pass "--check no escribe" \
+  || fail "--check modificó el destino"
+
+run_sync "$dst" && rc=0 || rc=$?
+[ "$rc" = 0 ] && pass "la fusión sale con rc=0" || fail "la fusión devolvió rc=$rc"
+[ "$(jq -r '[.hooks.PreToolUse[0].hooks[].command] | join(",")' "$dst")" \
+   = "~/.claude/hooks/uno.sh,~/.claude/hooks/dos.sh" ] \
+  && pass "la fusión trae los hooks de la plantilla" \
+  || fail "hooks tras la fusión: $(jq -c '.hooks' "$dst")"
+[ "$(jq -r '.outputStyle' "$dst")" = scribe ] && [ "$(jq -r '.effortLevel' "$dst")" = xhigh ] \
+  && pass "la fusión conserva las claves de la máquina" \
+  || fail "la fusión pisó claves locales: $(jq -c 'del(.hooks)' "$dst")"
+if compgen -G "$SYNC_HOME/dotfiles-backup/*/claude-settings.json" >/dev/null; then
+  pass "la fusión deja copia previa"
+else
+  fail "la fusión no dejó copia en $SYNC_HOME/dotfiles-backup"
+fi
+
+run_sync "$dst" && rc=0 || rc=$?
+[ "$rc" = 0 ] && grep -q "alineados" "$TMP/sync_out" \
+  && pass "la fusión es idempotente" \
+  || fail "segunda pasada: rc=$rc, salida: $(cat "$TMP/sync_out")"
+
+run_sync "$SYNC_HOME/.claude/no-existe.json" --check && rc=0 || rc=$?
+[ "$rc" = 2 ] && pass "destino ausente es indecidible (rc=2)" || fail "destino ausente dio rc=$rc"
+
+ln -sf "$tpl" "$SYNC_HOME/.claude/enlazado.json"
+run_sync "$SYNC_HOME/.claude/enlazado.json" --check && rc=0 || rc=$?
+[ "$rc" = 2 ] && pass "un symlink es indecidible (rc=2)" || fail "el symlink dio rc=$rc"
+
+printf 'no soy json' > "$SYNC_HOME/.claude/roto.json"
+run_sync "$SYNC_HOME/.claude/roto.json" --check && rc=0 || rc=$?
+[ "$rc" = 2 ] && pass "un JSON inválido es indecidible (rc=2)" || fail "el JSON roto dio rc=$rc"
+
+cp "$tpl" "$dst"
+run_sync "$dst" --check && rc=0 || rc=$?
+[ "$rc" = 0 ] && pass "sin deriva, --check sale 0" || fail "sin deriva --check dio rc=$rc"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
