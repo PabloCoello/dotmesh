@@ -328,9 +328,12 @@ section "guardarraíl: el cuerpo de un heredoc no dispara sus propios patrones"
 # se bloqueaba a sí mismo al escribirse.
 GUARD="$HOOKS/block-dangerous-git.sh"
 
+GUARD_CWD=""
 run_guard() {
   local rc=0
-  jq -nc --arg c "$1" '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c}}' \
+  jq -nc --arg c "$1" --arg d "$GUARD_CWD" \
+    '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c}}
+     + (if $d == "" then {} else {cwd:$d} end)' \
     | bash "$GUARD" >/dev/null 2>"$TMP/guard_err" || rc=$?
   return $rc
 }
@@ -382,6 +385,40 @@ guard_allows "git status --porcelain" "un comando de solo lectura"
 # mensaje de commit vive justo en un heredoc, y ahí es donde hay que verlo.
 guard_blocks "git commit -m \"\$(cat <<'EOF'${nl}arregla algo${nl}${nl}Co-authored-by: Claude${nl}EOF${nl})\"" \
   "un trailer de atribución dentro de un heredoc"
+
+section "guardarraíl: el push a la rama por defecto"
+# 5.5 del diagnóstico: AGENTS.md y /super-git lo prohíben por escrito y nada lo
+# hacía cumplir. El hook solo cubría el push forzado, el espejo y el borrado.
+repo="$TMP/repo-push"
+git init -q -b main "$repo"
+git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
+git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+
+GUARD_CWD="$repo"
+guard_blocks "git push" "un push sin argumentos estando en la rama por defecto"
+guard_blocks "git push origin" "un push solo con remoto estando en la rama por defecto"
+guard_blocks "git push origin main" "un push con la rama por defecto como refspec"
+guard_blocks "git push origin HEAD:main" "un push con la rama por defecto como destino"
+guard_blocks "git push -u origin main" "un push a la rama por defecto con banderas delante"
+guard_allows "git push --dry-run origin main" "un push en seco a la rama por defecto"
+guard_allows "git push origin main:una-rama" "un push cuyo destino no es la rama por defecto"
+
+git -C "$repo" checkout -q -b una-rama
+guard_blocks "git push origin main" "el refspec manda aunque estés en otra rama"
+guard_allows "git push" "un push sin argumentos desde una rama de trabajo"
+guard_allows "git push -u origin una-rama" "un push de una rama de trabajo"
+
+# Sin origin/HEAD no hay con qué comparar: no se bloquea nada.
+huerfano="$TMP/repo-sin-origin"
+git init -q -b main "$huerfano"
+git -C "$huerfano" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
+GUARD_CWD="$huerfano"
+guard_allows "git push origin main" "sin origin/HEAD no se puede afirmar cuál es la rama por defecto"
+
+# -C manda sobre el cwd del hook.
+GUARD_CWD="$huerfano"
+guard_blocks "git -C $repo push origin main" "el destino se resuelve en el repositorio que dice -C"
+GUARD_CWD=""
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

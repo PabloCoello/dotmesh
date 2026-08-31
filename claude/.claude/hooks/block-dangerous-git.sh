@@ -42,6 +42,8 @@ fi
 input=$(cat)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 [ -z "$cmd" ] && exit 0
+hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+[ -d "$hook_cwd" ] || hook_cwd=$PWD
 
 # A heredoc body is not quoted, so it survives the quote stripping below and
 # reaches the scanners: writing a document that describes this guardrail trips
@@ -220,6 +222,38 @@ while IFS= read -r seg; do
   # cannot produce a dangerous-pattern match in practice.
   if printf '%s' "$seg" | grep -qE '(^|[[:space:]])(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+)*((/[^[:space:]]*/)?git)([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit([[:space:]]|$)'; then
     continue
+  fi
+  # Push to the default branch. AGENTS.md and /super-git forbid it by policy and
+  # nothing enforced it: the patterns below only cover force, mirror and delete.
+  # Fires only when the default branch and the target can both be resolved;
+  # anything unknown is left alone, like the rest of this hook.
+  if printf '%s' "$seg" | grep -qE '(^|[[:space:]])push([[:space:]]|$)' \
+     && ! printf '%s' "$seg" | grep -qE '[[:space:]](--dry-run|-n)([[:space:]]|$)'; then
+    _dir=$(printf '%s' "$seg" | sed -nE 's/.*[[:space:]]-C[[:space:]]+([^[:space:]]+).*/\1/p')
+    [ -d "$_dir" ] || _dir=$hook_cwd
+    # origin/HEAD is the only local record of which branch the remote defaults
+    # to. Without it there is nothing to compare against, so nothing is blocked.
+    _def=$(git -C "$_dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    _def=${_def#*/}
+    if [ -n "$_def" ]; then
+      # Non-flag tokens after `push`: the first is the remote, the second the
+      # refspec. With no refspec, git pushes the branch that is checked out.
+      _args=$(printf '%s' "$seg" \
+        | sed -E 's/^.*(^|[[:space:]])push([[:space:]]|$)/ /' \
+        | tr ' \t' '\n' | grep -vE '^-|^$' || true)
+      _target=$(printf '%s' "$_args" | sed -n '2p')
+      if [ -z "$_target" ]; then
+        _target=$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+      else
+        # origin +src:dst -> dst; refs/heads/x -> x.
+        _target=${_target##*:}
+        _target=${_target#+}
+        _target=${_target##refs/heads/}
+      fi
+      if [ -n "$_target" ] && [ "$_target" = "$_def" ]; then
+        block "push a la rama por defecto ($_def): AGENTS.md lo prohíbe, abre una rama y un PR"
+      fi
+    fi
   fi
   # checkout/restore that resets the working tree: block regardless of what ref
   # or flags precede the final path argument, UNLESS --staged is present (which
