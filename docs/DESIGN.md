@@ -203,7 +203,20 @@ va en ink-0.
   herdr. `herdr integration install` los reescribiría destructivamente (a claude le
   reordena entero `settings.json`), así que dotmesh los mantiene versionados a mano.
   Tras actualizar herdr, comprueba con `herdr integration status` si quedan
-  desfasados y, si es así, re-vendoriza el artefacto afectado.
+  desfasados y, si es así, re-vendoriza el artefacto afectado. La forma no
+  destructiva de obtener la versión nueva es generarla en un `$HOME` de usar y
+  tirar y copiar de ahí al repo, sin que `install` toque nunca la instalación
+  viva:
+
+  ```bash
+  SB=$(mktemp -d); mkdir -p "$SB/.claude" "$SB/.codex" "$SB/.config/opencode"
+  for t in claude codex opencode; do HOME="$SB" herdr integration install "$t"; done
+  # diff y copia manual de $SB/... a los paquetes claude/, codex/, opencode/
+  ```
+
+  Al copiar, conserva las diferencias deliberadas de dotmesh: `hooks.json` de
+  codex y el hook `SessionStart` de claude usan rutas `~/…` portables donde
+  upstream escribe rutas absolutas de la máquina donde se generó.
 - **`syntax-theme` de delta**: se usa `ansi`, que delega en la paleta ANSI del
   terminal (el tema Ghostty dotmesh la define alineada con la sintaxis). Las decoraciones de
   `+/-`, cabeceras de hunk y números de línea van siempre en colores foreground
