@@ -147,6 +147,29 @@ function find_file() {
 }
 
 # ─────────────────────────────────────────────
+# ➤ HERDR WORKFLOWS
+# ─────────────────────────────────────────────
+function hspace() {
+    # Outfit the current herdr space: this terminal + harness + nvim, all in $PWD
+    if [[ "$HERDR_ENV" != "1" ]]; then
+        echo "❌ hspace solo funciona dentro de herdr"
+        return 1
+    fi
+    local harness="${1:-claude}"
+    local ws pane
+    ws=$(herdr workspace list | python3 -c 'import sys,json; print(next(w["workspace_id"] for w in json.load(sys.stdin)["result"]["workspaces"] if w["focused"]))')
+    if [[ -z "$ws" ]]; then
+        echo "❌ No se pudo determinar el workspace actual"
+        return 1
+    fi
+    pane=$(herdr tab create --workspace "$ws" --cwd "$PWD" --label "$harness" --no-focus | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
+    [[ -n "$pane" ]] && herdr pane run "$pane" "$harness"
+    pane=$(herdr tab create --workspace "$ws" --cwd "$PWD" --label "nvim" --no-focus | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
+    [[ -n "$pane" ]] && herdr pane run "$pane" "nvim ."
+    echo "✅ Espacio listo: terminal + $harness + nvim en $PWD"
+}
+
+# ─────────────────────────────────────────────
 # ➤ SYSTEM UTILITIES
 # ─────────────────────────────────────────────
 function extract() {
