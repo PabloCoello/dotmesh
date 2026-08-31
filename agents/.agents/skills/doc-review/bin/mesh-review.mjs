@@ -242,12 +242,12 @@ async function runProject(argv) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
     process.exit(1);
   }
-  const docRelPath = path2.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith("..")) {
+  const reviewDir = path2.resolve(gitRoot, ".ai", "review");
+  const eventDir = path2.resolve(reviewDir, path2.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path2.sep)) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
     process.exit(1);
   }
-  const eventDir = path2.join(gitRoot, ".ai", "review", docRelPath);
   const events = await readEvents(eventDir);
   let threads = project(events);
   if (pending) {
@@ -438,12 +438,12 @@ async function runReanchor(argv) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
     process.exit(1);
   }
-  const docRelPath = path4.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith("..")) {
+  const reviewDir = path4.resolve(gitRoot, ".ai", "review");
+  const eventDir = path4.resolve(reviewDir, path4.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path4.sep)) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
     process.exit(1);
   }
-  const eventDir = path4.join(gitRoot, ".ai", "review", docRelPath);
   let text;
   try {
     text = await readFile2(docAbs, "utf8");

@@ -20,10 +20,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
-import { isPending } from './commands/project.ts';
+import { isPending, runProject } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
 import { parseCliArgs } from './args.ts';
-import { reanchorThreads } from './commands/reanchor.ts';
+import { reanchorThreads, runReanchor } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
 import { runReply } from './commands/reply.ts';
@@ -2626,6 +2626,47 @@ test('integración: open → reply → resolve → project muestra hilo resuelto
     // messages: the initial thread.opened message + the reply
     assert.strictEqual(threads[0].messages.length, 2, '2 mensajes (opened + reply)');
     assert.strictEqual(threads[0].messages[1].body, 'Corrección aplicada sin commit', 'body del reply correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T2.1 — B4: guardas de path traversal en project y reanchor (patrón moderno)
+// ---------------------------------------------------------------------------
+
+test('project: doc dentro del git root → devuelve array JSON vacío sin error', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const written: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runProject([docAbs]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const out = written.join('').trim();
+    const threads = JSON.parse(out);
+    assert.ok(Array.isArray(threads), 'la salida es un array JSON');
+    assert.strictEqual(threads.length, 0, 'sin hilos para un doc sin sidecar');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reanchor: doc dentro del git root sin hilos → emite 0 eventos sin error', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    // runReanchor no llama a process.exit en el happy path con 0 eventos
+    await runReanchor([docAbs]);
+    // Si llegamos aquí sin excepción, la guarda no disparó en falso
   } finally {
     await cleanup();
   }
