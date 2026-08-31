@@ -53,6 +53,7 @@ help:
 	@echo "  make clean     - Vacía ~/dotfiles-backup"
 	@echo "  make test-wait-for-user - Verifica el contrato WAIT_FOR_USER en agentes y docs"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
+	@echo "  make cli-verify  - Reconstruye el bundle CLI y falla si difiere del commiteado"
 	@echo "  make test-tool-error-recovery - Verifica la política común de reintentos de herramientas"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
@@ -346,6 +347,15 @@ verify-opencode-ast-grep:
 test-scribe-flow:
 	@echo "→ arnés headless scribe"
 	@bash scripts/test-scribe-flow.sh
+
+.PHONY: cli-verify
+cli-verify:
+	@echo "→ Reconstruyendo bundle CLI..."
+	cd vscode/review-extension && npm run build
+	@echo "→ Verificando sincronía del bundle..."
+	git diff --exit-code agents/.agents/skills/doc-review/bin/mesh-review.mjs \
+	  || (echo "ERROR: bundle desincronizado; ejecuta 'cd vscode/review-extension && npm run build' y commitea" && exit 1)
+	@echo "✓ Bundle sincronizado."
 
 .PHONY: test-tool-error-recovery
 test-tool-error-recovery:
