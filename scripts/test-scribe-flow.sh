@@ -280,6 +280,110 @@ else
 fi
 
 # ===========================================================================
+# CASO FIX (escenario E1: el agente usa fix, no emit crudo)
+# ===========================================================================
+section "Caso FIX (1 hilo edita → fix con commit real)"
+
+setup_workdir "$FIXTURES_DIR/fix-scenario"
+WORK_FIX="$TMPWORK"
+DOC_ORIGINAL=$(cat "$WORK_FIX/doc.md")
+
+# Pre-verificación: exactamente 1 hilo pendiente
+pending_fix=$(node "$MESH_REVIEW" project --pending "$WORK_FIX/doc.md")
+count_fix=$(echo "$pending_fix" | node -e "
+const d = require('fs').readFileSync('/dev/stdin', 'utf8');
+process.stdout.write(String(JSON.parse(d).length) + '\n');
+")
+if [ "$count_fix" = "1" ]; then
+  pass "fix-scenario pre-check: 1 hilo pendiente de tipo edita"
+else
+  fail "fix-scenario pre-check: se esperaba 1 hilo, hay $count_fix"
+fi
+
+events_before_fix=$(find "$WORK_FIX/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
+
+# Prompt que guía al agente a usar fix (no emit crudo).
+# Sigue el flujo de SKILL.md §6: editar el doc → git add → mesh-review fix.
+# No menciona el subcomando emit.
+PROMPT_FIX=$(cat <<PROMPT
+Tu tarea: resolver el comentario pendiente del documento en "$WORK_FIX/doc.md".
+
+Pasos (ejecuta exactamente en este orden):
+
+PASO 1 — Proyecta el hilo pendiente:
+  node "$MESH_REVIEW" project --pending "$WORK_FIX/doc.md"
+
+PASO 2 — Para el hilo de tipo edita encontrado:
+  a) Lee el campo "body" del hilo para entender la corrección solicitada.
+  b) Lee el ancla ("anchor.quote") para localizar el texto a editar.
+  c) Abre "$WORK_FIX/doc.md" y edita el fragmento indicado.
+  d) Prepara el commit:
+       git -C "$WORK_FIX" add doc.md
+  e) Registra la corrección (esto crea el commit y emite el evento):
+       node "$MESH_REVIEW" fix "$WORK_FIX/doc.md" <thread_id> -m "fix(doc): reformula frase de calidad" --body "Frase reformulada segun el comentario."
+
+PASO 3 — Produce la respuesta estructurada con estas tres secciones EXACTAS:
+
+## Contexto
+(documento revisado y hilo procesado)
+
+## Alcance
+(descripción de la corrección realizada)
+
+## Preguntas
+(preguntas para el humano; escribe "Ninguna" si no hay)
+PROMPT
+)
+
+echo "  Ejecutando claude -p (puede tardar varios minutos)..."
+RESULT_TEXT_FIX=""
+if RESULT_TEXT_FIX=$(run_claude_scribe "$WORK_FIX" "$PROMPT_FIX"); then
+  echo "  claude -p completado"
+else
+  fail "fix-scenario: claude -p falló o agotó el timeout"
+fi
+
+# Verificar que se emitió al menos un evento nuevo
+events_after_fix=$(find "$WORK_FIX/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
+new_events_fix=$((events_after_fix - events_before_fix))
+echo "  Eventos después de claude: $events_after_fix (nuevos: $new_events_fix)"
+
+if [ "$new_events_fix" -ge 1 ]; then
+  pass "fix-scenario: se emitió al menos $new_events_fix evento(s) nuevo(s)"
+else
+  fail "fix-scenario: no se emitieron eventos nuevos"
+fi
+
+# Verificar que existe un message.posted con commit no nulo (SHA real del fix)
+SHA_FIX=$(node -e "
+const fs = require('fs');
+const dir = '$WORK_FIX/.ai/review/doc.md';
+const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') && !f.endsWith('.tmp'));
+for (const f of files) {
+  const ev = JSON.parse(fs.readFileSync(dir + '/' + f, 'utf8'));
+  if (ev.type === 'message.posted' && ev.commit !== null && typeof ev.commit === 'string' && ev.commit.length > 0) {
+    process.stdout.write(ev.commit + '\n');
+    process.exit(0);
+  }
+}
+process.exit(1);
+" 2>/dev/null || true)
+
+if [ -n "$SHA_FIX" ]; then
+  pass "fix-scenario: message.posted con commit SHA real: $SHA_FIX"
+else
+  fail "fix-scenario: no hay message.posted con commit no nulo (el agente no usó fix)"
+fi
+
+# Verificar que el documento fue modificado
+DOC_AFTER=$(cat "$WORK_FIX/doc.md" 2>/dev/null || echo "")
+if [ "$DOC_AFTER" != "$DOC_ORIGINAL" ]; then
+  pass "fix-scenario: documento modificado por el agente"
+else
+  fail "fix-scenario: el documento no fue modificado (el agente no editó el doc)"
+fi
+
+# ===========================================================================
 # CASO CONTROL
 # ===========================================================================
 section "Caso CONTROL (0 hilos pendientes → 0 eventos nuevos)"
