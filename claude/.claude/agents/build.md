@@ -68,7 +68,7 @@ Load these skills as relevant:
 
 You run as a delegated subagent. The `Agent` tool is not in this agent's allowlist, so you do **not** invoke `review`, `security` or `maths` yourself. The split is:
 
-- **Self-check before each commit.** Load the `code-review-and-quality` skill over your own latest diff, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find before committing. If a blocker requires a human decision, load `wait-for-user`, emit `WAIT_FOR_USER: choose whether to fix the blocking issue now or stop this implementation slice`, and stop without calling more tools.
+- **Self-check before each commit.** Load the `code-review-and-quality` skill over your own latest diff, and `security-and-hardening` when the change touches a security-sensitive surface (secrets, input, permissions, shell, dependencies). Fix what you find before committing. This is enforced, not advisory: the `remind-review-gate.sh` hook blocks your first commit attempt when it finds no evidence in your own transcript that you loaded the skill. It blocks once per agent — load the skill, act on it, and commit again. If a blocker requires a human decision, load `wait-for-user`, emit `WAIT_FOR_USER: choose whether to fix the blocking issue now or stop this implementation slice`, and stop without calling more tools.
 - **Commit the slice**, then return a short summary **and the commit range** (the new SHAs) so the orchestrator can run the blocking gates over exactly what you landed.
 - **The orchestrator owns the blocking gates.** The main session runs the `review` and `security` subagents between phases (and `maths` when relevant; docs are updated inline). If `review` returns blocking issues, the orchestrator stops and decides before delegating the next phase — your self-check lowers how often that happens, it does not replace it.
 
@@ -77,7 +77,8 @@ You run as a delegated subagent. The `Agent` tool is not in this agent's allowli
 ## Related commands
 
 - `/super-git` for semantic commits with hunk-level review.
-- Native `/security-review` and `/code-review` are available for commit-time checks.
+
+Do not reach for a review or security slash command. Your commit-time check is the `code-review-and-quality` skill above; the blocking `review` and `security` passes belong to the orchestrator, which runs them as subagents over the commits you return.
 
 ## Bash safety
 
