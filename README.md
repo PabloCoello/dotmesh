@@ -248,6 +248,19 @@ El script vive en el root del repo como fichero normal. Tres formas de gestionar
 
 `.git/info/exclude` es un `.gitignore` privado de tu clone: no se versiona, no se sincroniza, solo lo lee tu git local. El fichero existe en disco del repo origen, el wrapper lo encuentra (vía fallback al repo origen, porque el worktree nuevo no recibe ficheros untracked) y lo ejecuta, pero `git status` lo ignora y `git add .` no lo incluye. Caveat: si re-clonas el repo, pierdes tanto el script como la regla de exclude — en ese caso, prefiere la opción de symlink.
 
+## Montar un espacio de herdr: `hspace`
+
+`shell/.config/shell/functions.zsh` define `hspace`, que prepara el espacio de trabajo actual de herdr desde el pane en el que lo ejecutas. Crea dos pestañas nuevas sin robarte el foco, ambas con el cwd del directorio donde lanzas el comando: una ejecuta el harness (primer argumento, `claude` por defecto) y la otra abre `nvim .`. Junto con la terminal desde la que lo ejecutas, el espacio queda con tres pestañas: terminal, harness y editor.
+
+```bash
+cd ~/proyectos/mi-repo
+hspace                     # terminal + claude + nvim
+hspace opencode            # terminal + opencode + nvim
+hspace "claude --resume"   # el harness admite el comando completo, entre comillas
+```
+
+Requiere ejecutarse dentro de herdr (`HERDR_ENV=1`); fuera, avisa y devuelve error. Las pestañas se crean en el workspace enfocado: herdr solo arranca el shell de una pestaña nueva cuando su workspace está a la vista, así que `hspace` no sirve para preparar workspaces en segundo plano. La función usa sintaxis común a bash y zsh, como el resto de `functions.zsh`; si trabajas en bash, sourcéalo igual que `claude-session.zsh`: `source ~/Documentos/GitHub/dotmesh/shell/.config/shell/functions.zsh` en tu `~/.bashrc`.
+
 ## Comandos del Makefile
 
 ```bash
