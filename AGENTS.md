@@ -25,6 +25,7 @@ make stow        # symlink every package into ~
 make unstow      # remove the symlinks
 make restow      # unstow + stow (run after adding/removing files in a package)
 make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
+make sync-claude-hooks # push the template's `hooks` block into ~/.claude/settings.json
 make gnome-rice  # dotmesh retint of the GNOME desktop (Linux only)
 make clean       # wipe ~/dotfiles-backup/*
 ```
@@ -49,6 +50,8 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 | `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
+
+`claude/.claude/settings.json` is **not** stowed (`claude/.stow-local-ignore`): `make seed-claude-settings` copies it once and never overwrites, so per-machine settings don't show up as uncommitted changes. The cost is that a hook added to the repo never reaches an already-installed machine. `make health` reports that drift and `make sync-claude-hooks` merges **only** the `hooks` key — it registers repo files, so it belongs to the repo; every other key belongs to the machine and is left alone. A copy of the previous file lands in `~/dotfiles-backup/<timestamp>/`.
 
 `Makefile:6` defines `PACKAGES` — keep this list in sync when adding or removing a package directory. `IS_WSL`, computed just below, drives WSL-aware conditional logic in `health`, `vscode-install` and `wsl-terminal`.
 

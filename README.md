@@ -257,6 +257,7 @@ make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
 make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
+make sync-claude-hooks # lleva el bloque hooks de la plantilla a ~/.claude/settings.json
 make vendor-check # comprueba metadatos upstream de componentes vendorizados
 make health         # comprueba binarios
 make opencode-doctor # diagnóstico estático de OpenCode
