@@ -2945,3 +2945,95 @@ test('assign: hilo inexistente → exit 1, sin evento emitido', async () => {
     await cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// project --thread (T2.8 — C3/P5)
+// ---------------------------------------------------------------------------
+
+test('project --thread: hilo existente → array de un elemento con ese thread_id', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido del documento\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid1 = await makeOpenedWithAnchor(eventDir, 'contenido del documento', 0, 0);
+    // Second thread to ensure filtering works
+    const tid2 = await makeOpenedWithAnchor(eventDir, 'documento', 12, 0);
+
+    let output = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      output += chunk.toString();
+      return true;
+    };
+    try {
+      await runProject([docAbs, '--thread', tid1]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const threads = JSON.parse(output) as ThreadProjection[];
+    assert.strictEqual(threads.length, 1, 'devuelve exactamente 1 hilo');
+    assert.strictEqual(threads[0].thread_id, tid1, 'el hilo es el solicitado');
+    assert.ok(!threads.some(t => t.thread_id === tid2), 'el segundo hilo no aparece');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('project --thread: hilo inexistente → array vacío', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    await makeOpenedWithAnchor(eventDir, 'texto', 0, 0);
+    const nonExistent = randomUUID();
+
+    let output = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      output += chunk.toString();
+      return true;
+    };
+    try {
+      await runProject([docAbs, '--thread', nonExistent]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const threads = JSON.parse(output) as ThreadProjection[];
+    assert.strictEqual(threads.length, 0, 'array vacío para hilo inexistente');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('project --thread --pending: filtra al hilo si es pendiente', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto de prueba\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // Open a thread (human author → pending)
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto de prueba', 0, 0);
+
+    let output = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      output += chunk.toString();
+      return true;
+    };
+    try {
+      await runProject([docAbs, '--pending', '--thread', tid]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const threads = JSON.parse(output) as ThreadProjection[];
+    assert.strictEqual(threads.length, 1, 'hilo pendiente aparece en el resultado');
+    assert.strictEqual(threads[0].thread_id, tid);
+  } finally {
+    await cleanup();
+  }
+});

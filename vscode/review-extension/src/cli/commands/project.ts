@@ -8,18 +8,32 @@
  * `getGitRoot` de sidecar.ts.
  */
 
-import { readEvents, project, getGitRoot, type ThreadProjection } from '../../sidecar.ts';
+import { readEvents, project, getGitRoot, isUuid, type ThreadProjection } from '../../sidecar.ts';
 import * as path from 'node:path';
 
 export async function runProject(argv: string[]): Promise<void> {
-  // Extrae el flag --pending y el argumento de documento
+  // Extrae los flags y el argumento de documento
   const pendingIdx = argv.indexOf('--pending');
   const pending = pendingIdx !== -1;
-  const args = argv.filter((_, i) => i !== pendingIdx);
+  let filtered = argv.filter((_, i) => i !== pendingIdx);
 
+  // --thread <id>: filtrar a un único hilo
+  let threadId: string | undefined;
+  const threadIdx = filtered.indexOf('--thread');
+  if (threadIdx !== -1) {
+    threadId = filtered[threadIdx + 1];
+    filtered = filtered.filter((_, i) => i !== threadIdx && i !== threadIdx + 1);
+  }
+
+  if (threadId !== undefined && !isUuid(threadId)) {
+    process.stderr.write(`mesh-review project: --thread debe ser un UUID v4 válido: ${threadId}\n`);
+    process.exit(1);
+  }
+
+  const args = filtered;
   const [docArg] = args;
   if (!docArg) {
-    process.stderr.write('Uso: mesh-review project [--pending] <doc>\n');
+    process.stderr.write('Uso: mesh-review project [--pending] [--thread <id>] <doc>\n');
     process.exit(1);
   }
 
@@ -45,6 +59,10 @@ export async function runProject(argv: string[]): Promise<void> {
 
   if (pending) {
     threads = threads.filter(isPending);
+  }
+
+  if (threadId !== undefined) {
+    threads = threads.filter(t => t.thread_id === threadId);
   }
 
   process.stdout.write(JSON.stringify(threads) + '\n');
