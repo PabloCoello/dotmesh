@@ -7,6 +7,7 @@
  */
 
 import * as vscode from 'vscode';
+import { checkProcessAlive } from './scribe-bridge-utils';
 
 /** Nombre fijo del terminal scribe. Sin estado persistido: se busca en cada llamada. */
 const SCRIBE_TERMINAL_NAME = 'scribe';
@@ -203,6 +204,70 @@ export function ensureScribeTerminal(
 const SUBMIT_KEY_DELAY_MS = 200;
 
 /**
+ * Cola de envío: garantiza que llamadas concurrentes a sendToScribe se
+ * serialicen en orden y no intercalen su texto en el terminal.
+ *
+ * Patrón mutex por encadenamiento de promesas: cada llamada encola un nuevo
+ * then sobre la promesa anterior. `_sendQueue` solo almacena la versión que
+ * nunca rechaza (el catch vacío); la promesa con el resultado real se devuelve
+ * al caller, que puede hacer await y recibir el error si lo hay.
+ */
+let _sendQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Obtiene el PID del terminal y comprueba si el proceso sigue activo.
+ *
+ * Best-effort: `Terminal.processId` es el PID del proceso del terminal host
+ * (generalmente la shell). Detects terminales que VS Code todavía no ha
+ * marcado como cerrados. No detecta el caso «shell viva pero claude ya
+ * salió» — ese caso requeriría leer la pantalla del terminal (como hace
+ * scribe.lua vía herdr pane read), lo que no está disponible en VS Code.
+ *
+ * Semántica de retorno:
+ *   - `true`      → PID existe.
+ *   - `false`     → PID no existe (proceso muerto).
+ *   - `undefined` → no se puede determinar (processId no disponible, EPERM…).
+ */
+async function _getScribeAlive(terminal: vscode.Terminal): Promise<boolean | undefined> {
+  let pid: number | undefined;
+  try {
+    pid = await terminal.processId;
+  } catch {
+    return undefined;
+  }
+  if (pid === undefined) return undefined;
+  return checkProcessAlive(pid);
+}
+
+/** Núcleo de envío: cuerpo real de sendToScribe, sin mutex. */
+async function _doSend(terminal: vscode.Terminal, text: string): Promise<void> {
+  if (terminal.exitStatus !== undefined) return;
+
+  // Alive-check (best-effort): abortar si el proceso ya no existe.
+  // Misma filosofía que scribe.lua:372-384 en Neovim: ante la duda, no enviar.
+  const alive = await _getScribeAlive(terminal);
+  if (alive === false) {
+    vscode.window.showWarningMessage(
+      'mesh-review: el proceso scribe ya no está activo. No se envió el prompt. ' +
+      'Relanza la sesión scribe y vuelve a intentarlo.'
+    );
+    return;
+  }
+  if (alive === undefined) {
+    vscode.window.showWarningMessage(
+      'mesh-review: no se pudo verificar el estado del proceso scribe. ' +
+      'No se envió el prompt para evitar enviar texto a una shell.'
+    );
+    return;
+  }
+
+  terminal.sendText(text, false);
+  await delay(SUBMIT_KEY_DELAY_MS);
+  if (terminal.exitStatus !== undefined) return;
+  terminal.sendText('\r', false);
+}
+
+/**
  * Envía un texto a la sesión scribe y lo confirma con un Enter separado.
  *
  * La TUI de Claude Code trata el texto que llega junto a su salto de línea
@@ -217,11 +282,13 @@ const SUBMIT_KEY_DELAY_MS = 200;
  * shells en prompt y podría interrumpir el proceso en primer plano. Si el
  * terminal se cierra entre medias, no-op (sendText sobre un disposed lanza);
  * se comprueba antes de cada write porque la pausa deja una ventana abierta.
+ *
+ * Serialización: si ya hay un envío en curso, espera a que termine antes de
+ * empezar el siguiente. Evita que dos clics rápidos intercalen su texto.
  */
-export async function sendToScribe(terminal: vscode.Terminal, text: string): Promise<void> {
-  if (terminal.exitStatus !== undefined) return;
-  terminal.sendText(text, false);
-  await delay(SUBMIT_KEY_DELAY_MS);
-  if (terminal.exitStatus !== undefined) return;
-  terminal.sendText('\r', false);
+export function sendToScribe(terminal: vscode.Terminal, text: string): Promise<void> {
+  const next = _sendQueue.then(() => _doSend(terminal, text));
+  // El queue nunca rechaza: un error en _doSend no bloquea llamadas futuras.
+  _sendQueue = next.catch(() => {});
+  return next;
 }
