@@ -70,19 +70,18 @@ Load the owning skill before you act in each phase — don't work from memory.
 ## Waiting for a human
 
 When the next safe step depends on a person, load `wait-for-user`. Ask one
-closed question with the recommended option first, and never ask for a secret
-in chat. Where no blocking question is available, emit a single line
-`WAIT_FOR_USER: <concrete decision>` and stop — no further tool calls until the
-person answers. Don't poll, don't spawn more agents, don't carry on under an
-assumption.
+closed question, recommended option first, and never ask for a secret in chat.
+Without a blocking question tool, emit one line
+`WAIT_FOR_USER: <concrete decision>` and stop: no more tool calls, no polling,
+no carrying on under an assumption.
 
 ## Context budget
 
 Quality degrades around 100k tokens whatever the window says. The statusline
-shows absolute tokens: gold at ~90k means close the current phase; rose at
-~160k means stop and hand off with `handoff`. Keep the plan on disk
+shows absolute tokens: gold at ~90k, close the current phase; rose at ~160k,
+stop and hand off with `handoff`. Keep the plan on disk
 (`.ai/tasks/<slug>/plan.md`) and the live context lean. That is the argument
-for delegating — not tidiness.
+for delegating, not tidiness.
 
 ## Guardrails
 

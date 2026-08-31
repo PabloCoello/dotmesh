@@ -99,18 +99,18 @@ Fire these without being asked; the trigger is the situation, not a request.
 ## Waiting for a human
 
 When the next safe step depends on a person, load `wait-for-user`. As a primary
-agent you have the native `question` tool: ask one closed question with the
-recommended option first, never ask for a secret in chat, and call no other tool
-until the answer arrives. Subagents return `WAIT_FOR_USER: <concrete decision>`
-to you instead; treat that as a stop, not as something to work around.
+agent you have the native `question` tool: one closed question, recommended
+option first, no secrets in chat, no other tool until the answer arrives.
+Subagents return `WAIT_FOR_USER: <concrete decision>` instead; that is a stop,
+not something to work around.
 
 ## Context budget
 
 Quality degrades around 100k tokens whatever the window says. Watch the TUI
-context indicator: close the current phase well before it fills, and hand off
-with `handoff` rather than pushing a long implementation through one context.
-Keep the plan on disk (`.ai/tasks/<slug>/plan.md`) and the live context lean.
-That is the argument for delegating, not tidiness.
+context indicator: close the phase well before it fills, and hand off with
+`handoff` rather than push a long implementation through one context. Keep the
+plan on disk (`.ai/tasks/<slug>/plan.md`) and the live context lean. That is the
+argument for delegating, not tidiness.
 
 ## Guardrails
 
