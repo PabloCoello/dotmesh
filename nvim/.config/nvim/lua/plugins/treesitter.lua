@@ -15,14 +15,24 @@
 return {
   {
     "nvim-treesitter/nvim-treesitter",
-    -- Sin `branch`: lazy usa la rama por defecto del repo, que ya es `main`.
+    -- `main` explícito, no implícito. Lazy resuelve la rama por defecto
+    -- preguntando al clon local, cuyo symref origin/HEAD queda cacheado del día
+    -- que se clonó: en una máquina que ya tuvo el plugin, ese símbolo sigue
+    -- apuntando a `master` y el update se queda ahí. `master` está congelado
+    -- upstream y no soporta Neovim >= 0.11.
+    branch = "main",
     lazy = false,
     build = ":TSUpdate",
     dependencies = {
       {
         "nvim-treesitter/nvim-treesitter-textobjects",
-        -- Desactiva los keymaps por defecto del plugin; los registramos
-        -- explícitamente abajo para tener control total.
+        branch = "main",
+        -- OJO: no_plugin_maps no desactiva keymaps de este plugin — textobjects
+        -- `main` no registra ninguno. Desactiva los de los ftplugin que trae
+        -- Neovim, para todos los filetypes, y así evitar choques con los
+        -- textobjects que se registran abajo. Es la receta del README de
+        -- upstream, pero el alcance es global: si echas de menos algún atajo
+        -- de ftplugin, empieza mirando aquí.
         init = function()
           vim.g.no_plugin_maps = true
         end,
@@ -95,9 +105,9 @@ return {
 
       -- ------------------------------------------------------------------
       -- 4. textobjects: keymaps de selección (modos x y o)
-      --    Riesgo R1: @block.outer/@block.inner pueden no existir en la
-      --    rama main de textobjects. Si no seleccionan nada, los keymaps
-      --    son silenciosos y no dan error.
+      --    Las seis capturas (@function/@class/@block, outer e inner) están
+      --    comprobadas en la rama main. El movimiento (sección 5) solo cubre
+      --    función y clase: saltar de bloque en bloque no aporta gran cosa.
       -- ------------------------------------------------------------------
       local ts_select = require("nvim-treesitter-textobjects.select")
       for _, map in ipairs({
