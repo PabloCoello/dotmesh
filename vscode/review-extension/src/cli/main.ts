@@ -13,6 +13,7 @@ import { runOpen } from './commands/open.ts';
 import { runReply } from './commands/reply.ts';
 import { runResolve } from './commands/resolve.ts';
 import { runRetract } from './commands/retract.ts';
+import { runAssign } from './commands/assign.ts';
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const [subcommand, ...rest] = argv;
@@ -42,6 +43,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     case 'retract':
       await runRetract(rest);
       break;
+    case 'assign':
+      await runAssign(rest);
+      break;
     default:
       printUsage();
       if (subcommand !== undefined) process.exit(1);
@@ -67,6 +71,8 @@ function printUsage(): void {
       '                                    Retracta un mensaje del hilo',
       '  fix <doc> <thread_id> -m <msg> --body <texto>',
       '                                    Commit + mensaje en una llamada',
+      '  assign <doc> <thread_id> --agent <nombre>',
+      '                                    Asigna el hilo a un subagente',
       '',
       'Herramientas de bajo nivel:',
       '  emit <doc> <tipo> [clave=valor…]  Emite un evento de revisión para el documento',

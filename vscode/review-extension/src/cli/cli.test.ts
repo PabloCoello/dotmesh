@@ -29,6 +29,7 @@ import { runOpen } from './commands/open.ts';
 import { runReply } from './commands/reply.ts';
 import { runResolve } from './commands/resolve.ts';
 import { runRetract } from './commands/retract.ts';
+import { runAssign } from './commands/assign.ts';
 import { writeFile } from 'node:fs/promises';
 
 const execFileAsync = promisify(execFile);
@@ -2880,5 +2881,67 @@ test('reanchorThreads: ancla con bestDist > threshold emite uncertain:true y war
       'stderr incluye aviso de incertidumbre');
   } finally {
     await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// assign (T2.7 — C3)
+// ---------------------------------------------------------------------------
+
+test('assign: happy path → emite thread.assigned con agent correcto', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto de prueba\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto de prueba', 0, 0);
+
+    await runAssign([docAbs, tid, '--agent', 'reviser']);
+
+    const events = await readEvents(eventDir);
+    const assignEv = events.find(e => e.type === 'thread.assigned');
+    assert.ok(assignEv, 'hay evento thread.assigned');
+    assert.strictEqual(assignEv!.thread_id, tid, 'thread_id correcto');
+    assert.strictEqual((assignEv as Record<string, unknown>).agent, 'reviser', 'agent correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('assign: agente inválido → exit 1, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto', 0, 0);
+
+    const code = await captureExit(() =>
+      runAssign([docAbs, tid, '--agent', 'agente-inexistente'])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con agente inválido');
+    const events = await readEvents(eventDir);
+    assert.ok(!events.some(e => e.type === 'thread.assigned'), 'sin evento thread.assigned');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('assign: hilo inexistente → exit 1, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const nonExistentTid = randomUUID();
+
+    const code = await captureExit(() =>
+      runAssign([docAbs, nonExistentTid, '--agent', 'reviser'])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con hilo inexistente');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
   }
 });

@@ -1469,6 +1469,104 @@ function printUsage6() {
   );
 }
 
+// src/cli/commands/assign.ts
+import { randomUUID as randomUUID8 } from "node:crypto";
+import * as path10 from "node:path";
+var VALID_AGENTS = /* @__PURE__ */ new Set(["security", "maths", "reviser", "editor"]);
+async function runAssign(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage7();
+    return;
+  }
+  const positionals = [];
+  let agent;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--agent") {
+      agent = argv[++i];
+    } else if (!arg.startsWith("-")) {
+      positionals.push(arg);
+    }
+  }
+  const doc = positionals[0];
+  const threadId = positionals[1];
+  if (!doc || !threadId) {
+    process.stderr.write("mesh-review assign: se requieren <doc> y <thread_id>\n");
+    process.exit(1);
+  }
+  if (!isUuid(threadId)) {
+    process.stderr.write(`mesh-review assign: thread_id no es un UUID v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  if (agent === void 0) {
+    process.stderr.write("mesh-review assign: se requiere --agent <nombre>\n");
+    process.exit(1);
+  }
+  if (!VALID_AGENTS.has(agent)) {
+    process.stderr.write(
+      `mesh-review assign: agente desconocido "${agent}"; v\xE1lidos: ${[...VALID_AGENTS].join(", ")}
+`
+    );
+    process.exit(1);
+  }
+  const docAbs = path10.resolve(doc);
+  const gitRoot = await getGitRoot(path10.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const reviewDir = path10.resolve(gitRoot, ".ai", "review");
+  const eventDir = path10.resolve(reviewDir, path10.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path10.sep)) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const existingEvents = await readEvents(eventDir);
+  const existingThreads = project(existingEvents);
+  if (!existingThreads.some((t) => t.thread_id === threadId)) {
+    process.stderr.write(`mesh-review assign: el hilo ${threadId} no existe en este documento
+`);
+    process.exit(1);
+  }
+  const ev = {
+    id: randomUUID8(),
+    version: 2,
+    type: "thread.assigned",
+    thread_id: threadId,
+    author: { kind: "human" },
+    created_at: utcTimestampMs(),
+    commit: null,
+    dirty: false,
+    agent
+  };
+  await emitEvent(eventDir, ev);
+  process.stdout.write(`${ev.id}
+`);
+}
+function printUsage7() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review assign <doc> <thread_id> --agent <nombre>",
+      "",
+      "Emite un evento thread.assigned para asignar el hilo al subagente indicado.",
+      "El hilo debe existir en el documento; se sale con error si no existe.",
+      "",
+      "Agentes v\xE1lidos: security, maths, reviser, editor",
+      "",
+      "Opciones:",
+      "  --agent <nombre>   Subagente al que se asigna el hilo (obligatorio)",
+      "  --help             Muestra este mensaje",
+      "",
+      "Salida:",
+      "  stdout: UUID del evento thread.assigned escrito",
+      "",
+      "Ejemplo:",
+      "  mesh-review assign docs/SPEC.md <uuid> --agent reviser"
+    ].join("\n") + "\n"
+  );
+}
+
 // src/cli/main.ts
 async function main(argv = process.argv.slice(2)) {
   const [subcommand, ...rest] = argv;
@@ -1497,13 +1595,16 @@ async function main(argv = process.argv.slice(2)) {
     case "retract":
       await runRetract(rest);
       break;
+    case "assign":
+      await runAssign(rest);
+      break;
     default:
-      printUsage7();
+      printUsage8();
       if (subcommand !== void 0) process.exit(1);
       break;
   }
 }
-function printUsage7() {
+function printUsage8() {
   process.stderr.write(
     [
       "Uso: mesh-review <subcomando> [argumentos]",
@@ -1521,6 +1622,8 @@ function printUsage7() {
       "                                    Retracta un mensaje del hilo",
       "  fix <doc> <thread_id> -m <msg> --body <texto>",
       "                                    Commit + mensaje en una llamada",
+      "  assign <doc> <thread_id> --agent <nombre>",
+      "                                    Asigna el hilo a un subagente",
       "",
       "Herramientas de bajo nivel:",
       "  emit <doc> <tipo> [clave=valor\u2026]  Emite un evento de revisi\xF3n para el documento",
