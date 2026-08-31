@@ -20,6 +20,13 @@ keymap("n", "<C-Down>", ":resize -2<CR>", opts)
 keymap("n", "<C-Left>", ":vertical resize -2<CR>", opts)
 keymap("n", "<C-Right>", ":vertical resize +2<CR>", opts)
 
+-- With `wrap` on, j/k move by display row so a wrapped paragraph reads as it
+-- looks. `expr` keeps a count intact: 5j is still 5 buffer lines, not 5 rows.
+keymap("n", "j", function() return vim.v.count == 0 and "gj" or "j" end, { expr = true, silent = true })
+keymap("n", "k", function() return vim.v.count == 0 and "gk" or "k" end, { expr = true, silent = true })
+keymap("n", "<Down>", function() return vim.v.count == 0 and "gj" or "j" end, { expr = true, silent = true })
+keymap("n", "<Up>", function() return vim.v.count == 0 and "gk" or "k" end, { expr = true, silent = true })
+
 -- ============================================================================
 -- Better Editing
 -- ============================================================================

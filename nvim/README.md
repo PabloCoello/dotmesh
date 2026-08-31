@@ -49,6 +49,13 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 | `<Espacio>fg` | Buscar texto (live grep) |
 | `<Espacio>fb` | Buffers abiertos |
 | `-` | Explorador de ficheros (neo-tree) |
+| `j` / `k` / flechas | Bajan y suben por **línea de pantalla**, no de buffer |
+
+Las líneas largas se ajustan al ancho de la ventana (`wrap`) cortando por palabra
+(`linebreak`), con sangría continuada (`breakindent`) y un `↳` al principio de cada
+fila de continuación (`showbreak`). Por eso `j` y `k` se mueven por fila visible: en un
+párrafo ajustado es lo que uno espera. Un count los devuelve a líneas de buffer, así
+que `5j` siguen siendo cinco líneas reales.
 
 ### LSP
 
@@ -208,6 +215,15 @@ reescritura, donde no existe `nvim-treesitter.configs` y `ensure_installed`,
 `highlight`, `indent` y `textobjects` dejan de ser opciones de `setup()`. Sin el pin,
 un clon nuevo cae en `main` y la configuración revienta al arrancar. Si algún día se
 migra a la API nueva, el pin se quita en el mismo cambio.
+
+Ese pin tiene una consecuencia: la rama `master` está en mantenimiento y no soporta
+Neovim >= 0.11. Sus directivas propias (`set-lang-from-info-string!`,
+`set-lang-from-mimetype!`, `downcase!`) leen `match[id]` como un nodo suelto, pero
+desde 0.11 el match entrega una lista de nodos; el handler acaba llamando a `:range()`
+sobre una tabla y aborta el parseo del buffer entero, que se queda sin resaltado. Por
+eso `queries/markdown/injections.scm` es una copia local de la query de Neovim 0.12:
+gana en runtimepath sobre la del plugin y evita la directiva rota. `html` sigue
+afectado por la directiva hermana; el arreglo de fondo es migrar a la rama `main`.
 
 ## Plugin mesh-review
 
