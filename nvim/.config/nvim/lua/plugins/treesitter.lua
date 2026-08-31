@@ -2,12 +2,18 @@
 -- Treesitter Configuration - Syntax Highlighting
 -- ============================================================================
 
+-- Ambos plugins se fijan a `master`. La rama por defecto de nvim-treesitter es ya
+-- `main`, la reescritura: allí no existe `nvim-treesitter.configs` (solo
+-- `nvim-treesitter.config`) y `ensure_installed`/`highlight`/`indent`/`textobjects`
+-- desaparecen como opciones de setup. Sin el pin, un clon nuevo cae en `main` y esta
+-- configuración revienta al arrancar. Migrar a la API nueva es un cambio aparte.
 return {
   {
     "nvim-treesitter/nvim-treesitter",
+    branch = "master",
     build = ":TSUpdate",
     dependencies = {
-      "nvim-treesitter/nvim-treesitter-textobjects",
+      { "nvim-treesitter/nvim-treesitter-textobjects", branch = "master" },
     },
     config = function()
       require("nvim-treesitter.configs").setup({

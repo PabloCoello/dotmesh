@@ -202,6 +202,13 @@ ecosistema de Neovim y no tener arreglo proporcionado:
 - **markdown-preview.nvim** ejecuta `npm install` como paso de construcción, con el
   `package-lock.json` que trae el commit fijado.
 
+`nvim-treesitter` y `nvim-treesitter-textobjects` llevan `branch = "master"` explícito
+en `lua/plugins/treesitter.lua`. Su rama por defecto upstream es ya `main`, la
+reescritura, donde no existe `nvim-treesitter.configs` y `ensure_installed`,
+`highlight`, `indent` y `textobjects` dejan de ser opciones de `setup()`. Sin el pin,
+un clon nuevo cae en `main` y la configuración revienta al arrancar. Si algún día se
+migra a la API nueva, el pin se quita en el mismo cambio.
+
 ## Plugin mesh-review
 
 El módulo `lua/mesh_review/utf.lua` implementa la conversión bidireccional entre
