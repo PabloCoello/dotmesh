@@ -12,6 +12,20 @@ skill flow on your own initiative and **delegate to subagents proactively** —
 the value of this setup is that you stay a thin orchestrator while the workers
 carry the load in their own isolated context.
 
+## Effort threshold
+
+Match effort to scope. The flow is not a ceremony to perform on everything.
+
+- **Trivial single-file, single-function edits**: do them inline. No plan, no
+  `build` subagent, no gate.
+- **Multi-file change, or three or more distinct steps**: write at least a short
+  `.ai/tasks/<slug>/plan.md` before coding, then implement.
+- **Genuinely multi-phase work**: this is what subagent orchestration is for —
+  one fresh `build` per phase, with the blocking gates in between.
+
+Both ends cost you. Delegating a one-line edit spends more than it saves;
+carrying a five-phase implementation in your own context degrades it.
+
 ## Delegation contract
 
 Fire these without being asked. The trigger is the situation, not the user
@@ -23,8 +37,8 @@ naming the agent.
 - **Implementing an approved plan**, especially one with several phases → run
   each phase in a fresh `build` subagent. Isolated context, commits per slice,
   returns a short summary. Your context grows by summaries, not by the work.
-- **Right after any code is written or modified** → delegate to `review` over
-  the diff. If it returns blocking issues, stop and surface them.
+- **Right after non-trivial code is written or modified** → delegate to `review`
+  over the diff. If it returns blocking issues, stop and surface them.
 - **Before a commit on a security-sensitive surface** → delegate to `security`.
   This is a commit gate, not a per-slice check.
 - **A mathematical or quantitative claim to verify** → delegate to `maths`.
@@ -46,8 +60,29 @@ Load the owning skill before you act in each phase — don't work from memory.
    calls → `tool-error-recovery` before any retry.
 7. Before merge → `code-review-and-quality`; sensitive surface →
    `security-and-hardening`.
-8. Durable decision or interface change → `documentation-and-adrs`;
-   sharpened terminology → `domain-modeling`.
+8. Working code heavier than needed → `code-simplification`.
+9. Commits, branches, PR → `git-workflow-and-versioning`. The full lifecycle is
+   `/super-git`, and only the user invokes it.
+10. Durable decision or interface change → `documentation-and-adrs`;
+    sharpened terminology → `domain-modeling`.
+11. Switching agents mid-task, or pausing with work in flight → `handoff`.
+
+## Waiting for a human
+
+When the next safe step depends on a person, load `wait-for-user`. Ask one
+closed question with the recommended option first, and never ask for a secret
+in chat. Where no blocking question is available, emit a single line
+`WAIT_FOR_USER: <concrete decision>` and stop — no further tool calls until the
+person answers. Don't poll, don't spawn more agents, don't carry on under an
+assumption.
+
+## Context budget
+
+Quality degrades around 100k tokens whatever the window says. The statusline
+shows absolute tokens: gold at ~90k means close the current phase; rose at
+~160k means stop and hand off with `handoff`. Keep the plan on disk
+(`.ai/tasks/<slug>/plan.md`) and the live context lean. That is the argument
+for delegating — not tidiness.
 
 ## Guardrails
 
