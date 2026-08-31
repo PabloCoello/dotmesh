@@ -324,7 +324,7 @@ Every review session produces a structured response with five parts:
 |---|---|---|---|
 | 1 | **Contexto** | always | Document path, number of open threads, current branch, git commit range if available. |
 | 2 | **Alcance** | always | Which threads are addressed in this session (IDs and types). |
-| 3 | **Supuestos** | conditional | Non-obvious assumptions made during the review. Omit if none. |
+| 3 | **Supuestos y limitaciones** | conditional | `supuesto`-type threads with their `confidence` and `rationale`. Omit if none. |
 | 4 | **Tareas accesorias** | conditional | Work items identified that fall outside the review scope (e.g. TODOs, follow-up spikes). Each is persisted to `<git-root>/.ai/backlog/<id>.json` with fields `{ id, doc, session, author, commit, body }`. Omit if none. |
 | 5 | **Preguntas** | always | Open questions for the human that are blocking or significantly affect the review. May be an empty list. |
 
