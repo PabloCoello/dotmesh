@@ -93,6 +93,8 @@ Default flow for a code change, and the skill that owns each phase:
 10. Durable decision or interface change → `documentation-and-adrs`; new or sharpened domain terminology → `domain-modeling` (maintains `CONTEXT.md`).
 11. Switching agents mid-task, or pausing with work in flight → `handoff`.
 
+`docs/FLUJO-MAKER.md` holds the diagram of this flow: skills and subagents per phase, the transversal skills, and the hook safety net.
+
 ### Waiting for user input
 
 When the next safe action depends on a human decision, load `wait-for-user`.
