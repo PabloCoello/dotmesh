@@ -139,6 +139,14 @@ export function buildSendAllPrompt(docRelPath: string): string {
  * Esta función está separada de `scribe-bridge.ts` para ser testeable sin
  * dependencias de VS Code.
  *
+ * Limitación conocida: `Terminal.processId` es el PID del proceso del
+ * terminal host (generalmente la shell anfitriona). Esta función detecta si
+ * la shell ha salido, pero no distingue el caso «shell viva, claude ya
+ * terminó». Si claude sale pero el terminal sigue abierto, `checkProcessAlive`
+ * devuelve `true` y el texto se envía igualmente a la shell. Detectar si
+ * claude sigue activo requeriría leer la pantalla del terminal (como hace
+ * scribe.lua vía herdr pane read), lo que no está disponible en VS Code.
+ *
  * @param pid  PID del proceso a comprobar.
  */
 export function checkProcessAlive(pid: number): boolean | undefined {
@@ -173,14 +181,18 @@ const BUNDLE_KNOWN_PATHS: readonly string[] = [
 
 /**
  * Devuelve la ruta al bundle mesh-review.mjs, o `undefined` si no se
- * encuentra. Usa la variable de entorno MESH_REVIEW_CLI si está definida;
- * si no, prueba las rutas conocidas en orden de preferencia.
+ * encuentra. Usa la variable de entorno MESH_REVIEW_CLI si está definida
+ * y apunta a un fichero existente en disco; si no existe, cae a las rutas
+ * conocidas en orden de preferencia.
  *
  * Equivalente en TypeScript a la resolución de `cli.lua:init_cli`.
  */
 export function resolveCliBundle(): string | undefined {
   const envCli = process.env['MESH_REVIEW_CLI'];
-  if (envCli && envCli.trim() !== '') return envCli.trim();
+  if (envCli && envCli.trim() !== '') {
+    const p = envCli.trim();
+    if (existsSync(p)) return p;
+  }
   return BUNDLE_KNOWN_PATHS.find(p => existsSync(p));
 }
 
@@ -198,4 +210,32 @@ export function buildFocusPrompt(
   // separador de comandos en una shell viva.
   const line = shellQuote(toSingleLine(lineLabel));
   return `Céntrate única y exclusivamente en el hilo ${tid} (${type} en ${line}). No proceses ningún otro hilo. Para el contexto ejecuta: mesh-review project ${doc}`;
+}
+
+// ---------------------------------------------------------------------------
+// createPromiseQueue
+// ---------------------------------------------------------------------------
+
+/**
+ * Crea una cola de promesas genérica que serializa llamadas concurrentes.
+ *
+ * Cada llamada a la función devuelta espera a que la anterior termine antes
+ * de ejecutar su función, aunque las llamadas lleguen simultáneamente. Un
+ * rechazo en una función encolada rechaza la promesa de esa llamada, pero no
+ * bloquea las siguientes: la cola sigue procesando en orden.
+ *
+ * Patrón: encadenamiento de promesas con cola interna que nunca rechaza
+ * (tail.then/catch). La promesa con el resultado real se devuelve al caller.
+ *
+ * @returns función `enqueue(fn)` que añade `fn` al final de la cola y
+ *          devuelve una promesa con el resultado de `fn` (puede rechazar).
+ */
+export function createPromiseQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
+  let tail: Promise<void> = Promise.resolve();
+  return function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const next = tail.then(fn);
+    // tail nunca rechaza: un error en fn no bloquea llamadas posteriores.
+    tail = next.then(() => {}, () => {});
+    return next;
+  };
 }

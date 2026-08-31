@@ -118,7 +118,7 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 |---|---|
 | `:MeshPanel` | Igual que `<Espacio>rp` |
 | `:MeshRetract <thread_id> <msg_id> [reason]` | Retractar un mensaje |
-| `:MeshAssign <thread_id> [agente]` | Asignar un hilo a un subagente |
+| `:MeshAssign <thread_id> [agente]` | Sin agente: abre selector interactivo. Con agente: asigna directo sin diálogo. |
 | `:MeshFocusThread <thread_id> [tipo] [linea]` | Enviar un hilo concreto a scribe |
 
 El plugin resuelve el CLI de mesh-review en este orden: opción `cli` de `setup()`,

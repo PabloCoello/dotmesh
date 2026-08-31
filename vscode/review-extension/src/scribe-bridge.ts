@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode';
-import { checkProcessAlive } from './scribe-bridge-utils';
+import { checkProcessAlive, createPromiseQueue } from './scribe-bridge-utils';
 
 /** Nombre fijo del terminal scribe. Sin estado persistido: se busca en cada llamada. */
 const SCRIBE_TERMINAL_NAME = 'scribe';
@@ -207,12 +207,12 @@ const SUBMIT_KEY_DELAY_MS = 200;
  * Cola de envío: garantiza que llamadas concurrentes a sendToScribe se
  * serialicen en orden y no intercalen su texto en el terminal.
  *
- * Patrón mutex por encadenamiento de promesas: cada llamada encola un nuevo
- * then sobre la promesa anterior. `_sendQueue` solo almacena la versión que
- * nunca rechaza (el catch vacío); la promesa con el resultado real se devuelve
- * al caller, que puede hacer await y recibir el error si lo hay.
+ * Patrón mutex por encadenamiento de promesas: la lógica de cola vive en
+ * createPromiseQueue (scribe-bridge-utils.ts), donde es testeable de forma
+ * aislada. Un error en _doSend no bloquea llamadas futuras: la cola absorbe
+ * el rechazo internamente y devuelve la promesa con el error real al caller.
  */
-let _sendQueue: Promise<void> = Promise.resolve();
+const _enqueue = createPromiseQueue();
 
 /**
  * Obtiene el PID del terminal y comprueba si el proceso sigue activo.
@@ -287,8 +287,5 @@ async function _doSend(terminal: vscode.Terminal, text: string): Promise<void> {
  * empezar el siguiente. Evita que dos clics rápidos intercalen su texto.
  */
 export function sendToScribe(terminal: vscode.Terminal, text: string): Promise<void> {
-  const next = _sendQueue.then(() => _doSend(terminal, text));
-  // El queue nunca rechaza: un error en _doSend no bloquea llamadas futuras.
-  _sendQueue = next.catch(() => {});
-  return next;
+  return _enqueue(() => _doSend(terminal, text));
 }

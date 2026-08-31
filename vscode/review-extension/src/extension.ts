@@ -1213,7 +1213,20 @@ export function activate(context: vscode.ExtensionContext): void {
           const focusLineLabel = typeof focusHint === 'number' && Number.isFinite(focusHint)
             ? `L${focusHint + 1}`
             : '(desanclado)';
-          await sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+          // ACK explícito: rehabilita el botón en cuanto sendToScribe resuelve,
+          // sin esperar a que el handler completo devuelva el control al caller
+          // (thread-cards.ts). Necesario porque ensureScribeTerminal puede tardar
+          // más de 10 s en un terminal nuevo (shell integration + settle cap),
+          // haciendo que el temporizador de seguridad del webview se adelante.
+          // El temporizador de 10 s queda como red de seguridad.
+          try {
+            await sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+            cardsProvider.postMessage({ type: 'action-ack', ok: true, thread_id: msg.thread_id });
+          } catch (sendErr) {
+            const sendErrMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+            vscode.window.showWarningMessage(`mesh-review: error al enviar a scribe — ${sendErrMsg}`);
+            cardsProvider.postMessage({ type: 'action-ack', ok: false, error: sendErrMsg, thread_id: msg.thread_id });
+          }
           break;
         }
       }

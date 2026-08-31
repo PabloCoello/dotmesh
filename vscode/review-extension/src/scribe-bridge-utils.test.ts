@@ -13,6 +13,7 @@ import {
   buildFocusPrompt,
   checkProcessAlive,
   resolveCliBundle,
+  createPromiseQueue,
 } from './scribe-bridge-utils.ts';
 
 // UUID canónico de prueba
@@ -191,15 +192,69 @@ test('resolveCliBundle devuelve string o undefined (no lanza)', () => {
     'resolveCliBundle debe devolver string o undefined');
 });
 
-test('resolveCliBundle usa MESH_REVIEW_CLI si está definida', () => {
+test('resolveCliBundle usa MESH_REVIEW_CLI si apunta a un fichero existente', () => {
+  // process.execPath siempre existe en cualquier entorno donde corren los tests.
+  const realPath = process.execPath;
   const prev = process.env['MESH_REVIEW_CLI'];
-  process.env['MESH_REVIEW_CLI'] = '/ruta/falsa/mesh-review.mjs';
+  process.env['MESH_REVIEW_CLI'] = realPath;
   try {
     const result = resolveCliBundle();
-    assert.strictEqual(result, '/ruta/falsa/mesh-review.mjs',
-      'debe preferir MESH_REVIEW_CLI sobre las rutas conocidas');
+    assert.strictEqual(result, realPath,
+      'debe preferir MESH_REVIEW_CLI sobre las rutas conocidas cuando el fichero existe');
   } finally {
     if (prev === undefined) delete process.env['MESH_REVIEW_CLI'];
     else process.env['MESH_REVIEW_CLI'] = prev;
   }
+});
+
+test('resolveCliBundle ignora MESH_REVIEW_CLI si el fichero no existe', () => {
+  const prev = process.env['MESH_REVIEW_CLI'];
+  process.env['MESH_REVIEW_CLI'] = '/ruta/inexistente/mesh-review.mjs';
+  try {
+    const result = resolveCliBundle();
+    assert.ok(result !== '/ruta/inexistente/mesh-review.mjs',
+      'una ruta inexistente en MESH_REVIEW_CLI no debe devolverse');
+    assert.ok(result === undefined || typeof result === 'string',
+      'el resultado debe ser string o undefined');
+  } finally {
+    if (prev === undefined) delete process.env['MESH_REVIEW_CLI'];
+    else process.env['MESH_REVIEW_CLI'] = prev;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// createPromiseQueue (T3.4)
+// ---------------------------------------------------------------------------
+
+test('createPromiseQueue serializa dos envíos concurrentes en orden', async () => {
+  const enqueue = createPromiseQueue();
+  const order: number[] = [];
+  // p1 tarda 20 ms; p2 se encola antes de que p1 termine.
+  const p1 = enqueue(() => new Promise<void>(r => setTimeout(() => { order.push(1); r(); }, 20)));
+  const p2 = enqueue(async () => { order.push(2); });
+  await Promise.all([p1, p2]);
+  assert.deepEqual(order, [1, 2], 'p2 debe ejecutarse después de p1 aunque se encolen a la vez');
+});
+
+test('createPromiseQueue no bloquea la cola tras un rechazo', async () => {
+  const enqueue = createPromiseQueue();
+  // p1 rechaza; p2 debe ejecutarse igualmente.
+  const p1 = enqueue(async () => { throw new Error('fallo intencional'); });
+  let ran = false;
+  const p2 = enqueue(async () => { ran = true; });
+  await p1.catch(() => {}); // consumir el rechazo para que el test no falle aquí
+  await p2;
+  assert.equal(ran, true, 'p2 debe ejecutarse aunque p1 haya rechazado');
+});
+
+test('createPromiseQueue propaga el rechazo al caller sin perderlo', async () => {
+  const enqueue = createPromiseQueue();
+  const p1 = enqueue(async () => { throw new Error('rechazo visible'); });
+  await assert.rejects(p1, /rechazo visible/, 'el caller debe poder observar el error de fn');
+});
+
+test('createPromiseQueue devuelve el valor de retorno de fn', async () => {
+  const enqueue = createPromiseQueue();
+  const result = await enqueue(async () => 42);
+  assert.equal(result, 42, 'debe propagar el valor de retorno de fn al caller');
 });
