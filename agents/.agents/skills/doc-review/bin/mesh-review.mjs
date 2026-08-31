@@ -481,6 +481,12 @@ async function reanchorThreads(text, threads, eventDir) {
     } else {
       const newAnchor = createAnchor(text, resolved.startOffset, resolved.endOffset);
       if (!anchorChanged(stored, newAnchor)) continue;
+      if (resolved.uncertain) {
+        process.stderr.write(
+          `mesh-review reanchor: ancla incierta (uncertain) para hilo ${thread.thread_id} \u2014 la cita se encontr\xF3 pero muy alejada del offset original; verifica manualmente.
+`
+        );
+      }
       ev = {
         id: randomUUID2(),
         version: 2,
@@ -490,7 +496,8 @@ async function reanchorThreads(text, threads, eventDir) {
         created_at: utcTimestampMs(),
         commit: null,
         dirty: false,
-        anchor: newAnchor
+        anchor: newAnchor,
+        ...resolved.uncertain ? { uncertain: true } : {}
       };
     }
     await emitEvent(eventDir, ev);

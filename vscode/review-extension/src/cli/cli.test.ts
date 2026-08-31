@@ -2714,3 +2714,49 @@ test('isUuid: UUID válido v4 con variante 9 → true', () => {
 test('isUuid: UUID válido v4 con variante b → true', () => {
   assert.strictEqual(isUuid('550e8400-e29b-41d4-b716-446655440000'), true);
 });
+
+// ---------------------------------------------------------------------------
+// T2.3 — B1: reanchor propaga uncertain cuando bestDist > threshold
+// ---------------------------------------------------------------------------
+
+test('reanchorThreads: ancla con bestDist > threshold emite uncertain:true y warning en stderr', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reanchor-uncertain-'));
+  try {
+    // Ancla original en offset 0; el texto actual la pone muy lejos (>200 chars)
+    const originalText = 'texto ancla';  // quote a buscar
+    await makeOpenedWithAnchor(dir, originalText, 0, 0);
+
+    // Desplazar el ancla más de 200 chars para forzar uncertain
+    const prefix = 'x'.repeat(201);
+    const shiftedText = prefix + originalText;
+
+    const events = await readEvents(dir);
+    const threads = project(events);
+
+    const stderrLines: string[] = [];
+    const origStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: unknown) => { stderrLines.push(String(chunk)); return true; };
+    let count: number;
+    try {
+      count = await reanchorThreads(shiftedText, threads, dir);
+    } finally {
+      process.stderr.write = origStderr;
+    }
+
+    assert.strictEqual(count, 1, 'emite 1 evento reanchored');
+
+    // El evento emitido debe llevar uncertain:true
+    const events2 = await readEvents(dir);
+    const reanchored = events2.filter(e => e.type === 'thread.reanchored');
+    assert.strictEqual(reanchored.length, 1, 'hay un evento thread.reanchored');
+    assert.strictEqual((reanchored[0] as Record<string, unknown>).uncertain, true,
+      'el evento lleva uncertain:true');
+
+    // stderr debe incluir aviso sobre uncertain
+    const stderrFull = stderrLines.join('');
+    assert.ok(stderrFull.includes('uncertain') || stderrFull.includes('incierto'),
+      'stderr incluye aviso de incertidumbre');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});

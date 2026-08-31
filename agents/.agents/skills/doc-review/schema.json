@@ -99,7 +99,7 @@
       }
     },
     {
-      "description": "thread.reanchored (re-anchor) — moves a thread's anchor to a new text selection. Discriminated from the detached variant by presence of 'anchor' and absence of 'detached'.",
+      "description": "thread.reanchored (re-anchor) — moves a thread's anchor to a new text selection. Discriminated from the detached variant by presence of 'anchor' and absence of 'detached'. The optional 'uncertain' field signals that the best match was found far from the original char_offset (> ANCHOR_UNCERTAINTY_THRESHOLD); the UI and agent should flag it for manual review.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id","version","type","thread_id","author","created_at","commit","dirty","anchor"],
@@ -112,7 +112,8 @@
         "created_at": { "$ref": "#/$defs/isoTs" },
         "commit":     { "type": ["string","null"] },
         "dirty":      { "type": "boolean" },
-        "anchor":     { "$ref": "#/$defs/anchor" }
+        "anchor":     { "$ref": "#/$defs/anchor" },
+        "uncertain":  { "type": "boolean", "description": "true when the resolved anchor is more than ANCHOR_UNCERTAINTY_THRESHOLD chars away from the original char_offset — the match may be the wrong occurrence of the same quote." }
       }
     },
     {
