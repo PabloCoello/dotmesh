@@ -28,7 +28,7 @@ function utcTimestampMs() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 function compareEvents(a, b) {
   const ta = Date.parse(a.created_at);

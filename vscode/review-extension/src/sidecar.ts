@@ -244,7 +244,9 @@ export function utcTimestampMs(): string {
  * convierta en nombre de fichero pasa por esta guarda antes de tocar el disco.
  */
 export function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  // Strict UUID v4: version nibble must be '4', variant nibble must be [89ab], lowercase only.
+  // Aligns with schema.json $defs/uuid pattern which enforces these constraints.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 
 /**

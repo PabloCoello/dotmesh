@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
+import { readEvents, project, utcTimestampMs, isUuid, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
 import { isPending, runProject } from './commands/project.ts';
 import { emitEvent, parseKvPairs } from './commands/emit.ts';
 import { parseCliArgs } from './args.ts';
@@ -2670,4 +2670,47 @@ test('reanchor: doc dentro del git root sin hilos → emite 0 eventos sin error'
   } finally {
     await cleanup();
   }
+});
+
+// ---------------------------------------------------------------------------
+// T2.2 — B5: isUuid estricto v4 (nibble 4, variante [89ab], minúsculas)
+// ---------------------------------------------------------------------------
+
+test('isUuid: UUID v4 minúsculas válido → true', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-a716-446655440000'), true);
+});
+
+test('isUuid: UUID v4 generado por randomUUID → true', () => {
+  // randomUUID always produces v4
+  assert.strictEqual(isUuid(randomUUID()), true);
+});
+
+test('isUuid: UUID v1 (nibble de versión = 1) → false', () => {
+  // Tercer grupo empieza por 1, no por 4
+  assert.strictEqual(isUuid('550e8400-e29b-11d4-a716-446655440000'), false);
+});
+
+test('isUuid: UUID v3 (nibble de versión = 3) → false', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-31d4-a716-446655440000'), false);
+});
+
+test('isUuid: UUID con variante de nibble inválida (c) → false', () => {
+  // Cuarto grupo: variante debe ser [89ab], c no es válida para v4
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-c716-446655440000'), false);
+});
+
+test('isUuid: UUID en mayúsculas → false (isUuid requiere minúsculas)', () => {
+  assert.strictEqual(isUuid('550E8400-E29B-41D4-A716-446655440000'), false);
+});
+
+test('isUuid: cadena vacía → false', () => {
+  assert.strictEqual(isUuid(''), false);
+});
+
+test('isUuid: UUID válido v4 con variante 9 → true', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-9716-446655440000'), true);
+});
+
+test('isUuid: UUID válido v4 con variante b → true', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-b716-446655440000'), true);
 });
