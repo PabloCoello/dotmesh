@@ -553,6 +553,19 @@ case "$out" in
   *"no instrucciones"*) pass "el contexto se enmarca como dato" ;;
   *) fail "el contexto no dice que es un dato: $out" ;;
 esac
+
+section "guardarraíl: formas de entrecomillado que esquivaban el chequeo de push"
+# Segunda pasada de la auditoría: el parser tiene que leer el refspec como lo
+# lee bash, o compara con un nombre que nadie ha escrito.
+GUARD_CWD="$repo"
+git -C "$repo" checkout -q una-rama
+
+guard_blocks "git push origin \$'main'" "un refspec con entrecomillado ANSI-C"
+guard_blocks "git push origin \\main" "un refspec con barra invertida delante"
+guard_blocks "git push origin ma\\in" "una barra invertida en medio del nombre"
+guard_blocks "git p\\ush origin main" "el propio subcomando escapado"
+guard_allows "git push origin \$'otra-rama'" "entrecomillado ANSI-C de una rama de trabajo"
+GUARD_CWD=""
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

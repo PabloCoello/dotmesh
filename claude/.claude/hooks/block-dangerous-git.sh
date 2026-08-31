@@ -255,8 +255,10 @@ done <<< "$scan"
 # and read as a push of the checked-out branch. De-quoting is safe here because
 # this pass only ever looks at the push subcommand and its positional
 # arguments, never at free text.
+# $'…' is stripped before '…' so that `origin $'main'` does not leave `$main`
+# behind, which would read as a different branch than the one bash pushes to.
 dequoted=$(printf '%s' "$payload" \
-  | sed -E "s/'([^']*)'/\1/g; s/\"([^\"]*)\"/\1/g" \
+  | sed -E "s/\\$'([^']*)'/\1/g; s/'([^']*)'/\1/g; s/\"([^\"]*)\"/\1/g" \
   | tr ';|&(){}' '\n')
 
 while IFS= read -r seg; do
@@ -268,6 +270,10 @@ while IFS= read -r seg; do
   rest=$(printf '%s' "$seg" | sed -E \
     -e "s#^${_GIT_PRE}psu?([[:space:]]|\$)#push #" \
     -e "s#^${_GIT_PRE}##")
+  # Backslash escapes are the shell's, not part of the name: bash runs
+  # `push origin \main` as `push origin main`, so the parser has to read it the
+  # same way or the comparison below looks at a name nobody typed.
+  rest=$(printf '%s' "$rest" | sed -E 's/\\(.)/\1/g')
 
   # Walk git's global flags to find the real subcommand. Doing this by token
   # rather than by pattern is what keeps `git log --grep push origin main` out:
