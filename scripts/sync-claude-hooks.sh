@@ -41,6 +41,10 @@ command -v jq >/dev/null 2>&1 || undecidable "jq no encontrado; requerido para c
 [ -e "$DST" ] || undecidable "$DST no existe (corre 'make seed-claude-settings')"
 jq -e . "$SRC" >/dev/null 2>&1 || undecidable "la plantilla no es JSON válido: $SRC"
 jq -e . "$DST" >/dev/null 2>&1 || undecidable "no es JSON válido: $DST"
+# Sin esta guarda, una plantilla sin bloque `hooks` asignaría null al vivo y
+# borraría todos los hooks de la máquina sin decir nada.
+jq -e '.hooks | type == "object"' "$SRC" >/dev/null 2>&1 \
+  || undecidable "la plantilla no trae un bloque hooks utilizable: $SRC"
 
 # Aplana el bloque hooks a una línea por hook registrado, para poder decir qué
 # entra y qué sale en vez de un "difieren" a secas.

@@ -304,6 +304,19 @@ cp "$tpl" "$dst"
 run_sync "$dst" --check && rc=0 || rc=$?
 [ "$rc" = 0 ] && pass "sin deriva, --check sale 0" || fail "sin deriva --check dio rc=$rc"
 
+# Una plantilla sin bloque hooks no debe vaciar los del vivo: se rechaza antes
+# de tocar nada.
+tpl_original="$tpl"
+tpl="$TMP/plantilla-sin-hooks.json"
+printf '{"outputStyle":"maker"}' > "$tpl"
+cp "$vivo_inicial" "$dst"
+run_sync "$dst" && rc=0 || rc=$?
+[ "$rc" = 2 ] && pass "una plantilla sin hooks es indecidible (rc=2)" || fail "plantilla sin hooks dio rc=$rc"
+diff -q "$vivo_inicial" "$dst" >/dev/null \
+  && pass "una plantilla sin hooks no toca el vivo" \
+  || fail "la plantilla sin hooks modificó el destino: $(jq -c '.hooks' "$dst")"
+tpl="$tpl_original"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
