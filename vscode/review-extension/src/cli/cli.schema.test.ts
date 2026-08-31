@@ -448,3 +448,34 @@ test('schema ajv: reanchor uncertain:true produce thread.reanchored conforme al 
     await cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Casos negativos: el oneOf del esquema rechaza eventos malformados
+// ---------------------------------------------------------------------------
+
+test('schema ajv: rechaza un evento con type desconocido', async () => {
+  const validate = await buildValidate();
+  const valid = validate({
+    version: 2,
+    id: randomUUID(),
+    thread_id: randomUUID(),
+    type: 'thread.exploded',
+    author: { kind: 'human' },
+    created_at: utcTimestampMs(),
+  });
+  assert.strictEqual(valid, false, 'un type fuera del oneOf debe fallar la validación');
+});
+
+test('schema ajv: rechaza thread.assigned con agent fuera del enum', async () => {
+  const validate = await buildValidate();
+  const valid = validate({
+    version: 2,
+    id: randomUUID(),
+    thread_id: randomUUID(),
+    type: 'thread.assigned',
+    agent: 'becario',
+    author: { kind: 'human' },
+    created_at: utcTimestampMs(),
+  });
+  assert.strictEqual(valid, false, 'un agent fuera del enum debe fallar la validación');
+});
