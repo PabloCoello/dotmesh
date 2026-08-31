@@ -51,6 +51,30 @@ Al pulsar "Responder" o "Editar" en una tarjeta, aparece un textarea bajo ella. 
 
 El botón `Asignar` en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección escribe un evento `thread.assigned` en el log.
 
+### Puente scribe
+
+El panel de hilos incluye tres botones para interactuar con la persona `scribe` de Claude Code:
+
+| Botón | Acción |
+|---|---|
+| **Lanzar sesión scribe** | Abre un terminal integrado de VS Code con `claude --settings '{"outputStyle":"scribe"}'` y lo registra como sesión scribe activa. El terminal se lanza con `hideFromUser: true`, de modo que no aparece en la lista de terminales del panel; queda en segundo plano esperando prompts. |
+| **Enviar pendientes** | Envía a la sesión scribe activa el prompt para procesar todos los hilos pendientes del documento activo (`mesh-review project --pending '<ruta>'`). Si no hay sesión activa, la lanza primero. |
+| **Enviar hilo** | (Próximamente) Envía a la sesión scribe el contexto de un único hilo seleccionado. |
+
+**Comando de lanzamiento.** La sesión se arranca con:
+
+```
+claude --settings '{"outputStyle":"scribe"}'
+```
+
+Esto garantiza que Claude Code active la persona `scribe` desde el primer turno, sin que el usuario tenga que cambiarla manualmente.
+
+**`hideFromUser`.** El terminal se crea con `hideFromUser: true` para mantener la interfaz limpia. La sesión procesa los hilos en segundo plano; el resultado llega a través de los eventos del log (`.ai/review/`), que la extensión detecta y refleja en el panel.
+
+**Tiempo de espera.** La extensión espera a que la sesión esté lista antes de enviar el primer prompt. El tiempo de espera base es configurable con `mesh-review.scribe.launchDelayMs` (véase Configuración).
+
+**Primera vez en una carpeta nueva.** Si Claude Code muestra el diálogo de confianza de directorio antes de estar listo para recibir prompts, el botón "Enviar pendientes" detecta que el proceso `claude` no está disponible para entrada y **no envía el texto** — en su lugar muestra un aviso. Acepta la confianza en el terminal scribe y vuelve a pulsar el botón.
+
 ### Diff por hilo
 
 El botón de diff en cada tarjeta abre una vista comparativa entre la versión del documento en el commit en que se creó el comentario y la versión actual. El título de la pestaña tiene el formato `nombre_fichero · tipo · sha` (7 dígitos). Cada nuevo diff cierra el anterior.
@@ -69,6 +93,7 @@ El icono de la extensión en la barra de actividad muestra el número de respues
 |---|---|---|---|
 | `mesh-review.badge.toast` | `boolean` | `false` | Muestra una notificación al recibir respuestas IA nuevas. |
 | `mesh-review.navigation.cyclic` | `boolean` | `true` | La navegación entre hilos cicla al llegar al último o al primero. |
+| `mesh-review.scribe.launchDelayMs` | `number` | `2000` | Milisegundos que la extensión espera tras lanzar la sesión scribe antes de enviar el primer prompt. Aumenta este valor si el agente no está listo a tiempo en máquinas lentas. |
 
 ## Modelo de datos
 
