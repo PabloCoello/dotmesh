@@ -162,7 +162,7 @@ Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the a
 
 1. Search for an exact substring match of `anchor.quote`.
 2. **One match** → that is the position. Proceed.
-3. **Multiple matches** → choose the one whose start offset is closest to `anchor.char_offset`; break ties by proximity to `anchor.line_hint`.
+3. **Multiple matches** → choose the one whose start offset is closest to `anchor.char_offset`.
 4. **No match (the quoted text is gone)** → do not invent a position. If the section can be identified with confidence from `messages[0].body`, note the discrepancy and, when you move the thread, **append** a `thread.reanchored` event carrying the new `anchor`. If it cannot be located with confidence, **append** a `thread.reanchored` event with `detached: true` (which transitions the thread to `detached`) and report it — never fabricate a location.
 
 Threads already projected with `anchor: { detached: true }` have no current position: surface them for the human to re-anchor rather than guessing.
@@ -297,12 +297,12 @@ Route open threads to subagents based on `assignee` from `thread.assigned` event
 
 | Signal | Subagent |
 |---|---|
-| `assignee: "security"` or `verifica` on a security claim | `security` |
-| `assignee: "maths"` or `verifica` on a quantitative/mathematical claim | `maths` |
+| `assignee: "security"` | `security` |
+| `assignee: "maths"` | `maths` |
 | `assignee: "reviser"` | `reviser` |
 | `assignee: "editor"` | `editor` |
-| `edita` or `sugerencia` (prose change, no assignee) | `reviser` |
-| `pregunta` requiring factual research (no assignee) | `editor` |
+| `edita`, `sugerencia`, or `pregunta` (no assignee) | `reviser` |
+| `verifica` (no assignee) | `reviser`; escalate to `security` or `maths` if the body indicates |
 | `nota`, `referencia`, `supuesto` (annotations) | principal |
 | No assignee, no clear signal | principal |
 
