@@ -283,7 +283,7 @@ health:
 	fi
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
 	@command -v nvim         >/dev/null && echo "  ok  nvim"         || echo "  --  nvim"
-	@command -v tree-sitter  >/dev/null && echo "  ok  tree-sitter"  || echo "  --  tree-sitter  (brew install tree-sitter)"
+	@command -v tree-sitter  >/dev/null && echo "  ok  tree-sitter"  || echo "  --  tree-sitter  (brew install tree-sitter-cli)"
 	@command -v npx          >/dev/null && echo "  ok  npx"          || echo "  --  npx"
 	@command -v ast-grep >/dev/null && echo "  ok  ast-grep (opcional)" || echo "  --  ast-grep opcional (búsqueda estructural)"
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-review' \
