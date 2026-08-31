@@ -110,7 +110,7 @@ Tasks outside session scope are persisted in `.ai/backlog/<task_id>.json` and li
 
 ## Batching
 
-Before fan-out, group actionable threads whose `char_offset` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
+Before fan-out, group actionable threads whose `line_hint` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
 
 When delegating to the reviser, include ±20 lines of the document surrounding each thread's `anchor.char_offset` verbatim in the delegation prompt. The reviser uses this extract as its primary source; it re-reads the full document or event directory only if the extract is insufficient or absent.
 

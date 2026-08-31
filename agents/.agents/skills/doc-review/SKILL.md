@@ -306,6 +306,8 @@ Route open threads to subagents based on `assignee` from `thread.assigned` event
 | `nota`, `referencia`, `supuesto` (annotations) | principal |
 | No assignee, no clear signal | principal |
 
+**Batching before fan-out.** Group actionable threads whose `line_hint` values are within 50 lines of each other into batches (max 5 threads per batch). Delegate each batch to the reviser in a single call.
+
 **Inline context for fan-out.** When delegating a thread to a subagent, the principal extracts ±20 lines of the document surrounding `anchor.char_offset` and includes them verbatim in the delegation prompt. The subagent uses this extract as its primary source for understanding the anchored text; it re-reads the full document or event directory only if the inline extract is insufficient or absent.
 
 The dotmesh subagent roster: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`.
