@@ -49,7 +49,7 @@ Al pulsar "Responder" o "Editar" en una tarjeta, aparece un textarea bajo ella. 
 
 ### Asignación
 
-El botón `Asignar` en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección escribe un evento `thread.assigned` en el log.
+El botón `Asignar` en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección invoca `mesh-review assign` vía el CLI bundleado, que valida la existencia del hilo y escribe el evento `thread.assigned`. Si el bundle no está disponible en las rutas conocidas (`~/.claude/skills/` o `~/.agents/skills/`), la extensión cae de vuelta a `writeEvent` directa con aviso en el canal de output.
 
 ### Puente scribe
 
