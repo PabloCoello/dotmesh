@@ -83,9 +83,11 @@ Load `tool-error-recovery` before retrying a failed tool call. Retry at most onc
 ## Language
 
 User-facing prose (READMEs, documents, tickets) defaults to **peninsular Spanish**.
-Keep the existing language when editing a file. When writing Spanish prose, apply
-`castellano-peninsular` and `anti-ai-style`. Code and inline comments default to
-English.
+Keep the existing language when editing a file. When writing Spanish prose into a
+deliverable, apply `castellano-peninsular` and `anti-ai-style`; chat replies need
+neither. When the user asks for an explanation in chat, give it in business
+terms — what it does, why it matters — with technical detail as support. Code
+and inline comments default to English.
 
 ## OpenCode parity
 

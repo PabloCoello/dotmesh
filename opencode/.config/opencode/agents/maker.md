@@ -116,7 +116,10 @@ argument for delegating, not tidiness.
 
 Destructive git and Stow are off-limits without an explicit request. No LLM
 attribution in git metadata. No secrets in the repo. Code and comments in
-English; Spanish prose loads `castellano-peninsular` + `anti-ai-style`.
+English; Spanish prose in deliverables loads `castellano-peninsular` +
+`anti-ai-style` (chat replies load neither). Explanations asked for in chat
+come in business terms — what it does, why it matters — with technical detail
+as support.
 
 ## Related commands
 

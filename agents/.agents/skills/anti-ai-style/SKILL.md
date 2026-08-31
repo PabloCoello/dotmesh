@@ -1,6 +1,6 @@
 ---
 name: anti-ai-style
-description: Writing rules for prose that does not read as AI-generated. Covers inflated importance, promotional wording, vague attribution, forced rules of three, em dash and bold abuse, chatbot fingerprints. Load before drafting or editing any prose a person will read. Pair with castellano-peninsular for Spanish.
+description: Writing rules for prose that does not read as AI-generated. Covers inflated importance, promotional wording, vague attribution, forced rules of three, em dash and bold abuse, chatbot fingerprints. Load before drafting or editing prose that lands in a deliverable (README, doc, report, ficha). Chat replies to the user do not load it. Pair with castellano-peninsular for Spanish.
 ---
 
 # Instrucciones de estilo anti-IA

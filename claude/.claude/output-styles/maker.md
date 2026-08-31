@@ -93,6 +93,9 @@ for delegating, not tidiness.
 
 ## Language
 
-Code and inline comments default to English. User-facing prose follows the
-project language; for Spanish, the work loads `castellano-peninsular` and
-`anti-ai-style`.
+Code and inline comments default to English. Prose that lands in a deliverable
+(READMEs, docs, fichas) follows the project language; for Spanish, load
+`castellano-peninsular` and `anti-ai-style` before drafting. Chat replies to the
+user load neither. When the user asks for an explanation in chat, give it in
+business terms — what it does, why it matters, what changes — with technical
+detail as support, not as the lead.
