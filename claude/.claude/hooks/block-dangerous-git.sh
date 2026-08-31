@@ -43,6 +43,36 @@ input=$(cat)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 [ -z "$cmd" ] && exit 0
 
+# A heredoc body is not quoted, so it survives the quote stripping below and
+# reaches the scanners: writing a document that describes this guardrail trips
+# it. Drop those bodies, but only when no interpreter receives them on the
+# opener line. Writing a file is not irreversible; feeding a shell is, and that
+# payload has to stay visible.
+_INTERPRETER_RE='(^|[[:space:];&|(])(sudo[[:space:]]+)?(bash|sh|zsh|ash|ksh|dash|fish|python[0-9.]*|perl|ruby|node|deno|eval)([[:space:]]|$)'
+strip_heredoc_bodies() {
+  local line trimmed delim="" keep=0 out=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ -n "$delim" ]; then
+      trimmed=${line#"${line%%[![:space:]]*}"}
+      [ "$trimmed" = "$delim" ] && delim=""
+      # Inside a body: keep it only when an interpreter is reading it.
+      [ "$keep" = 1 ] && out+="$line"$'\n'
+      continue
+    fi
+    out+="$line"$'\n'
+    # `<<<` is a herestring, not a heredoc: exclude it. If the delimiter cannot
+    # be read the body simply stays, which is the safe direction.
+    printf '%s' "$line" | grep -qE '<<-?[[:space:]]*("[^"]+"|'"'"'[^'"'"']+'"'"'|[A-Za-z_][A-Za-z0-9_]*)' \
+      && ! printf '%s' "$line" | grep -qE '<<<' || continue
+    delim=$(printf '%s' "$line" \
+      | sed -E 's/.*<<-?[[:space:]]*//; s/^"([^"]+)".*/\1/; s/^'"'"'([^'"'"']+)'"'"'.*/\1/; s/^([A-Za-z_][A-Za-z0-9_]*).*/\1/')
+    keep=0
+    printf '%s' "$line" | grep -qE "$_INTERPRETER_RE" && keep=1
+  done
+  printf '%s' "$out"
+}
+payload=$(printf '%s' "$cmd" | strip_heredoc_bodies)
+
 block() {  # $1 = reason
   printf 'BLOCKED: %s. dotmesh guardrail: not permitted. If you genuinely need it, run it yourself.\n' "$1" >&2
   exit 2
@@ -54,7 +84,7 @@ block() {  # $1 = reason
 # tr replaces each separator character with a newline; || and && each produce
 # two newlines (an empty segment between) which the loop skips harmlessly.
 # This is portable across GNU sed and BSD sed (macOS), unlike \n in sed -E.
-scan=$(printf '%s' "$cmd" \
+scan=$(printf '%s' "$payload" \
   | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" \
   | tr ';|&(){}' '\n')
 # KNOWN LIMIT — shell indirection (sh -c '…', bash -c '…', eval '…'): the
@@ -85,7 +115,7 @@ if printf '%s' "$scan" | grep -qE '>[[:space:]]*/dev/(sd|nvme|vd|hd|mmcblk|disk)
 fi
 # curl/wget piped directly to a shell — remote code execution without review.
 # Checked on the raw cmd (before split) because the pipe is the intent signal.
-if printf '%s' "$cmd" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh|ash|fish|python[0-9.]?|perl|ruby)([[:space:]]|$)'; then
+if printf '%s' "$payload" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh|ash|fish|python[0-9.]?|perl|ruby)([[:space:]]|$)'; then
   block "curl/wget canalizado a un intérprete de shell (ejecución remota de código)"
 fi
 # rm -rf over sensitive user subtrees that the root-anchored pattern above
@@ -103,16 +133,17 @@ if printf '%s' "$cmd" | grep -qE '\bgit[[:space:]]+([^[:space:]]+[[:space:]]+)*c
 fi
 
 # --- 1a) Alias injection that would persist or inline a dangerous op ----------
-# Checked on the RAW cmd (before quote-stripping) because the dangerous value
-# lives inside the quoted alias definition. Both -c (session-scoped) and
-# config (persistent) forms are covered.
+# Checked before quote-stripping because the dangerous value lives inside the
+# quoted alias definition, but on the heredoc-stripped payload so that prose
+# describing this evasion can be written to a file. Both -c (session-scoped)
+# and config (persistent) forms are covered.
 _dangerous_op_re='(push[[:space:]].*(--force|-f([[:space:]]|$)|--mirror)|reset[[:space:]]+--hard|(^|[[:space:]])clean[[:space:]].*-[A-Za-z]*f|branch[[:space:]]+(-D|--delete)|update-ref.*-d|stash[[:space:]]+(drop|clear))'
-if printf '%s' "$cmd" | grep -qE 'git[[:space:]].*-c[[:space:]]+alias\.' \
-   && printf '%s' "$cmd" | grep -qiE "$_dangerous_op_re"; then
+if printf '%s' "$payload" | grep -qE 'git[[:space:]].*-c[[:space:]]+alias\.' \
+   && printf '%s' "$payload" | grep -qiE "$_dangerous_op_re"; then
   block "git -c alias.X=<op-peligrosa> evade el guardarraíl"
 fi
-if printf '%s' "$cmd" | grep -qE 'git[[:space:]]+config[[:space:]].*(--[^[:space:]]+[[:space:]]+)*alias\.' \
-   && printf '%s' "$cmd" | grep -qiE "$_dangerous_op_re"; then
+if printf '%s' "$payload" | grep -qE 'git[[:space:]]+config[[:space:]].*(--[^[:space:]]+[[:space:]]+)*alias\.' \
+   && printf '%s' "$payload" | grep -qiE "$_dangerous_op_re"; then
   block "git config alias.X=<op-peligrosa> persistiría una evasión del guardarraíl"
 fi
 

