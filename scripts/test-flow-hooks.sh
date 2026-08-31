@@ -278,8 +278,12 @@ run_sync "$dst" && rc=0 || rc=$?
 [ "$(jq -r '.outputStyle' "$dst")" = scribe ] && [ "$(jq -r '.effortLevel' "$dst")" = xhigh ] \
   && pass "la fusión conserva las claves de la máquina" \
   || fail "la fusión pisó claves locales: $(jq -c 'del(.hooks)' "$dst")"
-if compgen -G "$SYNC_HOME/dotfiles-backup/*/claude-settings.json" >/dev/null; then
+copia=$(compgen -G "$SYNC_HOME/dotfiles-backup/*/claude-settings.json" || true)
+if [ -n "$copia" ]; then
   pass "la fusión deja copia previa"
+  [ "$(stat -c '%a' "$copia")" = 600 ] \
+    && pass "la copia previa no es legible por otros" \
+    || fail "la copia previa tiene permisos $(stat -c '%a' "$copia")"
 else
   fail "la fusión no dejó copia en $SYNC_HOME/dotfiles-backup"
 fi

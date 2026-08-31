@@ -89,12 +89,19 @@ BACKUP_DIR="$HOME/dotfiles-backup/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 cp "$DST" "$BACKUP_DIR/claude-settings.json"
+# Explícito, y no a merced de la umask: la copia lleva la configuración del
+# usuario y no depende de que el directorio padre sea restrictivo.
+chmod 600 "$BACKUP_DIR/claude-settings.json"
 echo "  ok  copia previa en $BACKUP_DIR/claude-settings.json"
 
 # Solo la clave hooks; el resto del fichero vivo se conserva tal cual. El
 # temporal va al lado del destino para que el mv final sea un rename dentro del
 # mismo sistema de ficheros: si jq falla, el destino no se ha tocado.
-NUEVO="$DST.dotmesh-sync.$$"
+# mktemp y no $$: el PID es predecible y ~/.claude puede ser escribible por el
+# grupo, así que un nombre adivinable admite que otro proceso plante ahí un
+# symlink y desvíe la escritura. El sufijo aleatorio va en el mismo directorio
+# que el destino para que el mv final siga siendo un rename.
+NUEVO=$(mktemp "$DST.dotmesh-sync.XXXXXX")
 trap 'rm -rf "$TMP"; rm -f "$NUEVO"' EXIT
 jq --slurpfile plantilla "$SRC" '.hooks = $plantilla[0].hooks' "$DST" > "$NUEVO"
 jq -e . "$NUEVO" >/dev/null
