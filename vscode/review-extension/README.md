@@ -73,8 +73,6 @@ Esto garantiza que Claude Code active la persona `scribe` desde el primer turno,
 
 **Tiempo de espera.** La extensión espera a que la sesión esté lista antes de enviar el primer prompt. El tiempo de espera base es configurable con `mesh-review.scribe.launchDelayMs` (véase Configuración).
 
-**Primera vez en una carpeta nueva.** Si Claude Code muestra el diálogo de confianza de directorio antes de estar listo para recibir prompts, el botón "Enviar pendientes" detecta que el proceso `claude` no está disponible para entrada y **no envía el texto** — en su lugar muestra un aviso. Acepta la confianza en el terminal scribe y vuelve a pulsar el botón.
-
 ### Diff por hilo
 
 El botón de diff en cada tarjeta abre una vista comparativa entre la versión del documento en el commit en que se creó el comentario y la versión actual. El título de la pestaña tiene el formato `nombre_fichero · tipo · sha` (7 dígitos). Cada nuevo diff cierra el anterior.
