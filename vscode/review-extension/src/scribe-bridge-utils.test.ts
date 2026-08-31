@@ -11,6 +11,8 @@ import {
   buildLaunchCommand,
   buildSendAllPrompt,
   buildFocusPrompt,
+  checkProcessAlive,
+  resolveCliBundle,
 } from './scribe-bridge-utils.ts';
 
 // UUID canónico de prueba
@@ -150,4 +152,54 @@ test('buildFocusPrompt entrecomilla lineLabel para neutralizar separadores de co
 test('buildFocusPrompt elimina caracteres de control C1 (CSI) de los valores', () => {
   const prompt = buildFocusPrompt('docs/informe.md', UUID, 'edita', 'L42\x9b31m');
   assert.ok(!prompt.includes('\x9b'), 'los caracteres C1 no deben llegar al terminal');
+});
+
+// ---------------------------------------------------------------------------
+// checkProcessAlive (T3.2)
+// ---------------------------------------------------------------------------
+
+test('checkProcessAlive devuelve true para el proceso actual (self)', () => {
+  // process.pid siempre existe mientras corre el test runner
+  const result = checkProcessAlive(process.pid);
+  assert.strictEqual(result, true, 'el proceso actual debe reportar alive=true');
+});
+
+test('checkProcessAlive devuelve false para un PID inexistente', () => {
+  // PID 99999999 es muy improbable que exista; si existiera, el test fallaría
+  // con un falso negativo no relacionado con el código. Tolerado por la naturaleza
+  // probabilística del test: si falla, revisar el entorno, no el código.
+  const result = checkProcessAlive(99999999);
+  assert.ok(result === false || result === undefined,
+    'un PID inexistente debe reportar alive=false o undefined (EPERM en algunos SO)');
+});
+
+test('checkProcessAlive devuelve undefined para PID no positivo (guardia defensiva)', () => {
+  assert.strictEqual(checkProcessAlive(0),  undefined, 'pid=0 debe devolver undefined');
+  assert.strictEqual(checkProcessAlive(-1), undefined, 'pid=-1 debe devolver undefined');
+  assert.strictEqual(checkProcessAlive(1.5), undefined, 'pid no entero debe devolver undefined');
+});
+
+// ---------------------------------------------------------------------------
+// resolveCliBundle (T3.3)
+// ---------------------------------------------------------------------------
+
+test('resolveCliBundle devuelve string o undefined (no lanza)', () => {
+  // Solo verificamos que no lanza: el bundle puede estar o no en este entorno.
+  let result: unknown;
+  assert.doesNotThrow(() => { result = resolveCliBundle(); });
+  assert.ok(result === undefined || typeof result === 'string',
+    'resolveCliBundle debe devolver string o undefined');
+});
+
+test('resolveCliBundle usa MESH_REVIEW_CLI si está definida', () => {
+  const prev = process.env['MESH_REVIEW_CLI'];
+  process.env['MESH_REVIEW_CLI'] = '/ruta/falsa/mesh-review.mjs';
+  try {
+    const result = resolveCliBundle();
+    assert.strictEqual(result, '/ruta/falsa/mesh-review.mjs',
+      'debe preferir MESH_REVIEW_CLI sobre las rutas conocidas');
+  } finally {
+    if (prev === undefined) delete process.env['MESH_REVIEW_CLI'];
+    else process.env['MESH_REVIEW_CLI'] = prev;
+  }
 });
