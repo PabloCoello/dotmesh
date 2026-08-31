@@ -50,11 +50,19 @@ hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
 # it. Drop those bodies, but only when no interpreter receives them on the
 # opener line. Writing a file is not irreversible; feeding a shell is, and that
 # payload has to stay visible.
-_INTERPRETER_RE='(^|[[:space:];&|(])(sudo[[:space:]]+)?(bash|sh|zsh|ash|ksh|dash|fish|python[0-9.]*|perl|ruby|node|deno|eval)([[:space:]]|$)'
+# Anything that can spawn a process from the text it reads counts: awk has
+# system(), lua and php have os.execute()/exec(), R has system(). A body fed
+# to one of these is a payload, not a document.
+_INTERPRETER_RE='(^|[[:space:];&|(])(sudo[[:space:]]+)?(bash|sh|zsh|ash|ksh|dash|fish|csh|tcsh|python[0-9.]*|perl|ruby|node|deno|bun|eval|g?awk|mawk|tclsh|wish|lua[a-z0-9._-]*|php[0-9.-]*|[Rr]script|pwsh|powershell|xargs|parallel)([[:space:]]|$)'
 strip_heredoc_bodies() {
   local line trimmed delim="" keep=0 out=""
   while IFS= read -r line || [ -n "$line" ]; do
     if [ -n "$delim" ]; then
+      # Leading whitespace is trimmed unconditionally. That is exact for <<-
+      # and lax for <<, where bash requires the delimiter at column zero: the
+      # body closes here earlier than bash would, so more of the command gets
+      # scanned, never less. Trailing whitespace is NOT trimmed, matching bash:
+      # a line "EOF " does not close the heredoc there either.
       trimmed=${line#"${line%%[![:space:]]*}"}
       [ "$trimmed" = "$delim" ] && delim=""
       # Inside a body: keep it only when an interpreter is reading it.
@@ -223,38 +231,6 @@ while IFS= read -r seg; do
   if printf '%s' "$seg" | grep -qE '(^|[[:space:]])(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+)*((/[^[:space:]]*/)?git)([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit([[:space:]]|$)'; then
     continue
   fi
-  # Push to the default branch. AGENTS.md and /super-git forbid it by policy and
-  # nothing enforced it: the patterns below only cover force, mirror and delete.
-  # Fires only when the default branch and the target can both be resolved;
-  # anything unknown is left alone, like the rest of this hook.
-  if printf '%s' "$seg" | grep -qE '(^|[[:space:]])push([[:space:]]|$)' \
-     && ! printf '%s' "$seg" | grep -qE '[[:space:]](--dry-run|-n)([[:space:]]|$)'; then
-    _dir=$(printf '%s' "$seg" | sed -nE 's/.*[[:space:]]-C[[:space:]]+([^[:space:]]+).*/\1/p')
-    [ -d "$_dir" ] || _dir=$hook_cwd
-    # origin/HEAD is the only local record of which branch the remote defaults
-    # to. Without it there is nothing to compare against, so nothing is blocked.
-    _def=$(git -C "$_dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
-    _def=${_def#*/}
-    if [ -n "$_def" ]; then
-      # Non-flag tokens after `push`: the first is the remote, the second the
-      # refspec. With no refspec, git pushes the branch that is checked out.
-      _args=$(printf '%s' "$seg" \
-        | sed -E 's/^.*(^|[[:space:]])push([[:space:]]|$)/ /' \
-        | tr ' \t' '\n' | grep -vE '^-|^$' || true)
-      _target=$(printf '%s' "$_args" | sed -n '2p')
-      if [ -z "$_target" ]; then
-        _target=$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-      else
-        # origin +src:dst -> dst; refs/heads/x -> x.
-        _target=${_target##*:}
-        _target=${_target#+}
-        _target=${_target##refs/heads/}
-      fi
-      if [ -n "$_target" ] && [ "$_target" = "$_def" ]; then
-        block "push a la rama por defecto ($_def): AGENTS.md lo prohíbe, abre una rama y un PR"
-      fi
-    fi
-  fi
   # checkout/restore that resets the working tree: block regardless of what ref
   # or flags precede the final path argument, UNLESS --staged is present (which
   # only unstages, it does not touch the working tree).
@@ -269,5 +245,84 @@ while IFS= read -r seg; do
     fi
   done
 done <<< "$scan"
+
+# --- 1b) Push to the default branch -----------------------------------------
+# AGENTS.md and /super-git forbid it by policy and nothing enforced it: the
+# patterns above only cover force, mirror and delete.
+#
+# Parsed in its own pass over a DE-QUOTED copy, not over $scan: the scan deletes
+# quoted substrings whole, so `git push origin 'main'` would lose its refspec
+# and read as a push of the checked-out branch. De-quoting is safe here because
+# this pass only ever looks at the push subcommand and its positional
+# arguments, never at free text.
+dequoted=$(printf '%s' "$payload" \
+  | sed -E "s/'([^']*)'/\1/g; s/\"([^\"]*)\"/\1/g" \
+  | tr ';|&(){}' '\n')
+
+while IFS= read -r seg; do
+  seg=$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//')
+  printf '%s' "$seg" | grep -qE \
+    '^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*((/[^[:space:]]*/)?git)([[:space:]]|$)' \
+    || continue
+  _GIT_PRE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*(/[^[:space:]]*/)?git[[:space:]]+'
+  rest=$(printf '%s' "$seg" | sed -E \
+    -e "s#^${_GIT_PRE}psu?([[:space:]]|\$)#push #" \
+    -e "s#^${_GIT_PRE}##")
+
+  # Walk git's global flags to find the real subcommand. Doing this by token
+  # rather than by pattern is what keeps `git log --grep push origin main` out:
+  # there, `push` is an argument, not the subcommand.
+  read -ra _toks <<< "$rest"
+  _i=0; _sub=""; _dir=""
+  while [ "$_i" -lt "${#_toks[@]}" ]; do
+    case "${_toks[$_i]}" in
+      -C) _dir=${_toks[$((_i+1))]:-}; _i=$((_i+2)) ;;
+      -c|--git-dir|--work-tree|--namespace|--exec-path) _i=$((_i+2)) ;;
+      -*) _i=$((_i+1)) ;;
+      *) _sub=${_toks[$_i]}; break ;;
+    esac
+  done
+  [ "$_sub" = push ] || continue
+
+  # Positional arguments of push, skipping the flags that consume a value.
+  _i=$((_i+1)); _pos=()
+  while [ "$_i" -lt "${#_toks[@]}" ]; do
+    case "${_toks[$_i]}" in
+      --dry-run|-n) continue 2 ;;
+      -o|--push-option|--repo|--receive-pack|--exec) _i=$((_i+2)) ;;
+      -*) _i=$((_i+1)) ;;
+      *) _pos+=("${_toks[$_i]}"); _i=$((_i+1)) ;;
+    esac
+  done
+
+  [ -d "$_dir" ] || _dir=$hook_cwd
+  # origin/HEAD is the only local record of which branch the remote defaults to.
+  # Without it there is nothing to compare against, so nothing is blocked.
+  _def=$(git -C "$_dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+  _def=${_def#*/}
+  [ -n "$_def" ] || continue
+
+  # The first positional is the remote; every one after it is a refspec, and
+  # git pushes them all. With no refspec at all it pushes the checked-out branch.
+  if [ "${#_pos[@]}" -le 1 ]; then
+    _targets=("$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)")
+  else
+    _targets=("${_pos[@]:1}")
+  fi
+  for _t in "${_targets[@]}"; do
+    [ -n "$_t" ] || continue
+    _t=${_t##*:}          # +src:dst -> dst
+    _t=${_t#+}
+    _t=${_t#refs/heads/}
+    # HEAD and @ name the checked-out branch; comparing them as strings would
+    # miss `git push origin HEAD` from the default branch.
+    case "$_t" in
+      HEAD|@) _t=$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' "$_t") ;;
+    esac
+    if [ "$_t" = "$_def" ]; then
+      block "push a la rama por defecto ($_def): AGENTS.md lo prohíbe, abre una rama y un PR"
+    fi
+  done
+done <<< "$dequoted"
 
 exit 0
