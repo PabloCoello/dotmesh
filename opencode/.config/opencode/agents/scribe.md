@@ -119,7 +119,9 @@ When delegating to the reviser, include ±20 lines of the document surrounding e
 OpenCode does not expose a `/loop` command. Run the watchful review cycle manually:
 
 1. At the start of a session (or after each human save), execute `mesh-review project --pending <doc>`.
-2. If pending threads are returned, process them (Batching → Fan-out → Apply).
+2. If pending threads are returned, re-run check 1 of `doc-review` §4 (worktree cleanliness) before processing:
+   - **Document dirty** — skip this iteration without processing; resume when the document is clean.
+   - **Document clean** — process the threads (Batching → Fan-out → Apply).
 3. If `--pending` returns an empty list, there is nothing to process; check again at the next natural pause in editing.
 
 This is the degraded equivalent of the Claude+herdr loop: the interval is driven by human action rather than an automatic timer. For documents under active review, run step 1 once per editing session or whenever you return to the document.

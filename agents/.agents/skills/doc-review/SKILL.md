@@ -197,6 +197,10 @@ Check these before touching any file or running any git command:
 
 Run all three checks once per session at the start of the pass. In watchful-mode iterations, re-run only check 1 (worktree cleanliness for the document under review) before each commit. Checks 2 and 3 do not change between iterations.
 
+**Watchful-mode loop rules (check 1 outcome):**
+- **Document dirty** — skip this iteration without committing and without doubling the loop interval. Pending work exists; resume when the document is clean.
+- **Pending threads found and processed** — reset the loop interval to its base value after the pass completes.
+
 ---
 
 ## 5. Branch management
