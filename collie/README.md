@@ -105,6 +105,27 @@ collie push-test       # dispara una notificación sin esperar a un agente
 El registro de lo que se ha ejecutado desde el móvil está en
 `~/.local/state/collie/audit.log`.
 
+## Notificaciones
+
+El push avisa de dos estados de agente: **bloqueado** (encendido de fábrica) y
+**terminado** (`done`, apagado de fábrica; se enciende en los ajustes de la PWA).
+La preferencia vive en `~/.local/state/collie/notify-prefs.json`, estado del
+puente que no se versiona: en una máquina nueva hay que volver a encender `done`
+si se quiere el aviso de agente terminado.
+
+El aviso llega con un debounce de 30 segundos (variable `COLLIE_NOTIFY_DELAY_MS`,
+no documentada en el `.env.example` de Collie): si el agente se desbloquea antes,
+el push no sale. El cuerpo lleva el binario del agente (`claude`, `codex`), el
+workspace y el cwd; no lleva la pregunta ni el nombre de sesión de `/rename`.
+Un agente ya bloqueado cuando arranca el puente no notifica: la primera vista de
+un pane nunca genera transición.
+
+Estas notificaciones cubren también el reloj: Garmin replica las notificaciones
+del móvil en la muñeca, así que el aviso de collie se lee en el Garmin sin código
+de dispositivo. El puente ntfy de `dotmesh-watch`, que además aprobaba permisos
+desde el reloj, se retiró en 2026-09 por falta de uso; de su parte de avisos se
+encarga este push, y queda en el historial de aquel repo.
+
 ## Secretos
 
 El `.env` vive junto a los presets y **nunca se versiona**: lleva las claves VAPID de push.
@@ -117,8 +138,5 @@ incrusta en las peticiones que van a los servicios push de Google y Mozilla. Se 
 
 ## Deudas
 
-- **herdr 0.7.1 es anterior a `session.snapshot`**, así que Collie cae al sondeo por
-  llamadas de lista, el camino caro. Actualizar herdr es lo primero que mejoraría esto.
 - `make health` solo comprueba la unidad en Linux; en macOS el puente corre bajo launchd
   y esa fila no lo cubre.
-- El deep link desde el puente `dotmesh-watch` a `/pane/:id` sigue sin implementar.
