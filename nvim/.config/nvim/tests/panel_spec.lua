@@ -72,6 +72,37 @@ local function assert_geo(desc, cfg, ui, esperado)
   end
 end
 
+--- Verifica que todas las líneas miden exactamente `ancho` celdas de display.
+--- Es la aserción que sostiene los bordes: si una sola línea desvía, el borde
+--- derecho de la caja se rompe en esa fila.
+local function assert_all_width(desc, lineas, ancho)
+  local malas = {}
+  for i, l in ipairs(lineas) do
+    local w = vim.fn.strdisplaywidth(l)
+    if w ~= ancho then table.insert(malas, string.format("[%d]=%d %q", i, w, l)) end
+  end
+  if #malas == 0 then
+    io.stderr:write("  ok  " .. desc .. "\n")
+    pass = pass + 1
+  else
+    io.stderr:write(string.format("  FAIL %s  esperaba %d celdas; desvían: %s\n",
+      desc, ancho, table.concat(malas, " ")))
+    fail = fail + 1
+  end
+end
+
+--- Compara dos valores simples.
+local function assert_eq(desc, got, esperado)
+  if got == esperado then
+    io.stderr:write("  ok  " .. desc .. "\n")
+    pass = pass + 1
+  else
+    io.stderr:write(string.format("  FAIL %s  got=%s  esperaba=%s\n",
+      desc, tostring(got), tostring(esperado)))
+    fail = fail + 1
+  end
+end
+
 -- Pantalla de referencia: 200 columnas × 50 líneas.
 -- Mitades: 100 columnas, 25 líneas.
 local GRANDE  = { columns = 200, lines = 50 }
@@ -204,6 +235,169 @@ do
       tostring(geo2.position), tostring(geo2.size)))
     fail = fail + 1
   end
+end
+
+-- ---------------------------------------------------------------------------
+-- Construcción de las tarjetas
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== tarjetas ===\n")
+
+local ok_box, box = pcall(require, "mesh_review.box")
+if not ok_box then
+  io.stderr:write("ERROR cargando mesh_review.box: " .. tostring(box) .. "\n")
+  vim.cmd("cq")
+  return
+end
+
+--- Hilo de prueba con valores por defecto razonables.
+local function hilo(over)
+  local h = {
+    thread_id   = "8f968901-1234-4321-8888-aaaabbbbcccc",
+    status      = "open",
+    commentType = "edita",
+    openedBy    = { kind = "human", name = "PabloCoello" },
+    openedAt    = "2026-09-01T10:00:00Z",
+    anchor      = { quote = "A behavioural layer for the bank" },
+    messages    = {
+      { author = { kind = "human", name = "PabloCoello" },
+        body = "por lo que omar dice en la reunión le interesa presentar behavioral" },
+    },
+  }
+  for k, v in pairs(over or {}) do h[k] = v end
+  return h
+end
+
+local ANCHO = 46
+
+--- Devuelve solo las líneas que forman parte de una caja (no las separadoras).
+local function lineas_de_caja(lines)
+  local out = {}
+  for _, l in ipairs(lines) do
+    if l ~= "" then table.insert(out, l) end
+  end
+  return out
+end
+
+do
+  local lines = panel._build_content({ hilo() }, ANCHO)
+  assert_all_width("todas las líneas de la caja miden el ancho pedido",
+    lineas_de_caja(lines), ANCHO)
+end
+
+do
+  -- Un cuerpo largo obliga a varias líneas envueltas: es donde el borde derecho
+  -- se rompería si el wrap midiera bytes.
+  local lines = panel._build_content({ hilo({
+    messages = {
+      { author = { kind = "human", name = "PabloCoello" },
+        body = "por lo que omar dice en la reunión, a él le interesa presentar "
+            .. "behavioral como un layer completo para la institución y "
+            .. "posicionar el piloto con el agente operador telefónico" },
+    },
+  }) }, ANCHO)
+  assert_all_width("cuerpo largo envuelto sigue cuadrando", lineas_de_caja(lines), ANCHO)
+end
+
+do
+  local lines = panel._build_content({ hilo() }, ANCHO)
+  local todo = table.concat(lines, "\n")
+  assert_eq("la cabecera no lleva el thread_id",
+    todo:find("8f968901", 1, true) == nil, true)
+  assert_eq("la cabecera lleva el tipo",
+    todo:find("edita", 1, true) ~= nil, true)
+  assert_eq("la cabecera lleva el autor",
+    todo:find("PabloCoello", 1, true) ~= nil, true)
+end
+
+do
+  local lines = panel._build_content({ hilo() }, ANCHO)
+  assert_eq("la primera línea abre la caja",  lines[1]:sub(1, #"┌"), "┌")
+  local ultima_caja
+  for _, l in ipairs(lines) do
+    if l:sub(1, #"└") == "└" then ultima_caja = l end
+  end
+  assert_eq("hay línea de cierre de caja", ultima_caja ~= nil, true)
+  -- El separador colgante del render anterior dejaba una línea de ═ tras el
+  -- último hilo. Ahora la última línea con contenido cierra una caja.
+  local ultima_con_texto
+  for _, l in ipairs(lines) do
+    if l ~= "" then ultima_con_texto = l end
+  end
+  assert_eq("no queda separador colgante tras el último hilo",
+    ultima_con_texto:sub(1, #"└") == "└", true)
+end
+
+do
+  local lines = panel._build_content({ hilo(), hilo({ commentType = "nota" }) }, ANCHO)
+  -- Entre dos cajas hay exactamente una línea en blanco.
+  local blancos, cierres = 0, 0
+  for _, l in ipairs(lines) do
+    if l == "" then blancos = blancos + 1 end
+    if l:sub(1, #"└") == "└" then cierres = cierres + 1 end
+  end
+  assert_eq("dos hilos dan dos cajas", cierres, 2)
+  assert_eq("una sola línea en blanco entre cajas", blancos, 1)
+end
+
+do
+  local lines = panel._build_content({
+    hilo(),
+    hilo({ status = "resolved", commentType = "nota" }),
+  }, ANCHO)
+  local cierres = 0
+  for _, l in ipairs(lines) do
+    if l:sub(1, #"└") == "└" then cierres = cierres + 1 end
+  end
+  assert_eq("los hilos resueltos no se dibujan", cierres, 1)
+end
+
+do
+  local _, highlights = panel._build_content({ hilo() }, ANCHO)
+  local tipos = require("mesh_review.types")
+  local esperado = tipos.by_label["edita"].mark_hl
+  local encontrado = false
+  for _, hl in ipairs(highlights) do
+    if hl[1] == esperado and hl[2] == 0 then encontrado = true end
+  end
+  assert_eq("el borde superior lleva el mark_hl del tipo", encontrado, true)
+end
+
+do
+  local _, highlights = panel._build_content({ hilo({ commentType = "inventado" }) }, ANCHO)
+  local encontrado = false
+  for _, hl in ipairs(highlights) do
+    if hl[1] == "MeshReviewDetached" then encontrado = true end
+  end
+  assert_eq("un tipo desconocido cae al grupo atenuado", encontrado, true)
+end
+
+do
+  -- Sin cita: la caja se dibuja igual, sin línea de cita.
+  local lines = panel._build_content({ hilo({ anchor = nil }) }, ANCHO)
+  assert_all_width("hilo sin ancla sigue cuadrando", lineas_de_caja(lines), ANCHO)
+end
+
+do
+  -- Un cuerpo con salto de línea llegaba a romper el render entero: se trocea.
+  local lines = panel._build_content({ hilo({
+    messages = {
+      { author = { kind = "human", name = "PabloCoello" },
+        body = "primera línea\nsegunda línea" },
+    },
+  }) }, ANCHO)
+  assert_all_width("cuerpo multilínea sigue cuadrando", lineas_de_caja(lines), ANCHO)
+end
+
+do
+  local lines = panel._build_content({}, ANCHO)
+  assert_eq("sin hilos abiertos hay un aviso",
+    table.concat(lines, "\n"):find("Sin hilos abiertos", 1, true) ~= nil, true)
+end
+
+do
+  -- Un ancho ridículo no debe reventar el render.
+  local lines = panel._build_content({ hilo() }, 8)
+  assert_all_width("ancho mínimo no rompe la caja", lineas_de_caja(lines), 8)
 end
 
 -- ---------------------------------------------------------------------------

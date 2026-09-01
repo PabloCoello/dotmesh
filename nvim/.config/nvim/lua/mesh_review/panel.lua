@@ -3,16 +3,23 @@
 --- El panel usa el nombre de buffer "mesh-review://<ruta_del_doc>" para que
 --- no colisione con otros buffers. Si ya existe, lo enfoca en lugar de crear uno nuevo.
 ---
---- Formato de cada hilo (D9 del spec):
+--- Cada hilo abierto se dibuja como una caja cerrada enmarcada en el color de su
+--- tipo (los hilos resueltos se omiten):
 ---
----   [open] 3f4a… (nota · human:pablo · 2026-08-30)
----     "<texto de la cita>"
----     ────────────────────
----     [human:pablo] Cuerpo del primer mensaje.
----     [ai:claude-sonnet-4-6] Respuesta del agente.
----   ══════════════════════════════════════════════
+---   ┌ nota · pablo · hoy ──────────────────────┐
+---   │ "<texto de la cita>"                     │
+---   │                                          │
+---   │  pablo                                   │
+---   │  Cuerpo del primer mensaje.              │
+---   │                                          │
+---   │  claude-opus-5                           │
+---   │  Respuesta del agente.                   │
+---   └──────────────────────────────────────────┘
 ---
---- Los hilos resueltos se omiten (solo status=="open").
+--- El borde solo cuadra si todas las líneas miden lo mismo EN CELDAS, no en
+--- bytes; de ahí que el wrap y el relleno vivan en mesh_review.box y no aquí.
+--- Por el mismo motivo la ventana va con wrap=false: si plegara las líneas,
+--- lo haría por fuera del marco.
 ---
 --- APIs modernas usadas en este fichero:
 ---   vim.bo[bufnr].xxx    en lugar de nvim_buf_set_option (deprecada desde 0.10)
@@ -22,6 +29,7 @@
 local M = {}
 
 local types = require("mesh_review.types")
+local box   = require("mesh_review.box")
 
 --- Estado del panel (singleton: solo un panel abierto a la vez).
 --- Prefijo del nombre de los buffers del panel. Sirve para reconocerlos: el
@@ -36,9 +44,6 @@ local _state = {
   source_doc   = nil,  -- ruta del documento fuente
   line_to_thread = {},  -- { [lnum_0indexed] = thread_id }
 }
-
-local SEPARATOR_THREAD = string.rep("═", 46)
-local SEPARATOR_HDR    = string.rep("─", 20)
 
 -- ---------------------------------------------------------------------------
 -- Geometría del panel
@@ -237,14 +242,85 @@ local function _split_lines(texto)
   return partes
 end
 
-local function _build_content(threads)
-  local lines         = {}
-  local highlights    = {}
+--- Caracteres del marco. Se agrupan aquí para que cambiar el estilo de caja sea
+--- un solo sitio y no una búsqueda por todo el render.
+local BORDES = {
+  sup_izq = "┌", sup_der = "┐",
+  inf_izq = "└", inf_der = "┘",
+  h       = "─", v       = "│",
+}
+
+--- Ancho mínimo con el que una caja sigue siendo una caja: los cuatro caracteres
+--- de estructura (│, espacio, espacio, │) más algo de texto.
+local ANCHO_MINIMO = 8
+
+--- Construye el borde superior con el título embebido:  ┌ titulo ──────┐
+---
+--- El título se trunca si no cabe, dejando siempre al menos un ─: un borde sin
+--- esquina derecha se lee como una caja rota, y eso es peor que un título corto.
+---
+--- @param titulo string
+--- @param W      number  Ancho total en celdas.
+--- @return string
+--- @return number  Offset en BYTES donde empieza el título dentro de la línea.
+local function _borde_superior(titulo, W)
+  -- Estructura fija en celdas: ┌ + espacio + espacio + ┐
+  local FIJO = 4
+  local disponible = math.max(0, W - FIJO - 1)
+  local t = box.truncate(titulo, disponible)
+  local relleno = math.max(0, W - FIJO - box.width(t))
+  local linea = BORDES.sup_izq .. " " .. t .. " " .. string.rep(BORDES.h, relleno) .. BORDES.sup_der
+  return linea, #BORDES.sup_izq + 1
+end
+
+--- Construye el borde inferior:  └──────────┘
+---
+--- @param W number
+--- @return string
+local function _borde_inferior(W)
+  return BORDES.inf_izq .. string.rep(BORDES.h, math.max(0, W - 2)) .. BORDES.inf_der
+end
+
+--- Construye una línea de contenido:  │ texto            │
+---
+--- El texto se rellena hasta el ancho exacto; ahí es donde cuadra el borde
+--- derecho. La sangría es para los cuerpos de mensaje, que van un paso dentro
+--- de la cita.
+---
+--- @param texto   string
+--- @param W       number  Ancho total en celdas.
+--- @param sangria number  Espacios extra tras el margen izquierdo.
+--- @return string
+--- @return number  Offset en BYTES donde empieza el texto dentro de la línea.
+local function _linea_interior(texto, W, sangria)
+  sangria = sangria or 0
+  local hueco = math.max(0, W - 4 - sangria)
+  local linea = BORDES.v .. " " .. string.rep(" ", sangria)
+             .. box.pad(texto, hueco) .. " " .. BORDES.v
+  return linea, #BORDES.v + 1 + sangria
+end
+
+--- Construye las líneas del panel, sus highlights y el mapa lnum→thread_id.
+---
+--- Cada hilo abierto se dibuja como una caja cerrada enmarcada en el color de su
+--- tipo. El wrap se hace aquí y no lo hace la ventana: con `wrap` de Neovim una
+--- línea larga se plegaría por fuera del marco y rompería el borde derecho.
+---
+--- @param threads table   Array de hilos (salida de cli.project).
+--- @param ancho   number  Ancho de la ventana en celdas.
+--- @return string[]  lines
+--- @return table     highlights, array de { group, lnum, col_s, col_e } en bytes
+--- @return table     line_to_thread
+function M._build_content(threads, ancho)
+  local W = math.max(ANCHO_MINIMO, math.floor(tonumber(ancho) or 60))
+
+  local lines          = {}
+  local highlights     = {}
   local line_to_thread = {}
 
   -- Filtrar solo hilos abiertos y ordenar por openedAt.
   local open_threads = {}
-  for _, t in ipairs(threads) do
+  for _, t in ipairs(threads or {}) do
     if t.status == "open" then
       table.insert(open_threads, t)
     end
@@ -258,88 +334,90 @@ local function _build_content(threads)
     return lines, highlights, line_to_thread
   end
 
-  for _, thread in ipairs(open_threads) do
-    local tid_short = (thread.thread_id or "?"):sub(1, 8) .. "…"
-    local ctype     = thread.commentType or "?"
-    local author    = _fmt_author(thread.openedBy)
-    local date      = _fmt_date(thread.openedAt)
-    local quote     = (thread.anchor and thread.anchor.quote) or ""
+  for idx, thread in ipairs(open_threads) do
+    -- Una línea en blanco separa las cajas. No se emite tras la última: el
+    -- render anterior dejaba ahí un separador colgante sin nada que separar.
+    if idx > 1 then table.insert(lines, "") end
 
-    -- La subcadena del tipo en el encabezado puede contener saltos (raro pero
-    -- posible si el sidecar viene de una herramienta externa). Se limpia igual
-    -- que el resto del texto para que la búsqueda de posición funcione.
-    local ctype_clean = table.concat(_split_lines(ctype), " ")
+    local ctype  = thread.commentType or "?"
+    local author = _fmt_author(thread.openedBy)
+    local date   = _fmt_date(thread.openedAt)
+    local quote  = (thread.anchor and thread.anchor.quote) or ""
 
-    -- Línea de encabezado: [open] <tid_short> (tipo · autor · fecha)
-    local hdr_lnum = #lines  -- 0-indexed
-    local hdr = string.format("[open] %s (%s · %s · %s)", tid_short,
-      ctype_clean,
-      table.concat(_split_lines(author), " "),
-      table.concat(_split_lines(date), " "))
+    -- El texto que llega puede traer saltos: se colapsan antes de medir nada.
+    local ctype_limpio  = table.concat(_split_lines(ctype), " ")
+    local author_limpio = table.concat(_split_lines(author), " ")
+
+    local tipo_entry = types.by_label[ctype]
+    local tipo_hl    = tipo_entry and tipo_entry.mark_hl or "MeshReviewDetached"
+
+    -- Cabecera: tipo · autor · fecha. Sin thread_id: en una columna estrecha se
+    -- come el sitio del texto y no se usa a ojo. Se copia con `y`.
+    local titulo = string.format("%s · %s · %s", ctype_limpio, author_limpio, date)
+
+    local hdr_lnum = #lines
+    local hdr, titulo_col = _borde_superior(titulo, W)
     table.insert(lines, hdr)
     line_to_thread[hdr_lnum] = thread.thread_id
 
-    -- Highlight: "Identifier" para "[open]" y "Comment" para el resto.
-    table.insert(highlights, { "Identifier", hdr_lnum, 0, 6 })
-    table.insert(highlights, { "Comment", hdr_lnum, 7, #hdr })
+    -- Toda la línea en el color del tipo, y encima el tramo de autor y fecha
+    -- atenuado: el extmark posterior se dibuja sobre el anterior, así que la
+    -- etiqueta del tipo se queda con el color fuerte y el resto baja a Comment.
+    table.insert(highlights, { tipo_hl, hdr_lnum, 0, -1 })
+    local resto_col = titulo_col + #ctype_limpio
+    if resto_col < #hdr then
+      table.insert(highlights, { "Comment", hdr_lnum, resto_col, titulo_col + #titulo })
+    end
 
-    -- Highlight del tipo dentro del encabezado: buscar la subcadena del tipo
-    -- en el encabezado empezando desde la posición 8 (tras "[open] ").
-    -- Esto permite que la etiqueta del tipo aparezca en su color específico
-    -- mientras el resto del encabezado queda en "Comment".
-    -- Se usa mark_hl (solo fg, color canónico) en lugar de hl (solo bg): en un
-    -- buffer de texto el fondo tintado quedaría invisible sobre el fondo de Normal,
-    -- mientras que el fg del tipo resalta la etiqueta exactamente como en VS Code.
-    -- Tipo desconocido o no reconocido → grupo atenuado "MeshReviewDetached".
-    local tipo_entry = types.by_label[ctype]
-    local tipo_hl    = tipo_entry and tipo_entry.mark_hl or "MeshReviewDetached"
-    if ctype_clean ~= "" then
-      local tipo_s, tipo_e = string.find(hdr, ctype_clean, 8, true)
-      if tipo_s then
-        -- tipo_e es el índice del último byte (1-indexed); col_e es exclusivo.
-        table.insert(highlights, { tipo_hl, hdr_lnum, tipo_s - 1, tipo_e })
+    -- Cita del ancla, envuelta. Se entrecomilla solo la primera y la última
+    -- línea para que se lea como una cita sin repetir comillas por fila.
+    if quote ~= "" then
+      local plano  = table.concat(_split_lines(quote), " ")
+      local trozos = box.wrap('"' .. plano .. '"', W - 4)
+      for _, trozo in ipairs(trozos) do
+        local linea, col = _linea_interior(trozo, W, 0)
+        table.insert(lines, linea)
+        table.insert(highlights, { "String", #lines - 1, col, col + #trozo })
       end
     end
 
-    -- Cita (si existe).
-    if quote ~= "" then
-      -- La cita se colapsa a una línea: en una tarjeta de hilo interesa el
-      -- fragmento anclado, no su maquetación.
-      local quote_line = '  "' .. table.concat(_split_lines(quote), " ") .. '"'
-      table.insert(lines, quote_line)
-      table.insert(highlights, { "String", #lines - 1, 0, #quote_line })
-    end
-
-    -- Separador de cita/mensajes.
-    table.insert(lines, "  " .. SEPARATOR_HDR)
-    table.insert(highlights, { "Comment", #lines - 1, 0, -1 })
-
-    -- Mensajes del hilo.
+    -- Mensajes del hilo, separados por una línea vacía dentro de la caja.
     for _, msg in ipairs(thread.messages or {}) do
       if not msg.retracted then
-        local msg_author = _fmt_author(msg.author)
-        local prefix     = "  [" .. msg_author .. "] "
-        local cuerpo     = _split_lines(msg.body)
+        table.insert(lines, (_linea_interior("", W, 0)))
 
-        -- Primera línea con el autor delante; las siguientes, indentadas hasta
-        -- donde empieza el texto, para que el cuerpo se lea como un bloque.
-        table.insert(lines, prefix .. cuerpo[1])
-        table.insert(highlights, { "Comment", #lines - 1, 0, #prefix })
+        local msg_author = table.concat(_split_lines(_fmt_author(msg.author)), " ")
+        local linea, col = _linea_interior(msg_author, W, 1)
+        table.insert(lines, linea)
+        table.insert(highlights, { "Comment", #lines - 1, col, col + #msg_author })
 
-        local sangria = string.rep(" ", #prefix)
-        for i = 2, #cuerpo do
-          table.insert(lines, sangria .. cuerpo[i])
+        for _, parrafo in ipairs(_split_lines(msg.body)) do
+          for _, trozo in ipairs(box.wrap(parrafo, W - 5)) do
+            table.insert(lines, (_linea_interior(trozo, W, 1)))
+          end
         end
       end
     end
 
-    -- Separador entre hilos.
-    table.insert(lines, SEPARATOR_THREAD)
-    table.insert(highlights, { "Comment", #lines - 1, 0, -1 })
+    local inf = _borde_inferior(W)
+    table.insert(lines, inf)
+    table.insert(highlights, { tipo_hl, #lines - 1, 0, -1 })
+
+    -- Bordes verticales de todas las líneas interiores de esta caja, en el color
+    -- del tipo. Se pintan al final, cuando ya se sabe dónde empieza y acaba la
+    -- caja, en vez de repetir la inserción en cada rama de arriba.
+    for lnum = hdr_lnum + 1, #lines - 2 do
+      local linea = lines[lnum + 1]
+      table.insert(highlights, { tipo_hl, lnum, 0, #BORDES.v })
+      table.insert(highlights, { tipo_hl, lnum, #linea - #BORDES.v, #linea })
+    end
   end
 
   return lines, highlights, line_to_thread
 end
+
+--- Alias interno: el resto del módulo lo llama sin el prefijo.
+local _build_content = M._build_content
 
 --- Aplica highlights a un buffer ya escrito.
 --- Usa nvim_buf_set_extmark (API moderna) en lugar de nvim_buf_add_highlight
@@ -439,7 +517,15 @@ end
 --- @param bufnr   number  Buffer del panel.
 --- @param threads table   Array de hilos (de cli.project).
 function M.render(bufnr, threads)
-  local lines, highlights, l2t = _build_content(threads)
+  -- El ancho de la caja se fija al renderizar, así que se lee de la ventana del
+  -- panel si sigue viva. Sin ventana —render antes de abrirla, o en un test— se
+  -- cae al ancho de la pantalla.
+  local ancho = vim.o.columns
+  if _state.winid and vim.api.nvim_win_is_valid(_state.winid) then
+    ancho = vim.api.nvim_win_get_width(_state.winid)
+  end
+
+  local lines, highlights, l2t = M._build_content(threads, ancho)
 
   -- Desbloquear el buffer temporalmente para escribir.
   vim.bo[bufnr].modifiable = true
