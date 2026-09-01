@@ -474,6 +474,77 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Mapa línea → hilo (lo que usan `r`, `x` e `y` bajo el cursor)
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== mapa línea → hilo ===\n")
+
+do
+  local h1 = hilo()
+  local h2 = hilo({ thread_id = "5f217def-9999-4321-8888-aaaabbbbcccc",
+                    commentType = "nota", openedAt = "2026-09-01T11:00:00Z" })
+  local lines, _, l2t = panel._build_content({ h1, h2 }, ANCHO)
+
+  local n = 0
+  for _ in pairs(l2t) do n = n + 1 end
+  assert_eq("un hilo, una entrada en el mapa", n, 2)
+
+  -- Cada entrada tiene que caer sobre el borde superior de su caja: es la línea
+  -- desde la que thread_at_cursor busca hacia atrás.
+  local todas_en_cabecera = true
+  for lnum in pairs(l2t) do
+    if lines[lnum + 1]:sub(1, #"┌") ~= "┌" then todas_en_cabecera = false end
+  end
+  assert_eq("las entradas caen sobre el borde superior", todas_en_cabecera, true)
+
+  -- El id guardado es el completo, no el abreviado que se mostraba antes: `y`
+  -- lo copia para pasárselo a :MeshRetract.
+  local ids = {}
+  for _, tid in pairs(l2t) do ids[tid] = true end
+  assert_eq("el mapa guarda el thread_id completo del primer hilo",
+    ids["8f968901-1234-4321-8888-aaaabbbbcccc"] == true, true)
+  assert_eq("el mapa guarda el thread_id completo del segundo hilo",
+    ids["5f217def-9999-4321-8888-aaaabbbbcccc"] == true, true)
+end
+
+io.stderr:write("\n=== re-render a otro ancho ===\n")
+
+do
+  -- Lo que hace el autocomando de resize: volver a componer con el ancho nuevo.
+  for _, w in ipairs({ 30, 46, 100 }) do
+    local lines = panel._build_content({ hilo() }, w)
+    assert_all_width("recomposición a " .. w .. " columnas", lineas_de_caja(lines), w)
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Vigilante de redimensionado
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== vigilante de redimensionado ===\n")
+
+do
+  -- Regresión: _watch_resize se declaraba DESPUÉS de M.open, que la llamaba.
+  -- En Lua eso compila la referencia como global, o sea nil, y abrir el panel
+  -- reventaba. Colgarla de M la resuelve en tiempo de ejecución; este caso
+  -- comprueba que sigue siendo alcanzable desde fuera.
+  assert_eq("_watch_resize es alcanzable", type(panel._watch_resize), "function")
+
+  local ok_call = pcall(panel._watch_resize)
+  assert_eq("registrar el vigilante no falla", ok_call, true)
+
+  local autocmds = vim.api.nvim_get_autocmds({ group = "MeshReviewPanel" })
+  assert_eq("queda registrado en su augroup", #autocmds > 0, true)
+
+  -- Sin panel abierto el callback tiene que salir sin tocar nada, no explotar.
+  local ok_evt = pcall(vim.api.nvim_exec_autocmds, "VimResized", {})
+  assert_eq("dispararlo sin panel abierto no falla", ok_evt, true)
+
+  -- close() se lleva el vigilante consigo: sin ventana no hay nada que recomponer.
+  panel.close()
+  local restantes = vim.api.nvim_get_autocmds({ group = "MeshReviewPanel" })
+  assert_eq("close() limpia el vigilante", #restantes, 0)
+end
+
+-- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------
 io.stderr:write(string.format("\n%d passed, %d failed\n", pass, fail))

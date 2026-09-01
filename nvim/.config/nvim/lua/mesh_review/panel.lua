@@ -43,7 +43,13 @@ local _state = {
   source_bufnr = nil,  -- buffer fuente desde el que se abrió
   source_doc   = nil,  -- ruta del documento fuente
   line_to_thread = {},  -- { [lnum_0indexed] = thread_id }
+  threads      = {},   -- últimos hilos renderizados, para recomponer sin CLI
+  ancho        = nil,  -- ancho en celdas del último render
 }
+
+--- Grupo de autocomandos del panel. Uno solo, con clear, para que reabrir el
+--- panel no acumule vigilantes de redimensionado.
+local AUGROUP = vim.api.nvim_create_augroup("MeshReviewPanel", { clear = true })
 
 -- ---------------------------------------------------------------------------
 -- Geometría del panel
@@ -542,6 +548,24 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
     end)
   end, vim.tbl_extend("force", opts, { desc = "Responder al hilo" }))
 
+  -- Y → copiar el thread_id del hilo bajo el cursor.
+  --
+  -- Va en Y y no en y porque `y` es el operador de copia: remapearlo dejaría el
+  -- panel sin yy ni yiw, y copiar el texto de un comentario es justo lo que se
+  -- quiere hacer aquí. Y (copiar hasta fin de línea) sí es prescindible.
+  vim.keymap.set("n", "Y", function()
+    local tid = M.thread_at_cursor()
+    if not tid then
+      vim.notify("[mesh-review] No hay hilo bajo el cursor", vim.log.levels.WARN)
+      return
+    end
+    -- Al portapapeles del sistema y al registro por defecto: el id se usa tanto
+    -- pegándolo fuera como con p dentro de Neovim.
+    vim.fn.setreg("+", tid)
+    vim.fn.setreg('"', tid)
+    vim.notify("[mesh-review] thread_id copiado: " .. tid)
+  end, vim.tbl_extend("force", opts, { desc = "Copiar thread_id" }))
+
   -- x → resolver el hilo bajo el cursor.
   vim.keymap.set("n", "x", function()
     local tid = M.thread_at_cursor()
@@ -588,6 +612,10 @@ function M.render(bufnr, threads)
 
   _apply_highlights(bufnr, highlights)
   _state.line_to_thread = l2t
+  -- Se memorizan para que un redimensionado recomponga las cajas sin volver a
+  -- lanzar el CLI, que es un proceso externo y se dispararía en cada arrastre.
+  _state.threads = threads
+  _state.ancho   = ancho
 end
 
 --- Abre (o enfoca) el panel para el documento dado.
@@ -652,8 +680,9 @@ function M.open(doc)
   _state.bufnr        = panel_bufnr
   _state.source_doc   = doc
 
-  -- Registrar keymaps del panel.
+  -- Registrar keymaps del panel y el vigilante de redimensionado.
   _register_keymaps(panel_bufnr, source_bufnr, doc)
+  M._watch_resize()
 
   -- Cargar y renderizar hilos.
   local cli = require("mesh_review.cli")
@@ -668,12 +697,38 @@ function M.open(doc)
   M.render(panel_bufnr, threads)
 end
 
+--- Vigila los cambios de tamaño para recomponer las cajas al ancho nuevo.
+---
+--- El ancho de la caja se fija al renderizar, así que sin esto un redimensionado
+--- deja los bordes derechos partidos o flotando a media ventana. Se recompone
+--- con los hilos memorizados, sin volver al CLI.
+---
+--- WinResized cubre el arrastre de un separador; VimResized, el cambio de tamaño
+--- del terminal entero, que no siempre emite el primero.
+function M._watch_resize()
+  vim.api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
+    group = AUGROUP,
+    callback = function()
+      if not (_state.bufnr and vim.api.nvim_buf_is_valid(_state.bufnr)) then return end
+      if not (_state.winid and vim.api.nvim_win_is_valid(_state.winid)) then return end
+
+      -- Solo si de verdad ha cambiado el ancho: WinResized se dispara también
+      -- cuando cambia la altura, y recomponer entonces sería trabajo perdido.
+      if vim.api.nvim_win_get_width(_state.winid) == _state.ancho then return end
+
+      M.render(_state.bufnr, _state.threads)
+    end,
+  })
+end
+
 --- Cierra la ventana del panel si está abierta.
 function M.close()
   if _state.winid and vim.api.nvim_win_is_valid(_state.winid) then
     vim.api.nvim_win_close(_state.winid, true)
   end
   _state.winid = nil
+  -- Sin ventana no hay nada que recomponer: el vigilante se va con ella.
+  vim.api.nvim_clear_autocmds({ group = AUGROUP })
 end
 
 return M
