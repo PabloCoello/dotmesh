@@ -115,6 +115,7 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 
 | Atajo | Acción |
 |---|---|
+| `<CR>` | Saltar al fragmento anclado, en la ventana del documento |
 | `r` | Responder al hilo bajo el cursor |
 | `d` | Retractar el mensaje bajo el cursor (pide la razón; `<Esc>` cancela) |
 | `a` | Mandar el hilo a la IA (sesión scribe; requiere `HERDR_ENV=1`) |
@@ -123,7 +124,14 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 | `q` / `<Esc>` | Cerrar el panel |
 
 Los cinco primeros se anuncian en el pie de cada caja, porque actúan sobre ese
-hilo y no sobre el panel.
+hilo y no sobre el panel. `Y` se queda fuera del pie: con seis atajos ya no cabe
+en una línea a 60 columnas, y es el único que no actúa sobre el hilo.
+
+`<CR>` mueve el foco al documento, no solo el cursor: se salta para leer o editar
+ahí, y se vuelve con `<C-h>`. La posición sale del extmark vivo, no del ancla
+guardada en el sidecar, así que cae donde está el fragmento ahora aunque el
+buffer se haya editado desde el último guardado. Si el hilo está desanclado, o el
+documento no tiene ninguna ventana abierta, avisa y no mueve nada.
 
 `d` opera sobre el mensaje, no sobre el hilo: en el modelo de eventos no existe
 «borrar un hilo», y hace falta el cursor puesto sobre el autor o el cuerpo del
@@ -137,6 +145,18 @@ vez del documento entero.
 `yy` ni `yiw`, y llevarse el texto de un comentario es justo lo que se quiere
 poder hacer ahí. El `thread_id` va al portapapeles y al registro por defecto, que
 es lo que pide `:MeshRetract <thread_id> <msg_id>`.
+
+**Ir y venir entre el panel y el documento**
+
+`<C-h>` / `<C-l>` (o `<C-j>` / `<C-k>` con el panel abajo) cambian de ventana;
+son los atajos generales de `lua/core/keymaps.lua`, no del panel. Desde el
+documento, `<Espacio>rp` abre el panel o lo enfoca si ya estaba abierto. Dentro
+del panel, `<CR>` salta al fragmento del hilo bajo el cursor. Ojo: `<Esc>` en el
+panel **cierra**, no «sale»; para volver al documento y dejar el panel abierto,
+`<C-h>`.
+
+Para redimensionarlo, `<C-Left>` / `<C-Right>` (ancho) y `<C-Up>` / `<C-Down>`
+(alto), también generales. Las cajas se recomponen al ancho nuevo.
 
 **El panel**
 
@@ -154,7 +174,7 @@ tipo, con la cabecera embebida en el borde superior:
 │  claude-opus-5                                           │
 │  Confirmado en el transcript.                            │
 │                                                          │
-│ r responder · d borrar · a → IA · x resolver · Y id      │
+│ ⏎ ancla · r responder · d borrar · a → IA · x resolver   │
 └──────────────────────────────────────────────────────────┘
 ```
 

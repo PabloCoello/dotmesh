@@ -559,30 +559,41 @@ end
 
 do
   -- Con sitio de sobra los cinco atajos caben en una línea.
-  local hints = panel._hint_lines(panel.ATAJOS, 80)
+  local hints = panel._hint_lines(panel.ATAJOS, 90)
   assert_eq("con ancho de sobra, una sola línea", #hints, 1)
   assert_eq("la línea nombra todos los atajos",
-    hints[1].texto, "r responder · d borrar · a → IA · x resolver · Y id")
+    hints[1].texto,
+    "⏎ ancla · r responder · d borrar · a → IA · x resolver")
   assert_eq("hay una posición de tecla por atajo", #hints[1].teclas, #panel.ATAJOS)
 end
 
 do
+  -- El pie tiene que caber en una línea en el ancho por defecto del sidebar
+  -- (60 columnas → 56 celdas de interior). Es lo que decide que la caja no
+  -- gane una línea de chrome por hilo.
+  local hints = panel._hint_lines(panel.ATAJOS, 56)
+  assert_eq("el pie cabe en una línea a 60 columnas de panel", #hints, 1)
+end
+
+do
   -- Las posiciones tienen que caer sobre la tecla, no un byte al lado: es lo que
-  -- decide si se pinta la letra o el espacio siguiente.
-  for _, ancho in ipairs({ 12, 20, 34, 80 }) do
+  -- decide si se pinta la letra o el byte siguiente. Con «⏎» (3 bytes) delante,
+  -- medir en caracteres en vez de en bytes desalinearía todo lo que viene detrás.
+  for _, ancho in ipairs({ 12, 20, 34, 90 }) do
     local hints = panel._hint_lines(panel.ATAJOS, ancho)
-    local todas_bien = true
-    local encontradas = 0
+    local extraidas = {}
     for _, hint in ipairs(hints) do
       for _, tecla in ipairs(hint.teclas) do
-        encontradas = encontradas + 1
-        local trozo = hint.texto:sub(tecla[1] + 1, tecla[2])
-        if #trozo ~= 1 or not trozo:match("[rdaxY]") then todas_bien = false end
+        table.insert(extraidas, hint.texto:sub(tecla[1] + 1, tecla[2]))
       end
     end
-    assert_eq("ancho " .. ancho .. ": cada posición cae sobre su tecla", todas_bien, true)
-    assert_eq("ancho " .. ancho .. ": no se pierde ningún atajo",
-      encontradas, #panel.ATAJOS)
+
+    local iguales = #extraidas == #panel.ATAJOS
+    for i, atajo in ipairs(panel.ATAJOS) do
+      if extraidas[i] ~= atajo.key then iguales = false end
+    end
+    assert_eq("ancho " .. ancho .. ": cada posición cae sobre su tecla, en orden",
+      iguales, true)
   end
 end
 
@@ -620,6 +631,7 @@ end
 
 do
   local lines = panel._build_content({ hilo() }, ANCHO)
+  assert_eq("la caja anuncia el salto al ancla",    contiene(lines, "⏎ ancla"),      true)
   assert_eq("la caja anuncia el atajo de responder", contiene(lines, "r responder"), true)
   assert_eq("la caja anuncia el atajo de borrar",    contiene(lines, "d borrar"),    true)
   assert_eq("la caja anuncia el envío a la IA",      contiene(lines, "a → IA"),      true)

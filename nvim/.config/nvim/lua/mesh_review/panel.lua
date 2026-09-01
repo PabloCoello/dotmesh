@@ -15,7 +15,7 @@
 ---   │  claude-opus-5                           │
 ---   │  Respuesta del agente.                   │
 ---   │                                          │
----   │ r responder · d borrar · a → IA · x res… │
+---   │ ⏎ ancla · r responder · d borrar · a → IA │
 ---   └──────────────────────────────────────────┘
 ---
 --- El pie de cada caja lleva los atajos que operan sobre ESE hilo. Va dentro del
@@ -388,12 +388,19 @@ end
 ---
 --- Es la misma tabla que registra los keymaps: si se añade una acción aquí y no
 --- allí (o al revés), la caja anuncia algo que no existe. Ver _register_keymaps.
+--- El pie NO lista `Y` (copiar el thread_id): los seis juntos miden 61 celdas y
+--- se irían a dos líneas en el ancho por defecto, con «Y id» solo en la segunda.
+--- Es el único atajo que no actúa sobre el hilo, sino que se lleva su id fuera,
+--- así que es el que menos pierde por vivir solo en el README.
 M.ATAJOS = {
+  -- El campo key es la ETIQUETA que se dibuja, no siempre la notación del
+  -- keymap: «⏎» se registra como <CR>. U+23CE es de ancho Neutral en Unicode,
+  -- o sea una celda en cualquier terminal, así que no descuadra la caja.
+  { key = "⏎", label = "ancla"     },
   { key = "r", label = "responder" },
   { key = "d", label = "borrar"    },
   { key = "a", label = "→ IA"      },
   { key = "x", label = "resolver"  },
-  { key = "Y", label = "id"        },
 }
 
 --- Separador entre atajos del pie.
@@ -609,7 +616,7 @@ local function _apply_highlights(bufnr, highlights)
   end
 end
 
---- Registra los keymaps locales del panel (r, d, a, x, Y, q, Esc).
+--- Registra los keymaps locales del panel (CR, r, d, a, x, Y, q, Esc).
 --- Necesita saber el bufnr fuente y la ruta del documento para poder operar.
 ---
 --- Los atajos por hilo son los que anuncia el pie de cada caja (M.ATAJOS): si se
@@ -653,6 +660,49 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
   end
   vim.keymap.set("n", "q",     close_panel, vim.tbl_extend("force", opts, { desc = "Cerrar panel" }))
   vim.keymap.set("n", "<Esc>", close_panel, vim.tbl_extend("force", opts, { desc = "Cerrar panel" }))
+
+  -- <CR> → saltar al fragmento anclado, en la ventana del documento.
+  --
+  -- El foco se va al documento: se salta para leer o editar ahí, y volver es
+  -- <C-h>. Se lee la posición del extmark vivo, no el ancla del sidecar, para
+  -- caer donde está el fragmento ahora y no donde estaba al guardar.
+  vim.keymap.set("n", "<CR>", function()
+    local tid = hilo_o_aviso()
+    if not tid then return end
+
+    local winid = vim.fn.bufwinid(source_bufnr)
+    if winid == -1 then
+      vim.notify("[mesh-review] El documento no está visible en ninguna ventana",
+        vim.log.levels.WARN)
+      return
+    end
+
+    local row, col = anchor.position_of(source_bufnr, tid)
+    if row == nil then
+      -- Sin extmark: hilo desanclado, o el documento se recargó sin refrescar.
+      vim.notify("[mesh-review] Este hilo no tiene ancla en el documento",
+        vim.log.levels.WARN)
+      return
+    end
+
+    vim.api.nvim_set_current_win(winid)
+
+    -- Se acota DESPUÉS de cambiar de ventana, no antes: set_current_win dispara
+    -- WinEnter y BufEnter, y un autocmd ajeno puede acortar el buffer o cerrar la
+    -- ventana justo ahí. nvim_win_set_cursor aborta ante una fila o una columna
+    -- fuera de rango, y el error subiría como un volcado de pila en el keymap.
+    if not vim.api.nvim_win_is_valid(winid) then return end
+
+    local ultima = vim.api.nvim_buf_line_count(source_bufnr) - 1
+    row = math.max(0, math.min(row, ultima))
+    local linea = vim.api.nvim_buf_get_lines(source_bufnr, row, row + 1, false)[1] or ""
+    col = math.max(0, math.min(col, #linea))
+
+    vim.api.nvim_win_set_cursor(winid, { row + 1, col })
+    -- Centrar: el ancla suele caer al borde de la ventana y el contexto de
+    -- alrededor es justo lo que se va a leer.
+    vim.cmd("normal! zz")
+  end, vim.tbl_extend("force", opts, { desc = "Saltar al fragmento anclado" }))
 
   -- r → responder al hilo bajo el cursor.
   vim.keymap.set("n", "r", function()
@@ -833,6 +883,7 @@ function M.open(doc)
   end
 
   _state.bufnr        = panel_bufnr
+  _state.source_bufnr = source_bufnr
   _state.source_doc   = doc
 
   -- Registrar keymaps del panel y el vigilante de redimensionado.

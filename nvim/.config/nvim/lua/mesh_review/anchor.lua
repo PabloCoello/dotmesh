@@ -234,6 +234,38 @@ function M.refresh(bufnr)
   _place_extmarks(bufnr, threads)
 end
 
+--- Devuelve la posición actual del extmark de un hilo en el buffer dado.
+---
+--- Es el inverso de thread_at_cursor: del hilo a su sitio en el documento. Lo
+--- usa el salto al ancla del panel (⏎).
+---
+--- Se lee el extmark vivo y no el ancla del sidecar a propósito: el extmark lo
+--- ha ido moviendo Neovim con las ediciones del buffer, así que apunta a donde
+--- está el fragmento AHORA, no a donde estaba en el último guardado.
+---
+--- @param bufnr     number  Buffer fuente.
+--- @param thread_id string  UUID del hilo.
+--- @return number|nil, number|nil  Fila y columna 0-indexed, o nil si el hilo no
+---                                 tiene extmark en este buffer.
+function M.position_of(bufnr, thread_id)
+  if thread_id == nil then return nil end
+  if not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+
+  local buf_map = _extmark_to_thread[bufnr]
+  if buf_map == nil then return nil end
+
+  local ns = _get_ns()
+  for eid, tid in pairs(buf_map) do
+    if tid == thread_id then
+      -- Devuelve {} si el extmark se borró (p. ej. tras clear_namespace).
+      local mark = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, eid, {})
+      if mark and mark[1] ~= nil then return mark[1], mark[2] end
+      return nil
+    end
+  end
+  return nil
+end
+
 --- Devuelve el thread_id del extmark más cercano al cursor en el buffer dado.
 --- Útil cuando el cursor está en el documento fuente (no en el panel).
 ---

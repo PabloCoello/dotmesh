@@ -352,6 +352,67 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- position_of: del hilo a su sitio en el documento
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== position_of ===\n")
+
+do
+  local bufnr = make_buf({ "primera línea", "foo bar baz", "tercera" })
+  anchor._place_extmarks(bufnr, {
+    { status = "open", thread_id = "tid-uno", commentType = "nota",
+      anchor = { quote = "bar", char_offset = 18, line_hint = 1 } },
+    { status = "open", thread_id = "tid-dos", commentType = "edita",
+      anchor = { quote = "tercera", char_offset = 30, line_hint = 2 } },
+  })
+
+  local row, col = anchor.position_of(bufnr, "tid-uno")
+  eq("position_of: fila del primer hilo",   row, 1)
+  eq("position_of: columna del primer hilo", col, 4)
+
+  local row2 = anchor.position_of(bufnr, "tid-dos")
+  eq("position_of: fila del segundo hilo", row2, 2)
+
+  eq("position_of: hilo desconocido da nil", anchor.position_of(bufnr, "no-existe"), nil)
+  eq("position_of: sin thread_id da nil",    anchor.position_of(bufnr, nil),         nil)
+end
+
+do
+  -- Un buffer sin extmarks colocados: no hay mapa, así que nil, no un error.
+  local bufnr = make_buf({ "sin hilos" })
+  eq("position_of: buffer sin extmarks da nil", anchor.position_of(bufnr, "tid-uno"), nil)
+end
+
+do
+  -- Buffer inválido: nil en vez de reventar. Pasa de verdad si el documento se
+  -- cierra con el panel abierto.
+  local bufnr = make_buf({ "efímero" })
+  anchor._place_extmarks(bufnr, {
+    { status = "open", thread_id = "tid-uno", commentType = "nota",
+      anchor = { quote = "efímero", char_offset = 0, line_hint = 0 } },
+  })
+  vim.api.nvim_buf_delete(bufnr, { force = true })
+  local ok_call, res = pcall(anchor.position_of, bufnr, "tid-uno")
+  ok_check("position_of: buffer borrado no lanza error", ok_call)
+  eq("position_of: buffer borrado da nil", res, nil)
+end
+
+do
+  -- El extmark se mueve con las ediciones: la posición que devuelve es la de
+  -- ahora, no la del sidecar. Es la razón de leer el extmark y no el ancla.
+  local bufnr = make_buf({ "foo bar baz" })
+  anchor._place_extmarks(bufnr, {
+    { status = "open", thread_id = "tid-uno", commentType = "nota",
+      anchor = { quote = "bar", char_offset = 4, line_hint = 0 } },
+  })
+  eq("position_of: fila antes de editar", (anchor.position_of(bufnr, "tid-uno")), 0)
+
+  -- Dos líneas nuevas por delante empujan el fragmento hacia abajo.
+  vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, { "nueva", "otra" })
+  eq("position_of: la fila sigue al fragmento tras editar",
+    (anchor.position_of(bufnr, "tid-uno")), 2)
+end
+
+-- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------
 io.stderr:write(string.format("\n%d passed, %d failed\n", pass, fail))
