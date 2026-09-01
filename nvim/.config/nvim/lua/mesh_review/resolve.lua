@@ -23,12 +23,11 @@ local utf = require("mesh_review.utf")
 --- El texto que procesa es `table.concat(lines, "\n")`, que no añade '\n' final.
 --- Cada línea ocupa `#line` bytes seguidos de un byte '\n', excepto la última.
 ---
---- La función se llama tanto con byte_start (inicio de la ocurrencia) como con
---- byte_end_inclusive (último byte de la cita). Nunca recibe posiciones que caigan
---- justo en un '\n' intermediario porque las ocurrencias provienen de string.find
---- sobre citas reales (que no terminan en '\n' en el caso habitual).
---- Si de todas formas byte_pos cae en el '\n' de separación, se devuelve la
---- columna del fin de la línea correspondiente.
+--- Se usa para el INICIO de la ocurrencia (byte_start). Si byte_pos cae en el
+--- '\n' de separación —una cita que empieza en el salto de línea— se devuelve la
+--- columna del fin de la línea correspondiente, que es una posición válida.
+--- Para el extremo final del rango existe text_end_to_rowcol, con semántica
+--- exclusiva: ver allí por qué no basta con «inclusivo + 1».
 ---
 --- @param lines    table   Array de strings (líneas del buffer, sin '\n').
 --- @param byte_pos number  Posición 1-indexed en el texto concatenado.
@@ -52,6 +51,50 @@ local function text_pos_to_rowcol(lines, byte_pos)
   return #lines - 1, #last
 end
 
+--- Convierte el extremo FINAL EXCLUSIVO de una ocurrencia a (row, col) 0-indexed.
+---
+--- byte_pos es la posición 1-indexed del primer byte que ya NO forma parte de la
+--- cita, es decir byte_start + #quote.
+---
+--- No vale calcularlo como «posición del último byte + 1»: cuando la cita termina
+--- en '\n' eso da col = #linea + 1, una columna que no existe, y
+--- nvim_buf_set_extmark aborta el refresco entero con
+--- «Invalid 'end_col': out of range». Citas terminadas en '\n' son habituales:
+--- una selección visual por caracteres que baja hasta una línea vacía produce un
+--- end_offset situado al inicio de la línea siguiente, y el CLI recorta la cita
+--- con ese offset, salto incluido.
+---
+--- Recorriendo el texto con semántica exclusiva el caso se resuelve solo. Con la
+--- línea i empezando en el byte p y midiendo llen bytes:
+---   - byte_pos < p + llen  → el fin cae dentro de la línea: (i, byte_pos - p).
+---   - byte_pos == p + llen → la cita agota la línea sin llevarse el '\n':
+---     (i, llen), que como columna exclusiva es válida.
+---   - byte_pos == p + llen + 1 → la cita SÍ se lleva el '\n'. La condición del
+---     bucle falla, se pasa a la línea siguiente y allí byte_pos == p, o sea
+---     (i+1, 0): el mismo punto del documento, expresado donde Neovim lo acepta.
+---     Este es el caso que rompía.
+---
+--- @param lines    table   Array de strings (líneas del buffer, sin '\n').
+--- @param byte_pos number  Posición 1-indexed exclusiva en el texto concatenado.
+--- @return number, number  row 0-indexed, col 0-indexed en bytes (exclusiva).
+local function text_end_to_rowcol(lines, byte_pos)
+  local p = 1  -- posición 1-indexed del inicio de la línea actual en el texto
+  for i, line in ipairs(lines) do
+    local llen = #line
+    -- byte_pos == p + llen es la cita que agota la línea sin incluir su '\n':
+    -- col == llen es una columna exclusiva válida. Si la cita se lleva el salto
+    -- (byte_pos == p + llen + 1) esta condición falla a propósito y el fin acaba
+    -- resolviéndose como (línea siguiente, 0) en la iteración de después.
+    if byte_pos <= p + llen then
+      return i - 1, byte_pos - p
+    end
+    p = p + llen + 1  -- saltar los bytes de la línea y el '\n' separador
+  end
+  -- Pasada del final (no debería ocurrir con entradas válidas derivadas de text).
+  local last = lines[#lines] or ""
+  return #lines - 1, #last
+end
+
 --- Busca la ocurrencia de `quote` en `bufnr` más cercana a `char_offset`.
 ---
 --- Algoritmo (idéntico a resolveAnchor del CLI):
@@ -66,7 +109,8 @@ end
 ---   4. Calcular |utf16_offset - char_offset| y elegir el mínimo.
 ---   5. Si no hay ninguna ocurrencia, devolver nil.
 ---   6. Marcar uncertain = true si la distancia mínima supera 200.
----   7. Calcular end_row, end_col (exclusivo) a partir de start + #quote bytes.
+---   7. Calcular end_row, end_col (exclusivo) con text_end_to_rowcol a partir
+---      de byte_start + #quote.
 ---
 --- El caller no debe invocar find_quote cuando anchor.detached == true.
 ---
@@ -143,17 +187,17 @@ function M.find_quote(bufnr, quote, char_offset)
     end
   end
 
-  -- Calcular el extremo final del rango. byte_end_inclusive es el último byte
-  -- de la cita (1-indexed en el texto concatenado); end_col es exclusivo (semántica
-  -- de nvim_buf_set_extmark y de las APIs de rango de Neovim en general).
-  local byte_end_inclusive        = best.byte_start + #quote - 1
-  local end_row, end_col_inclusive = text_pos_to_rowcol(lines, byte_end_inclusive)
+  -- Calcular el extremo final del rango directamente en coordenadas exclusivas
+  -- (la semántica de nvim_buf_set_extmark y de las APIs de rango de Neovim).
+  -- byte_end_exclusive es el primer byte que ya no pertenece a la cita.
+  local byte_end_exclusive  = best.byte_start + #quote
+  local end_row, end_col    = text_end_to_rowcol(lines, byte_end_exclusive)
 
   return {
     start_row = best.row,
     start_col = best.col,
     end_row   = end_row,
-    end_col   = end_col_inclusive + 1,  -- exclusivo
+    end_col   = end_col,
     uncertain = best_dist > ANCHOR_UNCERTAINTY_THRESHOLD,
   }
 end
