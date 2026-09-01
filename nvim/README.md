@@ -162,8 +162,10 @@ del panel, `<CR>` salta al fragmento del hilo bajo el cursor. Ojo: `<Esc>` en el
 panel **cierra**, no «sale»; para volver al documento y dejar el panel abierto,
 `<C-h>`.
 
-Para redimensionarlo, `<C-Left>` / `<C-Right>` (ancho) y `<C-Up>` / `<C-Down>`
-(alto), también generales. Las cajas se recomponen al ancho nuevo.
+Para redimensionarlo, `<Espacio>wh` / `<Espacio>wl` (ancho) y `<Espacio>wk` /
+`<Espacio>wj` (alto), también generales. Las cajas se recomponen al ancho nuevo.
+No son `<C-flechas>` porque en macOS esa combinación la intercepta el sistema
+para cambiar de Espacio y abrir Mission Control: nunca llega al terminal.
 
 **El panel**
 
