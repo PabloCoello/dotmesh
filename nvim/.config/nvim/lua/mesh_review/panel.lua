@@ -194,24 +194,75 @@ function M.thread_at_cursor()
   return best_tid
 end
 
---- Formatea una fecha ISO 8601 reducida a "AAAA-MM-DD".
+--- Días de calendario entre una fecha ISO y un instante de referencia.
 ---
---- @param iso string  Fecha en formato ISO.
---- @return string
-local function _fmt_date(iso)
-  if not iso then return "?" end
-  return iso:sub(1, 10)
+--- Ambas se normalizan al mediodía para que un cambio de horario de verano no
+--- desplace la cuenta un día entero.
+---
+--- @param iso   string  Fecha ISO 8601.
+--- @param ahora number|nil  Timestamp de referencia (por defecto, os.time()).
+--- @return number|nil  Días transcurridos, o nil si la fecha no es reconocible.
+local function _dias_desde(iso, ahora)
+  local y, m, d = iso:match("^(%d%d%d%d)-(%d%d)-(%d%d)")
+  if not y then return nil end
+
+  local entonces = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 })
+  local hoy      = os.date("*t", ahora or os.time())
+  local referencia = os.time({ year = hoy.year, month = hoy.month, day = hoy.day, hour = 12 })
+  if not entonces or not referencia then return nil end
+
+  return math.floor((referencia - entonces) / 86400 + 0.5)
 end
 
---- Formatea el autor como "kind:name".
+--- Formatea una fecha ISO 8601 en forma relativa corta.
 ---
---- @param author table  { kind, name }
+--- Dentro de la semana la distancia es lo que se quiere saber («ayer», «hace 3
+--- d»); más allá deja de decir nada útil y manda la fecha. Una fecha futura
+--- —reloj desajustado, sidecar de otra máquina— también cae a la fecha, porque
+--- «hace -2 d» no se entiende.
+---
+--- @param iso   string|nil  Fecha en formato ISO.
+--- @param ahora number|nil  Timestamp de referencia; solo lo usan los tests.
 --- @return string
-local function _fmt_author(author)
+function M._fmt_date(iso, ahora)
+  if not iso then return "?" end
+
+  local dias = _dias_desde(iso, ahora)
+  if dias == nil then return iso end  -- irreconocible: se muestra tal cual
+
+  if dias == 0 then return "hoy" end
+  if dias == 1 then return "ayer" end
+  if dias >= 2 and dias <= 6 then return string.format("hace %d d", dias) end
+  return iso:sub(1, 10)
+end
+local _fmt_date = M._fmt_date
+
+--- Nombre visible del autor de un evento.
+---
+--- El esquema de los sidecars no le da `name` a un agente: su identidad es
+--- `model` (ver $defs/author). La versión anterior leía `name` para los dos
+--- casos, y por eso TODOS los mensajes de agente aparecían como «ai:?».
+---
+--- El prefijo «human:» / «ai:» desaparece: ocupa columna en un sidebar estrecho
+--- y la distinción ya la lleva el color del nombre en el render.
+---
+--- @param author table|nil  { kind = "human", name } o { kind = "ai", model }.
+--- @return string
+function M._fmt_author(author)
   if not author then return "?" end
-  local kind = author.kind or "?"
-  local name = author.name or "?"
-  return kind .. ":" .. name
+  if author.kind == "ai" then
+    return author.model or "agente"
+  end
+  return author.name or "?"
+end
+local _fmt_author = M._fmt_author
+
+--- ¿El autor es un agente? Decide el color con el que se pinta su nombre.
+---
+--- @param author table|nil
+--- @return boolean
+local function _es_agente(author)
+  return author ~= nil and author.kind == "ai"
 end
 
 --- Construye las líneas del panel y el mapa lnum→thread_id.
@@ -389,7 +440,10 @@ function M._build_content(threads, ancho)
         local msg_author = table.concat(_split_lines(_fmt_author(msg.author)), " ")
         local linea, col = _linea_interior(msg_author, W, 1)
         table.insert(lines, linea)
-        table.insert(highlights, { "Comment", #lines - 1, col, col + #msg_author })
+        -- Special es teal en dotmesh, el color de «lo especial»: distingue al
+        -- agente del humano sin inventar un grupo de highlight propio.
+        local autor_hl = _es_agente(msg.author) and "Special" or "Comment"
+        table.insert(highlights, { autor_hl, #lines - 1, col, col + #msg_author })
 
         for _, parrafo in ipairs(_split_lines(msg.body)) do
           for _, trozo in ipairs(box.wrap(parrafo, W - 5)) do

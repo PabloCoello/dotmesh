@@ -401,6 +401,79 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Autor y fecha
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== autor ===\n")
+
+assert_eq("humano: su nombre",
+  panel._fmt_author({ kind = "human", name = "PabloCoello" }), "PabloCoello")
+assert_eq("humano sin nombre: interrogante",
+  panel._fmt_author({ kind = "human" }), "?")
+-- El esquema no da `name` a los agentes, su identidad es `model`. Leer `name`
+-- aquí es lo que dejaba TODOS los mensajes de agente en «ai:?».
+assert_eq("agente: su modelo, no interrogante",
+  panel._fmt_author({ kind = "ai", model = "claude-opus-5" }), "claude-opus-5")
+assert_eq("agente sin modelo: etiqueta genérica",
+  panel._fmt_author({ kind = "ai" }), "agente")
+assert_eq("autor ausente: interrogante", panel._fmt_author(nil), "?")
+
+io.stderr:write("\n=== fecha ===\n")
+
+-- Referencia fija: 1 de septiembre de 2026 a mediodía.
+local AHORA = os.time({ year = 2026, month = 9, day = 1, hour = 12 })
+
+assert_eq("mismo día: hoy",
+  panel._fmt_date("2026-09-01T08:00:00Z", AHORA), "hoy")
+assert_eq("día anterior: ayer",
+  panel._fmt_date("2026-08-31T23:00:00Z", AHORA), "ayer")
+assert_eq("tres días: forma corta",
+  panel._fmt_date("2026-08-29T10:00:00Z", AHORA), "hace 3 d")
+assert_eq("seis días: última forma relativa",
+  panel._fmt_date("2026-08-26T10:00:00Z", AHORA), "hace 6 d")
+-- A partir de una semana la distancia deja de decir nada útil y manda la fecha.
+assert_eq("una semana: fecha ISO",
+  panel._fmt_date("2026-08-25T10:00:00Z", AHORA), "2026-08-25")
+assert_eq("meses atrás: fecha ISO",
+  panel._fmt_date("2026-01-15T10:00:00Z", AHORA), "2026-01-15")
+-- Un reloj desajustado o un sidecar de otra máquina pueden datar en el futuro.
+assert_eq("fecha futura: fecha ISO, no «hace -2 d»",
+  panel._fmt_date("2026-09-03T10:00:00Z", AHORA), "2026-09-03")
+assert_eq("sin fecha: interrogante", panel._fmt_date(nil, AHORA), "?")
+assert_eq("fecha malformada: se devuelve tal cual",
+  panel._fmt_date("no-es-fecha", AHORA), "no-es-fecha")
+
+io.stderr:write("\n=== autor en el render ===\n")
+
+do
+  local lines = panel._build_content({ hilo({
+    messages = {
+      { author = { kind = "ai", model = "claude-opus-5" }, body = "Confirmado." },
+    },
+  }) }, ANCHO)
+  local todo = table.concat(lines, "\n")
+  assert_eq("el mensaje de agente muestra el modelo",
+    todo:find("claude-opus-5", 1, true) ~= nil, true)
+  assert_eq("y ya no aparece el «ai:?» de antes",
+    todo:find("ai:?", 1, true) == nil, true)
+  assert_eq("el humano ya no lleva el prefijo «human:»",
+    todo:find("human:", 1, true) == nil, true)
+end
+
+do
+  local _, highlights = panel._build_content({ hilo({
+    messages = {
+      { author = { kind = "human", name = "PabloCoello" }, body = "uno" },
+      { author = { kind = "ai", model = "claude-opus-5" }, body = "dos" },
+    },
+  }) }, ANCHO)
+  local hay_special = false
+  for _, hl in ipairs(highlights) do
+    if hl[1] == "Special" then hay_special = true end
+  end
+  assert_eq("el autor agente se pinta distinto del humano", hay_special, true)
+end
+
+-- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------
 io.stderr:write(string.format("\n%d passed, %d failed\n", pass, fail))
