@@ -53,6 +53,16 @@ local function shell_quote(value)
   return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
+--- Tipos de comentario válidos según el schema de eventos: el mismo conjunto
+--- que VALID_COMMENT_TYPES en la extensión VS Code (sidecar.ts). El prompt solo
+--- interpola tipos de esta lista; cualquier otro valor del sidecar cae a la
+--- etiqueta neutra «comentario», con lo que un commentType manipulado no puede
+--- colar texto en un prompt que va a leer un agente.
+local VALID_COMMENT_TYPES = {
+  edita = true, sugerencia = true, pregunta = true, verifica = true,
+  nota = true, referencia = true, supuesto = true,
+}
+
 -- ---------------------------------------------------------------------------
 -- Constructoras de texto del prompt (puras, testeables sin proceso externo)
 -- ---------------------------------------------------------------------------
@@ -91,7 +101,9 @@ end
 ---
 --- El id se filtra a `[A-Za-z0-9-]`. Es un UUID, así que el filtro no le quita
 --- nada legítimo, y evita que un sidecar manipulado cuele instrucciones dentro
---- de un prompt que va a leer un agente.
+--- de un prompt que va a leer un agente. El tipo se valida contra la lista
+--- blanca del schema (VALID_COMMENT_TYPES) y fuera de ella cae a «comentario»,
+--- igual que buildFocusPrompt en la extensión VS Code.
 ---
 --- @param doc_abs    string  Ruta absoluta al documento.
 --- @param thread_id  string  UUID del hilo.
@@ -101,7 +113,7 @@ end
 function M.build_focus_thread_prompt(doc_abs, thread_id, type_label, line_label)
   local doc  = shell_quote(to_single_line(doc_abs))
   local tid  = tostring(thread_id or ""):gsub("[^%w%-]", "")
-  local tipo = to_single_line(type_label)
+  local tipo = VALID_COMMENT_TYPES[type_label] and type_label or "comentario"
   local line = shell_quote(to_single_line(line_label))
   return "Céntrate única y exclusivamente en el hilo " .. tid
     .. " (" .. tipo .. " en " .. line .. ")."
