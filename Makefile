@@ -40,7 +40,7 @@ help:
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
 	@echo "  make collie-install - Instala Collie (puente móvil de herdr) y enlaza sus presets"
-	@echo "  make nvim-install   - Instala Neovim >= 0.11 en ~/.local/bin/nvim (sin sudo, idempotente)"
+	@echo "  make nvim-install   - Instala Neovim >= 0.11 y el CLI de tree-sitter en ~/.local/bin (sin sudo, idempotente)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
 	@echo "  make sync-claude-hooks - Propaga el bloque hooks de la plantilla a ~/.claude/settings.json"
@@ -264,6 +264,7 @@ collie-install:
 .PHONY: nvim-install
 nvim-install:
 	@bash "$(abspath nvim/scripts/install-nvim.sh)"
+	@bash "$(abspath nvim/scripts/install-tree-sitter.sh)"
 
 .PHONY: health
 health:
@@ -295,7 +296,7 @@ health:
 	fi
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
 	@command -v nvim         >/dev/null && echo "  ok  nvim"         || echo "  --  nvim"
-	@command -v tree-sitter  >/dev/null && echo "  ok  tree-sitter"  || echo "  --  tree-sitter  (brew install tree-sitter-cli)"
+	@command -v tree-sitter  >/dev/null && echo "  ok  tree-sitter"  || echo "  --  tree-sitter  (Linux: make nvim-install · macOS: brew install tree-sitter-cli)"
 	@command -v npx          >/dev/null && echo "  ok  npx"          || echo "  --  npx"
 	@command -v ast-grep >/dev/null && echo "  ok  ast-grep (opcional)" || echo "  --  ast-grep opcional (búsqueda estructural)"
 	@code --list-extensions 2>/dev/null | grep -q 'pablocoello.mesh-review' \
