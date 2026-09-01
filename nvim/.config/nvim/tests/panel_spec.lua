@@ -671,6 +671,81 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Aviso de solo lectura
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== aviso de solo lectura ===\n")
+
+do
+  -- Literal a propósito, no recorriendo las tablas: recorrerlas comprobaría que
+  -- la función usa las tablas que usa, y eso no puede fallar. Escrito así, tocar
+  -- un atajo rompe el test y obliga a decidir si el aviso debe cambiar.
+  assert_eq("el aviso lista todos los atajos del panel, en orden",
+    panel._texto_atajos(),
+    "⏎ ancla · r responder · d borrar · a → IA · x resolver · Y id · q cerrar")
+end
+
+do
+  -- Los atajos extra son los que NO salen en el pie: si uno se colara en las dos
+  -- tablas, el aviso lo diría dos veces.
+  local en_pie = {}
+  for _, atajo in ipairs(panel.ATAJOS) do en_pie[atajo.key] = true end
+  local solapan = false
+  for _, atajo in ipairs(panel.ATAJOS_EXTRA) do
+    if en_pie[atajo.key] then solapan = true end
+  end
+  assert_eq("ningún atajo está en las dos tablas", solapan, false)
+end
+
+do
+  -- Ninguna tecla de edición puede pisar una acción del panel: el aviso tomaría
+  -- el sitio de la acción y el atajo anunciado en el pie dejaría de funcionar.
+  local acciones = { ["r"] = true, ["d"] = true, ["a"] = true, ["x"] = true,
+                     ["Y"] = true, ["q"] = true, ["<CR>"] = true, ["<Esc>"] = true }
+  local pisadas = {}
+  for _, tecla in ipairs(panel._TECLAS_EDICION) do
+    if acciones[tecla] then table.insert(pisadas, tecla) end
+  end
+  assert_eq("las teclas de edición no pisan ninguna acción del panel",
+    table.concat(pisadas, " "), "")
+end
+
+do
+  -- En visual, `i` y `a` son los prefijos de los objetos de texto: viw y vap son
+  -- justo el gesto de seleccionar el texto de un comentario para copiarlo, que es
+  -- el motivo de no haber remapeado `y`. Mapearlos rompería eso.
+  local prohibidas = {}
+  for _, tecla in ipairs(panel._TECLAS_EDICION_VISUAL) do
+    if tecla == "i" or tecla == "a" then table.insert(prohibidas, tecla) end
+  end
+  assert_eq("visual no mapea los prefijos de objeto de texto",
+    table.concat(prohibidas, " "), "")
+end
+
+do
+  -- Las teclas que dan E21 y se comprobaron a mano en un panel real tienen que
+  -- seguir cubiertas. Si alguien acorta la lista, este test lo dice.
+  local cubierta = {}
+  for _, tecla in ipairs(panel._TECLAS_EDICION) do cubierta[tecla] = true end
+  local faltan = {}
+  for _, tecla in ipairs({ "i", "I", "A", "o", "O", "C", "s", "S", "p", "P",
+                           "X", "D", "R", "J", "~", "u", "<C-r>" }) do
+    if not cubierta[tecla] then table.insert(faltan, tecla) end
+  end
+  assert_eq("normal cubre todas las teclas que daban E21",
+    table.concat(faltan, " "), "")
+
+  local cubierta_v = {}
+  for _, tecla in ipairs(panel._TECLAS_EDICION_VISUAL) do cubierta_v[tecla] = true end
+  local faltan_v = {}
+  for _, tecla in ipairs({ "c", "s", "d", "x", "p", "r", "~", "J",
+                           "C", "D", "S", "X", "R" }) do
+    if not cubierta_v[tecla] then table.insert(faltan_v, tecla) end
+  end
+  assert_eq("visual cubre todas las teclas que daban E21",
+    table.concat(faltan_v, " "), "")
+end
+
+-- ---------------------------------------------------------------------------
 -- Mapa línea → mensaje
 -- ---------------------------------------------------------------------------
 io.stderr:write("\n=== mapa línea → mensaje ===\n")

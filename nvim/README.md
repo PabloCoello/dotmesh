@@ -127,6 +127,13 @@ Los cinco primeros se anuncian en el pie de cada caja, porque actúan sobre ese
 hilo y no sobre el panel. `Y` se queda fuera del pie: con seis atajos ya no cabe
 en una línea a 60 columnas, y es el único que no actúa sobre el hilo.
 
+El panel es de solo lectura. Las teclas que editarían (`i`, `o`, `p`, `C`, `D`,
+`~`, `u`, `<C-r>`…) no dan el `E21: Cannot make changes` de Neovim: avisan con la
+lista de atajos disponibles, que es lo que hacía falta saber en ese momento. Vale
+también en modo visual, que ahí se usa para seleccionar el texto de un comentario
+y copiarlo — por eso `i` y `a` se quedan sin mapear en visual: son los prefijos de
+`viw` y `vap`.
+
 `<CR>` mueve el foco al documento, no solo el cursor: se salta para leer o editar
 ahí, y se vuelve con `<C-h>`. La posición sale del extmark vivo, no del ancla
 guardada en el sidecar, así que cae donde está el fragmento ahora aunque el

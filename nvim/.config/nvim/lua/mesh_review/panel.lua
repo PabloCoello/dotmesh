@@ -403,6 +403,36 @@ M.ATAJOS = {
   { key = "x", label = "resolver"  },
 }
 
+--- Atajos del panel que NO salen en el pie de la caja, pero existen. Se listan
+--- aquí para que el aviso de solo lectura los nombre sin repetir literales.
+M.ATAJOS_EXTRA = {
+  { key = "Y", label = "id"     },
+  { key = "q", label = "cerrar" },
+}
+
+--- Teclas que editarían el buffer en modo normal. El panel es de solo lectura,
+--- así que lo único que producen es «E21: Cannot make changes, 'modifiable' is
+--- off»: un error de Neovim que no dice que estás en un panel ni qué puedes
+--- hacer en él. Se cambian por el aviso con los atajos que sí existen.
+---
+--- No están las que ya son acciones del panel (a, d, r, x): con nowait, las de
+--- dos pulsaciones —cc, dd— no llegan a dispararse.
+M._TECLAS_EDICION = {
+  "i", "I", "A", "o", "O", "c", "C", "s", "S", "p", "P",
+  "X", "D", "R", "J", "~", "gJ", "u", "<C-r>", "<BS>", "<Del>",
+}
+
+--- Ídem en modo visual, donde el panel se usa de verdad: seleccionar el texto de
+--- un comentario para copiarlo es el motivo de no haber remapeado `y`.
+---
+--- Aquí NO van `i` ni `a`: en visual son los prefijos de los objetos de texto
+--- (`viw`, `vap`), justo lo que se usa para seleccionar. Mapearlos rompería el
+--- gesto que esta lista pretende proteger.
+M._TECLAS_EDICION_VISUAL = {
+  "c", "C", "s", "S", "d", "D", "x", "X", "p", "P", "r", "R",
+  "~", "J", "<BS>", "<Del>",
+}
+
 --- Separador entre atajos del pie.
 local SEP_ATAJO = " · "
 
@@ -446,6 +476,21 @@ function M._hint_lines(atajos, ancho)
   emitir()
 
   return lineas
+end
+
+--- Enumera todos los atajos del panel en una línea, para el aviso de solo
+--- lectura. Sale de las mismas tablas que el pie, así que no se desincroniza.
+---
+--- @return string
+function M._texto_atajos()
+  local partes = {}
+  for _, atajo in ipairs(M.ATAJOS) do
+    table.insert(partes, atajo.key .. " " .. atajo.label)
+  end
+  for _, atajo in ipairs(M.ATAJOS_EXTRA) do
+    table.insert(partes, atajo.key .. " " .. atajo.label)
+  end
+  return table.concat(partes, SEP_ATAJO)
 end
 
 --- Construye las líneas del panel, sus highlights y el mapa lnum→thread_id.
@@ -652,6 +697,21 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
       vim.notify("[mesh-review] No hay hilo bajo el cursor", vim.log.levels.WARN)
     end
     return tid
+  end
+
+  -- Teclas de edición: en vez del E21 de Neovim, el aviso con los atajos.
+  -- Las listas viven al nivel del módulo (M._TECLAS_EDICION*) para que los tests
+  -- puedan comprobarlas sin abrir el panel.
+  local function aviso_solo_lectura()
+    vim.notify("[mesh-review] Panel de solo lectura. Atajos: " .. M._texto_atajos())
+  end
+  for _, tecla in ipairs(M._TECLAS_EDICION) do
+    vim.keymap.set("n", tecla, aviso_solo_lectura,
+      vim.tbl_extend("force", opts, { desc = "Panel de solo lectura" }))
+  end
+  for _, tecla in ipairs(M._TECLAS_EDICION_VISUAL) do
+    vim.keymap.set("x", tecla, aviso_solo_lectura,
+      vim.tbl_extend("force", opts, { desc = "Panel de solo lectura" }))
   end
 
   -- q / Esc → cerrar panel.
