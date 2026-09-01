@@ -4,10 +4,11 @@
 --- respuestas herdr) de la lógica asíncrona que ejecuta procesos externos,
 --- de modo que las primeras sean verificables en headless sin proceso externo.
 ---
---- Funciones puras exportadas: build_prompt, build_get_argv, build_split_argv,
---- build_start_argv, build_wait_argv, build_prompt_argv, build_read_pane_argv,
---- build_focus_agent_argv, is_trust_dialog, pick_payload, parse_herdr_response.
---- Función impura principal: ensure_and_prompt.
+--- Funciones puras exportadas: build_prompt, build_focus_thread_prompt,
+--- build_get_argv, build_split_argv, build_start_argv, build_wait_argv,
+--- build_prompt_argv, build_read_pane_argv, build_focus_agent_argv,
+--- is_trust_dialog, pick_payload, parse_herdr_response.
+--- Funciones impuras principales: ensure_and_prompt, ensure_and_prompt_thread.
 ---
 --- Por qué ruta absoluta en el prompt: el prompt se ejecuta en un pane cuyo
 --- cwd no controlamos del todo. mesh-review acepta rutas absolutas y así se
@@ -73,10 +74,6 @@ function M.build_prompt(doc_abs)
     .. ". Ejecuta: mesh-review project --pending " .. doc
 end
 
--- ---------------------------------------------------------------------------
--- Constructoras de argv (puras, testeables sin proceso externo)
--- ---------------------------------------------------------------------------
-
 --- Construye el texto del prompt «foco en un hilo concreto» para la sesión scribe.
 ---
 --- Equivalente a buildFocusPrompt de la extensión de VS Code.
@@ -92,6 +89,10 @@ end
 --- sin --thread (ver buildFocusPrompt en scribe-bridge-utils.ts). Esta
 --- implementación de Neovim sigue la misma decisión para mantener la paridad.
 ---
+--- El id se filtra a `[A-Za-z0-9-]`. Es un UUID, así que el filtro no le quita
+--- nada legítimo, y evita que un sidecar manipulado cuele instrucciones dentro
+--- de un prompt que va a leer un agente.
+---
 --- @param doc_abs    string  Ruta absoluta al documento.
 --- @param thread_id  string  UUID del hilo.
 --- @param type_label string  Tipo de comentario (nota, edita, duda, etc.).
@@ -99,7 +100,7 @@ end
 --- @return string  Texto del prompt listo para enviar a herdr agent prompt.
 function M.build_focus_thread_prompt(doc_abs, thread_id, type_label, line_label)
   local doc  = shell_quote(to_single_line(doc_abs))
-  local tid  = to_single_line(thread_id)
+  local tid  = tostring(thread_id or ""):gsub("[^%w%-]", "")
   local tipo = to_single_line(type_label)
   local line = shell_quote(to_single_line(line_label))
   return "Céntrate única y exclusivamente en el hilo " .. tid
@@ -107,6 +108,10 @@ function M.build_focus_thread_prompt(doc_abs, thread_id, type_label, line_label)
     .. " No proceses ningún otro hilo."
     .. " Para el contexto ejecuta: mesh-review project " .. doc
 end
+
+-- ---------------------------------------------------------------------------
+-- Constructoras de argv (puras, testeables sin proceso externo)
+-- ---------------------------------------------------------------------------
 
 --- Construye el argv para consultar el estado del agente scribe.
 ---

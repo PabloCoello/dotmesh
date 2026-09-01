@@ -14,11 +14,21 @@ keymap("n", "<C-j>", "<C-w>j", opts)
 keymap("n", "<C-k>", "<C-w>k", opts)
 keymap("n", "<C-l>", "<C-w>l", opts)
 
--- Resize windows with arrows
-keymap("n", "<C-Up>", ":resize +2<CR>", opts)
-keymap("n", "<C-Down>", ":resize -2<CR>", opts)
-keymap("n", "<C-Left>", ":vertical resize -2<CR>", opts)
-keymap("n", "<C-Right>", ":vertical resize +2<CR>", opts)
+-- Resize windows. Not <C-arrow>: macOS takes those for switching Spaces and
+-- Mission Control, so they never reach the terminal. <leader>w + hjkl follows
+-- the same directions as the window-navigation maps above.
+keymap("n", "<leader>wk", "<cmd>resize +2<cr>", { desc = "Más alto" })
+keymap("n", "<leader>wj", "<cmd>resize -2<cr>", { desc = "Más bajo" })
+keymap("n", "<leader>wh", "<cmd>vertical resize -2<cr>", { desc = "Más estrecho" })
+keymap("n", "<leader>wl", "<cmd>vertical resize +2<cr>", { desc = "Más ancho" })
+keymap("n", "<leader>w=", "<cmd>wincmd =<cr>", { desc = "Igualar ventanas" })
+
+-- With `wrap` on, j/k move by display row so a wrapped paragraph reads as it
+-- looks. `expr` keeps a count intact: 5j is still 5 buffer lines, not 5 rows.
+keymap("n", "j", function() return vim.v.count == 0 and "gj" or "j" end, { expr = true, silent = true })
+keymap("n", "k", function() return vim.v.count == 0 and "gk" or "k" end, { expr = true, silent = true })
+keymap("n", "<Down>", function() return vim.v.count == 0 and "gj" or "j" end, { expr = true, silent = true })
+keymap("n", "<Up>", function() return vim.v.count == 0 and "gk" or "k" end, { expr = true, silent = true })
 
 -- ============================================================================
 -- Better Editing

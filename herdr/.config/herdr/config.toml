@@ -101,12 +101,31 @@ rows = [
 [ui.sidebar.agents]
 row_gap = 1
 rows = [
-  ["state_icon", "workspace", "tab"],
+  # `$later` es un token propio, no un built-in: lo reporta
+  # `bin/mark-later.sh` con `herdr pane report-metadata`. Abre las dos filas,
+  # y como su valor es un medio bloque (`▌`), los dos apilados forman una
+  # barra lilac continua por el borde izquierdo de la tarjeta. Es lo más
+  # parecido a resaltar el componente entero: herdr solo estiliza tokens con
+  # `fg`/`bold`/`dim`, no admite fondo por token ni por fila, y `rows` es
+  # estático, así que el resto de tokens no se pueden teñir solo cuando hay
+  # marca. El único elemento condicional es este.
+  #
+  # La barra manda sobre el icono de estado a propósito: un agente en `idle`
+  # puede ser «visto y cerrado» o «no lo he mirado», y esto es lo único que
+  # los separa. Lilac es el único acento de dotmesh sin uso en este cromo (el
+  # teal está tomado por `accent` y la fila activa), así que no se confunde
+  # con ningún estado.
+  #
+  # La marca vive en memoria: herdr no la escribe en `session.json`, así que
+  # aguanta cerrar el terminal pero no un reinicio del servidor (arranque de
+  # la máquina, `herdr update`, `herdr server stop`). Asumido a propósito: es
+  # una marca de «vuelvo esta tarde», no un pendiente de la semana.
+  ["state_icon", { token = "$later", fg = "#CBAACB", bold = true, dim = false }, "workspace", "tab"],
   # La segunda fila decía «claude» siete veces; con el estado al lado informa.
   # herdr atenúa ambos tokens por defecto y sobre Ink quedaban ilegibles:
   # `dim = false` los devuelve a su gris real. El agente se queda en el gris
   # secundario (7:1 sobre Ink-0); por debajo vuelve a leerse como apagado.
-  [{ token = "agent", fg = "#9e9e9e", dim = false }, { token = "state_text", dim = false }],
+  [{ token = "$later", fg = "#CBAACB", bold = true, dim = false }, { token = "agent", fg = "#9e9e9e", dim = false }, { token = "state_text", dim = false }],
 ]
 
 [ui.sound]
@@ -147,3 +166,29 @@ previous_tab     = ["prefix+p", "ctrl+alt+p"]
 workspace_picker = ["prefix+w", "ctrl+alt+w"]
 goto             = ["prefix+g", "ctrl+alt+g"]
 detach           = ["prefix+q", "ctrl+alt+q"]
+
+# --- Comandos propios -------------------------------------------------------
+# Marca el agente enfocado como pendiente de volver sobre él. `type = "shell"`
+# lo lanza detached, sin abrir panel ni tocar el layout: la marca tiene que
+# costar una pulsación y cero contexto, porque el momento en que hace falta es
+# justo cuando te vas con prisa. herdr inyecta `HERDR_ACTIVE_PANE_ID` con el
+# panel que tenía el foco, que es lo que el script usa para saber a quién
+# marcar.
+#
+# ctrl+alt+m sigue a la familia del resto de chords y está libre en macOS,
+# GNOME y Windows. No tiene tecla dedicada en el Voyager: keymesh/keymap.c no
+# manda ningún HRD_* para esta, así que aquí solo existe el chord.
+#
+# La ruta lleva `$HOME` y no una absoluta porque el fichero se comparte entre
+# macOS y Linux. Verificado en 0.8.2: `type = "shell"` pasa el comando por un
+# shell y la variable se expande. Si una versión futura dejara de hacerlo, el
+# atajo no haría nada en silencio; el síntoma es ese.
+[[keys.command]]
+key     = "prefix+m"
+type    = "shell"
+command = "$HOME/.config/herdr/bin/mark-later.sh"
+
+[[keys.command]]
+key     = "ctrl+alt+m"
+type    = "shell"
+command = "$HOME/.config/herdr/bin/mark-later.sh"

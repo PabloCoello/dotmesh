@@ -325,8 +325,12 @@ hl("@property",              { fg = txt.primary })
 
 -- Marcado (Markdown)
 hl("@markup.heading",        { fg = syn.blue, bold = true })
-hl("@markup.bold",           { fg = syn.peach, bold = true })
+-- La captura canónica de la negrita es @markup.strong; @markup.bold es el nombre
+-- viejo y ninguna query actual lo emite, así que se mantiene solo como alias.
+hl("@markup.strong",         { fg = syn.peach, bold = true })
+hl("@markup.bold",           { link = "@markup.strong" })
 hl("@markup.italic",         { fg = syn.teal, italic = true })
+hl("@markup.strikethrough",  { fg = txt.dim, strikethrough = true })
 hl("@markup.link",           { fg = syn.blue, underline = true })
 hl("@markup.link.url",       { fg = syn.blue, underline = true })
 hl("@markup.raw",            { fg = syn.sage })

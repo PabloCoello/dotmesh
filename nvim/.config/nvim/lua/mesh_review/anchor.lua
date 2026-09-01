@@ -73,6 +73,25 @@ local function _place_extmarks(bufnr, threads)
   local num_lines = vim.api.nvim_buf_line_count(bufnr)
   if num_lines == 0 then return end
 
+  --- Acota una posición (row, col) al rango real del buffer.
+  ---
+  --- nvim_buf_set_extmark aborta con «Invalid 'end_col': out of range» ante una
+  --- columna que no existe, y ese error sube por refresh() y deja el documento
+  --- SIN NINGÚN extmark: una sola ancla malformada apagaría la revisión entera.
+  --- Acotar degrada esa ancla a un rango algo más corto y deja vivas las demás.
+  --- El caso conocido —cita terminada en '\n'— ya se resuelve en resolve.lua;
+  --- esto es la red por debajo, para anclas venidas de otro editor o escritas
+  --- a mano en el sidecar.
+  ---
+  --- @param row number  Fila 0-indexed.
+  --- @param col number  Columna 0-indexed en bytes.
+  --- @return number, number  Fila y columna acotadas.
+  local function clamp(row, col)
+    row = math.max(0, math.min(row, num_lines - 1))
+    local line = vim.api.nvim_buf_get_lines(bufnr, row, row + 1, false)[1] or ""
+    return row, math.max(0, math.min(col, #line))
+  end
+
   for _, thread in ipairs(threads) do
     if thread.status == "open" and thread.anchor then
       local anchor = thread.anchor
@@ -132,9 +151,18 @@ local function _place_extmarks(bufnr, threads)
           -- usuario sigue viendo qué tipo de comentario es aunque el ancla sea
           -- aproximada; solo el rango de fondo pierde el tinte canónico.
           local range_hl = pos.uncertain and "MeshReviewDetached" or hl_group
-          opts.hl_group  = range_hl
-          opts.end_row   = pos.end_row
-          opts.end_col   = pos.end_col
+
+          row, col = clamp(row, col)
+          local end_row, end_col = clamp(pos.end_row, pos.end_col)
+
+          -- Si el acotado ha dejado el fin por detrás del inicio, el rango ya no
+          -- describe nada: se cae a extmark sin rango (solo signo y virt_text)
+          -- en vez de pedirle a Neovim un rango invertido.
+          if end_row > row or (end_row == row and end_col >= col) then
+            opts.hl_group = range_hl
+            opts.end_row  = end_row
+            opts.end_col  = end_col
+          end
         end
         -- Cita no resuelta: opts sin end_row/end_col ni hl_group (solo sign + virt_text).
 
@@ -204,6 +232,38 @@ function M.refresh(bufnr)
   end
 
   _place_extmarks(bufnr, threads)
+end
+
+--- Devuelve la posición actual del extmark de un hilo en el buffer dado.
+---
+--- Es el inverso de thread_at_cursor: del hilo a su sitio en el documento. Lo
+--- usa el salto al ancla del panel (⏎).
+---
+--- Se lee el extmark vivo y no el ancla del sidecar a propósito: el extmark lo
+--- ha ido moviendo Neovim con las ediciones del buffer, así que apunta a donde
+--- está el fragmento AHORA, no a donde estaba en el último guardado.
+---
+--- @param bufnr     number  Buffer fuente.
+--- @param thread_id string  UUID del hilo.
+--- @return number|nil, number|nil  Fila y columna 0-indexed, o nil si el hilo no
+---                                 tiene extmark en este buffer.
+function M.position_of(bufnr, thread_id)
+  if thread_id == nil then return nil end
+  if not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+
+  local buf_map = _extmark_to_thread[bufnr]
+  if buf_map == nil then return nil end
+
+  local ns = _get_ns()
+  for eid, tid in pairs(buf_map) do
+    if tid == thread_id then
+      -- Devuelve {} si el extmark se borró (p. ej. tras clear_namespace).
+      local mark = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns, eid, {})
+      if mark and mark[1] ~= nil then return mark[1], mark[2] end
+      return nil
+    end
+  end
+  return nil
 end
 
 --- Devuelve el thread_id del extmark más cercano al cursor en el buffer dado.

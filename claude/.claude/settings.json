@@ -21,6 +21,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/remind-review-gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/remind-load-skills.sh"
           }
         ]
       },
@@ -125,6 +129,18 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "build",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/verify-phase-close.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "enableWorkflows": true,
@@ -134,6 +150,7 @@
     "padding": 1
   },
   "enabledPlugins": {
+    "bait-skills@bait": true,
     "miro@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
