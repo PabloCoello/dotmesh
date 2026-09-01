@@ -14,7 +14,14 @@
 ---   │                                          │
 ---   │  claude-opus-5                           │
 ---   │  Respuesta del agente.                   │
+---   │                                          │
+---   │ r responder · d borrar · a → IA · x res… │
 ---   └──────────────────────────────────────────┘
+---
+--- El pie de cada caja lleva los atajos que operan sobre ESE hilo. Va dentro del
+--- marco y no en una línea de ayuda del panel porque las acciones son por hilo:
+--- puesto arriba una sola vez, habría que mirar dónde está el cursor para saber
+--- sobre qué actúa.
 ---
 --- El borde solo cuadra si todas las líneas miden lo mismo EN CELDAS, no en
 --- bytes; de ahí que el wrap y el relleno vivan en mesh_review.box y no aquí.
@@ -43,6 +50,7 @@ local _state = {
   source_bufnr = nil,  -- buffer fuente desde el que se abrió
   source_doc   = nil,  -- ruta del documento fuente
   line_to_thread = {},  -- { [lnum_0indexed] = thread_id }
+  line_to_message = {}, -- { [lnum_0indexed] = { thread_id, msg_id } }
   threads      = {},   -- últimos hilos renderizados, para recomponer sin CLI
   ancho        = nil,  -- ancho en celdas del último render
 }
@@ -198,6 +206,21 @@ function M.thread_at_cursor()
     end
   end
   return best_tid
+end
+
+--- Devuelve el mensaje sobre el que está el cursor, o nil si no hay ninguno.
+---
+--- A diferencia de thread_at_cursor, aquí la consulta es por línea EXACTA: solo
+--- las líneas de autor y de cuerpo de un mensaje cuentan. Borrar es la única
+--- acción del panel que opera sobre algo más fino que el hilo, y una búsqueda
+--- «hacia atrás» retractaría el último mensaje con el cursor puesto en el pie o
+--- en la cabecera, donde nadie apunta a un mensaje concreto.
+---
+--- @return table|nil  { thread_id, msg_id }.
+function M.message_at_cursor()
+  if _state.bufnr == nil then return nil end
+  local cursor_row = vim.api.nvim_win_get_cursor(0)[1] - 1  -- 0-indexed
+  return _state.line_to_message[cursor_row]
 end
 
 --- Días de calendario entre una fecha ISO y un instante de referencia.
@@ -357,6 +380,67 @@ local function _linea_interior(texto, W, sangria)
   return linea, #BORDES.v + 1 + sangria
 end
 
+-- ---------------------------------------------------------------------------
+-- Pie de atajos de la caja
+-- ---------------------------------------------------------------------------
+
+--- Atajos que operan sobre el hilo de la caja, en el orden en que se anuncian.
+---
+--- Es la misma tabla que registra los keymaps: si se añade una acción aquí y no
+--- allí (o al revés), la caja anuncia algo que no existe. Ver _register_keymaps.
+M.ATAJOS = {
+  { key = "r", label = "responder" },
+  { key = "d", label = "borrar"    },
+  { key = "a", label = "→ IA"      },
+  { key = "x", label = "resolver"  },
+  { key = "Y", label = "id"        },
+}
+
+--- Separador entre atajos del pie.
+local SEP_ATAJO = " · "
+
+--- Reparte los atajos en líneas que caben en `ancho` celdas.
+---
+--- Devuelve, por línea, el texto y la posición en BYTES de cada tecla, para que
+--- el render la pinte en el color del tipo sin volver a medir nada. El wrap se
+--- hace por segmentos enteros y no con box.wrap porque partir «d borrar» entre
+--- dos líneas dejaría una tecla huérfana, ilegible como atajo.
+---
+--- Un atajo que no cabe ni solo en una línea se emite igualmente: lo truncará
+--- _linea_interior, que es quien sabe cuadrar el borde.
+---
+--- @param atajos table   Array de { key, label }.
+--- @param ancho  number  Celdas disponibles para el texto.
+--- @return table  Array de { texto = string, teclas = { { col_s, col_e } } }.
+function M._hint_lines(atajos, ancho)
+  if type(ancho) ~= "number" or ancho < 1 then return {} end
+
+  local lineas = {}
+  local actual, teclas = "", {}
+
+  local function emitir()
+    if actual ~= "" then
+      table.insert(lineas, { texto = actual, teclas = teclas })
+      actual, teclas = "", {}
+    end
+  end
+
+  for _, atajo in ipairs(atajos or {}) do
+    local pieza  = atajo.key .. " " .. atajo.label
+    local prefijo = (actual == "") and "" or SEP_ATAJO
+    if actual ~= "" and box.width(actual .. prefijo .. pieza) > ancho then
+      emitir()
+      prefijo = ""
+    end
+    local col = #actual + #prefijo
+    table.insert(teclas, { col, col + #atajo.key })
+    actual = actual .. prefijo .. pieza
+  end
+  emitir()
+
+  return lineas
+end
+
 --- Construye las líneas del panel, sus highlights y el mapa lnum→thread_id.
 ---
 --- Cada hilo abierto se dibuja como una caja cerrada enmarcada en el color de su
@@ -368,12 +452,14 @@ end
 --- @return string[]  lines
 --- @return table     highlights, array de { group, lnum, col_s, col_e } en bytes
 --- @return table     line_to_thread
+--- @return table     line_to_message, { [lnum] = { thread_id, msg_id } }
 function M._build_content(threads, ancho)
   local W = math.max(ANCHO_MINIMO, math.floor(tonumber(ancho) or 60))
 
-  local lines          = {}
-  local highlights     = {}
-  local line_to_thread = {}
+  local lines           = {}
+  local highlights      = {}
+  local line_to_thread  = {}
+  local line_to_message = {}
 
   -- Filtrar solo hilos abiertos y ordenar por openedAt.
   local open_threads = {}
@@ -388,7 +474,7 @@ function M._build_content(threads, ancho)
 
   if #open_threads == 0 then
     lines[1] = "  Sin hilos abiertos."
-    return lines, highlights, line_to_thread
+    return lines, highlights, line_to_thread, line_to_message
   end
 
   for idx, thread in ipairs(open_threads) do
@@ -451,11 +537,33 @@ function M._build_content(threads, ancho)
         local autor_hl = _es_agente(msg.author) and "Special" or "Comment"
         table.insert(highlights, { autor_hl, #lines - 1, col, col + #msg_author })
 
+        -- Las líneas del mensaje —autor y cuerpo— quedan registradas para que
+        -- `d` sepa qué retractar. Se registran solo estas: el mapa se consulta
+        -- por línea exacta, no «la más cercana por arriba», y así el cursor
+        -- sobre la cabecera o el pie no borra un mensaje que no se ve.
+        local referencia = { thread_id = thread.thread_id, msg_id = msg.id }
+        if msg.id then line_to_message[#lines - 1] = referencia end
+
         for _, parrafo in ipairs(_split_lines(msg.body)) do
           for _, trozo in ipairs(box.wrap(parrafo, W - 5)) do
             table.insert(lines, (_linea_interior(trozo, W, 1)))
+            if msg.id then line_to_message[#lines - 1] = referencia end
           end
         end
+      end
+    end
+
+    -- Pie de atajos del hilo, precedido por una línea en blanco para que no se
+    -- confunda con el último cuerpo de mensaje.
+    table.insert(lines, (_linea_interior("", W, 0)))
+    for _, hint in ipairs(M._hint_lines(M.ATAJOS, W - 4)) do
+      local linea, col = _linea_interior(hint.texto, W, 0)
+      table.insert(lines, linea)
+      table.insert(highlights, { "Comment", #lines - 1, col, col + #hint.texto })
+      -- Las teclas, encima y en el color del tipo: el extmark posterior gana,
+      -- así que la etiqueta se queda atenuada y la tecla resalta.
+      for _, tecla in ipairs(hint.teclas) do
+        table.insert(highlights, { tipo_hl, #lines - 1, col + tecla[1], col + tecla[2] })
       end
     end
 
@@ -473,11 +581,8 @@ function M._build_content(threads, ancho)
     end
   end
 
-  return lines, highlights, line_to_thread
+  return lines, highlights, line_to_thread, line_to_message
 end
-
---- Alias interno: el resto del módulo lo llama sin el prefijo.
-local _build_content = M._build_content
 
 --- Aplica highlights a un buffer ya escrito.
 --- Usa nvim_buf_set_extmark (API moderna) en lugar de nvim_buf_add_highlight
@@ -504,8 +609,11 @@ local function _apply_highlights(bufnr, highlights)
   end
 end
 
---- Registra los keymaps locales del panel (r, x, q, Esc).
+--- Registra los keymaps locales del panel (r, d, a, x, Y, q, Esc).
 --- Necesita saber el bufnr fuente y la ruta del documento para poder operar.
+---
+--- Los atajos por hilo son los que anuncia el pie de cada caja (M.ATAJOS): si se
+--- toca uno, hay que tocar la tabla también, o la caja anuncia lo que no hay.
 ---
 --- @param panel_bufnr  number  Buffer del panel.
 --- @param source_bufnr number  Buffer del documento fuente.
@@ -516,6 +624,29 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
 
   local opts = { buffer = panel_bufnr, nowait = true, silent = true }
 
+  --- Vuelve a proyectar los hilos y repinta el panel y las marcas del documento.
+  --- Lo hacen igual r, d y x: cualquier escritura en el sidecar deja lo que se ve
+  --- desfasado, en el panel y en el margen del documento.
+  local function refrescar()
+    anchor.refresh(source_bufnr)
+    local threads, perr = cli.project(doc)
+    if threads then
+      M.render(panel_bufnr, threads)
+    elseif perr then
+      vim.notify("[mesh-review] project: " .. perr, vim.log.levels.WARN)
+    end
+  end
+
+  --- Devuelve el hilo bajo el cursor, avisando si no hay ninguno.
+  --- @return string|nil
+  local function hilo_o_aviso()
+    local tid = M.thread_at_cursor()
+    if not tid then
+      vim.notify("[mesh-review] No hay hilo bajo el cursor", vim.log.levels.WARN)
+    end
+    return tid
+  end
+
   -- q / Esc → cerrar panel.
   local function close_panel()
     M.close()
@@ -525,11 +656,8 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
 
   -- r → responder al hilo bajo el cursor.
   vim.keymap.set("n", "r", function()
-    local tid = M.thread_at_cursor()
-    if not tid then
-      vim.notify("[mesh-review] No hay hilo bajo el cursor", vim.log.levels.WARN)
-      return
-    end
+    local tid = hilo_o_aviso()
+    if not tid then return end
     vim.ui.input({ prompt = "Respuesta: " }, function(body)
       if not body or body == "" then return end
       local _, err = cli.reply(doc, tid, body)
@@ -537,16 +665,55 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
         vim.notify("[mesh-review] reply: " .. err, vim.log.levels.ERROR)
         return
       end
-      anchor.refresh(source_bufnr)
-      -- Refrescar el panel.
-      local threads, perr = cli.project(doc)
-      if threads then
-        M.render(panel_bufnr, threads)
-      elseif perr then
-        vim.notify("[mesh-review] project: " .. perr, vim.log.levels.WARN)
-      end
+      refrescar()
     end)
   end, vim.tbl_extend("force", opts, { desc = "Responder al hilo" }))
+
+  -- d → retractar el mensaje bajo el cursor.
+  --
+  -- Opera sobre el mensaje, no sobre el hilo: en el modelo de eventos no hay
+  -- «borrar un hilo», y borrar el hilo entero por error es mucho más caro que
+  -- retractar un mensaje. Por eso exige el cursor puesto sobre el mensaje.
+  --
+  -- Remapear d no quita nada: el buffer es nomodifiable, así que dd y dw no
+  -- borran nada de todos modos.
+  vim.keymap.set("n", "d", function()
+    local ref = M.message_at_cursor()
+    if not ref then
+      vim.notify("[mesh-review] Pon el cursor sobre el mensaje que quieres borrar",
+        vim.log.levels.WARN)
+      return
+    end
+    -- La razón queda en el evento message.retracted, que es el registro de por
+    -- qué desapareció. Vacía es válida; <Esc> (nil) cancela.
+    vim.ui.input({ prompt = "Retractar mensaje — razón (vacía = sin razón): " }, function(reason)
+      if reason == nil then
+        vim.notify("[mesh-review] Cancelado", vim.log.levels.INFO)
+        return
+      end
+      local _, err = cli.retract(doc, ref.thread_id, ref.msg_id, reason)
+      if err then
+        vim.notify("[mesh-review] retract: " .. err, vim.log.levels.ERROR)
+        return
+      end
+      refrescar()
+    end)
+  end, vim.tbl_extend("force", opts, { desc = "Retractar el mensaje bajo el cursor" }))
+
+  -- a → mandar este hilo a la IA (sesión scribe de herdr).
+  --
+  -- El mismo puente que <líder>rs, pero con el hilo concreto en el prompt en vez
+  -- del documento entero: desde el panel se está mirando un hilo, no la lista.
+  vim.keymap.set("n", "a", function()
+    local tid = hilo_o_aviso()
+    if not tid then return end
+    if vim.env.HERDR_ENV ~= "1" then
+      vim.notify("[mesh-review] HERDR_ENV no está activo", vim.log.levels.WARN)
+      return
+    end
+    local scribe = require("mesh_review.scribe")
+    scribe.ensure_and_prompt(doc, scribe.build_thread_prompt(doc, tid))
+  end, vim.tbl_extend("force", opts, { desc = "Mandar el hilo a la IA" }))
 
   -- Y → copiar el thread_id del hilo bajo el cursor.
   --
@@ -554,11 +721,8 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
   -- panel sin yy ni yiw, y copiar el texto de un comentario es justo lo que se
   -- quiere hacer aquí. Y (copiar hasta fin de línea) sí es prescindible.
   vim.keymap.set("n", "Y", function()
-    local tid = M.thread_at_cursor()
-    if not tid then
-      vim.notify("[mesh-review] No hay hilo bajo el cursor", vim.log.levels.WARN)
-      return
-    end
+    local tid = hilo_o_aviso()
+    if not tid then return end
     -- Al portapapeles del sistema y al registro por defecto: el id se usa tanto
     -- pegándolo fuera como con p dentro de Neovim.
     vim.fn.setreg("+", tid)
@@ -568,24 +732,14 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
 
   -- x → resolver el hilo bajo el cursor.
   vim.keymap.set("n", "x", function()
-    local tid = M.thread_at_cursor()
-    if not tid then
-      vim.notify("[mesh-review] No hay hilo bajo el cursor", vim.log.levels.WARN)
-      return
-    end
+    local tid = hilo_o_aviso()
+    if not tid then return end
     local _, err = cli.resolve(doc, tid)
     if err then
       vim.notify("[mesh-review] resolve: " .. err, vim.log.levels.ERROR)
       return
     end
-    anchor.refresh(source_bufnr)
-    -- Refrescar el panel.
-    local threads, perr = cli.project(doc)
-    if threads then
-      M.render(panel_bufnr, threads)
-    elseif perr then
-      vim.notify("[mesh-review] project: " .. perr, vim.log.levels.WARN)
-    end
+    refrescar()
   end, vim.tbl_extend("force", opts, { desc = "Resolver hilo" }))
 end
 
@@ -603,7 +757,7 @@ function M.render(bufnr, threads)
     ancho = vim.api.nvim_win_get_width(_state.winid)
   end
 
-  local lines, highlights, l2t = M._build_content(threads, ancho)
+  local lines, highlights, l2t, l2m = M._build_content(threads, ancho)
 
   -- Desbloquear el buffer temporalmente para escribir.
   vim.bo[bufnr].modifiable = true
@@ -611,7 +765,8 @@ function M.render(bufnr, threads)
   vim.bo[bufnr].modifiable = false
 
   _apply_highlights(bufnr, highlights)
-  _state.line_to_thread = l2t
+  _state.line_to_thread  = l2t
+  _state.line_to_message = l2m
   -- Se memorizan para que un redimensionado recomponga las cajas sin volver a
   -- lanzar el CLI, que es un proceso externo y se dispararía en cada arrastre.
   _state.threads = threads

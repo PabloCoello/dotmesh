@@ -116,9 +116,22 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 | Atajo | Acción |
 |---|---|
 | `r` | Responder al hilo bajo el cursor |
+| `d` | Retractar el mensaje bajo el cursor (pide la razón; `<Esc>` cancela) |
+| `a` | Mandar el hilo a la IA (sesión scribe; requiere `HERDR_ENV=1`) |
 | `x` | Resolver el hilo bajo el cursor |
 | `Y` | Copiar el `thread_id` del hilo bajo el cursor |
 | `q` / `<Esc>` | Cerrar el panel |
+
+Los cinco primeros se anuncian en el pie de cada caja, porque actúan sobre ese
+hilo y no sobre el panel.
+
+`d` opera sobre el mensaje, no sobre el hilo: en el modelo de eventos no existe
+«borrar un hilo», y hace falta el cursor puesto sobre el autor o el cuerpo del
+mensaje concreto. Sobre la cabecera o el pie avisa y no borra nada, que es lo
+prudente cuando la alternativa es retractar un mensaje que no se está mirando.
+
+`a` es el mismo puente que `<Espacio>rs`, con el hilo concreto en el prompt en
+vez del documento entero.
 
 `Y` y no `y` porque `y` es el operador de copia: remapearlo dejaría el panel sin
 `yy` ni `yiw`, y llevarse el texto de un comentario es justo lo que se quiere
@@ -140,11 +153,17 @@ tipo, con la cabecera embebida en el borde superior:
 │                                                          │
 │  claude-opus-5                                           │
 │  Confirmado en el transcript.                            │
+│                                                          │
+│ r responder · d borrar · a → IA · x resolver · Y id      │
 └──────────────────────────────────────────────────────────┘
 ```
 
 El nombre del agente va en teal y el del humano atenuado. La fecha es relativa
 dentro de la semana (`hoy`, `ayer`, `hace 3 d`) y pasa a ISO a partir de ahí.
+
+El pie lleva los atajos del hilo: la tecla en el color del tipo y la etiqueta
+atenuada. En una columna estrecha se reparte en varias líneas antes que
+truncarse, y nunca parte un atajo por la mitad.
 
 Por defecto abre como sidebar a la derecha. Se configura en el `setup()` del
 plugin (`lua/plugins/mesh-review.lua`):

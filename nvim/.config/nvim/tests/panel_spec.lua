@@ -545,6 +545,206 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Pie de atajos
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== pie de atajos ===\n")
+
+--- ¿Alguna línea contiene el texto dado?
+local function contiene(lines, texto)
+  for _, l in ipairs(lines) do
+    if l:find(texto, 1, true) then return true end
+  end
+  return false
+end
+
+do
+  -- Con sitio de sobra los cinco atajos caben en una línea.
+  local hints = panel._hint_lines(panel.ATAJOS, 80)
+  assert_eq("con ancho de sobra, una sola línea", #hints, 1)
+  assert_eq("la línea nombra todos los atajos",
+    hints[1].texto, "r responder · d borrar · a → IA · x resolver · Y id")
+  assert_eq("hay una posición de tecla por atajo", #hints[1].teclas, #panel.ATAJOS)
+end
+
+do
+  -- Las posiciones tienen que caer sobre la tecla, no un byte al lado: es lo que
+  -- decide si se pinta la letra o el espacio siguiente.
+  for _, ancho in ipairs({ 12, 20, 34, 80 }) do
+    local hints = panel._hint_lines(panel.ATAJOS, ancho)
+    local todas_bien = true
+    local encontradas = 0
+    for _, hint in ipairs(hints) do
+      for _, tecla in ipairs(hint.teclas) do
+        encontradas = encontradas + 1
+        local trozo = hint.texto:sub(tecla[1] + 1, tecla[2])
+        if #trozo ~= 1 or not trozo:match("[rdaxY]") then todas_bien = false end
+      end
+    end
+    assert_eq("ancho " .. ancho .. ": cada posición cae sobre su tecla", todas_bien, true)
+    assert_eq("ancho " .. ancho .. ": no se pierde ningún atajo",
+      encontradas, #panel.ATAJOS)
+  end
+end
+
+do
+  -- En columna estrecha el pie se reparte en varias líneas, y ninguna se pasa
+  -- del ancho: si se pasara, la caja se rompería al truncar.
+  local hints = panel._hint_lines(panel.ATAJOS, 16)
+  assert_eq("en 16 celdas el pie ocupa más de una línea", #hints > 1, true)
+  local caben = true
+  for _, hint in ipairs(hints) do
+    if box.width(hint.texto) > 16 then caben = false end
+  end
+  assert_eq("ninguna línea del pie pasa del ancho", caben, true)
+end
+
+do
+  -- Un atajo que no cabe ni solo se emite igualmente: el marco lo truncará, y
+  -- perderlo en silencio sería peor.
+  local hints = panel._hint_lines({ { key = "r", label = "responder" } }, 3)
+  assert_eq("un atajo más largo que el ancho se emite igual", #hints, 1)
+end
+
+do
+  local hints = panel._hint_lines(panel.ATAJOS, 0)
+  assert_eq("ancho cero no devuelve líneas", #hints, 0)
+end
+
+do
+  -- El pie va dentro del marco: si no cuadrara, rompería el borde derecho.
+  for _, w in ipairs({ 8, 20, 46, 100 }) do
+    local lines = panel._build_content({ hilo() }, w)
+    assert_all_width("caja con pie a " .. w .. " columnas", lineas_de_caja(lines), w)
+  end
+end
+
+do
+  local lines = panel._build_content({ hilo() }, ANCHO)
+  assert_eq("la caja anuncia el atajo de responder", contiene(lines, "r responder"), true)
+  assert_eq("la caja anuncia el atajo de borrar",    contiene(lines, "d borrar"),    true)
+  assert_eq("la caja anuncia el envío a la IA",      contiene(lines, "a → IA"),      true)
+end
+
+do
+  -- El pie es por hilo: dos cajas, dos pies. Puesto una sola vez arriba no se
+  -- sabría sobre qué hilo actúa el atajo.
+  local lines = panel._build_content(
+    { hilo(), hilo({ thread_id = "5f217def-9999-4321-8888-aaaabbbbcccc" }) }, ANCHO)
+  local pies = 0
+  for _, l in ipairs(lines) do
+    if l:find("r responder", 1, true) then pies = pies + 1 end
+  end
+  assert_eq("cada caja lleva su propio pie", pies, 2)
+end
+
+do
+  -- La tecla se pinta en el color del tipo y la etiqueta atenuada.
+  local _, highlights = panel._build_content({ hilo() }, 80)
+  local lines = panel._build_content({ hilo() }, 80)
+  local pie_lnum = nil
+  for i, l in ipairs(lines) do
+    if l:find("r responder", 1, true) then pie_lnum = i - 1 end
+  end
+  assert_eq("hay una línea de pie", pie_lnum ~= nil, true)
+
+  local hay_comment, hay_tipo = false, false
+  for _, h in ipairs(highlights) do
+    if h[2] == pie_lnum then
+      if h[1] == "Comment" then hay_comment = true end
+      if h[1] == "MeshReviewEditaMark" then hay_tipo = true end
+    end
+  end
+  assert_eq("la etiqueta del pie va atenuada", hay_comment, true)
+  assert_eq("las teclas del pie van en el color del tipo", hay_tipo, true)
+end
+
+-- ---------------------------------------------------------------------------
+-- Mapa línea → mensaje
+-- ---------------------------------------------------------------------------
+io.stderr:write("\n=== mapa línea → mensaje ===\n")
+
+do
+  local h = hilo({
+    messages = {
+      { id = "aaaa1111-1111-4111-8111-111111111111",
+        author = { kind = "human", name = "PabloCoello" },
+        body = "primero" },
+      { id = "bbbb2222-2222-4222-8222-222222222222",
+        author = { kind = "ai", model = "claude-opus-5" },
+        body = "segundo" },
+    },
+  })
+  local lines, _, _, l2m = panel._build_content({ h }, ANCHO)
+
+  -- Autor y cuerpo de cada mensaje apuntan a su id; nada más.
+  local por_id = {}
+  for _, ref in pairs(l2m) do
+    por_id[ref.msg_id] = (por_id[ref.msg_id] or 0) + 1
+  end
+  assert_eq("el primer mensaje ocupa dos líneas del mapa",
+    por_id["aaaa1111-1111-4111-8111-111111111111"], 2)
+  assert_eq("el segundo mensaje también",
+    por_id["bbbb2222-2222-4222-8222-222222222222"], 2)
+
+  -- Todas las referencias llevan el hilo al que pertenecen.
+  local hilos_ok = true
+  for _, ref in pairs(l2m) do
+    if ref.thread_id ~= h.thread_id then hilos_ok = false end
+  end
+  assert_eq("cada referencia lleva su thread_id", hilos_ok, true)
+
+  -- La cabecera y el pie NO están en el mapa: el cursor ahí no borra nada.
+  local hdr_lnum, pie_lnum
+  for i, l in ipairs(lines) do
+    if l:sub(1, #"┌") == "┌" then hdr_lnum = i - 1 end
+    if l:find("r responder", 1, true) then pie_lnum = i - 1 end
+  end
+  assert_eq("la cabecera no apunta a ningún mensaje", l2m[hdr_lnum], nil)
+  assert_eq("el pie no apunta a ningún mensaje", l2m[pie_lnum], nil)
+  assert_eq("el borde inferior tampoco", l2m[#lines - 1], nil)
+end
+
+do
+  -- Un mensaje retractado no se dibuja, así que no puede estar en el mapa.
+  local lines, _, _, l2m = panel._build_content({ hilo({
+    messages = {
+      { id = "aaaa1111-1111-4111-8111-111111111111",
+        author = { kind = "human", name = "PabloCoello" },
+        body = "visible" },
+      { id = "cccc3333-3333-4333-8333-333333333333", retracted = true,
+        author = { kind = "human", name = "PabloCoello" },
+        body = "retirado" },
+    },
+  }) }, ANCHO)
+  local ids = {}
+  for _, ref in pairs(l2m) do ids[ref.msg_id] = true end
+  assert_eq("el mensaje visible está en el mapa",
+    ids["aaaa1111-1111-4111-8111-111111111111"], true)
+  assert_eq("el retractado no está en el mapa",
+    ids["cccc3333-3333-4333-8333-333333333333"], nil)
+  assert_eq("el cuerpo retirado no se dibuja", contiene(lines, "retirado"), false)
+end
+
+do
+  -- Un sidecar sin id de mensaje (proyección incompleta) no debe registrar una
+  -- referencia inservible: retract sin msg_id fallaría en el CLI.
+  local _, _, _, l2m = panel._build_content({ hilo({
+    messages = {
+      { author = { kind = "human", name = "PabloCoello" }, body = "sin id" },
+    },
+  }) }, ANCHO)
+  local n = 0
+  for _ in pairs(l2m) do n = n + 1 end
+  assert_eq("un mensaje sin id no entra en el mapa", n, 0)
+end
+
+do
+  assert_eq("message_at_cursor es alcanzable", type(panel.message_at_cursor), "function")
+  -- Sin panel abierto devuelve nil en vez de reventar.
+  assert_eq("sin panel abierto no hay mensaje", panel.message_at_cursor(), nil)
+end
+
+-- ---------------------------------------------------------------------------
 -- Resultado
 -- ---------------------------------------------------------------------------
 io.stderr:write(string.format("\n%d passed, %d failed\n", pass, fail))

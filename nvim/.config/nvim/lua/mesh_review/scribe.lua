@@ -4,9 +4,10 @@
 --- respuestas herdr) de la lógica asíncrona que ejecuta procesos externos,
 --- de modo que las primeras sean verificables en headless sin proceso externo.
 ---
---- Funciones puras exportadas: build_prompt, build_get_argv, build_split_argv,
---- build_start_argv, build_wait_argv, build_prompt_argv, build_read_pane_argv,
---- build_focus_agent_argv, is_trust_dialog, pick_payload, parse_herdr_response.
+--- Funciones puras exportadas: build_prompt, build_thread_prompt, build_get_argv,
+--- build_split_argv, build_start_argv, build_wait_argv, build_prompt_argv,
+--- build_read_pane_argv, build_focus_agent_argv, is_trust_dialog, pick_payload,
+--- parse_herdr_response.
 --- Función impura principal: ensure_and_prompt.
 ---
 --- Por qué ruta absoluta en el prompt: el prompt se ejecuta en un pane cuyo
@@ -71,6 +72,27 @@ function M.build_prompt(doc_abs)
   local doc = shell_quote(to_single_line(doc_abs))
   return "Procesa los hilos pendientes del documento " .. doc
     .. ". Ejecuta: mesh-review project --pending " .. doc
+end
+
+--- Construye el prompt de «procesa este hilo» para la sesión scribe.
+---
+--- Misma forma que build_prompt pero con un hilo concreto: es lo que manda el
+--- panel, donde se está mirando un hilo y no la lista de pendientes. El agente
+--- proyecta el documento entero porque el CLI no tiene una lectura por hilo;
+--- el id le dice sobre cuál actuar.
+---
+--- El id se filtra a `[A-Za-z0-9-]`. Es un UUID, así que el filtro no le quita
+--- nada legítimo, y evita que un sidecar manipulado cuele instrucciones dentro
+--- de un prompt que va a leer un agente.
+---
+--- @param doc_abs   string  Ruta absoluta al documento.
+--- @param thread_id string  UUID del hilo.
+--- @return string  Texto del prompt listo para enviar a herdr agent prompt.
+function M.build_thread_prompt(doc_abs, thread_id)
+  local doc = shell_quote(to_single_line(doc_abs))
+  local tid = tostring(thread_id or ""):gsub("[^%w%-]", "")
+  return "Procesa el hilo de revisión " .. tid .. " del documento " .. doc
+    .. ". Ejecuta: mesh-review project " .. doc
 end
 
 -- ---------------------------------------------------------------------------
@@ -443,7 +465,9 @@ end
 --- Toda la cadena es asíncrona; nada bloquea el hilo principal de Neovim.
 ---
 --- @param doc_abs string  Ruta absoluta al documento (base del prompt y --cwd del pane).
-function M.ensure_and_prompt(doc_abs)
+--- @param prompt  string|nil  Texto a enviar. Por defecto, los hilos pendientes
+---                            del documento; el panel manda uno por hilo.
+function M.ensure_and_prompt(doc_abs, prompt)
   local pane_id = vim.env.HERDR_PANE_ID
   if not pane_id or pane_id == "" then
     vim.notify("[mesh-review] scribe: HERDR_PANE_ID no disponible", vim.log.levels.WARN)
@@ -454,7 +478,7 @@ function M.ensure_and_prompt(doc_abs)
   -- aproximación al contexto del fichero sin depender de un git root
   -- que puede no existir (p.ej. fichero fuera de un repositorio).
   local cwd = vim.fn.fnamemodify(doc_abs, ":h")
-  local prompt_text = M.build_prompt(doc_abs)
+  local prompt_text = prompt or M.build_prompt(doc_abs)
 
   vim.system(M.build_get_argv(), { text = true }, function(get_result)
     -- Se parsea el JSON en vez de mirar solo el exit code porque hace falta el
