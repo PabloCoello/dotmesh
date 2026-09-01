@@ -18,6 +18,7 @@ SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
 CLAUDE_SETTINGS_DST := $(HOME)/.claude/settings.json
+CLAUDE_HOOKS_SYNC := $(abspath scripts/sync-claude-hooks.sh)
 
 .PHONY: help
 help:
@@ -42,6 +43,7 @@ help:
 	@echo "  make nvim-install   - Instala Neovim >= 0.11 en ~/.local/bin/nvim (sin sudo, idempotente)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
+	@echo "  make sync-claude-hooks - Propaga el bloque hooks de la plantilla a ~/.claude/settings.json"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
 	@echo "  make macos-rectangle - Fija las prefs de Rectangle que asume el layout del Voyager (solo macOS)"
@@ -54,6 +56,9 @@ help:
 	@echo "  make test-wait-for-user - Verifica el contrato WAIT_FOR_USER en agentes y docs"
 	@echo "  make test-scribe-flow - Arnés headless scribe (requiere sesión de claude autenticada (keychain o ANTHROPIC_API_KEY))"
 	@echo "  make test-tool-error-recovery - Verifica la política común de reintentos de herramientas"
+	@echo "  make maker-flow-stats - Mide delegación y skills del flujo maker sobre transcripts reales"
+	@echo "  make test-maker-flow - Arnés headless maker: control vs persona (requiere claude autenticado)"
+	@echo "  make test-flow-hooks - Prueba los hooks del flujo con inputs sintéticos (sin red ni coste)"
 	@echo ""
 	@echo "Paquetes: $(PACKAGES)"
 
@@ -195,6 +200,12 @@ seed-claude-settings:
 		echo "  ok  sembrado $(CLAUDE_SETTINGS_DST) desde la plantilla base"; \
 	fi
 
+# seed-claude-settings no sobreescribe, así que un hook nuevo en el repo no
+# alcanza una máquina ya instalada. Este target fusiona solo la clave `hooks`.
+.PHONY: sync-claude-hooks
+sync-claude-hooks:
+	@bash "$(CLAUDE_HOOKS_SYNC)"
+
 # Prefs de Rectangle (gestor de ventanas de macOS). El layout del Voyager
 # (repo keymesh) resuelve Pant←/Pant→ como Ctrl+Opt+Cmd+flechas, que son los
 # atajos de Rectangle para mover la ventana de monitor: macOS no trae equivalente
@@ -326,6 +337,10 @@ health:
 			&& echo "  ok  code (VS Code Windows desde WSL)" \
 			|| echo "  --  code  (añade %CODE_PATH% al PATH de Windows o instala la integración WSL de VS Code)"; \
 	fi
+	@rc=0; bash "$(CLAUDE_HOOKS_SYNC)" --check >/dev/null 2>&1 || rc=$$?; \
+		if [ $$rc -eq 0 ]; then echo "  ok  hooks de Claude alineados con la plantilla"; \
+		elif [ $$rc -eq 1 ]; then echo "  --  hooks de Claude desalineados (corre 'make sync-claude-hooks')"; \
+		else echo "  --  hooks de Claude sin comprobar (falta jq o ~/.claude/settings.json)"; fi
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
@@ -361,3 +376,17 @@ clean:
 .PHONY: test-wait-for-user
 test-wait-for-user:
 	@bash scripts/check-wait-for-user.sh
+
+.PHONY: maker-flow-stats
+maker-flow-stats:
+	@node scripts/maker-flow-stats.mjs --project "$(subst /,-,$(CURDIR))"
+
+.PHONY: test-maker-flow
+test-maker-flow:
+	@echo "→ arnés headless maker (control/tratamiento)"
+	@bash scripts/test-maker-flow.sh
+
+.PHONY: test-flow-hooks
+test-flow-hooks:
+	@echo "→ hooks del flujo con inputs sintéticos"
+	@bash scripts/test-flow-hooks.sh

@@ -42,6 +42,46 @@ fi
 input=$(cat)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 [ -z "$cmd" ] && exit 0
+hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+[ -d "$hook_cwd" ] || hook_cwd=$PWD
+
+# A heredoc body is not quoted, so it survives the quote stripping below and
+# reaches the scanners: writing a document that describes this guardrail trips
+# it. Drop those bodies, but only when no interpreter receives them on the
+# opener line. Writing a file is not irreversible; feeding a shell is, and that
+# payload has to stay visible.
+# Anything that can spawn a process from the text it reads counts: awk has
+# system(), lua and php have os.execute()/exec(), R has system(). A body fed
+# to one of these is a payload, not a document.
+_INTERPRETER_RE='(^|[[:space:];&|(])(sudo[[:space:]]+)?(bash|sh|zsh|ash|ksh|dash|fish|csh|tcsh|python[0-9.]*|perl|ruby|node|deno|bun|eval|g?awk|mawk|tclsh|wish|lua[a-z0-9._-]*|php[0-9.-]*|[Rr]script|pwsh|powershell|xargs|parallel)([[:space:]]|$)'
+strip_heredoc_bodies() {
+  local line trimmed delim="" keep=0 out=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ -n "$delim" ]; then
+      # Leading whitespace is trimmed unconditionally. That is exact for <<-
+      # and lax for <<, where bash requires the delimiter at column zero: the
+      # body closes here earlier than bash would, so more of the command gets
+      # scanned, never less. Trailing whitespace is NOT trimmed, matching bash:
+      # a line "EOF " does not close the heredoc there either.
+      trimmed=${line#"${line%%[![:space:]]*}"}
+      [ "$trimmed" = "$delim" ] && delim=""
+      # Inside a body: keep it only when an interpreter is reading it.
+      [ "$keep" = 1 ] && out+="$line"$'\n'
+      continue
+    fi
+    out+="$line"$'\n'
+    # `<<<` is a herestring, not a heredoc: exclude it. If the delimiter cannot
+    # be read the body simply stays, which is the safe direction.
+    printf '%s' "$line" | grep -qE '<<-?[[:space:]]*("[^"]+"|'"'"'[^'"'"']+'"'"'|[A-Za-z_][A-Za-z0-9_]*)' \
+      && ! printf '%s' "$line" | grep -qE '<<<' || continue
+    delim=$(printf '%s' "$line" \
+      | sed -E 's/.*<<-?[[:space:]]*//; s/^"([^"]+)".*/\1/; s/^'"'"'([^'"'"']+)'"'"'.*/\1/; s/^([A-Za-z_][A-Za-z0-9_]*).*/\1/')
+    keep=0
+    printf '%s' "$line" | grep -qE "$_INTERPRETER_RE" && keep=1
+  done
+  printf '%s' "$out"
+}
+payload=$(printf '%s' "$cmd" | strip_heredoc_bodies)
 
 block() {  # $1 = reason
   printf 'BLOCKED: %s. dotmesh guardrail: not permitted. If you genuinely need it, run it yourself.\n' "$1" >&2
@@ -54,7 +94,7 @@ block() {  # $1 = reason
 # tr replaces each separator character with a newline; || and && each produce
 # two newlines (an empty segment between) which the loop skips harmlessly.
 # This is portable across GNU sed and BSD sed (macOS), unlike \n in sed -E.
-scan=$(printf '%s' "$cmd" \
+scan=$(printf '%s' "$payload" \
   | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g" \
   | tr ';|&(){}' '\n')
 # KNOWN LIMIT — shell indirection (sh -c '…', bash -c '…', eval '…'): the
@@ -85,7 +125,7 @@ if printf '%s' "$scan" | grep -qE '>[[:space:]]*/dev/(sd|nvme|vd|hd|mmcblk|disk)
 fi
 # curl/wget piped directly to a shell — remote code execution without review.
 # Checked on the raw cmd (before split) because the pipe is the intent signal.
-if printf '%s' "$cmd" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh|ash|fish|python[0-9.]?|perl|ruby)([[:space:]]|$)'; then
+if printf '%s' "$payload" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(bash|sh|zsh|ash|fish|python[0-9.]?|perl|ruby)([[:space:]]|$)'; then
   block "curl/wget canalizado a un intérprete de shell (ejecución remota de código)"
 fi
 # rm -rf over sensitive user subtrees that the root-anchored pattern above
@@ -103,16 +143,17 @@ if printf '%s' "$cmd" | grep -qE '\bgit[[:space:]]+([^[:space:]]+[[:space:]]+)*c
 fi
 
 # --- 1a) Alias injection that would persist or inline a dangerous op ----------
-# Checked on the RAW cmd (before quote-stripping) because the dangerous value
-# lives inside the quoted alias definition. Both -c (session-scoped) and
-# config (persistent) forms are covered.
+# Checked before quote-stripping because the dangerous value lives inside the
+# quoted alias definition, but on the heredoc-stripped payload so that prose
+# describing this evasion can be written to a file. Both -c (session-scoped)
+# and config (persistent) forms are covered.
 _dangerous_op_re='(push[[:space:]].*(--force|-f([[:space:]]|$)|--mirror)|reset[[:space:]]+--hard|(^|[[:space:]])clean[[:space:]].*-[A-Za-z]*f|branch[[:space:]]+(-D|--delete)|update-ref.*-d|stash[[:space:]]+(drop|clear))'
-if printf '%s' "$cmd" | grep -qE 'git[[:space:]].*-c[[:space:]]+alias\.' \
-   && printf '%s' "$cmd" | grep -qiE "$_dangerous_op_re"; then
+if printf '%s' "$payload" | grep -qE 'git[[:space:]].*-c[[:space:]]+alias\.' \
+   && printf '%s' "$payload" | grep -qiE "$_dangerous_op_re"; then
   block "git -c alias.X=<op-peligrosa> evade el guardarraíl"
 fi
-if printf '%s' "$cmd" | grep -qE 'git[[:space:]]+config[[:space:]].*(--[^[:space:]]+[[:space:]]+)*alias\.' \
-   && printf '%s' "$cmd" | grep -qiE "$_dangerous_op_re"; then
+if printf '%s' "$payload" | grep -qE 'git[[:space:]]+config[[:space:]].*(--[^[:space:]]+[[:space:]]+)*alias\.' \
+   && printf '%s' "$payload" | grep -qiE "$_dangerous_op_re"; then
   block "git config alias.X=<op-peligrosa> persistiría una evasión del guardarraíl"
 fi
 
@@ -204,5 +245,90 @@ while IFS= read -r seg; do
     fi
   done
 done <<< "$scan"
+
+# --- 1b) Push to the default branch -----------------------------------------
+# AGENTS.md and /super-git forbid it by policy and nothing enforced it: the
+# patterns above only cover force, mirror and delete.
+#
+# Parsed in its own pass over a DE-QUOTED copy, not over $scan: the scan deletes
+# quoted substrings whole, so `git push origin 'main'` would lose its refspec
+# and read as a push of the checked-out branch. De-quoting is safe here because
+# this pass only ever looks at the push subcommand and its positional
+# arguments, never at free text.
+# $'…' is stripped before '…' so that `origin $'main'` does not leave `$main`
+# behind, which would read as a different branch than the one bash pushes to.
+dequoted=$(printf '%s' "$payload" \
+  | sed -E "s/\\$'([^']*)'/\1/g; s/'([^']*)'/\1/g; s/\"([^\"]*)\"/\1/g" \
+  | tr ';|&(){}' '\n')
+
+while IFS= read -r seg; do
+  seg=$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//')
+  printf '%s' "$seg" | grep -qE \
+    '^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*((/[^[:space:]]*/)?git)([[:space:]]|$)' \
+    || continue
+  _GIT_PRE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|command|exec|nice|timeout|nohup|xargs)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*)*(/[^[:space:]]*/)?git[[:space:]]+'
+  rest=$(printf '%s' "$seg" | sed -E \
+    -e "s#^${_GIT_PRE}psu?([[:space:]]|\$)#push #" \
+    -e "s#^${_GIT_PRE}##")
+  # Backslash escapes are the shell's, not part of the name: bash runs
+  # `push origin \main` as `push origin main`, so the parser has to read it the
+  # same way or the comparison below looks at a name nobody typed.
+  rest=$(printf '%s' "$rest" | sed -E 's/\\(.)/\1/g')
+
+  # Walk git's global flags to find the real subcommand. Doing this by token
+  # rather than by pattern is what keeps `git log --grep push origin main` out:
+  # there, `push` is an argument, not the subcommand.
+  read -ra _toks <<< "$rest"
+  _i=0; _sub=""; _dir=""
+  while [ "$_i" -lt "${#_toks[@]}" ]; do
+    case "${_toks[$_i]}" in
+      -C) _dir=${_toks[$((_i+1))]:-}; _i=$((_i+2)) ;;
+      -c|--git-dir|--work-tree|--namespace|--exec-path) _i=$((_i+2)) ;;
+      -*) _i=$((_i+1)) ;;
+      *) _sub=${_toks[$_i]}; break ;;
+    esac
+  done
+  [ "$_sub" = push ] || continue
+
+  # Positional arguments of push, skipping the flags that consume a value.
+  _i=$((_i+1)); _pos=()
+  while [ "$_i" -lt "${#_toks[@]}" ]; do
+    case "${_toks[$_i]}" in
+      --dry-run|-n) continue 2 ;;
+      -o|--push-option|--repo|--receive-pack|--exec) _i=$((_i+2)) ;;
+      -*) _i=$((_i+1)) ;;
+      *) _pos+=("${_toks[$_i]}"); _i=$((_i+1)) ;;
+    esac
+  done
+
+  [ -d "$_dir" ] || _dir=$hook_cwd
+  # origin/HEAD is the only local record of which branch the remote defaults to.
+  # Without it there is nothing to compare against, so nothing is blocked.
+  _def=$(git -C "$_dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+  _def=${_def#*/}
+  [ -n "$_def" ] || continue
+
+  # The first positional is the remote; every one after it is a refspec, and
+  # git pushes them all. With no refspec at all it pushes the checked-out branch.
+  if [ "${#_pos[@]}" -le 1 ]; then
+    _targets=("$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)")
+  else
+    _targets=("${_pos[@]:1}")
+  fi
+  for _t in "${_targets[@]}"; do
+    [ -n "$_t" ] || continue
+    _t=${_t##*:}          # +src:dst -> dst
+    _t=${_t#+}
+    _t=${_t#refs/heads/}
+    # HEAD and @ name the checked-out branch; comparing them as strings would
+    # miss `git push origin HEAD` from the default branch.
+    case "$_t" in
+      HEAD|@) _t=$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '%s' "$_t") ;;
+    esac
+    if [ "$_t" = "$_def" ]; then
+      block "push a la rama por defecto ($_def): AGENTS.md lo prohíbe, abre una rama y un PR"
+    fi
+  done
+done <<< "$dequoted"
 
 exit 0

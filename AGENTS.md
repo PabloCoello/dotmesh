@@ -25,6 +25,7 @@ make stow        # symlink every package into ~
 make unstow      # remove the symlinks
 make restow      # unstow + stow (run after adding/removing files in a package)
 make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
+make sync-claude-hooks # push the template's `hooks` block into ~/.claude/settings.json
 make gnome-rice  # dotmesh retint of the GNOME desktop (Linux only)
 make clean       # wipe ~/dotfiles-backup/*
 ```
@@ -51,6 +52,8 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer + wallpaper). See `docs/DESIGN.md` |
 | `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
 | `collie/` | `~/.config/herdr/plugins/config/herdr.collie/{commands,keys,quick-replies}.toml` (Linux/macOS, via `make collie-install`) | Collie, herdr's mobile bridge: a Bun bridge plus a PWA served over `tailscale serve` that drives herdr panes from a phone, with push when an agent blocks. Answers the `WAIT_FOR_USER` contract away from the desk. Pinned in `scripts/vendor/upstreams.tsv`; see `collie/README.md` |
+
+`claude/.claude/settings.json` is **not** stowed (`claude/.stow-local-ignore`): `make seed-claude-settings` copies it once and never overwrites, so per-machine settings don't show up as uncommitted changes. The cost is that a hook added to the repo never reaches an already-installed machine. `make health` reports that drift and `make sync-claude-hooks` merges **only** the `hooks` key — it registers repo files, so it belongs to the repo; every other key belongs to the machine and is left alone. A copy of the previous file lands in `~/dotfiles-backup/<timestamp>/`.
 
 `Makefile:6` defines `PACKAGES` — keep this list in sync when adding or removing a package directory. `IS_WSL`, computed just below, drives WSL-aware conditional logic in `health`, `vscode-install` and `wsl-terminal`.
 
@@ -94,6 +97,8 @@ Default flow for a code change, and the skill that owns each phase:
 10. Durable decision or interface change → `documentation-and-adrs`; new or sharpened domain terminology → `domain-modeling` (maintains `CONTEXT.md`).
 11. Switching agents mid-task, or pausing with work in flight → `handoff`.
 
+`docs/FLUJO-MAKER.md` holds the diagram of this flow: skills and subagents per phase, the transversal skills, and the hook safety net.
+
 ### Waiting for user input
 
 When the next safe action depends on a human decision, load `wait-for-user`.
@@ -128,7 +133,7 @@ Enforcement rules:
 
 - **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour. For a multi-file change with **three or more distinct steps**, write at least a short `.ai/tasks/<slug>/plan.md` before coding, even without phase subagents; reserve subagent orchestration for genuinely multi-phase work.
 - **Specificity wins.** When two skills overlap, the more specific phase owns the rule; the conventions in this file override any skill.
-- **Spanish output** also loads `castellano-peninsular`, and for prose `anti-ai-style`.
+- **Spanish prose in deliverables** (READMEs, docs, fichas) loads `castellano-peninsular` and `anti-ai-style`. Chat replies load neither: they are working conversation, not final output. When the user asks for an explanation in chat, give it in business terms — what it does, why it matters, what changes — with technical detail as support, not as the lead.
 
 ## Long implementations and context
 
@@ -154,8 +159,12 @@ The agent system has two layers, identical in concept across the three tools.
 - **Seven subagents** — the workers a persona delegates to, never switched into by
   hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
-  situation, not on the user naming them. The `remind-load-skills` and
-  `remind-review-gate` hooks are the safety net under that delegation.
+  situation, not on the user naming them. The `remind-load-skills`,
+  `remind-review-gate` and `verify-phase-close` hooks are the safety net under
+  that delegation: the first two gate a subagent before it commits, the third
+  fires on `SubagentStop` and hands the orchestrator the state of the working
+  tree plus the last commits, so a phase is accepted against the repository
+  rather than against the subagent’s own summary.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
@@ -185,7 +194,7 @@ This repo aims for functional parity between OpenCode, Claude Code and Codex so 
 | MCP | `~/.config/opencode/opencode.json` | declared in `claude/.claude/mcp/` reference + `~/.claude.json` | `[mcp_servers.*]` in `codex/.codex/config.toml` |
 | Per-agent temperature | yes | not exposed — compensated in system prompts | not exposed — use model reasoning effort and workflow instructions |
 | Per-agent bash granularity | yes (e.g. `npm audit*`) | tools on/off per agent; within agents with Bash, sub-restrictions are by judgment (agent instructions), not enforced by the permission system | sandbox, trust levels and approval prompts; no OpenCode permission frontmatter |
-| Destructive-git guardrail | per-agent bash permission frontmatter | `PreToolUse` hook → `~/.claude/hooks/block-dangerous-git.sh` (blocks `reset --hard`, `clean -f`, `branch -D`, `checkout/restore .`, force-push; allows normal push) | sandbox + approval prompts gate destructive commands |
+| Destructive-git guardrail | per-agent bash permission frontmatter | `PreToolUse` hook → `~/.claude/hooks/block-dangerous-git.sh` (blocks `reset --hard`, `clean -f`, `branch -D`, `checkout/restore .`, force-push, and any push whose target is the default branch; allows a normal push of a work branch) | sandbox + approval prompts gate destructive commands |
 | Context counter | built-in context indicator in the TUI | custom `statusLine` → `~/.claude/statusline.sh` (modelo · persona activa · barra de contexto · rama · coste, paleta dotmesh) | built-in token/context indicator in the TUI |
 
 ## Conventions to respect
