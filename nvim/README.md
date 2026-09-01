@@ -49,6 +49,13 @@ En el primer arranque lazy.nvim descarga e instala todos los plugins, y Mason in
 | `<Espacio>fg` | Buscar texto (live grep) |
 | `<Espacio>fb` | Buffers abiertos |
 | `-` | Explorador de ficheros (neo-tree) |
+| `j` / `k` / flechas | Bajan y suben por **línea de pantalla**, no de buffer |
+
+Las líneas largas se ajustan al ancho de la ventana (`wrap`) cortando por palabra
+(`linebreak`), con sangría continuada (`breakindent`) y un `↳` al principio de cada
+fila de continuación (`showbreak`). Por eso `j` y `k` se mueven por fila visible: en un
+párrafo ajustado es lo que uno espera. Un count los devuelve a líneas de buffer, así
+que `5j` siguen siendo cinco líneas reales.
 
 ### LSP
 
@@ -108,9 +115,103 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 
 | Atajo | Acción |
 |---|---|
+| `<CR>` | Saltar al fragmento anclado, en la ventana del documento |
 | `r` | Responder al hilo bajo el cursor |
+| `d` | Retractar el mensaje bajo el cursor (pide la razón; `<Esc>` cancela) |
+| `a` | Mandar el hilo a la IA (sesión scribe; requiere `HERDR_ENV=1`) |
 | `x` | Resolver el hilo bajo el cursor |
+| `Y` | Copiar el `thread_id` del hilo bajo el cursor |
 | `q` / `<Esc>` | Cerrar el panel |
+
+Los cinco primeros se anuncian en el pie de cada caja, porque actúan sobre ese
+hilo y no sobre el panel. `Y` se queda fuera del pie: con seis atajos ya no cabe
+en una línea a 60 columnas, y es el único que no actúa sobre el hilo.
+
+El panel es de solo lectura. Las teclas que editarían (`i`, `o`, `p`, `C`, `D`,
+`~`, `u`, `<C-r>`…) no dan el `E21: Cannot make changes` de Neovim: avisan con la
+lista de atajos disponibles, que es lo que hacía falta saber en ese momento. Vale
+también en modo visual, que ahí se usa para seleccionar el texto de un comentario
+y copiarlo — por eso `i` y `a` se quedan sin mapear en visual: son los prefijos de
+`viw` y `vap`.
+
+`<CR>` mueve el foco al documento, no solo el cursor: se salta para leer o editar
+ahí, y se vuelve con `<C-h>`. La posición sale del extmark vivo, no del ancla
+guardada en el sidecar, así que cae donde está el fragmento ahora aunque el
+buffer se haya editado desde el último guardado. Si el hilo está desanclado, o el
+documento no tiene ninguna ventana abierta, avisa y no mueve nada.
+
+`d` opera sobre el mensaje, no sobre el hilo: en el modelo de eventos no existe
+«borrar un hilo», y hace falta el cursor puesto sobre el autor o el cuerpo del
+mensaje concreto. Sobre la cabecera o el pie avisa y no borra nada, que es lo
+prudente cuando la alternativa es retractar un mensaje que no se está mirando.
+
+`a` es el mismo puente que `<Espacio>rs`, con el hilo concreto en el prompt en
+vez del documento entero.
+
+`Y` y no `y` porque `y` es el operador de copia: remapearlo dejaría el panel sin
+`yy` ni `yiw`, y llevarse el texto de un comentario es justo lo que se quiere
+poder hacer ahí. El `thread_id` va al portapapeles y al registro por defecto, que
+es lo que pide `:MeshRetract <thread_id> <msg_id>`.
+
+**Ir y venir entre el panel y el documento**
+
+`<C-h>` / `<C-l>` (o `<C-j>` / `<C-k>` con el panel abajo) cambian de ventana;
+son los atajos generales de `lua/core/keymaps.lua`, no del panel. Desde el
+documento, `<Espacio>rp` abre el panel o lo enfoca si ya estaba abierto. Dentro
+del panel, `<CR>` salta al fragmento del hilo bajo el cursor. Ojo: `<Esc>` en el
+panel **cierra**, no «sale»; para volver al documento y dejar el panel abierto,
+`<C-h>`.
+
+Para redimensionarlo, `<Espacio>wh` / `<Espacio>wl` (ancho) y `<Espacio>wk` /
+`<Espacio>wj` (alto), también generales. Las cajas se recomponen al ancho nuevo.
+No son `<C-flechas>` porque en macOS esa combinación la intercepta el sistema
+para cambiar de Espacio y abrir Mission Control: nunca llega al terminal.
+
+**El panel**
+
+Cada hilo abierto se dibuja como una caja cerrada enmarcada en el color de su
+tipo, con la cabecera embebida en el borde superior:
+
+```
+┌ edita · PabloCoello · hoy ───────────────────────────────┐
+│ "**A behavioural layer for the bank**"                   │
+│                                                          │
+│  PabloCoello                                             │
+│  por lo que omar dice en la reunión, a él le interesa    │
+│  presentar behavioral como un layer completo             │
+│                                                          │
+│  claude-opus-5                                           │
+│  Confirmado en el transcript.                            │
+│                                                          │
+│ ⏎ ancla · r responder · d borrar · a → IA · x resolver   │
+└──────────────────────────────────────────────────────────┘
+```
+
+El nombre del agente va en teal y el del humano atenuado. La fecha es relativa
+dentro de la semana (`hoy`, `ayer`, `hace 3 d`) y pasa a ISO a partir de ahí.
+
+El pie lleva los atajos del hilo: la tecla en el color del tipo y la etiqueta
+atenuada. En una columna estrecha se reparte en varias líneas antes que
+truncarse, y nunca parte un atajo por la mitad.
+
+Por defecto abre como sidebar a la derecha. Se configura en el `setup()` del
+plugin (`lua/plugins/mesh-review.lua`):
+
+```lua
+require("mesh_review").setup({
+  panel = {
+    position = "right",  -- "right" (por defecto) | "bottom"
+    width    = 60,       -- columnas con position = "right"
+    height   = 15,       -- filas con position = "bottom"
+  },
+})
+```
+
+`width` se acota a la mitad de la pantalla, con un mínimo de 30 columnas que cede
+ante terminales estrechos: un panel más ancho que la mitad deja el documento
+inservible. `height` funciona igual sobre las filas, con un mínimo de 5. La
+opción del eje que no aplica se ignora, y un valor inválido cae al de por
+defecto avisando al arrancar.
 
 **Comandos:**
 
@@ -202,12 +303,53 @@ ecosistema de Neovim y no tener arreglo proporcionado:
 - **markdown-preview.nvim** ejecuta `npm install` como paso de construcción, con el
   `package-lock.json` que trae el commit fijado.
 
-`nvim-treesitter` y `nvim-treesitter-textobjects` llevan `branch = "master"` explícito
-en `lua/plugins/treesitter.lua`. Su rama por defecto upstream es ya `main`, la
-reescritura, donde no existe `nvim-treesitter.configs` y `ensure_installed`,
-`highlight`, `indent` y `textobjects` dejan de ser opciones de `setup()`. Sin el pin,
-un clon nuevo cae en `main` y la configuración revienta al arrancar. Si algún día se
-migra a la API nueva, el pin se quita en el mismo cambio.
+`nvim-treesitter` y `nvim-treesitter-textobjects` llevan `branch = "main"` explícito
+en `lua/plugins/treesitter.lua`, y no por gusto: lazy resuelve la rama por defecto
+preguntando al clon local, cuyo symref `origin/HEAD` queda cacheado del día que se
+clonó. En una máquina que ya tuvo el plugin, ese símbolo sigue apuntando a `master` y
+el `update` se queda ahí por mucho que upstream haya movido la rama por defecto.
+
+`master` está congelado upstream y **no soporta Neovim >= 0.11**: sus directivas
+propias (`set-lang-from-info-string!`, `set-lang-from-mimetype!`, `downcase!`) leen
+`match[id]` como un nodo suelto, pero desde 0.11 el match entrega una lista de nodos.
+El handler acaba llamando a `:range()` sobre una tabla, aborta el parseo del buffer
+entero y el fichero se queda sin resaltado. Markdown y HTML eran los casos visibles.
+
+La rama `main` cambia la API, y de ahí la forma del fichero:
+
+| `master` (antes) | `main` (ahora) |
+|---|---|
+| `require("nvim-treesitter.configs").setup{}` | `require("nvim-treesitter").install{}` |
+| `ensure_installed` / `auto_install` | lista de parsers pasada a `install()` |
+| `highlight.enable = true` | `vim.treesitter.start()` en un autocmd `FileType` |
+| `indent.enable = true` | `vim.bo.indentexpr` (experimental; **no** activado) |
+| `textobjects` dentro de `configs` | `setup()` propio + un `vim.keymap.set` por atajo |
+
+El `pcall` alrededor de `vim.treesitter.start()` no es decorativo: `start()` usa
+`assert()` por dentro, así que sin él la primera sesión tras una instalación limpia
+llena `:messages` de errores mientras los parsers todavía se compilan.
+
+La indentación por tree-sitter queda **desactivada** a conciencia: upstream la marca
+como experimental y en varios de los idiomas de la lista la nativa de Neovim es
+mejor. Se puede añadir después, idioma a idioma, sin tocar nada más.
+
+### Dependencia nueva: tree-sitter CLI
+
+La rama `main` no distribuye parsers precompilados: los construye en la máquina con
+`tree-sitter build`. Hace falta el CLI, versión >= 0.26.1.
+
+```bash
+brew install tree-sitter-cli   # macOS
+```
+
+Ojo con el nombre: la fórmula `tree-sitter` de Homebrew instala solo
+`libtree-sitter` y deja el PATH como estaba. El binario está en `tree-sitter-cli`.
+En Linux, `cargo install tree-sitter-cli` o el gestor de paquetes de la distro.
+`make health` avisa si falta, y el requisito queda anotado en
+`scripts/vendor/upstreams.tsv`.
+
+La primera sesión tras una instalación limpia compila los 15 parsers en segundo
+plano. Tarda unos minutos y durante ese rato los ficheros abren sin resaltado.
 
 ## Plugin mesh-review
 

@@ -141,6 +141,7 @@ return {
         { "<leader>m", group = "Markdown / Preview" },
         { "<leader>q", group = "Quit / Session" },
         { "<leader>t", group = "Terminal / Toggles" },
+        { "<leader>w", group = "Ventanas (resize)" },
       },
     },
   },

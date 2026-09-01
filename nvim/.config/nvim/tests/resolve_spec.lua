@@ -276,6 +276,35 @@ do
     { start_row=0, start_col=4, end_row=1, end_col=3, uncertain=false })
 end
 
+-- Cita que termina en salto de línea. Es el caso que produce una selección
+-- visual por caracteres que baja hasta una línea vacía: end_offset acaba siendo
+-- el inicio de la línea siguiente, así que la cita del sidecar se lleva el '\n'.
+-- El fin exclusivo correcto es (fila siguiente, col 0), NO (fila actual, #linea+1),
+-- que nvim_buf_set_extmark rechaza con "Invalid 'end_col': out of range".
+do
+  local b = make_buf({"## Slide 1", "", "texto"})
+  assert_range("cita terminada en \\n → fin en la fila siguiente",
+    resolve.find_quote(b, " Slide 1\n", 2),
+    { start_row=0, start_col=2, end_row=1, end_col=0, uncertain=false })
+end
+
+-- Varias líneas terminando en '\n': el fin cae al inicio de la línea posterior.
+do
+  local b = make_buf({"uno", "dos", "tres"})
+  assert_range("cita multilínea terminada en \\n",
+    resolve.find_quote(b, "uno\ndos\n", 0),
+    { start_row=0, start_col=0, end_row=2, end_col=0, uncertain=false })
+end
+
+-- Cita terminada en '\n' cuando la línea siguiente es la última y está vacía:
+-- el fin es (última fila, 0), dentro del buffer.
+do
+  local b = make_buf({"solo", ""})
+  assert_range("cita terminada en \\n con última línea vacía",
+    resolve.find_quote(b, "solo\n", 0),
+    { start_row=0, start_col=0, end_row=1, end_col=0, uncertain=false })
+end
+
 -- ---------------------------------------------------------------------------
 -- Caracteres especiales de patrón Lua (%, ., -, (, ), [)
 -- plain=true en string.find los trata como literales, no como metacaracteres.

@@ -134,6 +134,7 @@
     "padding": 1
   },
   "enabledPlugins": {
+    "bait-skills@bait": true,
     "miro@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
