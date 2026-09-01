@@ -9,7 +9,7 @@
 #      branch). Aliases from git/.gitconfig (co/discard/ps/psu) are normalised.
 #   2. A minimal net of catastrophic NON-git commands (rm -rf of / ~ $HOME,
 #      dd to a block device, mkfs, redirect to a raw disk). Deliberately small
-#      and conservative; the broad net lives in the external approver hook.
+#      and conservative; anything beyond it relies on explicit user approval.
 #   3. LLM attribution trailers in `git commit` (Co-authored-by: <model>,
 #      Claude-Session, "generated with/by <model>"), which the harness injects
 #      against the no-LLM-authorship policy in AGENTS.md.
@@ -102,12 +102,12 @@ scan=$(printf '%s' "$payload" \
 # making it invisible to all pattern families. Blocking every sh/bash -c or eval
 # call would generate mass false positives (e.g. git commit -m '…' heredocs,
 # CI wrappers). These forms are accepted as a deliberate limit and are left to
-# explicit user approval or the external approver hook.
+# explicit user approval.
 
 # --- 2) Minimal net of catastrophic non-git commands (on the stripped scan) ---
 # Conservative and anchored to the command: only the inequivocally system-
-# irreversible. Quoted targets and split flags are left to the external
-# approver / explicit user confirmation.
+# irreversible. Quoted targets and split flags are left to explicit user
+# confirmation.
 if printf '%s' "$scan" | grep -qE '(^|[[:space:];&|(/])rm[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*([rR]f|f[rR])[A-Za-z]*[[:space:]]+(-[A-Za-z]+[[:space:]]+)*(/\*|~/\*|\$\{?HOME\}?/\*|/|~/|~|\$\{?HOME\}?/|\$\{?HOME\}?)([[:space:]]|$)'; then
   block "rm recursivo/forzado sobre /, /*, ~ o \$HOME (raíz)"
 fi
