@@ -117,7 +117,53 @@ distintas. Neovim distingue los modos con precisión; no hay conflicto real.
 |---|---|
 | `r` | Responder al hilo bajo el cursor |
 | `x` | Resolver el hilo bajo el cursor |
+| `Y` | Copiar el `thread_id` del hilo bajo el cursor |
 | `q` / `<Esc>` | Cerrar el panel |
+
+`Y` y no `y` porque `y` es el operador de copia: remapearlo dejaría el panel sin
+`yy` ni `yiw`, y llevarse el texto de un comentario es justo lo que se quiere
+poder hacer ahí. El `thread_id` va al portapapeles y al registro por defecto, que
+es lo que pide `:MeshRetract <thread_id> <msg_id>`.
+
+**El panel**
+
+Cada hilo abierto se dibuja como una caja cerrada enmarcada en el color de su
+tipo, con la cabecera embebida en el borde superior:
+
+```
+┌ edita · PabloCoello · hoy ───────────────────────────────┐
+│ "**A behavioural layer for the bank**"                   │
+│                                                          │
+│  PabloCoello                                             │
+│  por lo que omar dice en la reunión, a él le interesa    │
+│  presentar behavioral como un layer completo             │
+│                                                          │
+│  claude-opus-5                                           │
+│  Confirmado en el transcript.                            │
+└──────────────────────────────────────────────────────────┘
+```
+
+El nombre del agente va en teal y el del humano atenuado. La fecha es relativa
+dentro de la semana (`hoy`, `ayer`, `hace 3 d`) y pasa a ISO a partir de ahí.
+
+Por defecto abre como sidebar a la derecha. Se configura en el `setup()` del
+plugin (`lua/plugins/mesh-review.lua`):
+
+```lua
+require("mesh_review").setup({
+  panel = {
+    position = "right",  -- "right" (por defecto) | "bottom"
+    width    = 60,       -- columnas con position = "right"
+    height   = 15,       -- filas con position = "bottom"
+  },
+})
+```
+
+`width` se acota a la mitad de la pantalla, con un mínimo de 30 columnas que cede
+ante terminales estrechos: un panel más ancho que la mitad deja el documento
+inservible. `height` funciona igual sobre las filas, con un mínimo de 5. La
+opción del eje que no aplica se ignora, y un valor inválido cae al de por
+defecto avisando al arrancar.
 
 **Comandos:**
 
