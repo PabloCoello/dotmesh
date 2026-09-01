@@ -4,7 +4,7 @@
 #
 # La rama `main` de nvim-treesitter compila cada parser con `tree-sitter
 # build` (y `tree-sitter generate` para latex): sin el CLI en el PATH, cada
-# apertura de Neovim falla con un ENOENT por parser. Requiere >= 0.26.
+# apertura de Neovim falla con un ENOENT por parser. Requiere >= 0.26.1.
 #
 # Idempotente: si ya hay un tree-sitter que cumple el umbral de versión,
 # termina en ok sin descargar nada.
@@ -24,6 +24,7 @@ set -o pipefail
 
 MIN_MAJOR=0
 MIN_MINOR=26
+MIN_PATCH=1
 
 TS_TAG="v0.27.0"
 TS_SHA256="20a1f39ec1c45f2211492dcb8881c802b643b554bb196869a29ac3778277fa77"
@@ -41,14 +42,19 @@ die()  { echo "  --  $1" >&2; exit 1; }
 # --------------------------------------------------------------------------
 version_ok() {
   local bin="$1"
-  local ver major minor
+  local ver major minor patch n
   ver="$("$bin" --version 2>/dev/null | awk '/^tree-sitter /{print $2}')" || return 1
   major="$(echo "$ver" | cut -d. -f1)"
   minor="$(echo "$ver" | cut -d. -f2)"
-  case "$major$minor" in *[!0-9]*|'') return 1 ;; esac
+  patch="$(echo "$ver" | cut -d. -f3)"
+  for n in "$major" "$minor" "$patch"; do
+    case "$n" in *[!0-9]*|'') return 1 ;; esac
+  done
   [ "$major" -gt "$MIN_MAJOR" ] && return 0
-  [ "$major" -eq "$MIN_MAJOR" ] && [ "$minor" -ge "$MIN_MINOR" ] && return 0
-  return 1
+  [ "$major" -lt "$MIN_MAJOR" ] && return 1
+  [ "$minor" -gt "$MIN_MINOR" ] && return 0
+  [ "$minor" -lt "$MIN_MINOR" ] && return 1
+  [ "$patch" -ge "$MIN_PATCH" ]
 }
 
 for candidate in "$BINARY" "$(command -v tree-sitter 2>/dev/null || true)"; do
@@ -97,7 +103,7 @@ ok "SHA-256 verificado contra el pin de dotmesh"
 # --------------------------------------------------------------------------
 # 4. Instalar
 # --------------------------------------------------------------------------
-gunzip "$ASSET"
+gunzip "$ASSET" || die "fallo al descomprimir $TS_ASSET"
 UNPACKED="${ASSET%.gz}"
 chmod +x "$UNPACKED"
 
@@ -112,7 +118,7 @@ ok "tree-sitter instalado en $BINARY"
 # 5. Verificación final
 # --------------------------------------------------------------------------
 "$BINARY" --version
-version_ok "$BINARY" || die "el binario instalado no alcanza la versión mínima $MIN_MAJOR.$MIN_MINOR"
+version_ok "$BINARY" || die "el binario instalado no alcanza la versión mínima $MIN_MAJOR.$MIN_MINOR.$MIN_PATCH"
 ok "instalación completada"
 
 # --------------------------------------------------------------------------

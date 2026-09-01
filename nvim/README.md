@@ -6,12 +6,13 @@ Paquete dotmesh que gestiona la configuración de Neovim.
 
 - Configuración modular en Lua: opciones, atajos de teclado y autocomandos en `lua/core/`.
 - Plugins gestionados por [lazy.nvim](https://github.com/folke/lazy.nvim) en `lua/plugins/`.
-- Script de instalación sin `sudo` en `scripts/install-nvim.sh`.
+- Scripts de instalación sin `sudo` en `scripts/`: `install-nvim.sh` (Neovim) e
+  `install-tree-sitter.sh` (CLI de tree-sitter).
 
 ## Instalación
 
 ```bash
-# 1. Instala Neovim >= 0.11 en ~/.local/bin/nvim
+# 1. Instala Neovim >= 0.11 y el CLI de tree-sitter en ~/.local/bin
 make nvim-install
 
 # 2. Enlaza la configuración en ~/.config/nvim
@@ -371,14 +372,16 @@ mejor. Se puede añadir después, idioma a idioma, sin tocar nada más.
 La rama `main` no distribuye parsers precompilados: los construye en la máquina con
 `tree-sitter build`. Hace falta el CLI, versión >= 0.26.1.
 
+En Linux lo instala `make nvim-install` a través de `scripts/install-tree-sitter.sh`:
+release fijada con SHA-256 verificado, binario en `~/.local/bin`, sin sudo. En macOS:
+
 ```bash
 brew install tree-sitter-cli   # macOS
 ```
 
 Ojo con el nombre: la fórmula `tree-sitter` de Homebrew instala solo
 `libtree-sitter` y deja el PATH como estaba. El binario está en `tree-sitter-cli`.
-En Linux, `cargo install tree-sitter-cli` o el gestor de paquetes de la distro.
-`make health` avisa si falta, y el requisito queda anotado en
+`make health` avisa si falta, y el pin queda anotado en
 `scripts/vendor/upstreams.tsv`.
 
 La primera sesión tras una instalación limpia compila los 15 parsers en segundo
