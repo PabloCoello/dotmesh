@@ -40,6 +40,117 @@ local _state = {
 local SEPARATOR_THREAD = string.rep("═", 46)
 local SEPARATOR_HDR    = string.rep("─", 20)
 
+-- ---------------------------------------------------------------------------
+-- Geometría del panel
+-- ---------------------------------------------------------------------------
+
+--- Valores por defecto y límites de la ventana del panel.
+---
+--- `min_width` y `min_height` son mínimos nominales: por debajo de ellos el
+--- panel no se lee. Ceden ante la pantalla —ver _clamp_size— porque un panel
+--- más ancho que la mitad del terminal deja el documento inservible, y ese es
+--- el problema peor de los dos.
+local GEO_DEFAULTS = {
+  position     = "right",
+  width        = 60,
+  min_width    = 30,
+  min_height   = 5,
+  height_ratio = 0.30,
+  height_floor = 10,
+}
+
+--- Config efectiva fijada por configure(). nil = valores por defecto.
+local _config = nil
+
+--- Acota un tamaño pedido al intervalo [minimo, maximo].
+---
+--- Cuando la pantalla no da ni para el mínimo nominal (maximo < minimo), manda
+--- la pantalla: el resultado es `maximo`, no `minimo`.
+---
+--- @param pedido number
+--- @param minimo number
+--- @param maximo number
+--- @return number
+local function _clamp_size(pedido, minimo, maximo)
+  local lo = math.min(minimo, maximo)
+  return math.max(lo, math.min(pedido, maximo))
+end
+
+--- Resuelve la geometría del panel a partir de la config y el tamaño de la UI.
+---
+--- Es pura: no abre ventanas, no lee vim.o y no notifica. Devuelve los avisos
+--- en una lista para que los emita quien corresponda. Así el acotado se prueba
+--- con pantallas simuladas, que en headless no coinciden con las del usuario.
+---
+--- @param cfg table|nil  { position, width, height }. nil usa la config guardada.
+--- @param ui  table      { columns, lines } de la interfaz.
+--- @return table          { position = "right"|"bottom", size = number }
+--- @return string[]       Avisos de validación, vacío si la config es correcta.
+function M._resolve_geometry(cfg, ui)
+  cfg = cfg or _config or {}
+  local avisos = {}
+
+  local position = GEO_DEFAULTS.position
+  if cfg.position ~= nil then
+    if cfg.position == "right" or cfg.position == "bottom" then
+      position = cfg.position
+    else
+      table.insert(avisos, string.format(
+        "panel.position = %s no reconocido (right | bottom); se usa \"%s\"",
+        vim.inspect(cfg.position), GEO_DEFAULTS.position))
+    end
+  end
+
+  -- Cada posición mide en su eje: la lateral en columnas, la inferior en filas.
+  -- La opción del otro eje se ignora en silencio: pasar `height` con el panel a
+  -- la derecha no es un error, solo una opción que no aplica.
+  local clave, por_defecto, minimo, disponible
+  if position == "right" then
+    clave       = "width"
+    por_defecto = GEO_DEFAULTS.width
+    minimo      = GEO_DEFAULTS.min_width
+    disponible  = math.floor(ui.columns / 2)
+  else
+    clave       = "height"
+    por_defecto = math.max(GEO_DEFAULTS.height_floor,
+                           math.floor(ui.lines * GEO_DEFAULTS.height_ratio))
+    minimo      = GEO_DEFAULTS.min_height
+    disponible  = math.floor(ui.lines / 2)
+  end
+
+  local pedido = por_defecto
+  local valor  = cfg[clave]
+  if valor ~= nil then
+    if type(valor) == "number" and valor >= 1 then
+      -- Un valor fraccionario no es un error del usuario: se trunca callando.
+      pedido = math.floor(valor)
+    else
+      table.insert(avisos, string.format(
+        "panel.%s = %s no es un número >= 1; se usa %d",
+        clave, vim.inspect(valor), por_defecto))
+    end
+  end
+
+  return { position = position, size = _clamp_size(pedido, minimo, disponible) }, avisos
+end
+
+--- Fija la config del panel. La llama setup() con opts.panel.
+---
+--- Los avisos de validación se emiten aquí, al arrancar, y no al abrir el panel:
+--- dependen solo de la config, no del tamaño de la pantalla, así que repetirlos
+--- en cada apertura sería ruido.
+---
+--- @param opts table|nil  { position, width, height }. nil restaura los defaults.
+function M.configure(opts)
+  _config = opts
+  if opts == nil then return end
+
+  local _, avisos = M._resolve_geometry(opts, { columns = vim.o.columns, lines = vim.o.lines })
+  for _, aviso in ipairs(avisos) do
+    vim.notify("[mesh-review] " .. aviso, vim.log.levels.WARN)
+  end
+end
+
 --- ¿Es este buffer el panel? Se usa para que los comandos que parten del buffer
 --- actual sepan reconducirse al documento fuente.
 ---
@@ -359,8 +470,15 @@ function M.open(doc)
 
   -- Función auxiliar: abre una ventana para el buffer del panel.
   local function _open_window(bufnr)
-    local height = math.max(10, math.floor(vim.o.lines * 0.30))
-    vim.cmd("botright " .. height .. "split")
+    local geo = M._resolve_geometry(nil, { columns = vim.o.columns, lines = vim.o.lines })
+    -- botright ancla la ventana al borde de la pantalla, no a la ventana actual:
+    -- el panel sale pegado al lateral derecho (o al fondo) aunque se abra desde
+    -- un split cualquiera.
+    if geo.position == "right" then
+      vim.cmd("botright " .. geo.size .. "vsplit")
+    else
+      vim.cmd("botright " .. geo.size .. "split")
+    end
     local winid = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(winid, bufnr)
     vim.wo[winid].number         = false

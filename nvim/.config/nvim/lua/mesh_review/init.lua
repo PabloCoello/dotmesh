@@ -278,10 +278,21 @@ end
 --- Inicializa el plugin.
 ---
 --- @param opts table|nil  Opciones:
----   opts.cli  string  Ruta explícita al bundle mesh-review.mjs (opcional).
+---   opts.cli    string  Ruta explícita al bundle mesh-review.mjs (opcional).
+---   opts.panel  table   Geometría del panel (opcional):
+---     position  "right" (por defecto) | "bottom".
+---     width     number  Columnas cuando position == "right". Por defecto 60,
+---                       acotado a la mitad de la pantalla.
+---     height    number  Filas cuando position == "bottom". Por defecto el 30 %
+---                       de la pantalla, acotado a la mitad.
 function M.setup(opts)
   if _setup_done then return end
   opts = opts or {}
+
+  -- La geometría se fija antes de resolver el CLI: sin CLI el plugin queda
+  -- inactivo y sale por el return de abajo, pero una config de panel inválida
+  -- debe avisar igual, que es el momento en que el usuario puede corregirla.
+  require("mesh_review.panel").configure(opts.panel)
 
   -- Resolver la ruta al bundle del CLI.
   local found = cli.init_cli(opts.cli)
