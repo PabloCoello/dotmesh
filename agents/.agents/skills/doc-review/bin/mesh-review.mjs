@@ -28,7 +28,7 @@ function utcTimestampMs() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 function compareEvents(a, b) {
   const ta = Date.parse(a.created_at);
@@ -68,6 +68,7 @@ function project(events) {
       };
       if (ev.assignee !== void 0) proj2.assignee = ev.assignee;
       if (ev.confidence !== void 0) proj2.confidence = ev.confidence;
+      if (ev.rationale !== void 0) proj2.rationale = ev.rationale;
       if (ev.refs !== void 0) proj2.refs = ev.refs;
       map.set(tid, proj2);
       order.push(tid);
@@ -230,10 +231,22 @@ import * as path2 from "node:path";
 async function runProject(argv) {
   const pendingIdx = argv.indexOf("--pending");
   const pending = pendingIdx !== -1;
-  const args = argv.filter((_, i) => i !== pendingIdx);
+  let filtered = argv.filter((_, i) => i !== pendingIdx);
+  let threadId;
+  const threadIdx = filtered.indexOf("--thread");
+  if (threadIdx !== -1) {
+    threadId = filtered[threadIdx + 1];
+    filtered = filtered.filter((_, i) => i !== threadIdx && i !== threadIdx + 1);
+  }
+  if (threadId !== void 0 && !isUuid(threadId)) {
+    process.stderr.write(`mesh-review project: --thread debe ser un UUID v4 v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  const args = filtered;
   const [docArg] = args;
   if (!docArg) {
-    process.stderr.write("Uso: mesh-review project [--pending] <doc>\n");
+    process.stderr.write("Uso: mesh-review project [--pending] [--thread <id>] <doc>\n");
     process.exit(1);
   }
   const docAbs = path2.resolve(docArg);
@@ -242,16 +255,19 @@ async function runProject(argv) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
     process.exit(1);
   }
-  const docRelPath = path2.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith("..")) {
+  const reviewDir = path2.resolve(gitRoot, ".ai", "review");
+  const eventDir = path2.resolve(reviewDir, path2.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path2.sep)) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
     process.exit(1);
   }
-  const eventDir = path2.join(gitRoot, ".ai", "review", docRelPath);
   const events = await readEvents(eventDir);
   let threads = project(events);
   if (pending) {
     threads = threads.filter(isPending);
+  }
+  if (threadId !== void 0) {
+    threads = threads.filter((t) => t.thread_id === threadId);
   }
   process.stdout.write(JSON.stringify(threads) + "\n");
 }
@@ -315,10 +331,20 @@ async function runEmit(argv) {
       process.exit(1);
     }
   }
-  if ("body" in event && typeof event.body !== "string") {
-    process.stderr.write(`mesh-review emit: body debe ser una cadena de texto
+  if ("body" in event) {
+    if (typeof event.body !== "string") {
+      process.stderr.write(`mesh-review emit: body debe ser una cadena de texto
 `);
-    process.exit(1);
+      process.exit(1);
+    }
+    if (event.body.length === 0) {
+      process.stderr.write("mesh-review emit: body no puede ser una cadena vac\xEDa (minLength: 1)\n");
+      process.exit(1);
+    }
+    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/.test(event.body)) {
+      process.stderr.write("mesh-review emit: body contiene caracteres de control no permitidos\n");
+      process.exit(1);
+    }
   }
   await emitEvent(eventDir, event);
   process.stdout.write(`${id}
@@ -438,12 +464,12 @@ async function runReanchor(argv) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
     process.exit(1);
   }
-  const docRelPath = path4.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith("..")) {
+  const reviewDir = path4.resolve(gitRoot, ".ai", "review");
+  const eventDir = path4.resolve(reviewDir, path4.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path4.sep)) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
     process.exit(1);
   }
-  const eventDir = path4.join(gitRoot, ".ai", "review", docRelPath);
   let text;
   try {
     text = await readFile2(docAbs, "utf8");
@@ -481,6 +507,12 @@ async function reanchorThreads(text, threads, eventDir) {
     } else {
       const newAnchor = createAnchor(text, resolved.startOffset, resolved.endOffset);
       if (!anchorChanged(stored, newAnchor)) continue;
+      if (resolved.uncertain) {
+        process.stderr.write(
+          `mesh-review reanchor: ancla incierta (uncertain) para hilo ${thread.thread_id} \u2014 la cita se encontr\xF3 pero muy alejada del offset original; verifica manualmente.
+`
+        );
+      }
       ev = {
         id: randomUUID2(),
         version: 2,
@@ -490,7 +522,8 @@ async function reanchorThreads(text, threads, eventDir) {
         created_at: utcTimestampMs(),
         commit: null,
         dirty: false,
-        anchor: newAnchor
+        anchor: newAnchor,
+        ...resolved.uncertain ? { uncertain: true } : {}
       };
     }
     await emitEvent(eventDir, ev);
@@ -625,6 +658,13 @@ async function runFix(argv) {
   const eventDir = path5.resolve(reviewDir, path5.relative(gitRoot, docAbs));
   if (!eventDir.startsWith(reviewDir + path5.sep)) {
     process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const existingEvents = await readEvents(eventDir);
+  const existingThreads = project(existingEvents);
+  if (!existingThreads.some((t) => t.thread_id === threadId)) {
+    process.stderr.write(`mesh-review fix: el hilo ${threadId} no existe en este documento
+`);
     process.exit(1);
   }
   const sha = await resolveCommit({ gitRoot, docAbs, commitMsg, alreadyDone });
@@ -1444,6 +1484,104 @@ function printUsage6() {
   );
 }
 
+// src/cli/commands/assign.ts
+import { randomUUID as randomUUID8 } from "node:crypto";
+import * as path10 from "node:path";
+var VALID_AGENTS = /* @__PURE__ */ new Set(["security", "maths", "reviser", "editor"]);
+async function runAssign(argv) {
+  if (argv.includes("--help") || argv.length === 0) {
+    printUsage7();
+    return;
+  }
+  const positionals = [];
+  let agent;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--agent") {
+      agent = argv[++i];
+    } else if (!arg.startsWith("-")) {
+      positionals.push(arg);
+    }
+  }
+  const doc = positionals[0];
+  const threadId = positionals[1];
+  if (!doc || !threadId) {
+    process.stderr.write("mesh-review assign: se requieren <doc> y <thread_id>\n");
+    process.exit(1);
+  }
+  if (!isUuid(threadId)) {
+    process.stderr.write(`mesh-review assign: thread_id no es un UUID v\xE1lido: ${threadId}
+`);
+    process.exit(1);
+  }
+  if (agent === void 0) {
+    process.stderr.write("mesh-review assign: se requiere --agent <nombre>\n");
+    process.exit(1);
+  }
+  if (!VALID_AGENTS.has(agent)) {
+    process.stderr.write(
+      `mesh-review assign: agente desconocido "${agent}"; v\xE1lidos: ${[...VALID_AGENTS].join(", ")}
+`
+    );
+    process.exit(1);
+  }
+  const docAbs = path10.resolve(doc);
+  const gitRoot = await getGitRoot(path10.dirname(docAbs));
+  if (!gitRoot) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro de un repositorio git\n");
+    process.exit(1);
+  }
+  const reviewDir = path10.resolve(gitRoot, ".ai", "review");
+  const eventDir = path10.resolve(reviewDir, path10.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path10.sep)) {
+    process.stderr.write("mesh-review: el documento no est\xE1 dentro del git root\n");
+    process.exit(1);
+  }
+  const existingEvents = await readEvents(eventDir);
+  const existingThreads = project(existingEvents);
+  if (!existingThreads.some((t) => t.thread_id === threadId)) {
+    process.stderr.write(`mesh-review assign: el hilo ${threadId} no existe en este documento
+`);
+    process.exit(1);
+  }
+  const ev = {
+    id: randomUUID8(),
+    version: 2,
+    type: "thread.assigned",
+    thread_id: threadId,
+    author: { kind: "human" },
+    created_at: utcTimestampMs(),
+    commit: null,
+    dirty: false,
+    agent
+  };
+  await emitEvent(eventDir, ev);
+  process.stdout.write(`${ev.id}
+`);
+}
+function printUsage7() {
+  process.stderr.write(
+    [
+      "Uso: mesh-review assign <doc> <thread_id> --agent <nombre>",
+      "",
+      "Emite un evento thread.assigned para asignar el hilo al subagente indicado.",
+      "El hilo debe existir en el documento; se sale con error si no existe.",
+      "",
+      "Agentes v\xE1lidos: security, maths, reviser, editor",
+      "",
+      "Opciones:",
+      "  --agent <nombre>   Subagente al que se asigna el hilo (obligatorio)",
+      "  --help             Muestra este mensaje",
+      "",
+      "Salida:",
+      "  stdout: UUID del evento thread.assigned escrito",
+      "",
+      "Ejemplo:",
+      "  mesh-review assign docs/SPEC.md <uuid> --agent reviser"
+    ].join("\n") + "\n"
+  );
+}
+
 // src/cli/main.ts
 async function main(argv = process.argv.slice(2)) {
   const [subcommand, ...rest] = argv;
@@ -1472,13 +1610,16 @@ async function main(argv = process.argv.slice(2)) {
     case "retract":
       await runRetract(rest);
       break;
+    case "assign":
+      await runAssign(rest);
+      break;
     default:
-      printUsage7();
+      printUsage8();
       if (subcommand !== void 0) process.exit(1);
       break;
   }
 }
-function printUsage7() {
+function printUsage8() {
   process.stderr.write(
     [
       "Uso: mesh-review <subcomando> [argumentos]",
@@ -1496,6 +1637,8 @@ function printUsage7() {
       "                                    Retracta un mensaje del hilo",
       "  fix <doc> <thread_id> -m <msg> --body <texto>",
       "                                    Commit + mensaje en una llamada",
+      "  assign <doc> <thread_id> --agent <nombre>",
+      "                                    Asigna el hilo a un subagente",
       "",
       "Herramientas de bajo nivel:",
       "  emit <doc> <tipo> [clave=valor\u2026]  Emite un evento de revisi\xF3n para el documento",

@@ -37,7 +37,7 @@ import { ThreadCardsViewProvider } from './thread-cards';
 import { buildCardViewModels, computeUnseenCount, pickNextThread } from './thread-cards-utils';
 import { buildDiffTitle, isMeshReviewDiffTabLabel } from './diff-utils';
 import { getScribeTerminal, launchScribeTerminal, ensureScribeTerminal, sendToScribe } from './scribe-bridge';
-import { buildLaunchCommand, buildSendAllPrompt, buildFocusPrompt } from './scribe-bridge-utils';
+import { buildLaunchCommand, buildSendAllPrompt, buildFocusPrompt, resolveCliBundle } from './scribe-bridge-utils';
 
 // ---------------------------------------------------------------------------
 // Estado de sesión: supresión del aviso de gitignore por workspace
@@ -473,16 +473,74 @@ async function resolveThreadImpl(
   vscode.window.showInformationMessage('mesh-review: hilo marcado como resuelto.');
 }
 
+// ---------------------------------------------------------------------------
+// runCliAssign — invoca mesh-review assign vía el bundle bundleado
+// ---------------------------------------------------------------------------
+
+/**
+ * Invoca el subcomando `mesh-review assign` mediante el bundle CLI externo.
+ *
+ * Por qué usar el CLI en lugar de writeEvent directamente:
+ *   - El CLI valida la existencia del hilo, el formato del agente y los path
+ *     traversal guards con la misma lógica que cualquier otro subcomando.
+ *   - Garantiza que la extensión y el CLI (la herramienta que usa el agente)
+ *     compartan exactamente la misma lógica de escritura del evento.
+ *   - Sigue el mismo patrón que el subcomando assign de Neovim (cli.lua).
+ *
+ * El bundle se localiza con `resolveCliBundle()`, que sigue las mismas rutas
+ * conocidas que `cli.lua:init_cli` (MESH_REVIEW_CLI → ~/.claude/skills → ~/.agents/skills).
+ *
+ * Si el bundle no está disponible, cae de vuelta a writeEvent (degradación
+ * explícita con aviso en el output channel; el usuario sigue pudiendo asignar).
+ *
+ * @param docAbsPath  Ruta absoluta al documento.
+ * @param threadId    UUID del hilo.
+ * @param agent       Nombre del subagente (security | maths | reviser | editor).
+ * @param outputLog   Canal de output para mensajes de depuración.
+ * @returns           true si el CLI se invocó con éxito, false si se usó fallback.
+ */
+async function runCliAssign(
+  docAbsPath: string,
+  threadId: string,
+  agent: string,
+  outputLog: vscode.OutputChannel
+): Promise<boolean> {
+  const bundlePath = resolveCliBundle();
+  if (!bundlePath) {
+    outputLog.appendLine(
+      'mesh-review: bundle mesh-review.mjs no encontrado; usando writeEvent directo para assign.'
+    );
+    return false;
+  }
+  try {
+    await execFileAsync(
+      'node',
+      [bundlePath, 'assign', docAbsPath, threadId, '--agent', agent],
+      { cwd: path.dirname(docAbsPath) }
+    );
+    return true;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    outputLog.appendLine(`mesh-review: mesh-review assign falló — ${msg}`);
+    return false;
+  }
+}
+
 /**
  * Asigna un hilo a un subagente (thread.assigned).
  * Invocable desde el webview vía setActionHandler (acción 'assign').
  * Muestra un QuickPick con los cuatro subagentes asignables del roster 2+6.
+ *
+ * Usa el CLI bundleado (mesh-review assign) como ruta principal para garantizar
+ * paridad de lógica con el agente y Neovim. Si el bundle no está disponible,
+ * cae de vuelta a writeEvent con aviso en el output channel.
  */
 async function assignThreadImpl(
   threadId: string,
   docUri: vscode.Uri,
   cardsProvider: ThreadCardsViewProvider,
-  afterUpdate?: (projections: ThreadProjection[]) => void
+  afterUpdate?: (projections: ThreadProjection[]) => void,
+  outputChannel?: vscode.OutputChannel
 ): Promise<void> {
   const { eventDir, gitRoot, docRelPath } = await resolveEventDir(docUri.fsPath);
   await ensureLegacyMigrated(gitRoot, docRelPath, eventDir);
@@ -505,19 +563,25 @@ async function assignThreadImpl(
   );
   if (!agentItem) return;
 
-  const event: EventEnvelope = {
-    id: randomUUID(),
-    version: 2,
-    type: 'thread.assigned',
-    thread_id: threadId,
-    author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
-    created_at: utcTimestampMs(),
-    commit: gitRoot ? await getHeadSha(gitRoot) : null,
-    dirty: false,
-    agent: agentItem.label,
-  };
+  const log = outputChannel ?? vscode.window.createOutputChannel('mesh-review');
+  const usedCli = await runCliAssign(docUri.fsPath, threadId, agentItem.label, log);
 
-  await writeEvent(eventDir, event);
+  if (!usedCli) {
+    // Fallback: escribir directamente (degradación explícita)
+    const event: EventEnvelope = {
+      id: randomUUID(),
+      version: 2,
+      type: 'thread.assigned',
+      thread_id: threadId,
+      author: await humanAuthor(gitRoot ?? path.dirname(docUri.fsPath)),
+      created_at: utcTimestampMs(),
+      commit: gitRoot ? await getHeadSha(gitRoot) : null,
+      dirty: false,
+      agent: agentItem.label,
+    };
+    await writeEvent(eventDir, event);
+  }
+
   await refreshAfterWrite(eventDir, docUri, cardsProvider, undefined, afterUpdate);
   vscode.window.showInformationMessage(`mesh-review: hilo asignado a ${agentItem.label}.`);
 }
@@ -1079,7 +1143,7 @@ export function activate(context: vscode.ExtensionContext): void {
           await openDiffImpl(msg.thread_id, msg.mode, cardsProvider);
           break;
         case 'assign':
-          await assignThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge);
+          await assignThreadImpl(msg.thread_id, docUri, cardsProvider, updateBadge, output);
           break;
         case 'jump-doc': {
           // Salto a un hilo de otro documento (P6 — vista multi-fichero).
@@ -1149,7 +1213,20 @@ export function activate(context: vscode.ExtensionContext): void {
           const focusLineLabel = typeof focusHint === 'number' && Number.isFinite(focusHint)
             ? `L${focusHint + 1}`
             : '(desanclado)';
-          await sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+          // ACK explícito: rehabilita el botón en cuanto sendToScribe resuelve,
+          // sin esperar a que el handler completo devuelva el control al caller
+          // (thread-cards.ts). Necesario porque ensureScribeTerminal puede tardar
+          // más de 10 s en un terminal nuevo (shell integration + settle cap),
+          // haciendo que el temporizador de seguridad del webview se adelante.
+          // El temporizador de 10 s queda como red de seguridad.
+          try {
+            await sendToScribe(focusTerminal, buildFocusPrompt(focusRelPath, focusThread.thread_id, focusThread.commentType, focusLineLabel));
+            cardsProvider.postMessage({ type: 'action-ack', ok: true, thread_id: msg.thread_id });
+          } catch (sendErr) {
+            const sendErrMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+            vscode.window.showWarningMessage(`mesh-review: error al enviar a scribe — ${sendErrMsg}`);
+            cardsProvider.postMessage({ type: 'action-ack', ok: false, error: sendErrMsg, thread_id: msg.thread_id });
+          }
           break;
         }
       }

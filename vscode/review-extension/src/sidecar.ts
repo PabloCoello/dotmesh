@@ -110,6 +110,8 @@ export interface ThreadProjection {
   assignee?: string;
   assignedAt?: string;  // created_at del último thread.assigned (recencia para --pending)
   confidence?: 'alta' | 'media' | 'baja';
+  /** Justificación del supuesto o comentario, copiada del thread.opened (campo opcional del schema). */
+  rationale?: string;
   refs?: Array<{ title: string; url?: string; note?: string }>;
   messages: MessageProjection[];
   openedAt: string;
@@ -244,7 +246,9 @@ export function utcTimestampMs(): string {
  * convierta en nombre de fichero pasa por esta guarda antes de tocar el disco.
  */
 export function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  // Strict UUID v4: version nibble must be '4', variant nibble must be [89ab], lowercase only.
+  // Aligns with schema.json $defs/uuid pattern which enforces these constraints.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 }
 
 /**
@@ -309,6 +313,7 @@ export function project(events: EventEnvelope[]): ThreadProjection[] {
       };
       if (ev.assignee !== undefined) proj.assignee = ev.assignee as string;
       if (ev.confidence !== undefined) proj.confidence = ev.confidence as 'alta' | 'media' | 'baja';
+      if (ev.rationale !== undefined) proj.rationale = ev.rationale as string;
       if (ev.refs !== undefined) proj.refs = ev.refs as Array<{ title: string; url?: string; note?: string }>;
       map.set(tid, proj);
       order.push(tid);

@@ -19,16 +19,17 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { readEvents, project, utcTimestampMs, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
-import { isPending } from './commands/project.ts';
-import { emitEvent, parseKvPairs } from './commands/emit.ts';
+import { readEvents, project, utcTimestampMs, isUuid, type EventEnvelope, type ThreadProjection } from '../sidecar.ts';
+import { isPending, runProject } from './commands/project.ts';
+import { emitEvent, parseKvPairs, runEmit } from './commands/emit.ts';
 import { parseCliArgs } from './args.ts';
-import { reanchorThreads } from './commands/reanchor.ts';
+import { reanchorThreads, runReanchor } from './commands/reanchor.ts';
 import { runFix } from './commands/fix.ts';
 import { runOpen } from './commands/open.ts';
 import { runReply } from './commands/reply.ts';
 import { runResolve } from './commands/resolve.ts';
 import { runRetract } from './commands/retract.ts';
+import { runAssign } from './commands/assign.ts';
 import { writeFile } from 'node:fs/promises';
 
 const execFileAsync = promisify(execFile);
@@ -129,6 +130,35 @@ test('project devuelve la proyección correcta de un fixture V2', async () => {
     assert.strictEqual(threads[0].status, 'open');
     assert.strictEqual(threads[0].commentType, 'edita');
     assert.strictEqual(threads[0].messages[0].body, 'Comentario de prueba');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+// A4: rationale projected from thread.opened
+test('project: rationale del thread.opened aparece en ThreadProjection', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-proj-rationale-'));
+  try {
+    const tid = randomUUID();
+    const openedEv: EventEnvelope = {
+      id: randomUUID(),
+      version: 2,
+      type: 'thread.opened',
+      thread_id: tid,
+      author: { kind: 'human' },
+      created_at: new Date().toISOString(),
+      commit: null,
+      dirty: false,
+      anchor: { quote: 'texto', line_hint: 0, char_offset: 0 },
+      commentType: 'supuesto',
+      body: 'Supuesto sobre la API',
+      rationale: 'Basado en la documentación de la v3',
+    };
+    await emitEvent(dir, openedEv);
+    const threads = project(await readEvents(dir));
+    assert.strictEqual(threads.length, 1);
+    assert.strictEqual(threads[0].rationale, 'Basado en la documentación de la v3',
+      'rationale copiado desde thread.opened');
   } finally {
     await rm(dir, { recursive: true });
   }
@@ -1253,6 +1283,51 @@ async function makeGitRepo(): Promise<{ gitRoot: string; cleanup: () => Promise<
   return { gitRoot, cleanup: () => rm(gitRoot, { recursive: true }) };
 }
 
+// ---------------------------------------------------------------------------
+// emit: validaciones de body (A5)
+// ---------------------------------------------------------------------------
+
+test('emit: body vacío → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const tid = randomUUID();
+    const code = await captureExit(() =>
+      runEmit([docAbs, 'message.posted',
+        `thread_id=${tid}`,
+        'author.kind=human',
+        `commit=null`,
+        'body=',
+      ])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con body vacío');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('emit: body con caracteres de control → exit 1', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const tid = randomUUID();
+    // \x01 is a control character (ASCII SOH); the kv parser passes it as-is
+    const code = await captureExit(() =>
+      runEmit([docAbs, 'message.posted',
+        `thread_id=${tid}`,
+        'author.kind=human',
+        `commit=null`,
+        `body=texto\x01malo`,
+      ])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con body con caracteres de control');
+  } finally {
+    await cleanup();
+  }
+});
+
 test('fix: caso nominal → crea commit y emite message.posted con SHA', async () => {
   const { gitRoot, cleanup } = await makeGitRepo();
   try {
@@ -1261,22 +1336,23 @@ test('fix: caso nominal → crea commit y emite message.posted con SHA', async (
     // Stage the file so it appears in git status --porcelain and can be committed
     await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
 
-    const tid = randomUUID();
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: fix now verifies the thread exists before committing; open a thread first.
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido para revisar', 0, 0);
 
     await runFix([docAbs, tid, '-m', 'fix(doc): corrige contenido', '--body', 'Corrección aplicada']);
 
-    // Event was emitted
+    // Event was emitted (1 thread.opened + 1 message.posted)
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    const ev = events[0];
-    assert.strictEqual(ev.type, 'message.posted');
-    assert.strictEqual(ev.thread_id, tid);
-    assert.strictEqual(ev.body as string, 'Corrección aplicada');
-    assert.strictEqual((ev.author as { kind: string }).kind, 'ai');
-    assert.ok(ev.commit, 'el evento tiene commit');
-    assert.strictEqual(typeof ev.commit, 'string', 'commit es string');
-    assert.strictEqual(ev.dirty, false);
+    assert.ok(events.length >= 2, 'al menos 2 eventos emitidos (opened + fix)');
+    const ev = events.find(e => e.type === 'message.posted');
+    assert.ok(ev, 'hay un evento message.posted');
+    assert.strictEqual(ev!.thread_id, tid);
+    assert.strictEqual(ev!.body as string, 'Corrección aplicada');
+    assert.strictEqual((ev!.author as { kind: string }).kind, 'ai');
+    assert.ok(ev!.commit, 'el evento tiene commit');
+    assert.strictEqual(typeof ev!.commit, 'string', 'commit es string');
+    assert.strictEqual(ev!.dirty, false);
 
     // A new commit was created
     const { stdout: logOut } = await execFileAsync('git', ['log', '--oneline'], { cwd: gitRoot });
@@ -1329,9 +1405,10 @@ test('fix: --already-done <sha> → sin commit nuevo, evento con ese SHA', async
     await writeFile(docAbs, 'contenido\n', 'utf8');
     // File is NOT staged: --already-done should not require pending changes
 
-    const tid = randomUUID();
     const alreadyDoneSha = 'abc1234';
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: open a thread so fix can find it
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido', 0, 0);
 
     const { stdout: logBefore } = await execFileAsync(
       'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
@@ -1346,10 +1423,11 @@ test('fix: --already-done <sha> → sin commit nuevo, evento con ese SHA', async
     );
     assert.strictEqual(parseInt(logAfter.trim(), 10), commitsBefore, 'sin commit nuevo');
 
-    // Event emitted with the supplied SHA
+    // Event emitted with the supplied SHA (filter out the thread.opened)
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    assert.strictEqual(events[0].commit, alreadyDoneSha, 'commit es el SHA de --already-done');
+    const fixEv = events.find(e => e.type === 'message.posted');
+    assert.ok(fixEv, 'hay evento message.posted');
+    assert.strictEqual(fixEv!.commit, alreadyDoneSha, 'commit es el SHA de --already-done');
   } finally {
     await cleanup();
   }
@@ -1389,10 +1467,12 @@ test('fix: --confidence alta → el campo aparece en el evento emitido', async (
   try {
     const docAbs = join(gitRoot, 'doc.md');
     await writeFile(docAbs, 'contenido a revisar\n', 'utf8');
-    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
-
-    const tid = randomUUID();
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: open a thread so fix can find it
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido a revisar', 0, 0);
+
+    // Stage the document (fix needs pending changes for -m commit path)
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
 
     await runFix([
       docAbs, tid,
@@ -1402,8 +1482,9 @@ test('fix: --confidence alta → el campo aparece en el evento emitido', async (
     ]);
 
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    assert.strictEqual(events[0].confidence, 'alta', 'campo confidence presente y correcto');
+    const fixEv = events.find(e => e.type === 'message.posted');
+    assert.ok(fixEv, 'hay evento message.posted');
+    assert.strictEqual(fixEv!.confidence, 'alta', 'campo confidence presente y correcto');
   } finally {
     await cleanup();
   }
@@ -1414,8 +1495,9 @@ test('fix: --model <id> → aparece como author.model en el evento emitido', asy
   try {
     const docAbs = join(gitRoot, 'doc.md');
     await writeFile(docAbs, 'contenido\n', 'utf8');
-    const tid = randomUUID();
     const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // B2: open a thread so fix can find it
+    const tid = await makeOpenedWithAnchor(eventDir, 'contenido', 0, 0);
 
     await runFix([
       docAbs, tid,
@@ -1425,8 +1507,9 @@ test('fix: --model <id> → aparece como author.model en el evento emitido', asy
     ]);
 
     const events = await readEvents(eventDir);
-    assert.strictEqual(events.length, 1, '1 evento emitido');
-    const author = events[0].author as { kind: string; model?: string };
+    const fixEv = events.find(e => e.type === 'message.posted');
+    assert.ok(fixEv, 'hay evento message.posted');
+    const author = fixEv!.author as { kind: string; model?: string };
     assert.strictEqual(author.model, 'claude-opus-4', 'author.model coincide con --model');
   } finally {
     await cleanup();
@@ -2626,6 +2709,330 @@ test('integración: open → reply → resolve → project muestra hilo resuelto
     // messages: the initial thread.opened message + the reply
     assert.strictEqual(threads[0].messages.length, 2, '2 mensajes (opened + reply)');
     assert.strictEqual(threads[0].messages[1].body, 'Corrección aplicada sin commit', 'body del reply correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T2.1 — B4: guardas de path traversal en project y reanchor (patrón moderno)
+// ---------------------------------------------------------------------------
+
+test('project: doc dentro del git root → devuelve array JSON vacío sin error', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    const written: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: unknown) => { written.push(String(chunk)); return true; };
+    try {
+      await runProject([docAbs]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const out = written.join('').trim();
+    const threads = JSON.parse(out);
+    assert.ok(Array.isArray(threads), 'la salida es un array JSON');
+    assert.strictEqual(threads.length, 0, 'sin hilos para un doc sin sidecar');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('reanchor: doc dentro del git root sin hilos → emite 0 eventos sin error', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'Contenido\n', 'utf8');
+
+    // runReanchor no llama a process.exit en el happy path con 0 eventos
+    await runReanchor([docAbs]);
+    // Si llegamos aquí sin excepción, la guarda no disparó en falso
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T2.2 — B5: isUuid estricto v4 (nibble 4, variante [89ab], minúsculas)
+// ---------------------------------------------------------------------------
+
+test('isUuid: UUID v4 minúsculas válido → true', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-a716-446655440000'), true);
+});
+
+test('isUuid: UUID v4 generado por randomUUID → true', () => {
+  // randomUUID always produces v4
+  assert.strictEqual(isUuid(randomUUID()), true);
+});
+
+test('isUuid: UUID v1 (nibble de versión = 1) → false', () => {
+  // Tercer grupo empieza por 1, no por 4
+  assert.strictEqual(isUuid('550e8400-e29b-11d4-a716-446655440000'), false);
+});
+
+test('isUuid: UUID v3 (nibble de versión = 3) → false', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-31d4-a716-446655440000'), false);
+});
+
+test('isUuid: UUID con variante de nibble inválida (c) → false', () => {
+  // Cuarto grupo: variante debe ser [89ab], c no es válida para v4
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-c716-446655440000'), false);
+});
+
+test('isUuid: UUID en mayúsculas → false (isUuid requiere minúsculas)', () => {
+  assert.strictEqual(isUuid('550E8400-E29B-41D4-A716-446655440000'), false);
+});
+
+test('isUuid: cadena vacía → false', () => {
+  assert.strictEqual(isUuid(''), false);
+});
+
+test('isUuid: UUID válido v4 con variante 9 → true', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-9716-446655440000'), true);
+});
+
+test('isUuid: UUID válido v4 con variante b → true', () => {
+  assert.strictEqual(isUuid('550e8400-e29b-41d4-b716-446655440000'), true);
+});
+
+// ---------------------------------------------------------------------------
+// T2.4 — B2: fix verifica existencia del hilo antes de commitear
+// ---------------------------------------------------------------------------
+
+test('fix: thread_id inexistente → exit 1, sin commit nuevo, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido para revisar\n', 'utf8');
+    await execFileAsync('git', ['add', docAbs], { cwd: gitRoot });
+
+    // UUID válido v4 pero que no corresponde a ningún hilo abierto
+    const nonExistentThreadId = randomUUID();
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+
+    const { stdout: logBefore } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    const commitsBefore = parseInt(logBefore.trim(), 10);
+
+    const code = await captureExit(() =>
+      runFix([docAbs, nonExistentThreadId, '-m', 'fix(doc): aplicado', '--body', 'Corrección aplicada'])
+    );
+
+    assert.strictEqual(code, 1, 'sale con código 1 cuando el hilo no existe');
+
+    // No se debe haber creado un commit nuevo
+    const { stdout: logAfter } = await execFileAsync(
+      'git', ['rev-list', '--count', 'HEAD'], { cwd: gitRoot }
+    );
+    assert.strictEqual(parseInt(logAfter.trim(), 10), commitsBefore, 'sin commit nuevo');
+
+    // No se debe haber emitido ningún evento
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T2.3 — B1: reanchor propaga uncertain cuando bestDist > threshold
+// ---------------------------------------------------------------------------
+
+test('reanchorThreads: ancla con bestDist > threshold emite uncertain:true y warning en stderr', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reanchor-uncertain-'));
+  try {
+    // Ancla original en offset 0; el texto actual la pone muy lejos (>200 chars)
+    const originalText = 'texto ancla';  // quote a buscar
+    await makeOpenedWithAnchor(dir, originalText, 0, 0);
+
+    // Desplazar el ancla más de 200 chars para forzar uncertain
+    const prefix = 'x'.repeat(201);
+    const shiftedText = prefix + originalText;
+
+    const events = await readEvents(dir);
+    const threads = project(events);
+
+    const stderrLines: string[] = [];
+    const origStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: unknown) => { stderrLines.push(String(chunk)); return true; };
+    let count: number;
+    try {
+      count = await reanchorThreads(shiftedText, threads, dir);
+    } finally {
+      process.stderr.write = origStderr;
+    }
+
+    assert.strictEqual(count, 1, 'emite 1 evento reanchored');
+
+    // El evento emitido debe llevar uncertain:true
+    const events2 = await readEvents(dir);
+    const reanchored = events2.filter(e => e.type === 'thread.reanchored');
+    assert.strictEqual(reanchored.length, 1, 'hay un evento thread.reanchored');
+    assert.strictEqual((reanchored[0] as Record<string, unknown>).uncertain, true,
+      'el evento lleva uncertain:true');
+
+    // stderr debe incluir aviso sobre uncertain
+    const stderrFull = stderrLines.join('');
+    assert.ok(stderrFull.includes('uncertain') || stderrFull.includes('incierto'),
+      'stderr incluye aviso de incertidumbre');
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// assign (T2.7 — C3)
+// ---------------------------------------------------------------------------
+
+test('assign: happy path → emite thread.assigned con agent correcto', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto de prueba\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto de prueba', 0, 0);
+
+    await runAssign([docAbs, tid, '--agent', 'reviser']);
+
+    const events = await readEvents(eventDir);
+    const assignEv = events.find(e => e.type === 'thread.assigned');
+    assert.ok(assignEv, 'hay evento thread.assigned');
+    assert.strictEqual(assignEv!.thread_id, tid, 'thread_id correcto');
+    assert.strictEqual((assignEv as Record<string, unknown>).agent, 'reviser', 'agent correcto');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('assign: agente inválido → exit 1, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto', 0, 0);
+
+    const code = await captureExit(() =>
+      runAssign([docAbs, tid, '--agent', 'agente-inexistente'])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con agente inválido');
+    const events = await readEvents(eventDir);
+    assert.ok(!events.some(e => e.type === 'thread.assigned'), 'sin evento thread.assigned');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('assign: hilo inexistente → exit 1, sin evento emitido', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const nonExistentTid = randomUUID();
+
+    const code = await captureExit(() =>
+      runAssign([docAbs, nonExistentTid, '--agent', 'reviser'])
+    );
+    assert.strictEqual(code, 1, 'exit 1 con hilo inexistente');
+    const events = await readEvents(eventDir);
+    assert.strictEqual(events.length, 0, 'ningún evento emitido');
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// project --thread (T2.8 — C3/P5)
+// ---------------------------------------------------------------------------
+
+test('project --thread: hilo existente → array de un elemento con ese thread_id', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'contenido del documento\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    const tid1 = await makeOpenedWithAnchor(eventDir, 'contenido del documento', 0, 0);
+    // Second thread to ensure filtering works
+    const tid2 = await makeOpenedWithAnchor(eventDir, 'documento', 12, 0);
+
+    let output = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      output += chunk.toString();
+      return true;
+    };
+    try {
+      await runProject([docAbs, '--thread', tid1]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const threads = JSON.parse(output) as ThreadProjection[];
+    assert.strictEqual(threads.length, 1, 'devuelve exactamente 1 hilo');
+    assert.strictEqual(threads[0].thread_id, tid1, 'el hilo es el solicitado');
+    assert.ok(!threads.some(t => t.thread_id === tid2), 'el segundo hilo no aparece');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('project --thread: hilo inexistente → array vacío', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    await makeOpenedWithAnchor(eventDir, 'texto', 0, 0);
+    const nonExistent = randomUUID();
+
+    let output = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      output += chunk.toString();
+      return true;
+    };
+    try {
+      await runProject([docAbs, '--thread', nonExistent]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const threads = JSON.parse(output) as ThreadProjection[];
+    assert.strictEqual(threads.length, 0, 'array vacío para hilo inexistente');
+  } finally {
+    await cleanup();
+  }
+});
+
+test('project --thread --pending: filtra al hilo si es pendiente', async () => {
+  const { gitRoot, cleanup } = await makeGitRepo();
+  try {
+    const docAbs = join(gitRoot, 'doc.md');
+    await writeFile(docAbs, 'texto de prueba\n', 'utf8');
+    const eventDir = join(gitRoot, '.ai', 'review', 'doc.md');
+    // Open a thread (human author → pending)
+    const tid = await makeOpenedWithAnchor(eventDir, 'texto de prueba', 0, 0);
+
+    let output = '';
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk: string | Uint8Array) => {
+      output += chunk.toString();
+      return true;
+    };
+    try {
+      await runProject([docAbs, '--pending', '--thread', tid]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+
+    const threads = JSON.parse(output) as ThreadProjection[];
+    assert.strictEqual(threads.length, 1, 'hilo pendiente aparece en el resultado');
+    assert.strictEqual(threads[0].thread_id, tid);
   } finally {
     await cleanup();
   }

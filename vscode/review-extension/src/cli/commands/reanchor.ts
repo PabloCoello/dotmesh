@@ -43,12 +43,15 @@ export async function runReanchor(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const docRelPath = path.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith('..')) {
+  // Use path.resolve + path.sep prefix check — same pattern as sidecarPathForDoc
+  // in sidecar.ts — to catch embedded traversal (e.g. foo/../../bar) that the
+  // simpler startsWith('..') check misses.
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const eventDir  = path.resolve(reviewDir, path.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path.sep)) {
     process.stderr.write('mesh-review: el documento no está dentro del git root\n');
     process.exit(1);
   }
-  const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
 
   let text: string;
   try {
@@ -111,6 +114,12 @@ export async function reanchorThreads(
       const newAnchor = createAnchor(text, resolved.startOffset, resolved.endOffset);
       // Si el ancla no ha cambiado (mismo offset, misma cita, mismo line_hint), no emitir
       if (!anchorChanged(stored, newAnchor)) continue;
+      if (resolved.uncertain) {
+        process.stderr.write(
+          `mesh-review reanchor: ancla incierta (uncertain) para hilo ${thread.thread_id} — ` +
+          'la cita se encontró pero muy alejada del offset original; verifica manualmente.\n'
+        );
+      }
       ev = {
         id: randomUUID(),
         version: 2,
@@ -121,6 +130,7 @@ export async function reanchorThreads(
         commit: null,
         dirty: false,
         anchor: newAnchor,
+        ...(resolved.uncertain ? { uncertain: true } : {}),
       };
     }
 

@@ -11,6 +11,9 @@ import {
   buildLaunchCommand,
   buildSendAllPrompt,
   buildFocusPrompt,
+  checkProcessAlive,
+  resolveCliBundle,
+  createPromiseQueue,
 } from './scribe-bridge-utils.ts';
 
 // UUID canónico de prueba
@@ -150,4 +153,108 @@ test('buildFocusPrompt entrecomilla lineLabel para neutralizar separadores de co
 test('buildFocusPrompt elimina caracteres de control C1 (CSI) de los valores', () => {
   const prompt = buildFocusPrompt('docs/informe.md', UUID, 'edita', 'L42\x9b31m');
   assert.ok(!prompt.includes('\x9b'), 'los caracteres C1 no deben llegar al terminal');
+});
+
+// ---------------------------------------------------------------------------
+// checkProcessAlive (T3.2)
+// ---------------------------------------------------------------------------
+
+test('checkProcessAlive devuelve true para el proceso actual (self)', () => {
+  // process.pid siempre existe mientras corre el test runner
+  const result = checkProcessAlive(process.pid);
+  assert.strictEqual(result, true, 'el proceso actual debe reportar alive=true');
+});
+
+test('checkProcessAlive devuelve false para un PID inexistente', () => {
+  // PID 99999999 es muy improbable que exista; si existiera, el test fallaría
+  // con un falso negativo no relacionado con el código. Tolerado por la naturaleza
+  // probabilística del test: si falla, revisar el entorno, no el código.
+  const result = checkProcessAlive(99999999);
+  assert.ok(result === false || result === undefined,
+    'un PID inexistente debe reportar alive=false o undefined (EPERM en algunos SO)');
+});
+
+test('checkProcessAlive devuelve undefined para PID no positivo (guardia defensiva)', () => {
+  assert.strictEqual(checkProcessAlive(0),  undefined, 'pid=0 debe devolver undefined');
+  assert.strictEqual(checkProcessAlive(-1), undefined, 'pid=-1 debe devolver undefined');
+  assert.strictEqual(checkProcessAlive(1.5), undefined, 'pid no entero debe devolver undefined');
+});
+
+// ---------------------------------------------------------------------------
+// resolveCliBundle (T3.3)
+// ---------------------------------------------------------------------------
+
+test('resolveCliBundle devuelve string o undefined (no lanza)', () => {
+  // Solo verificamos que no lanza: el bundle puede estar o no en este entorno.
+  let result: unknown;
+  assert.doesNotThrow(() => { result = resolveCliBundle(); });
+  assert.ok(result === undefined || typeof result === 'string',
+    'resolveCliBundle debe devolver string o undefined');
+});
+
+test('resolveCliBundle usa MESH_REVIEW_CLI si apunta a un fichero existente', () => {
+  // process.execPath siempre existe en cualquier entorno donde corren los tests.
+  const realPath = process.execPath;
+  const prev = process.env['MESH_REVIEW_CLI'];
+  process.env['MESH_REVIEW_CLI'] = realPath;
+  try {
+    const result = resolveCliBundle();
+    assert.strictEqual(result, realPath,
+      'debe preferir MESH_REVIEW_CLI sobre las rutas conocidas cuando el fichero existe');
+  } finally {
+    if (prev === undefined) delete process.env['MESH_REVIEW_CLI'];
+    else process.env['MESH_REVIEW_CLI'] = prev;
+  }
+});
+
+test('resolveCliBundle ignora MESH_REVIEW_CLI si el fichero no existe', () => {
+  const prev = process.env['MESH_REVIEW_CLI'];
+  process.env['MESH_REVIEW_CLI'] = '/ruta/inexistente/mesh-review.mjs';
+  try {
+    const result = resolveCliBundle();
+    assert.ok(result !== '/ruta/inexistente/mesh-review.mjs',
+      'una ruta inexistente en MESH_REVIEW_CLI no debe devolverse');
+    assert.ok(result === undefined || typeof result === 'string',
+      'el resultado debe ser string o undefined');
+  } finally {
+    if (prev === undefined) delete process.env['MESH_REVIEW_CLI'];
+    else process.env['MESH_REVIEW_CLI'] = prev;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// createPromiseQueue (T3.4)
+// ---------------------------------------------------------------------------
+
+test('createPromiseQueue serializa dos envíos concurrentes en orden', async () => {
+  const enqueue = createPromiseQueue();
+  const order: number[] = [];
+  // p1 tarda 20 ms; p2 se encola antes de que p1 termine.
+  const p1 = enqueue(() => new Promise<void>(r => setTimeout(() => { order.push(1); r(); }, 20)));
+  const p2 = enqueue(async () => { order.push(2); });
+  await Promise.all([p1, p2]);
+  assert.deepEqual(order, [1, 2], 'p2 debe ejecutarse después de p1 aunque se encolen a la vez');
+});
+
+test('createPromiseQueue no bloquea la cola tras un rechazo', async () => {
+  const enqueue = createPromiseQueue();
+  // p1 rechaza; p2 debe ejecutarse igualmente.
+  const p1 = enqueue(async () => { throw new Error('fallo intencional'); });
+  let ran = false;
+  const p2 = enqueue(async () => { ran = true; });
+  await p1.catch(() => {}); // consumir el rechazo para que el test no falle aquí
+  await p2;
+  assert.equal(ran, true, 'p2 debe ejecutarse aunque p1 haya rechazado');
+});
+
+test('createPromiseQueue propaga el rechazo al caller sin perderlo', async () => {
+  const enqueue = createPromiseQueue();
+  const p1 = enqueue(async () => { throw new Error('rechazo visible'); });
+  await assert.rejects(p1, /rechazo visible/, 'el caller debe poder observar el error de fn');
+});
+
+test('createPromiseQueue devuelve el valor de retorno de fn', async () => {
+  const enqueue = createPromiseQueue();
+  const result = await enqueue(async () => 42);
+  assert.equal(result, 42, 'debe propagar el valor de retorno de fn al caller');
 });

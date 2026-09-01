@@ -814,6 +814,8 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
   --
   -- El mismo puente que <líder>rs, pero con el hilo concreto en el prompt en vez
   -- del documento entero: desde el panel se está mirando un hilo, no la lista.
+  -- Tipo y línea salen del hilo renderizado, con el mismo rótulo que la tarjeta
+  -- de la extensión VS Code («L12» 1-based, o «(desanclado)» sin ancla).
   vim.keymap.set("n", "a", function()
     local tid = hilo_o_aviso()
     if not tid then return end
@@ -821,8 +823,18 @@ local function _register_keymaps(panel_bufnr, source_bufnr, doc)
       vim.notify("[mesh-review] HERDR_ENV no está activo", vim.log.levels.WARN)
       return
     end
+    local type_label, line_label = "comentario", "(desanclado)"
+    for _, t in ipairs(_state.threads or {}) do
+      if t.thread_id == tid then
+        type_label = t.commentType or type_label
+        if t.anchor and t.anchor.line_hint ~= nil then
+          line_label = "L" .. (t.anchor.line_hint + 1)
+        end
+        break
+      end
+    end
     local scribe = require("mesh_review.scribe")
-    scribe.ensure_and_prompt(doc, scribe.build_thread_prompt(doc, tid))
+    scribe.ensure_and_prompt_thread(doc, tid, type_label, line_label)
   end, vim.tbl_extend("force", opts, { desc = "Mandar el hilo a la IA" }))
 
   -- Y → copiar el thread_id del hilo bajo el cursor.

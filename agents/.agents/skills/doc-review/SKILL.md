@@ -107,7 +107,7 @@ After sorting, fold events into a `Map<thread_id, ThreadProjection>` in order:
 
 | Event type | Fold action |
 |---|---|
-| `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `refs` if present on the event. |
+| `thread.opened` | Seeds a new `ThreadProjection`: `status: "open"`, `openedCommit: ev.commit ?? null`, `messages: [{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }]`. Optionally sets `assignee`, `confidence`, `rationale`, `refs` if present on the event. |
 | `message.posted` | Appends `{ id, body, author, created_at, retracted: false, commit: ev.commit ?? null }` to `messages`. If the event carries `confidence`, propagates it to the message projection. |
 | `message.revised` | Finds the message whose `id` equals `target_message_id`; replaces its `body`. |
 | `message.retracted` | Finds the message whose `id` equals `target_message_id`; sets `retracted: true`. |
@@ -131,6 +131,7 @@ ThreadProjection {
   assignee?      : string
   assignedAt?    : ISO timestamp          // created_at of the most recent thread.assigned event; drives the --pending predicate
   confidence?    : "alta" | "media" | "baja"
+  rationale?     : string                 // copied from thread.opened; justification for supuesto/verifica threads
   refs?          : Array<{ title, url?, note? }>
   messages       : MessageProjection[]   // [0] = opening text
   openedAt       : ISO timestamp
@@ -149,6 +150,8 @@ MessageProjection {
 }
 ```
 
+**Reserved envelope fields (not projected):** `dirty` is a metadata flag written by every command (`dirty: false`) to indicate the event was emitted against a clean worktree; it is preserved in raw events for forensic use but is never surfaced in `ThreadProjection`. `parent_id` appears in the `message.posted` schema as a reserved slot for future nested-threading support; it has no current effect and is silently ignored during projection — do not use it in new events.
+
 Derived fields used by the card UI:
 
 - **`fixCommit`** (not stored in the projection itself; computed at view time): the `commit` value of the last non-retracted `message.posted` with `author.kind === "ai"` and `commit !== null`.
@@ -162,7 +165,7 @@ Before applying an `edita`/`sugerencia` or answering a `pregunta`, resolve the a
 
 1. Search for an exact substring match of `anchor.quote`.
 2. **One match** → that is the position. Proceed.
-3. **Multiple matches** → choose the one whose start offset is closest to `anchor.char_offset`; break ties by proximity to `anchor.line_hint`.
+3. **Multiple matches** → choose the one whose start offset is closest to `anchor.char_offset`.
 4. **No match (the quoted text is gone)** → do not invent a position. If the section can be identified with confidence from `messages[0].body`, note the discrepancy and, when you move the thread, **append** a `thread.reanchored` event carrying the new `anchor`. If it cannot be located with confidence, **append** a `thread.reanchored` event with `detached: true` (which transitions the thread to `detached`) and report it — never fabricate a location.
 
 Threads already projected with `anchor: { detached: true }` have no current position: surface them for the human to re-anchor rather than guessing.
@@ -196,6 +199,10 @@ Check these before touching any file or running any git command:
 3. **Must not be on the default branch.** Run `git branch --show-current`. Compare with `git symbolic-ref --short refs/remotes/origin/HEAD` (falls back to `git config init.defaultBranch`). If on the default branch, go to §5 before touching any file.
 
 Run all three checks once per session at the start of the pass. In watchful-mode iterations, re-run only check 1 (worktree cleanliness for the document under review) before each commit. Checks 2 and 3 do not change between iterations.
+
+**Watchful-mode loop rules (check 1 outcome):**
+- **Document dirty** — skip this iteration without committing and without doubling the loop interval. Pending work exists; resume when the document is clean.
+- **Pending threads found and processed** — reset the loop interval to its base value after the pass completes.
 
 ---
 
@@ -297,14 +304,16 @@ Route open threads to subagents based on `assignee` from `thread.assigned` event
 
 | Signal | Subagent |
 |---|---|
-| `assignee: "security"` or `verifica` on a security claim | `security` |
-| `assignee: "maths"` or `verifica` on a quantitative/mathematical claim | `maths` |
+| `assignee: "security"` | `security` |
+| `assignee: "maths"` | `maths` |
 | `assignee: "reviser"` | `reviser` |
 | `assignee: "editor"` | `editor` |
-| `edita` or `sugerencia` (prose change, no assignee) | `reviser` |
-| `pregunta` requiring factual research (no assignee) | `editor` |
+| `edita`, `sugerencia`, or `pregunta` (no assignee) | `reviser` |
+| `verifica` (no assignee) | `reviser`; escalate to `security` or `maths` if the body indicates |
 | `nota`, `referencia`, `supuesto` (annotations) | principal |
 | No assignee, no clear signal | principal |
+
+**Batching before fan-out.** Group actionable threads whose `line_hint` values are within 50 lines of each other into batches (max 5 threads per batch). Delegate each batch to the reviser in a single call.
 
 **Inline context for fan-out.** When delegating a thread to a subagent, the principal extracts ±20 lines of the document surrounding `anchor.char_offset` and includes them verbatim in the delegation prompt. The subagent uses this extract as its primary source for understanding the anchored text; it re-reads the full document or event directory only if the inline extract is insufficient or absent.
 
@@ -322,7 +331,7 @@ Every review session produces a structured response with five parts:
 |---|---|---|---|
 | 1 | **Contexto** | always | Document path, number of open threads, current branch, git commit range if available. |
 | 2 | **Alcance** | always | Which threads are addressed in this session (IDs and types). |
-| 3 | **Supuestos** | conditional | Non-obvious assumptions made during the review. Omit if none. |
+| 3 | **Supuestos y limitaciones** | conditional | `supuesto`-type threads with their `confidence` and `rationale`. Omit if none. |
 | 4 | **Tareas accesorias** | conditional | Work items identified that fall outside the review scope (e.g. TODOs, follow-up spikes). Each is persisted to `<git-root>/.ai/backlog/<id>.json` with fields `{ id, doc, session, author, commit, body }`. Omit if none. |
 | 5 | **Preguntas** | always | Open questions for the human that are blocking or significantly affect the review. May be an empty list. |
 
@@ -351,7 +360,7 @@ Duplicate `thread.reanchored` events for the same thread are innocuous: the proj
 
 ## 11. Fix event checklist
 
-`readEvents` silently discards any event that fails one of these predicates. Emit events that pass all three or they will not appear in the projection:
+`readEvents` silently discards any event that fails one of these predicates. Emit events that pass all of them or they will not appear in the projection:
 
 | Discard condition | Effect |
 |---|---|
@@ -359,7 +368,11 @@ Duplicate `thread.reanchored` events for the same thread are innocuous: the proj
 | `id` or `thread_id` is not a UUID v4 | Field missing, not a string, or wrong format; the event is ignored. |
 | `body` is present but not a string | Type mismatch (`null`, number, or object); the event is ignored. |
 | `author` is missing, not an object, or `author.kind` is not `"human"` or `"ai"` | Required field absent or invalid; the event is ignored. A single aggregated `console.warn` is emitted per `readEvents` call listing the count of discarded events. |
+| `author.kind === "ai"` and `author.model` is missing or not a string | AI events without a model identifier are discarded; the model field is required for AI authorship. Folded into the aggregated `console.warn`. |
+| `anchor` is present and any of: `anchor.line_hint` or `anchor.char_offset` is not a number, or `anchor.quote` is not a string | Malformed anchor; the event is ignored. Folded into the aggregated `console.warn`. |
 | File size exceeds 1 MiB | The file is skipped without reading. Folded into the same aggregated `console.warn`. A legitimate event is a few hundred bytes; any file larger than 1 MiB is assumed malformed or malicious. |
+
+**Default `author.model` for `fix` and `reanchor`.** When these subcommands are invoked without an explicit `--model` flag, they write `author.model: "mesh-review-cli"` on AI-authored events. This value passes the discard predicate above and appears in the author pill of the VS Code extension.
 
 For the badge and diff to work correctly in the VS Code extension, a fix `message.posted` must also satisfy:
 
@@ -542,4 +555,31 @@ node ~/.claude/skills/doc-review/bin/mesh-review.mjs retract docs/SPEC.md \
 node ~/.claude/skills/doc-review/bin/mesh-review.mjs reply docs/SPEC.md "$THREAD_ID" \
   --author ai --model "claude-sonnet-4-5" \
   --body "Corrección: la afirmación es incorrecta según [fuente]."
+```
+
+### 13.5 `emit` (vía de bajo nivel)
+
+Writes a raw V2 event to the event directory without the argument ergonomics of the typed subcommands. Intended for **harness scripts, integration tests, and external tooling** that construct events programmatically. Prefer `open`, `reply`, `resolve`, or `retract` whenever possible — they validate types, enforce anchor shapes, and guard invariants. Use `emit` only when you need to write an event type that none of the typed subcommands cover (e.g. `thread.assigned` before `assign` ships, or testing unusual event sequences).
+
+> **Advertencia:** `emit` es una vía de bajo nivel que puede escribir valores **fuera de las allowlists** de los subcomandos de alto nivel. Por ejemplo, el campo `agent` de `thread.assigned` está restringido por `assign` a `security | maths | reviser | editor`, pero `emit` acepta cualquier cadena que supere las guardas de `body`. Úsalo solo cuando lo que necesites no cabe en un subcomando tipado.
+
+```
+mesh-review emit <doc> <event-type> [key=value ...]
+```
+
+Key-value pairs are merged into the event after the fixed fields (`id`, `version`, `type`, `created_at`, `dirty: false`). Dot-notation builds nested objects: `author.kind=ai author.model=my-model`. The two numeric anchor fields (`anchor.line_hint`, `anchor.char_offset`) are coerced to non-negative integers; all other values remain strings unless the literal is `null`, `true`, or `false`.
+
+**Validation:** `id` and `thread_id` (if present) must be UUID v4. If `body` is present it must be a non-empty string (≥ 1 character) and must not contain C0 control characters (U+0001–U+0008, U+000B–U+000C, U+000E–U+001F), DEL (U+007F), or C1 characters (U+0080–U+009F); tab, LF and CR are allowed.
+
+**stdout:** UUID of the written event, followed by a newline.
+
+**Example:**
+
+```bash
+# Emit a thread.assigned event (until assign ships as a typed subcommand)
+node ~/.claude/skills/doc-review/bin/mesh-review.mjs emit docs/SPEC.md thread.assigned \
+  thread_id="$THREAD_ID" \
+  agent=reviser \
+  author.kind=human \
+  commit=null
 ```

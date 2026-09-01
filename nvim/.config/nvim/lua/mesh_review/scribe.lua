@@ -4,11 +4,11 @@
 --- respuestas herdr) de la lógica asíncrona que ejecuta procesos externos,
 --- de modo que las primeras sean verificables en headless sin proceso externo.
 ---
---- Funciones puras exportadas: build_prompt, build_thread_prompt, build_get_argv,
---- build_split_argv, build_start_argv, build_wait_argv, build_prompt_argv,
---- build_read_pane_argv, build_focus_agent_argv, is_trust_dialog, pick_payload,
---- parse_herdr_response.
---- Función impura principal: ensure_and_prompt.
+--- Funciones puras exportadas: build_prompt, build_focus_thread_prompt,
+--- build_get_argv, build_split_argv, build_start_argv, build_wait_argv,
+--- build_prompt_argv, build_read_pane_argv, build_focus_agent_argv,
+--- is_trust_dialog, pick_payload, parse_herdr_response.
+--- Funciones impuras principales: ensure_and_prompt, ensure_and_prompt_thread.
 ---
 --- Por qué ruta absoluta en el prompt: el prompt se ejecuta en un pane cuyo
 --- cwd no controlamos del todo. mesh-review acepta rutas absolutas y así se
@@ -53,6 +53,16 @@ local function shell_quote(value)
   return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
+--- Tipos de comentario válidos según el schema de eventos: el mismo conjunto
+--- que VALID_COMMENT_TYPES en la extensión VS Code (sidecar.ts). El prompt solo
+--- interpola tipos de esta lista; cualquier otro valor del sidecar cae a la
+--- etiqueta neutra «comentario», con lo que un commentType manipulado no puede
+--- colar texto en un prompt que va a leer un agente.
+local VALID_COMMENT_TYPES = {
+  edita = true, sugerencia = true, pregunta = true, verifica = true,
+  nota = true, referencia = true, supuesto = true,
+}
+
 -- ---------------------------------------------------------------------------
 -- Constructoras de texto del prompt (puras, testeables sin proceso externo)
 -- ---------------------------------------------------------------------------
@@ -74,25 +84,41 @@ function M.build_prompt(doc_abs)
     .. ". Ejecuta: mesh-review project --pending " .. doc
 end
 
---- Construye el prompt de «procesa este hilo» para la sesión scribe.
+--- Construye el texto del prompt «foco en un hilo concreto» para la sesión scribe.
 ---
---- Misma forma que build_prompt pero con un hilo concreto: es lo que manda el
---- panel, donde se está mirando un hilo y no la lista de pendientes. El agente
---- proyecta el documento entero porque el CLI no tiene una lectura por hilo;
---- el id le dice sobre cuál actuar.
+--- Equivalente a buildFocusPrompt de la extensión de VS Code.
+---
+--- Usa «mesh-review project» (sin --pending ni --thread) a propósito: el clic del
+--- usuario en «enviar hilo» es la reactivación explícita, y un hilo cuyo último
+--- mensaje es de IA no aparece en --pending. Pasar el contexto completo del doc
+--- permite que scribe decida si también necesita ver hilos vecinos.
+---
+--- Decisión de diseño frente a «project --thread <id>»: se podría restringir el
+--- contexto enviando solo el hilo pedido, pero el agente pierde información sobre
+--- la coherencia de los hilos vecinos. La extensión VS Code también usa «project»
+--- sin --thread (ver buildFocusPrompt en scribe-bridge-utils.ts). Esta
+--- implementación de Neovim sigue la misma decisión para mantener la paridad.
 ---
 --- El id se filtra a `[A-Za-z0-9-]`. Es un UUID, así que el filtro no le quita
 --- nada legítimo, y evita que un sidecar manipulado cuele instrucciones dentro
---- de un prompt que va a leer un agente.
+--- de un prompt que va a leer un agente. El tipo se valida contra la lista
+--- blanca del schema (VALID_COMMENT_TYPES) y fuera de ella cae a «comentario»,
+--- igual que buildFocusPrompt en la extensión VS Code.
 ---
---- @param doc_abs   string  Ruta absoluta al documento.
---- @param thread_id string  UUID del hilo.
+--- @param doc_abs    string  Ruta absoluta al documento.
+--- @param thread_id  string  UUID del hilo.
+--- @param type_label string  Tipo de comentario (nota, edita, duda, etc.).
+--- @param line_label string  Etiqueta de línea ("L42" o "(desanclado)").
 --- @return string  Texto del prompt listo para enviar a herdr agent prompt.
-function M.build_thread_prompt(doc_abs, thread_id)
-  local doc = shell_quote(to_single_line(doc_abs))
-  local tid = tostring(thread_id or ""):gsub("[^%w%-]", "")
-  return "Procesa el hilo de revisión " .. tid .. " del documento " .. doc
-    .. ". Ejecuta: mesh-review project " .. doc
+function M.build_focus_thread_prompt(doc_abs, thread_id, type_label, line_label)
+  local doc  = shell_quote(to_single_line(doc_abs))
+  local tid  = tostring(thread_id or ""):gsub("[^%w%-]", "")
+  local tipo = VALID_COMMENT_TYPES[type_label] and type_label or "comentario"
+  local line = shell_quote(to_single_line(line_label))
+  return "Céntrate única y exclusivamente en el hilo " .. tid
+    .. " (" .. tipo .. " en " .. line .. ")."
+    .. " No proceses ningún otro hilo."
+    .. " Para el contexto ejecuta: mesh-review project " .. doc
 end
 
 -- ---------------------------------------------------------------------------
@@ -451,6 +477,38 @@ local function create_session_and_prompt(prompt_text, pane_id, cwd)
   end)
 end
 
+--- Asegura que existe una sesión scribe y le envía un prompt construido por el caller.
+---
+--- Función interna compartida por ensure_and_prompt y ensure_and_prompt_thread.
+--- Separa la construcción del prompt de la lógica de creación de sesión.
+---
+--- @param prompt_text string  Texto del prompt ya construido.
+--- @param doc_abs     string  Ruta absoluta al documento (solo para --cwd del pane).
+local function _ensure_and_prompt_raw(prompt_text, doc_abs)
+  local pane_id = vim.env.HERDR_PANE_ID
+  if not pane_id or pane_id == "" then
+    vim.notify("[mesh-review] scribe: HERDR_PANE_ID no disponible", vim.log.levels.WARN)
+    return
+  end
+
+  local cwd = vim.fn.fnamemodify(doc_abs, ":h")
+
+  vim.system(M.build_get_argv(), { text = true }, function(get_result)
+    local parsed = M.parse_herdr_response(M.pick_payload(get_result.stdout, get_result.stderr))
+    if parsed.ok then
+      do_prompt(prompt_text, false)
+    elseif parsed.error_code == "agent_not_found" then
+      create_session_and_prompt(prompt_text, pane_id, cwd)
+    else
+      local msg = parsed.raw_error
+        or parsed.error_code
+        or (get_result.stderr and get_result.stderr ~= "" and get_result.stderr)
+        or "error desconocido"
+      notify_error("agent get: " .. msg)
+    end
+  end)
+end
+
 --- Asegura que existe una sesión scribe y le envía el prompt de pendientes.
 ---
 --- Flujo:
@@ -465,41 +523,23 @@ end
 --- Toda la cadena es asíncrona; nada bloquea el hilo principal de Neovim.
 ---
 --- @param doc_abs string  Ruta absoluta al documento (base del prompt y --cwd del pane).
---- @param prompt  string|nil  Texto a enviar. Por defecto, los hilos pendientes
----                            del documento; el panel manda uno por hilo.
-function M.ensure_and_prompt(doc_abs, prompt)
-  local pane_id = vim.env.HERDR_PANE_ID
-  if not pane_id or pane_id == "" then
-    vim.notify("[mesh-review] scribe: HERDR_PANE_ID no disponible", vim.log.levels.WARN)
-    return
-  end
+function M.ensure_and_prompt(doc_abs)
+  local prompt_text = M.build_prompt(doc_abs)
+  _ensure_and_prompt_raw(prompt_text, doc_abs)
+end
 
-  -- El cwd del nuevo pane es el directorio del documento. Es la mejor
-  -- aproximación al contexto del fichero sin depender de un git root
-  -- que puede no existir (p.ej. fichero fuera de un repositorio).
-  local cwd = vim.fn.fnamemodify(doc_abs, ":h")
-  local prompt_text = prompt or M.build_prompt(doc_abs)
-
-  vim.system(M.build_get_argv(), { text = true }, function(get_result)
-    -- Se parsea el JSON en vez de mirar solo el exit code porque hace falta el
-    -- código concreto: «agent_not_found» significa «crea la sesión» y cualquier
-    -- otro es un fallo que reportar. Ese JSON llega por stderr, no por stdout
-    -- (ver pick_payload).
-    local parsed = M.parse_herdr_response(M.pick_payload(get_result.stdout, get_result.stderr))
-    if parsed.ok then
-      -- La sesión ya existe: enviar el prompt directamente.
-      do_prompt(prompt_text, false)
-    elseif parsed.error_code == "agent_not_found" then
-      -- La sesión no existe: crearla antes de enviar.
-      create_session_and_prompt(prompt_text, pane_id, cwd)
-    else
-      local msg = parsed.raw_error
-        or parsed.error_code
-        or (get_result.stderr and get_result.stderr ~= "" and get_result.stderr)
-        or "error desconocido"
-      notify_error("agent get: " .. msg)
-    end
-  end)
+--- Asegura que existe una sesión scribe y le envía el prompt de foco en un hilo.
+---
+--- Equivalente a la acción «scribe-focus» de la extensión VS Code: el usuario
+--- quiere que scribe atienda únicamente el hilo indicado en este documento.
+---
+--- @param doc_abs    string  Ruta absoluta al documento.
+--- @param thread_id  string  UUID del hilo.
+--- @param type_label string  Tipo de comentario (nota, edita, duda…).
+--- @param line_label string  Etiqueta de línea ("L42" o "(desanclado)").
+function M.ensure_and_prompt_thread(doc_abs, thread_id, type_label, line_label)
+  local prompt_text = M.build_focus_thread_prompt(doc_abs, thread_id, type_label, line_label)
+  _ensure_and_prompt_raw(prompt_text, doc_abs)
 end
 
 return M

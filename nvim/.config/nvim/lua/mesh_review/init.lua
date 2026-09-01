@@ -275,6 +275,84 @@ function M.prompt_scribe()
   scribe.ensure_and_prompt(doc)
 end
 
+--- Muestra un selector de agente y asigna el hilo actual a él.
+---
+--- Equivalente al QuickPick «Asignar hilo a subagente» de la extensión VS Code:
+--- selección interactiva con vim.ui.select de los cuatro subagentes válidos
+--- (security, maths, reviser, editor), seguida de una llamada a `cli.assign`.
+---
+--- @param thread_id string  UUID del hilo a asignar.
+--- @param doc string|nil    Ruta al documento (si es nil usa el buffer activo).
+function M.assign_thread(thread_id, doc)
+  doc = doc or _current_doc()
+  if not doc or doc == "" then
+    vim.notify("[mesh-review] El buffer no tiene nombre de fichero", vim.log.levels.ERROR)
+    return
+  end
+  if not thread_id or thread_id == "" then
+    vim.notify("[mesh-review] assign_thread: thread_id requerido", vim.log.levels.ERROR)
+    return
+  end
+
+  local agents = { "security", "maths", "reviser", "editor" }
+  local descriptions = {
+    security = "Revisor de seguridad — hardening, secretos, permisos",
+    maths    = "Revisor de lógica y matemáticas",
+    reviser  = "Revisor conversacional — doc-review",
+    editor   = "Editor de prosa",
+  }
+
+  vim.ui.select(agents, {
+    prompt = "Asignar hilo a subagente:",
+    format_item = function(item)
+      return item .. " — " .. (descriptions[item] or "")
+    end,
+  }, function(choice)
+    if not choice then return end
+    local event_id, err = cli.assign(doc, thread_id, choice)
+    if err then
+      vim.notify("[mesh-review] assign: " .. err, vim.log.levels.ERROR)
+    else
+      vim.notify("[mesh-review] hilo asignado a " .. choice .. " (" .. (event_id or "?") .. ")",
+        vim.log.levels.INFO)
+    end
+  end)
+end
+
+--- Envía un hilo concreto a la sesión scribe (puente por hilo).
+---
+--- Equivalente a la acción «scribe-focus» de la extensión VS Code: le pide a
+--- scribe que se centre única y exclusivamente en el hilo indicado. Solo actúa
+--- si HERDR_ENV=1; en caso contrario avisa.
+---
+--- El prompt usa «mesh-review project <doc>» (sin --pending ni --thread) para
+--- que scribe tenga el contexto completo del documento —la misma decisión que
+--- buildFocusPrompt en scribe-bridge-utils.ts de la extensión VS Code—, pero
+--- la instrucción explícita al agente lo dirige únicamente al hilo pedido.
+---
+--- @param thread_id  string      UUID del hilo.
+--- @param doc        string|nil  Ruta al documento (si es nil usa el buffer activo).
+--- @param type_label string|nil  Tipo de comentario; si es nil se usa «comentario».
+--- @param line_label string|nil  Etiqueta de línea; si es nil se usa «(desanclado)».
+function M.focus_scribe_thread(thread_id, doc, type_label, line_label)
+  if vim.env.HERDR_ENV ~= "1" then
+    vim.notify("[mesh-review] HERDR_ENV no está activo", vim.log.levels.WARN)
+    return
+  end
+  doc = doc or _current_doc()
+  if not doc or doc == "" then
+    vim.notify("[mesh-review] El buffer no tiene nombre de fichero", vim.log.levels.WARN)
+    return
+  end
+  if not thread_id or thread_id == "" then
+    vim.notify("[mesh-review] focus_scribe_thread: thread_id requerido", vim.log.levels.WARN)
+    return
+  end
+  type_label = type_label or "comentario"
+  line_label = line_label or "(desanclado)"
+  scribe.ensure_and_prompt_thread(doc, thread_id, type_label, line_label)
+end
+
 --- Inicializa el plugin.
 ---
 --- @param opts table|nil  Opciones:
@@ -373,6 +451,52 @@ function M.setup(opts)
   end, {
     nargs = "+",
     desc  = "Retractar un mensaje de hilo",
+  })
+
+  vim.api.nvim_create_user_command("MeshAssign", function(cmd_opts)
+    local args = vim.split(cmd_opts.args, "%s+", { trimempty = true })
+    if #args < 1 then
+      vim.notify(":MeshAssign <thread_id> [agent]", vim.log.levels.ERROR)
+      return
+    end
+    local thread_id = args[1]
+    if #args >= 2 then
+      -- Agente pasado directamente (no interactivo): útil en scripts y macros.
+      local agent = args[2]
+      local doc = _current_doc()
+      if not doc then
+        vim.notify("[mesh-review] El buffer no tiene nombre de fichero", vim.log.levels.ERROR)
+        return
+      end
+      local event_id, err = cli.assign(doc, thread_id, agent)
+      if err then
+        vim.notify("[mesh-review] assign: " .. err, vim.log.levels.ERROR)
+      else
+        vim.notify("[mesh-review] hilo asignado a " .. agent .. " (" .. (event_id or "?") .. ")",
+          vim.log.levels.INFO)
+      end
+    else
+      -- Sin agente: mostrar el selector interactivo.
+      M.assign_thread(thread_id)
+    end
+  end, {
+    nargs = "+",
+    desc  = "Asignar un hilo a un subagente (interactivo si no se pasa agente)",
+  })
+
+  vim.api.nvim_create_user_command("MeshFocusThread", function(cmd_opts)
+    local args = vim.split(cmd_opts.args, "%s+", { trimempty = true })
+    if #args < 1 then
+      vim.notify(":MeshFocusThread <thread_id> [type] [line_label]", vim.log.levels.ERROR)
+      return
+    end
+    local thread_id  = args[1]
+    local type_label = args[2]   -- opcional
+    local line_label = args[3]   -- opcional
+    M.focus_scribe_thread(thread_id, nil, type_label, line_label)
+  end, {
+    nargs = "+",
+    desc  = "Enviar un hilo concreto a la sesión scribe",
   })
 
   -- Grupos de highlight del plugin (fondo tintado por tipo, signo y etiqueta).
