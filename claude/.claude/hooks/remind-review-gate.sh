@@ -32,11 +32,13 @@ if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
   # Honour the marker only if it belongs to the current UID (prevents a
   # world-writable /tmp pre-creation from silently suppressing the warning).
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
-  fi
+  # Anything at that path counts as already warned, and the marker is a
+  # directory: mkdir never follows a symlink in the final component, so a marker
+  # pre-seeded in a shared TMPDIR cannot make this hook create or truncate a file
+  # elsewhere. Audited 2026-09-02.
+  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
   printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
+  mkdir "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
@@ -131,16 +133,19 @@ if [ "$is_subagent" -eq 1 ]; then
   sid=$(printf '%s' "$input" | jq -r '.session_id // empty' | tr -cd 'A-Za-z0-9_-')
   [ -z "$sid" ] && sid="nosession"
   marker="${TMPDIR:-/tmp}/dotmesh-review-gate-${sid}-${aid}"
-  # Honour the marker only if it is ours, so a world-writable /tmp cannot be
-  # pre-seeded to disable the block. When stat cannot tell (portability), trust
-  # the marker: repeating the block is worse than skipping it.
-  owner=$(stat -c %u "$marker" 2>/dev/null || stat -f %u "$marker" 2>/dev/null || true)
+  # Anything already sitting at that path counts as spent, whoever put it there.
+  # In a shared TMPDIR a third party can pre-seed it and skip one block, but
+  # treating a foreign marker as unspent would block every commit with no way
+  # out, which is the worse failure.
   blocked_before=0
-  if [ -e "$marker" ] && { [ -z "$owner" ] || [ "$owner" = "$(id -u)" ]; }; then
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
     blocked_before=1
   fi
   if [ "$blocked_before" -eq 0 ]; then
-    : > "$marker" 2>/dev/null || true
+    # mkdir, not a redirection: it never follows a symlink in the final
+    # component, so a pre-seeded marker cannot make this hook create or truncate
+    # a file elsewhere. Audited 2026-09-02.
+    mkdir "$marker" 2>/dev/null || true
     printf '%s\n' "$msg" >&2
     exit 2
   fi

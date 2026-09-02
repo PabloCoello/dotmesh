@@ -930,6 +930,33 @@ run_slice "$tp" "$slicerepo" "$td"
   || fail "el marcador saboteado deja la sesión sin poder cerrar"
 git -C "$slicerepo" checkout -q -- modulo.sh
 
+section "marcadores: ningún hook escribe a través de un enlace"
+# La auditoría del 2026-09-02 encontró la vía en los hooks de Stop, pero el
+# patrón `: > "$marcador"` era el de la casa y estaba en los siete. Con un
+# TMPDIR compartido, quien acierte el session_id presiembra el marcador como
+# enlace y el hook crea o vacía el fichero de destino.
+redirecciones=$(grep -ln ': > "\$' "$HOOKS"/*.sh || true)
+[ -z "$redirecciones" ] \
+  && pass "ningún hook crea marcadores con redirección" \
+  || fail "todavía crean marcadores con redirección: $(printf '%s' "$redirecciones" | xargs -n1 basename | tr '\n' ' ')"
+
+# El recordatorio de skills marca una vez por agente.
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
+run_skills Write /tmp/x.txt "" "$td" >/dev/null
+[ ! -e "$TMP/inexistente-skills.txt" ] \
+  && pass "remind-load-skills no crea el destino del enlace" \
+  || fail "remind-load-skills escribió a través del enlace"
+
+# El gate de revisión bloquea una vez por subagente.
+td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
+ln -s "$TMP/inexistente-gate2.txt" "$td/dotmesh-review-gate-sesion-1-abc123"
+tp=$(make_transcripts no no)
+msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+[ ! -e "$TMP/inexistente-gate2.txt" ] \
+  && pass "remind-review-gate no crea el destino del enlace" \
+  || fail "remind-review-gate escribió a través del enlace"
+
 section "commit por slice: falla abierto y está registrado"
 run_slice "$TMP/no-existe.jsonl" "$slicerepo"
 [ "$(slice_rc)" -eq 0 ] && pass "sin transcript, falla abierto" || fail "bloqueó sin transcript"

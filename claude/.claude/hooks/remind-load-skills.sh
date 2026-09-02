@@ -31,11 +31,13 @@ if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
   # Honour the marker only if it belongs to the current UID (prevents a
   # world-writable /tmp pre-creation from silently suppressing the warning).
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
-  fi
+  # Anything at that path counts as already warned, and the marker is a
+  # directory: mkdir never follows a symlink in the final component, so a marker
+  # pre-seeded in a shared TMPDIR cannot make this hook create or truncate a file
+  # elsewhere. Audited 2026-09-02.
+  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
   printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
+  mkdir "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
@@ -75,8 +77,10 @@ aid=$(printf '%s' "$input" | jq -r '.agent_id // empty' | tr -cd 'A-Za-z0-9_-')
 [ -z "$sid" ] && sid="nosession"
 [ -z "$aid" ] && aid="main"
 marker="${TMPDIR:-/tmp}/dotmesh-skill-reminder-${sid}-${aid}"
-[ -e "$marker" ] && exit 0
-: > "$marker" 2>/dev/null || true
+# mkdir, not a redirection: a marker pre-seeded as a symlink in a shared TMPDIR
+# would otherwise make this hook create or truncate a file elsewhere.
+{ [ -e "$marker" ] || [ -L "$marker" ]; } && exit 0
+mkdir "$marker" 2>/dev/null || true
 
 read -r -d '' msg <<'EOF' || true
 Recordatorio dotmesh (una vez por agente): vas a implementar. Carga la skill que

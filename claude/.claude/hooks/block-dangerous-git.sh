@@ -31,11 +31,13 @@ if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
   # Honour the marker only if it belongs to the current UID (prevents a
   # world-writable /tmp pre-creation from silently suppressing the warning).
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
-  fi
+  # Anything at that path counts as already warned, and the marker is a
+  # directory: mkdir never follows a symlink in the final component, so a marker
+  # pre-seeded in a shared TMPDIR cannot make this hook create or truncate a file
+  # elsewhere. Audited 2026-09-02.
+  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
   printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
+  mkdir "$_jqw" 2>/dev/null || true
   exit 0
 fi
 

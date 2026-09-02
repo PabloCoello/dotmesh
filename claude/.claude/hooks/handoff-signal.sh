@@ -43,11 +43,13 @@ DAYS_BACK=3
 # break the Skill tool. Warn once per day so a fresh install notices.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  if [ -f "$_jqw" ] && [ "$(stat -f %u "$_jqw" 2>/dev/null || stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
-  fi
+  # Anything at that path counts as already warned, and the marker is a
+  # directory: mkdir never follows a symlink in the final component, so a marker
+  # pre-seeded in a shared TMPDIR cannot make this hook create or truncate a file
+  # elsewhere. Audited 2026-09-02.
+  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
   printf 'dotmesh hook: jq no encontrado; señal de handoffs desactivada (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
+  mkdir "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
