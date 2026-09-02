@@ -130,6 +130,18 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/close-review-gate.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "matcher": "build",

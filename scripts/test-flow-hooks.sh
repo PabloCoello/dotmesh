@@ -566,6 +566,148 @@ guard_blocks "git push origin ma\\in" "una barra invertida en medio del nombre"
 guard_blocks "git p\\ush origin main" "el propio subcomando escapado"
 guard_allows "git push origin \$'otra-rama'" "entrecomillado ANSI-C de una rama de trabajo"
 GUARD_CWD=""
+
+section "cierre del gate: un blocker no se cierra en silencio"
+# I1 del examen del flujo maker: `review` marcó un defecto como blocker y el
+# principal cerró el turno aplicando los otros hallazgos sin mencionarlo. En
+# otro run lanzó el gate en segundo plano y cerró sin esperar el resultado.
+# Medido además al diseñar el arreglo: toda delegación al Agent en esta
+# instalación devuelve status "async_launched", así que "esperar el gate" es una
+# propiedad comprobable, no una recomendación.
+CLOSEGATE="$HOOKS/close-review-gate.sh"
+
+# Lanzamiento de un subagente: registro assistant con tool_use de nombre Agent.
+gate_launch() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"%s","name":"Agent","input":{"subagent_type":"%s","description":"gate"}}]}}\n' "$1" "$2"; }
+# Resultado inmediato del lanzamiento: asíncrono (queda pendiente de cosechar).
+gate_async_result() { printf '{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a-%s"},"message":{"content":[{"type":"tool_result","tool_use_id":"%s","content":"lanzado"}]}}\n' "$1" "$1"; }
+# Resultado inmediato síncrono: el informe ya está en el tool_result.
+gate_sync_result() { printf '{"type":"user","toolUseResult":{"content":"%s"},"message":{"content":[{"type":"tool_result","tool_use_id":"%s","content":"%s"}]}}\n' "$2" "$1" "$2"; }
+# Notificación de cierre del subagente, que es donde llega el informe.
+gate_notification() { printf '{"type":"user","message":{"content":"<task-notification>\\n<task-id>a-%s</task-id>\\n<tool-use-id>%s</tool-use-id>\\n<status>completed</status>\\n<result>%s</result>\\n</task-notification>"}}\n' "$1" "$1" "$2"; }
+# Texto del principal.
+principal_text() { printf '{"type":"assistant","message":{"content":[{"type":"text","text":"%s"}]}}\n' "$1"; }
+
+# Ejecuta el hook de cierre. $1 = transcript, $2 = TMPDIR (para encadenar dos
+# cierres de la misma sesión), $3 = stop_hook_active (si|no).
+run_close_gate() {
+  local tp="$1" td="${2:-}" active="${3:-no}" input
+  [ -z "$td" ] && td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+  input=$(jq -nc --arg t "$tp" --argjson a "$([ "$active" = si ] && echo true || echo false)" \
+    '{hook_event_name:"Stop",session_id:"sesion-1",transcript_path:$t,stop_hook_active:$a}')
+  set +e
+  printf '%s' "$input" | TMPDIR="$td" bash "$CLOSEGATE" >"$TMP/close_out" 2>"$TMP/close_err"
+  printf '%s' "$?" > "$TMP/close_rc"
+  set -e
+}
+close_rc() { cat "$TMP/close_rc" 2>/dev/null || echo 0; }
+close_err() { cat "$TMP/close_err" 2>/dev/null || true; }
+
+# Monta un transcript en un fichero nuevo y devuelve su ruta. Recibe las líneas
+# ya formadas por stdin.
+make_close_transcript() {
+  local dir
+  dir=$(mktemp -d -p "$TMP" close.XXXXXX)
+  cat > "$dir/sesion.jsonl"
+  printf '%s' "$dir/sesion.jsonl"
+}
+
+if bash -n "$CLOSEGATE" 2>/dev/null; then pass "close-review-gate.sh compila"; else fail "close-review-gate.sh no compila"; fi
+
+# Sin gate lanzado no hay nada que cerrar.
+tp=$(principal_text "he hecho un cambio trivial" | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "sin gate lanzado, deja cerrar" || fail "bloqueó sin gate alguno (rc=$(close_rc))"
+
+# El defecto medido: gate lanzado en asíncrono y el turno se cierra sin él.
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo, revisión aplicada"; } | make_close_transcript)
+run_close_gate "$tp"
+if [ "$(close_rc)" -eq 2 ]; then
+  case "$(close_err)" in
+    *sin*cosechar*|*sin*resultado*|*espera*) pass "gate asíncrono sin resultado, no deja cerrar" ;;
+    *) fail "bloqueó con un mensaje inesperado: $(close_err)" ;;
+  esac
+else
+  fail "el turno cerró con el gate aún en vuelo (rc=$(close_rc))"
+fi
+
+# Cosechado y limpio: cerrar es correcto.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification t1 "OK"; principal_text "revisión OK"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "gate cosechado y limpio, deja cerrar" || fail "bloqueó con el gate ya cosechado (rc=$(close_rc))"
+
+# El otro defecto medido: el blocker llega y el principal cierra sin nombrarlo.
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification t1 "1. blocker - el quoting de la ruta rompe con espacios (linea 40)";
+       principal_text "he aplicado los otros dos hallazgos, listo"; } | make_close_transcript)
+run_close_gate "$tp"
+if [ "$(close_rc)" -eq 2 ]; then
+  case "$(close_err)" in
+    *blocker*) pass "blocker sin mencionar, no deja cerrar" ;;
+    *) fail "bloqueó sin nombrar el blocker: $(close_err)" ;;
+  esac
+else
+  fail "el blocker se cerró en silencio (rc=$(close_rc))"
+fi
+
+# Mencionado al cerrar: el contrato se cumple y no hay que estorbar.
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification t1 "1. blocker - el quoting de la ruta rompe con espacios";
+       principal_text "el blocker del quoting queda arreglado en el commit b3f1a2c"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "blocker mencionado al cerrar, deja cerrar" || fail "bloqueó pese a mencionarlo (rc=$(close_rc))"
+
+# Falso positivo que haría inservible el hook: un veredicto limpio nombra la
+# severidad para negarla.
+for veredicto in "sin blockers, dos nits" "no blockers found" "ningun blocker; 2 optional" "blockers: ninguno"; do
+  tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification t1 "$veredicto"; principal_text "cerrado"; } | make_close_transcript)
+  run_close_gate "$tp"
+  [ "$(close_rc)" -eq 0 ] && pass "veredicto limpio no cuenta como blocker: $veredicto" || fail "falso positivo con: $veredicto"
+done
+
+# Bloquear en bucle sería peor que no bloquear.
+td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp" "$td"
+[ "$(close_rc)" -eq 2 ] && pass "el primer cierre bloquea" || fail "el primer cierre no bloqueó"
+run_close_gate "$tp" "$td"
+[ "$(close_rc)" -eq 0 ] && pass "el segundo cierre pasa, sin bucle" || fail "el segundo cierre volvió a bloquear"
+
+# stop_hook_active dice que ya venimos de un bloqueo: no encadenar otro.
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp" "" si
+[ "$(close_rc)" -eq 0 ] && pass "con stop_hook_active no encadena bloqueos" || fail "encadenó un bloqueo sobre otro"
+
+# Un gate síncrono ya trae el informe en el tool_result: no hay nada pendiente.
+tp=$({ gate_launch t1 review; gate_sync_result t1 "OK"; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "un gate síncrono no queda pendiente" || fail "trató un gate síncrono como pendiente"
+
+# Solo review y security son gates. Un build en vuelo es trabajo, no un gate.
+tp=$({ gate_launch t1 build; gate_async_result t1; principal_text "fase lanzada"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "un build asíncrono no es un gate" || fail "bloqueó por un subagente que no es gate"
+
+# security cuenta igual que review.
+tp=$({ gate_launch t1 security; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "el gate de security cuenta como gate" || fail "no vigiló el gate de security"
+
+section "cierre del gate: falla abierto"
+run_close_gate "$TMP/no-existe.jsonl"
+[ "$(close_rc)" -eq 0 ] && pass "sin transcript, falla abierto" || fail "bloqueó sin transcript"
+
+roto=$(printf 'esto no es json\n' | make_close_transcript)
+run_close_gate "$roto"
+[ "$(close_rc)" -eq 0 ] && pass "con un transcript ilegible, falla abierto" || fail "bloqueó con un transcript ilegible"
+
+section "cierre del gate: registro en la plantilla de settings.json"
+if jq -e '.hooks.Stop[]? | .hooks[] | select(.command | test("close-review-gate"))' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
+  pass "close-review-gate.sh está registrado en Stop"
+else
+  fail "close-review-gate.sh no está registrado en la plantilla"
+fi
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
