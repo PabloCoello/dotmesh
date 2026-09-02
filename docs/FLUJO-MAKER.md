@@ -71,9 +71,9 @@ Entran en cualquier punto del camino, no en una fase concreta.
 | Tests, build o runtime rotos | `debugging-and-error-recovery` | quien implemente |
 | Herramienta que falla | `tool-error-recovery` antes de cualquier reintento | todos |
 | Decisión humana pendiente | `wait-for-user`: una pregunta cerrada o la línea `WAIT_FOR_USER:` y parar | todos; los subagentes devuelven la señal al orquestador |
-| Código que funciona pero pesa más de lo necesario | `code-simplification` | orquestador o `build` |
+| Código que funciona pero pesa más de lo necesario | `code-simplification` | quien implemente |
 | Prosa en castellano de un entregable | `castellano-peninsular` y `anti-ai-style` (el chat no las carga) | quien redacte |
-| Cambio de agente o pausa con trabajo en vuelo | `handoff` a `.ai/tasks/<slug>/handoff.md` | orquestador |
+| Cambio de agente o pausa con trabajo en vuelo | `handoff` a `.ai/tasks/<slug>/handoff.md` | sesión principal |
 | Presupuesto de contexto | statusline: oro a ~90k cierra la fase, rosa a ~160k traspasa con `handoff`; delegar no lo baja | quien implemente |
 
 ## La red mecánica

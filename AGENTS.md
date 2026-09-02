@@ -170,8 +170,9 @@ The agent system has two layers, identical in concept across the three tools.
   summary. `close-review-gate` and `verify-slice-commit` fire on `Stop`, which
   only the principal reaches: the first refuses to close a turn that left a gate
   unharvested or a `blocker` unnamed, the second one that left an edited file
-  uncommitted. All of them block once and then step aside — a hook that loops is
-  worse than no hook.
+  uncommitted. Of the five, only three ever block: the two `Stop` hooks, once per
+  session, and `remind-review-gate` inside a subagent, once per task. The rest
+  inject context and step aside. A hook that loops is worse than no hook.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old

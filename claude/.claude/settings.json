@@ -81,6 +81,21 @@
             "timeout": 310
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/close-review-gate.sh",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/verify-slice-commit.sh",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "Notification": [
@@ -126,23 +141,6 @@
             "type": "command",
             "command": "~/.claude/hooks/remind-herdr-skill.sh",
             "timeout": 5
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/close-review-gate.sh",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/verify-slice-commit.sh",
-            "timeout": 15
           }
         ]
       }

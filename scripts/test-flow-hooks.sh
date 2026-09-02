@@ -582,8 +582,15 @@ gate_launch() { printf '{"type":"assistant","message":{"content":[{"type":"tool_
 gate_async_result() { printf '{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a-%s"},"message":{"content":[{"type":"tool_result","tool_use_id":"%s","content":"lanzado"}]}}\n' "$1" "$1"; }
 # Resultado inmediato síncrono: el informe ya está en el tool_result.
 gate_sync_result() { printf '{"type":"user","toolUseResult":{"content":"%s"},"message":{"content":[{"type":"tool_result","tool_use_id":"%s","content":"%s"}]}}\n' "$2" "$1" "$2"; }
-# Notificación de cierre del subagente, que es donde llega el informe.
-gate_notification() { printf '{"type":"user","message":{"content":"<task-notification>\\n<task-id>a-%s</task-id>\\n<tool-use-id>%s</tool-use-id>\\n<status>completed</status>\\n<result>%s</result>\\n</task-notification>"}}\n' "$1" "$1" "$2"; }
+# Notificación de cierre del subagente, que es donde llega el informe. La forma
+# está copiada de un transcript real (2026-09-02): el informe viaja en <result>,
+# dentro del mismo bloque, y hay tres elementos más entre medias.
+# $3 = estado (por defecto completed).
+gate_notification() { printf '{"type":"user","message":{"content":"<task-notification>\\n<task-id>a-%s</task-id>\\n<tool-use-id>%s</tool-use-id>\\n<output-file>/tmp/tasks/a-%s.output</output-file>\\n<status>%s</status>\\n<summary>Agent \\"gate\\" finished</summary>\\n<note>A task-notification fires each time this agent stops.</note>\\n<result>%s</result>\\n</task-notification>"}}\n' "$1" "$1" "$1" "${3:-completed}" "$2"; }
+# La misma notificación tal y como aparece en un registro queue-operation: el
+# contenido cuelga de la raíz, no de message. Medido en transcripts reales, hay
+# notificaciones que solo existen con esta forma.
+gate_notification_queue() { printf '{"type":"queue-operation","operation":"add","content":"<task-notification>\\n<task-id>a-%s</task-id>\\n<tool-use-id>%s</tool-use-id>\\n<status>%s</status>\\n<result>%s</result>\\n</task-notification>"}\n' "$1" "$1" "${3:-completed}" "$2"; }
 # Texto del principal.
 principal_text() { printf '{"type":"assistant","message":{"content":[{"type":"text","text":"%s"}]}}\n' "$1"; }
 
@@ -692,6 +699,40 @@ tp=$({ gate_launch t1 security; gate_async_result t1; principal_text "listo"; } 
 run_close_gate "$tp"
 [ "$(close_rc)" -eq 2 ] && pass "el gate de security cuenta como gate" || fail "no vigiló el gate de security"
 
+# La notificación no siempre llega en un registro `user`. En transcripts reales
+# aparece también (y a veces solo) como `queue-operation`, con el contenido
+# colgando de la raíz. Leer solo message.content deja el gate por cosechar para
+# siempre y pierde su blocker.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification_queue t1 "OK"; principal_text "revisión OK"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "una notificación en queue-operation cosecha el gate" || fail "no vio la notificación fuera de message.content (rc=$(close_rc))"
+
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification_queue t1 "1. blocker - el quoting rompe con espacios";
+       principal_text "aplicados los otros hallazgos"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "un blocker en queue-operation también bloquea" || fail "el blocker de queue-operation se cerró en silencio"
+
+# Un subagente que termina mal ya no está en vuelo: pedir que esperes una
+# notificación que ya llegó es una instrucción imposible de cumplir.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification t1 "abortado" failed; principal_text "el gate falló, lo relanzo"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "un gate que terminó en error no queda en vuelo" || fail "pidió esperar una notificación ya recibida (rc=$(close_rc))"
+
+# Con dos gates, cosechar uno no exime del otro.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_launch t2 security; gate_async_result t2;
+       gate_notification t1 "OK"; principal_text "review OK"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "cosechar un gate no exime del otro" || fail "el segundo gate quedó sin vigilar"
+
+# El fallo exacto que se midió: el cierre dice "sin blockers" sobre un blocker
+# real. Negar la severidad no es nombrarla.
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification t1 "1. blocker - el quoting rompe con espacios";
+       principal_text "revisión aplicada, sin blockers"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "negar la severidad no descarga el blocker" || fail "\"sin blockers\" descargó un blocker real"
+
 section "cierre del gate: falla abierto"
 run_close_gate "$TMP/no-existe.jsonl"
 [ "$(close_rc)" -eq 0 ] && pass "sin transcript, falla abierto" || fail "bloqueó sin transcript"
@@ -738,6 +779,14 @@ if jq -e '.hooks.Stop[]? | .hooks[] | select(.command | test("close-review-gate"
 else
   fail "close-review-gate.sh no está registrado en la plantilla"
 fi
+
+# Una clave repetida dentro de `hooks` no la ve jq: se queda con la última y
+# pierde en silencio los hooks de la primera, y sync-claude-hooks escribe esa
+# pérdida en el settings.json vivo. Hay que mirar el fichero crudo.
+repes=$(grep -oE '^    "[A-Za-z]+": \[' "$REPO_ROOT/claude/.claude/settings.json" | sort | uniq -d)
+[ -z "$repes" ] \
+  && pass "ninguna clave de evento está declarada dos veces en hooks" \
+  || fail "clave de evento duplicada en hooks: $(printf '%s' "$repes" | tr '\n' ' ')"
 
 section "commit por slice: el turno no cierra con el slice sin commitear"
 # I1 e I2 del examen: cero commits en los 6 runs de I1 y en los 3 del brazo
@@ -817,6 +866,17 @@ tp=$(edit_line "$slicerepo/nuevo.sh" Write | make_close_transcript)
 run_slice "$tp" "$slicerepo"
 [ "$(slice_rc)" -eq 2 ] && pass "un fichero nuevo sin trackear cuenta" || fail "el fichero nuevo pasó (rc=$(slice_rc))"
 rm -f "$slicerepo/nuevo.sh"
+
+# Git interpreta el pathspec como patrón aunque vaya tras `--`. Una ruta con
+# corchetes es normal en proyectos web y se perdía sin avisar.
+mkdir -p "$slicerepo/app/[id]"
+printf 'pagina\n' > "$slicerepo/app/[id]/page.tsx"
+tp=$(edit_line "$slicerepo/app/[id]/page.tsx" Write | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 2 ] \
+  && pass "una ruta con metacaracteres de glob se compara literal" \
+  || fail "la ruta con corchetes se perdió (rc=$(slice_rc))"
+rm -rf "$slicerepo/app"
 
 # Lo que Git ignora no es un slice: planes, scratch y artefactos de IA.
 printf 'plan\n' > "$slicerepo/.ai/tasks/plan.md"

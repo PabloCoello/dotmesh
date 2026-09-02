@@ -58,10 +58,18 @@ tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 #   STR   <content>       a string-content record (task notifications live here)
 #   TEXT  <text>          assistant prose, where a blocker has to surface
 #
-# A malformed line stops jq; the lines before it are still emitted, which errs
-# towards fail-open rather than towards a spurious block.
+# A task notification reaches the transcript in more than one record shape: as a
+# `user` record with the string under `.message.content`, and as a
+# `queue-operation` record with it under a top-level `.content`. Measured on real
+# transcripts (2026-09-02), some notifications exist *only* in the second shape,
+# so reading `.message.content` alone leaves those gates forever unharvested and
+# loses their blocker. Both are read, and a duplicate costs nothing.
+#
+# jq stops at a malformed line, and its partial output cannot be trusted: GATE
+# and ASYNC are emitted before the notification that clears them, so acting on a
+# truncated stream produces a false pending block. A jq failure gives up instead.
 stream=$(jq -rc '
-  (.message.content? // empty) as $c
+  ((.message.content? // .content?) // empty) as $c
   | if ($c | type) == "array" then
       ( $c[]
         | if .type == "tool_use" and .name == "Agent"
@@ -74,19 +82,27 @@ stream=$(jq -rc '
           else empty end )
     elif ($c | type) == "string" then "STR\t\($c | gsub("[\n\r]"; " "))"
     else empty end
-' "$tp" 2>/dev/null || true)
+' "$tp" 2>/dev/null) || exit 0
 [ -z "$stream" ] && exit 0
 
-# A clean verdict names the severity in order to deny it ("sin blockers, dos
-# nits"). Strip the negated forms first, then look for what is left. Folding is
+# True when the text names a blocker rather than denying one. A clean verdict
+# names the severity in order to deny it ("sin blockers, dos nits"), so the
+# negated forms are stripped before looking for what is left. Folding is
 # ASCII-only and under LC_ALL=C so the accented forms survive untouched; both
 # `ningún` and `ningun` are listed for that reason.
-has_blocker() {
+#
+# The same predicate reads the report and the closing text. Using a bare grep on
+# the closing text would let "revisión aplicada, sin blockers" discharge a real
+# blocker, which is the exact sentence the measured failure produced.
+#
+# Residual: the stripping is adjacency-only, so "sin hallazgos blocker" still
+# counts as a blocker. Erring towards one extra block is the cheap direction.
+names_blocker() {
   printf '%s' "$1" \
     | LC_ALL=C tr 'A-Z' 'a-z' \
-    | sed -E 's/(no|sin|ningún|ningun|cero|0)[[:space:]]+(hay[[:space:]]+)?blockers?//g;
-              s/blockers?[[:space:]]*:?[[:space:]]*(ninguno|ninguna|none|0)//g' \
-    | grep -q 'blocker'
+    | sed -E 's/(no|sin|ningún|ningun|cero|0)[[:space:]]+(hay[[:space:]]+)?(blockers?|bloqueantes?)//g;
+              s/(blockers?|bloqueantes?)[[:space:]]*:?[[:space:]]*(ninguno|ninguna|none|0)//g' \
+    | grep -qE 'blocker|bloqueante'
 }
 
 gates=""
@@ -107,14 +123,17 @@ while IFS=$'\t' read -r tag rest; do
       status=$(printf '%s' "$rest" | sed -nE 's|.*<status>([^<]*)</status>.*|\1|p')
       [ -n "$id" ] || continue
       printf '%s' "$gates" | grep -qxF "$id" || continue
-      [ "$status" = completed ] || continue
+      # Any notification takes the gate out of flight, whatever it says. Telling
+      # the agent to wait for a report that already arrived saying the subagent
+      # failed is an instruction it cannot satisfy.
       notified="$notified$id"$'\n'
-      has_blocker "$rest" && blocker_open=1
+      [ "$status" = completed ] || continue
+      names_blocker "$rest" && blocker_open=1
       ;;
     TEXT)
       # The principal naming it discharges the duty; the notification itself
       # cannot, since it arrives as STR.
-      if [ "$blocker_open" -eq 1 ] && printf '%s' "$rest" | grep -qiE 'blocker|bloqueante'; then
+      if [ "$blocker_open" -eq 1 ] && names_blocker "$rest"; then
         blocker_open=0
       fi
       ;;
