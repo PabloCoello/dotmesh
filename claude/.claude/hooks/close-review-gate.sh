@@ -34,11 +34,9 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the check is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
-  fi
+  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
   printf 'dotmesh hook: jq no encontrado; cierre del gate sin verificar (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
+  mkdir "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
@@ -136,18 +134,19 @@ done <<< "$gates"
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty' | tr -cd 'A-Za-z0-9_-')
 [ -z "$sid" ] && sid="nosession"
 
-# Honour a marker only if it is ours, so a world-writable /tmp cannot be
-# pre-seeded to disable the block. When stat cannot tell, trust it: repeating the
-# block is worse than skipping it.
+# Anything already sitting at the marker path counts as spent, whoever put it
+# there. In a shared TMPDIR a third party can pre-seed it and skip one nudge;
+# treating a foreign marker as unspent would instead block every turn with no way
+# out, which is the worse failure.
 spent() {
-  local m="$1" owner
-  [ -e "$m" ] || return 1
-  owner=$(stat -c %u "$m" 2>/dev/null || stat -f %u "$m" 2>/dev/null || true)
-  [ -z "$owner" ] || [ "$owner" = "$(id -u)" ]
+  [ -e "$1" ] || [ -L "$1" ]
 }
 
 block() {
-  : > "$1" 2>/dev/null || true
+  # A directory, not a file: mkdir never follows a symlink in the final
+  # component, so a marker pre-seeded as a link cannot make this hook create or
+  # truncate a file somewhere else. Audited 2026-09-02.
+  mkdir "$1" 2>/dev/null || true
   printf '%s\n' "$2" >&2
   exit 2
 }

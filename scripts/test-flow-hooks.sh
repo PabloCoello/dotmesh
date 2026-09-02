@@ -700,6 +700,37 @@ roto=$(printf 'esto no es json\n' | make_close_transcript)
 run_close_gate "$roto"
 [ "$(close_rc)" -eq 0 ] && pass "con un transcript ilegible, falla abierto" || fail "bloqueó con un transcript ilegible"
 
+section "cierre del gate: el marcador no es una vía para truncar ficheros"
+# Auditoría del 2026-09-02: `: > "$marcador"` sigue symlinks. Con un TMPDIR
+# compartido, un tercero que adivine el session_id puede presembrar el marcador
+# como enlace a un fichero del usuario y el hook lo trunca al escribirlo.
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+
+# La vía de escritura es un enlace cuyo destino aún no existe: ahí la
+# redirección crea el fichero en la ruta que elija el atacante.
+td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+ln -s "$TMP/inexistente-gate.txt" "$td/dotmesh-close-gate-pending-sesion-1"
+run_close_gate "$tp" "$td"
+[ ! -e "$TMP/inexistente-gate.txt" ] \
+  && pass "un marcador presembrado como symlink no crea su destino" \
+  || fail "el hook creó el fichero al que apuntaba el marcador"
+
+# Con el destino ya existente la escritura lo truncaría.
+td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-gate.txt"
+ln -s "$TMP/victima-gate.txt" "$td/dotmesh-close-gate-pending-sesion-1"
+run_close_gate "$tp" "$td"
+[ -s "$TMP/victima-gate.txt" ] \
+  && pass "un marcador presembrado como symlink no trunca su destino" \
+  || fail "el hook truncó el fichero al que apuntaba el marcador"
+
+# Y con el marcador saboteado tampoco puede quedarse bloqueando cada turno:
+# repetir el bloqueo sin salida es peor que saltárselo.
+run_close_gate "$tp" "$td"
+[ "$(close_rc)" -eq 0 ] \
+  && pass "con el marcador saboteado no bloquea en bucle" \
+  || fail "el marcador saboteado deja la sesión sin poder cerrar"
+
 section "cierre del gate: registro en la plantilla de settings.json"
 if jq -e '.hooks.Stop[]? | .hooks[] | select(.command | test("close-review-gate"))' \
      "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
@@ -798,6 +829,46 @@ printf 'suelto\n' > "$TMP/suelto.txt"
 tp=$(edit_line "$TMP/suelto.txt" Write | make_close_transcript)
 run_slice "$tp" "$TMP"
 [ "$(slice_rc)" -eq 0 ] && pass "fuera de un repositorio, deja cerrar" || fail "bloqueó fuera de un repositorio (rc=$(slice_rc))"
+
+# El transcript puede nombrar ficheros de cualquier repositorio de la máquina.
+# Mirar ahí filtra estado ajeno al trabajo de la sesión y filtra el nombre del
+# fichero al agente: solo cuenta el repositorio en el que corre la sesión.
+otro="$TMP/repo-ajeno"
+git init -q -b main "$otro"
+printf 'a\n' > "$otro/secreto.txt"
+git -C "$otro" add -A
+git -C "$otro" -c user.name=t -c user.email=t@t commit -q -m base
+printf 'modificado\n' >> "$otro/secreto.txt"
+tp=$(edit_line "$otro/secreto.txt" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] \
+  && pass "un fichero de otro repositorio no cuenta como slice" \
+  || fail "bloqueó por el estado de un repositorio ajeno: $(slice_err)"
+
+# Mismo ataque de symlink que en el otro hook de Stop.
+printf 'cambio\n' >> "$slicerepo/modulo.sh"
+tp=$(edit_line "$slicerepo/modulo.sh" | make_close_transcript)
+
+td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+ln -s "$TMP/inexistente-slice.txt" "$td/dotmesh-slice-commit-sesion-slice"
+run_slice "$tp" "$slicerepo" "$td"
+[ ! -e "$TMP/inexistente-slice.txt" ] \
+  && pass "un marcador presembrado como symlink no crea su destino" \
+  || fail "el hook creó el fichero al que apuntaba el marcador"
+
+td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-slice.txt"
+ln -s "$TMP/victima-slice.txt" "$td/dotmesh-slice-commit-sesion-slice"
+run_slice "$tp" "$slicerepo" "$td"
+[ -s "$TMP/victima-slice.txt" ] \
+  && pass "un marcador presembrado como symlink no trunca su destino" \
+  || fail "el hook truncó el fichero al que apuntaba el marcador"
+
+run_slice "$tp" "$slicerepo" "$td"
+[ "$(slice_rc)" -eq 0 ] \
+  && pass "con el marcador saboteado no bloquea en bucle" \
+  || fail "el marcador saboteado deja la sesión sin poder cerrar"
+git -C "$slicerepo" checkout -q -- modulo.sh
 
 section "commit por slice: falla abierto y está registrado"
 run_slice "$TMP/no-existe.jsonl" "$slicerepo"

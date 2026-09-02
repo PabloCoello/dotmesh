@@ -25,11 +25,9 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the check is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
-  fi
+  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
   printf 'dotmesh hook: jq no encontrado; commit por slice sin verificar (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
+  mkdir "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
@@ -44,6 +42,15 @@ input=$(cat)
 tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 [ -z "$tp" ] && exit 0
 [ -f "$tp" ] || exit 0
+
+# The repository this session works in. A transcript can name a file anywhere on
+# the machine, and a path outside this repository is not this session's slice:
+# reporting it would leak the name of somebody else's file into the agent's
+# context and block the turn over state the session never touched.
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+[ -n "$cwd" ] && [ -d "$cwd" ] || exit 0
+root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || true)
+[ -n "$root" ] || exit 0
 
 # Absolute paths this session wrote to, deduplicated, newest last. A malformed
 # line stops jq; what came before is still emitted, which errs towards fail-open.
@@ -66,7 +73,7 @@ while IFS= read -r p; do
   [ -n "$p" ] || continue
   d=$(dirname "$p")
   [ -d "$d" ] || continue
-  git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue
+  [ "$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || true)" = "$root" ] || continue
   st=$(git -C "$d" status --porcelain -- "$p" 2>/dev/null || true)
   [ -n "$st" ] || continue
   count=$((count + 1))
@@ -82,14 +89,15 @@ sid=$(printf '%s' "$input" | jq -r '.session_id // empty' | tr -cd 'A-Za-z0-9_-'
 [ -z "$sid" ] && sid="nosession"
 marker="${TMPDIR:-/tmp}/dotmesh-slice-commit-${sid}"
 
-# Honour the marker only if it is ours, so a world-writable /tmp cannot be
-# pre-seeded to disable the block. When stat cannot tell, trust it: repeating the
-# block is worse than skipping it.
-owner=$(stat -c %u "$marker" 2>/dev/null || stat -f %u "$marker" 2>/dev/null || true)
-if [ -e "$marker" ] && { [ -z "$owner" ] || [ "$owner" = "$(id -u)" ]; }; then
-  exit 0
-fi
-: > "$marker" 2>/dev/null || true
+# Anything already sitting at the marker path counts as spent, whoever put it
+# there. In a shared TMPDIR a third party can pre-seed it and skip one nudge;
+# treating a foreign marker as unspent would instead block every turn with no way
+# out, which is the worse failure.
+{ [ -e "$marker" ] || [ -L "$marker" ]; } && exit 0
+# A directory, not a file: mkdir never follows a symlink in the final component,
+# so a marker pre-seeded as a link cannot make this hook create or truncate a
+# file somewhere else. Audited 2026-09-02.
+mkdir "$marker" 2>/dev/null || true
 
 cat >&2 <<EOF
 Bloqueado por dotmesh: cierras el turno con $count fichero(s) que has editado en
