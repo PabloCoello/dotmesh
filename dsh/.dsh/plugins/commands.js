@@ -54,6 +54,7 @@ function writeState(patch) {
   const next = { ...current, ...patch, updatedAt: new Date().toISOString() }
   if (next.title !== undefined) next.title = oneLine(next.title)
   if (next.status !== undefined) next.status = oneLine(next.status, 50)
+  if (next.req !== undefined) next.req = oneLine(next.req, 40)
   const dir = join(DSH_HOME, 'state')
   mkdirSync(dir, { recursive: true })
   const tmp = STATE_FILE + '.tmp'
@@ -103,14 +104,15 @@ function hasGateTarget(cwd) {
 // Conteo de hallazgos de argos diagnose --json
 // ---------------------------------------------------------------------------
 
+// Con --json argos imprime un array en stdout (los avisos van por stderr).
+// Cualquier otra cosa es un fallo del comando, no cero hallazgos: devuelve
+// null para que /gate lo trate como error en vez de registrar un gate verde.
 function countArgosFindings(stdout) {
   try {
     const arr = JSON.parse(stdout)
-    return Array.isArray(arr) ? arr.length : 0
+    return Array.isArray(arr) ? arr.length : null
   } catch {
-    // Si la salida no es JSON (p.ej. solo warnings de plugin), cuenta líneas
-    // no vacías como aproximación conservadora.
-    return stdout.split('\n').filter(l => l.trim().length > 0).length
+    return null
   }
 }
 
@@ -205,10 +207,13 @@ export function apply(ctx) {
         // un código distinto de 0 indica fallo de ejecución (p.ej. no hay proyecto argos).
         if (r.status !== 0) {
           const detail = (r.stderr ?? '').trim().slice(0, 300) || r.error?.message || 'error desconocido'
-          return { kind: 'error', text: `argos diagnose falló (exit ${r.status}): ${detail}` }
+          return { kind: 'error', text: `argos diagnose falló (exit ${r.status ?? 'sin código'}): ${detail}` }
         }
         const out = r.stdout ?? ''
         findings = countArgosFindings(out)
+        if (findings === null) {
+          return { kind: 'error', text: `argos diagnose no devolvió JSON: ${out.trim().slice(0, 200)}` }
+        }
         ok = findings === 0
       }
 
@@ -268,7 +273,7 @@ export function apply(ctx) {
         : ['- Gate: no ejecutado en esta sesión']
 
       const content = [
-        `# Handoff — ${slug}`,
+        `# Handoff: ${slug}`,
         '',
         '## Objetivo',
         '',
