@@ -77,25 +77,11 @@ por un symlink al repo, el `.env` dejaría de existir donde el puente lo busca.
 El proveedor local de llama.cpp no autentica, pero el esquema de proveedores de dsh
 exige que la clave exista. Sin ella, el turno falla con `MISSING_CREDENTIAL`.
 
-El fichero es `~/.dsh/.credentials.yaml`. Estructura mínima:
-
-```yaml
-version: 1
-refs:
-  LLAMACPP_API_KEY: unused-llama-cpp-does-not-authenticate
-```
-
+El fichero es `~/.dsh/.credentials.yaml` (`version: 1` y un mapa `refs:` con
+`LLAMACPP_API_KEY`); el bloque exacto está en [INSTALL.md](INSTALL.md), sección dsh.
 El valor es un relleno: llama.cpp lo ignora, pero el proveedor lo exige. Vive fuera
 del repositorio, con permisos 600. `.gitignore` ya cubre `dsh/.dsh/.credentials.yaml`,
 por lo que si el fichero acaba dentro del worktree por error no se versiona.
-
-```bash
-umask 077 && cat > ~/.dsh/.credentials.yaml <<'YAML'
-version: 1
-refs:
-  LLAMACPP_API_KEY: unused-llama-cpp-does-not-authenticate
-YAML
-```
 
 La página Models de la interfaz también crea este fichero al guardar la configuración del
 modelo, así que se puede dejar que la propia interfaz lo escriba en la primera arrancada.

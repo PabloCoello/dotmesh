@@ -298,23 +298,26 @@ encima de un perfil existente.
 
 ### Banco de trabajo
 
-Tras instalar, selecciona el preset `taller` en la interfaz de dsh. No viene activo
-por defecto en una máquina nueva porque `~/.dsh/settings.yaml` no se versiona; el
-preset queda registrado solo cuando lo seleccionas manualmente en el selector de
-workspace.
+Tras instalar, selecciona el preset `Taller` en la interfaz de dsh (directorio
+`taller` en `dsh/.dsh/.agent-presets/`). No viene activo por defecto en una máquina
+nueva porque `~/.dsh/settings.yaml` no se versiona.
 
-Tres comandos definen el ciclo de trabajo:
+Tres comandos definen el ciclo de trabajo. Los registra el parche cordis en el plano
+host, así que funcionan con cualquier preset del perfil `web`:
 
 - `/req <ID>` — fija el requisito activo consultando `argos get <ID> --json` y escribe el estado en `~/.dsh/state/workbench.json`.
 - `/gate` — corre `make gate` si el proyecto lo tiene; si no, `argos diagnose --new --json`. Registra el resultado (ok, hallazgos, marca de tiempo) en el mismo fichero.
 - `/handoff [slug]` — escribe `.ai/tasks/<slug>/handoff.md` en el directorio del proyecto activo con el formato estándar de dotmesh. Rechaza sobrescribir si el fichero ya existe.
 
-El estado persiste en `~/.dsh/state/workbench.json`. El panel de la interfaz lo lee
-por HTTP; un fichero ausente equivale a «sin REQ activo».
+El estado vive en `~/.dsh/state/workbench.json` y es único por máquina: guarda el
+REQ activo y la ruta del proyecto en que se fijó, y `/handoff` escribe en esa ruta.
+Dos sesiones de dsh sobre proyectos distintos comparten el fichero; fija el REQ con
+`/req` antes de trabajar en cada una. El panel de la interfaz lo lee por HTTP; un
+fichero ausente equivale a «sin REQ activo».
 
 `make install` llama a `make dsh-ui-install` solo si `dsh` está en el PATH como
-binario. Si usas dsh vía `npx`, ejecuta `make dsh-ui-install` a mano una vez: no
-queremos que `make install` descargue paquetes por npx en una instalación limpia.
+binario, para que una instalación limpia no descargue paquetes por npx. Con dsh vía
+`npx`, ejecuta `make dsh-ui-install` a mano una vez.
 
 ## MCP en Codex
 

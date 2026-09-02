@@ -126,7 +126,7 @@ Cuando pares con trabajo en vuelo, crea un documento de traspaso con estas secci
 (mismo formato que la skill `handoff` de dotmesh, compatible con Claude Code, OpenCode y Codex):
 
 ```markdown
-# Handoff: <slug del task>
+# Handoff: <slug de la tarea>
 
 ## Objetivo
 Qué se intenta conseguir.
@@ -135,7 +135,8 @@ Qué se intenta conseguir.
 - REQ activo: REQ-XXXXX-N — título breve
 - Status argos: DRAFT / APPROVED / IMPLEMENTED
 - Proyecto: ruta absoluta al directorio
-- Gate: OK o FALLÓ (N hallazgos). Fecha de la última ejecución.
+- Gate: OK o FALLÓ (N hallazgo(s))
+- Última ejecución del gate: fecha ISO
 
 ## Decisiones
 Decisiones tomadas y por qué. Referencia commits, PRs, REQs y paths
