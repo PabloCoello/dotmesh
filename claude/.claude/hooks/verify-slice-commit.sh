@@ -25,9 +25,11 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the check is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
-  printf 'dotmesh hook: jq no encontrado; commit por slice sin verificar (fail-open). Instala jq.\n' >&2
-  mkdir "$_jqw" 2>/dev/null || true
+  # mkdir is the check and the write in one step, and never follows a symlink in
+  # the final component. See the marker comment further down.
+  if mkdir "$_jqw" 2>/dev/null; then
+    printf 'dotmesh hook: jq no encontrado; commit por slice sin verificar (fail-open). Instala jq.\n' >&2
+  fi
   exit 0
 fi
 
@@ -100,15 +102,14 @@ sid=$(printf '%s' "$input" | jq -r '.session_id // empty' | tr -cd 'A-Za-z0-9_-'
 [ -z "$sid" ] && sid="nosession"
 marker="${TMPDIR:-/tmp}/dotmesh-slice-commit-${sid}"
 
-# Anything already sitting at the marker path counts as spent, whoever put it
-# there. In a shared TMPDIR a third party can pre-seed it and skip one nudge;
-# treating a foreign marker as unspent would instead block every turn with no way
-# out, which is the worse failure.
-{ [ -e "$marker" ] || [ -L "$marker" ]; } && exit 0
-# A directory, not a file: mkdir never follows a symlink in the final component,
-# so a marker pre-seeded as a link cannot make this hook create or truncate a
-# file somewhere else. Audited 2026-09-02.
-mkdir "$marker" 2>/dev/null || true
+# mkdir is the check and the write in one step. It never follows a symlink in
+# the final component, so a marker pre-seeded in a shared TMPDIR cannot make this
+# hook create or truncate a file elsewhere; it succeeds for exactly one caller;
+# and it fails when the path is taken or TMPDIR is not writable, where stepping
+# aside beats repeating a block this hook has no way to remember. Anyone able to
+# pre-seed the path skips one nudge, which is the cheaper failure.
+# Audited 2026-09-02.
+mkdir "$marker" 2>/dev/null || exit 0
 
 cat >&2 <<EOF
 Bloqueado por dotmesh: cierras el turno con $count fichero(s) que has editado en

@@ -34,9 +34,11 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the check is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  { [ -e "$_jqw" ] || [ -L "$_jqw" ]; } && exit 0
-  printf 'dotmesh hook: jq no encontrado; cierre del gate sin verificar (fail-open). Instala jq.\n' >&2
-  mkdir "$_jqw" 2>/dev/null || true
+  # mkdir is the check and the write in one step, and never follows a symlink in
+  # the final component. See the block() comment below.
+  if mkdir "$_jqw" 2>/dev/null; then
+    printf 'dotmesh hook: jq no encontrado; cierre del gate sin verificar (fail-open). Instala jq.\n' >&2
+  fi
   exit 0
 fi
 
@@ -153,47 +155,40 @@ done <<< "$gates"
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty' | tr -cd 'A-Za-z0-9_-')
 [ -z "$sid" ] && sid="nosession"
 
-# Anything already sitting at the marker path counts as spent, whoever put it
-# there. In a shared TMPDIR a third party can pre-seed it and skip one nudge;
-# treating a foreign marker as unspent would instead block every turn with no way
-# out, which is the worse failure.
-spent() {
-  [ -e "$1" ] || [ -L "$1" ]
-}
-
+# mkdir is the check and the write in one step, which is what makes this safe.
+# It never follows a symlink in the final component, so a marker pre-seeded in a
+# shared TMPDIR cannot make this hook create or truncate a file elsewhere; it
+# succeeds for exactly one caller, so two turns closing at once cannot both
+# block; and it fails when the path is already taken or TMPDIR is not writable,
+# in which case the hook steps aside rather than repeating a block it has no way
+# to remember. Audited 2026-09-02.
+#
+# The cost is that anyone able to pre-seed the path skips one nudge. Blocking
+# every turn with no way out is the worse failure.
 block() {
-  # A directory, not a file: mkdir never follows a symlink in the final
-  # component, so a marker pre-seeded as a link cannot make this hook create or
-  # truncate a file somewhere else. Audited 2026-09-02.
-  mkdir "$1" 2>/dev/null || true
+  mkdir "$1" 2>/dev/null || return 0
   printf '%s\n' "$2" >&2
   exit 2
 }
 
 if [ -n "$pending" ]; then
-  m="${TMPDIR:-/tmp}/dotmesh-close-gate-pending-${sid}"
-  if ! spent "$m"; then
-    read -r -d '' msg <<'EOF' || true
+  read -r -d '' msg <<'EOF' || true
 Bloqueado por dotmesh: lanzaste el gate (review o security) en segundo plano y
 vas a cerrar el turno sin su resultado. Espera su notificación, lee el informe y
 trata sus hallazgos antes de cerrar; un gate que nadie cosecha no es un gate.
 Este bloqueo ocurre una sola vez por sesión.
 EOF
-    block "$m" "$msg"
-  fi
+  block "${TMPDIR:-/tmp}/dotmesh-close-gate-pending-${sid}" "$msg"
 fi
 
 if [ "$blocker_open" -eq 1 ]; then
-  m="${TMPDIR:-/tmp}/dotmesh-close-gate-blocker-${sid}"
-  if ! spent "$m"; then
-    read -r -d '' msg <<'EOF' || true
+  read -r -d '' msg <<'EOF' || true
 Bloqueado por dotmesh: el gate devolvió al menos un hallazgo `blocker` y no lo
 has nombrado al cerrar. Arréglalo, o dilo al usuario de forma explícita con la
 razón de no aplicarlo. Un blocker no se cierra en silencio.
 Este bloqueo ocurre una sola vez por sesión.
 EOF
-    block "$m" "$msg"
-  fi
+  block "${TMPDIR:-/tmp}/dotmesh-close-gate-blocker-${sid}" "$msg"
 fi
 
 exit 0

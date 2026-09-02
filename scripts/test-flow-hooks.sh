@@ -935,20 +935,58 @@ section "marcadores: ningún hook escribe a través de un enlace"
 # patrón `: > "$marcador"` era el de la casa y estaba en los siete. Con un
 # TMPDIR compartido, quien acierte el session_id presiembra el marcador como
 # enlace y el hook crea o vacía el fichero de destino.
-redirecciones=$(grep -ln ': > "\$' "$HOOKS"/*.sh || true)
-[ -z "$redirecciones" ] \
-  && pass "ningún hook crea marcadores con redirección" \
-  || fail "todavía crean marcadores con redirección: $(printf '%s' "$redirecciones" | xargs -n1 basename | tr '\n' ' ')"
+# El invariante no puede quedarse en el literal exacto: `touch`, `printf '' >` y
+# `cat /dev/null >` crean el destino igual, y un glob sin coincidencias no puede
+# pasar por bueno.
+hooks_escaneados=$(find "$HOOKS" -maxdepth 1 -name '*.sh' | wc -l)
+[ "$hooks_escaneados" -ge 7 ] \
+  && pass "el invariante escanea los $hooks_escaneados hooks del directorio" \
+  || fail "el invariante no encontró hooks que escanear ($hooks_escaneados)"
 
-# El recordatorio de skills marca una vez por agente.
+peligrosas=$(grep -lE '(:|printf +.{0,4}|cat +/dev/null) *> *"?\$(marker|_jqw|m)"?|touch +"?\$(marker|_jqw|m)"?' \
+  "$HOOKS"/*.sh 2>/dev/null || true)
+[ -z "$peligrosas" ] \
+  && pass "ningún hook crea marcadores por una vía que siga enlaces" \
+  || fail "crean marcadores siguiendo enlaces: $(printf '%s' "$peligrosas" | xargs -n1 basename | tr '\n' ' ')"
+
+# Y el invariante positivo: quien define un marcador lo crea con mkdir.
+sin_mkdir=""
+for h in "$HOOKS"/*.sh; do
+  grep -qE '^[[:space:]]*(marker|_jqw)=' "$h" || continue
+  grep -qE 'mkdir "\$(marker|_jqw)"' "$h" || sin_mkdir="$sin_mkdir $(basename "$h")"
+done
+[ -z "$sin_mkdir" ] \
+  && pass "todo hook que define un marcador lo crea con mkdir" \
+  || fail "definen un marcador sin crearlo con mkdir:$sin_mkdir"
+
+# Todos compilan, incluido handoff-signal.sh, que no tiene más cobertura.
+no_compilan=""
+for h in "$HOOKS"/*.sh; do
+  bash -n "$h" 2>/dev/null || no_compilan="$no_compilan $(basename "$h")"
+done
+[ -z "$no_compilan" ] && pass "los $hooks_escaneados hooks compilan" || fail "no compilan:$no_compilan"
+
+# remind-load-skills: ni crea el destino del enlace, ni lo trunca, ni deja de
+# avisar por tener el marcador envenenado.
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
 ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
-run_skills Write /tmp/x.txt "" "$td" >/dev/null
+msg=$(run_skills Write /tmp/x.txt "" "$td")
 [ ! -e "$TMP/inexistente-skills.txt" ] \
   && pass "remind-load-skills no crea el destino del enlace" \
   || fail "remind-load-skills escribió a través del enlace"
+[ -z "$msg" ] \
+  && pass "con el marcador envenenado, remind-load-skills calla en vez de repetirse" \
+  || fail "el marcador envenenado no se respetó como gastado"
 
-# El gate de revisión bloquea una vez por subagente.
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-skills.txt"
+ln -s "$TMP/victima-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
+run_skills Write /tmp/x.txt "" "$td" >/dev/null
+[ -s "$TMP/victima-skills.txt" ] \
+  && pass "remind-load-skills no trunca el destino del enlace" \
+  || fail "remind-load-skills truncó el fichero enlazado"
+
+# remind-review-gate: igual, y sin quedarse bloqueando cada commit.
 td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
 ln -s "$TMP/inexistente-gate2.txt" "$td/dotmesh-review-gate-sesion-1-abc123"
 tp=$(make_transcripts no no)
@@ -956,6 +994,90 @@ msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
 [ ! -e "$TMP/inexistente-gate2.txt" ] \
   && pass "remind-review-gate no crea el destino del enlace" \
   || fail "remind-review-gate escribió a través del enlace"
+[ "$(gate_rc)" -eq 0 ] \
+  && pass "con el marcador envenenado, el commit no queda bloqueado para siempre" \
+  || fail "el marcador envenenado bloquea todos los commits (rc=$(gate_rc))"
+
+td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-gate2.txt"
+ln -s "$TMP/victima-gate2.txt" "$td/dotmesh-review-gate-sesion-1-abc123"
+msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+[ -s "$TMP/victima-gate2.txt" ] \
+  && pass "remind-review-gate no trunca el destino del enlace" \
+  || fail "remind-review-gate truncó el fichero enlazado"
+
+# Si el marcador no se puede crear, comprobar antes y escribir después deja el
+# bloqueo sin memoria: se repite en cada llamada y contradice el fallo abierto
+# que prometen estos hooks. Crear y comprobar en una sola operación lo cierra.
+if [ "$(id -u)" != 0 ]; then
+  td=$(mktemp -d -p "$TMP" sinescritura.XXXXXX)
+  chmod 500 "$td"
+  tp=$(make_transcripts no no)
+  msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+  primero=$(gate_rc)
+  msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+  { [ "$primero" -eq 0 ] && [ "$(gate_rc)" -eq 0 ]; } \
+    && pass "sin poder escribir el marcador, remind-review-gate falla abierto" \
+    || fail "sin marcador escribible bloquea sin memoria (rc=$primero y $(gate_rc))"
+  chmod 700 "$td"
+
+  td=$(mktemp -d -p "$TMP" sinescritura.XXXXXX)
+  chmod 500 "$td"
+  tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+  run_close_gate "$tp" "$td"
+  primero=$(close_rc)
+  run_close_gate "$tp" "$td"
+  { [ "$primero" -eq 0 ] && [ "$(close_rc)" -eq 0 ]; } \
+    && pass "sin poder escribir el marcador, close-review-gate falla abierto" \
+    || fail "sin marcador escribible el turno no cierra nunca (rc=$primero y $(close_rc))"
+  chmod 700 "$td"
+else
+  echo "salto el caso de TMPDIR sin escritura: como root todo es escribible"
+fi
+
+section "marcadores: la rama sin jq de los siete hooks"
+# Cinco de los siete sitios tocados están en la rama que salta cuando falta jq,
+# y ninguna prueba entraba ahí: el aviso diario, el fallo abierto y la seguridad
+# del marcador quedaban solo bajo la vigilancia del grep del invariante.
+stub="$TMP/bin-sin-jq"
+mkdir -p "$stub"
+for b in bash basename date mkdir id stat printf cat; do
+  ruta=$(command -v "$b" 2>/dev/null) && ln -sf "$ruta" "$stub/$b"
+done
+command -v jq >/dev/null 2>&1 && [ ! -e "$stub/jq" ] \
+  && pass "el PATH de prueba no tiene jq" \
+  || fail "el PATH de prueba no aísla jq"
+
+for h in "$HOOKS"/*.sh; do
+  nombre=$(basename "$h" .sh)
+  grep -q '_jqw' "$h" || continue
+  td=$(mktemp -d -p "$TMP" nojq.XXXXXX)
+  marcador="$td/dotmesh-nojq-${nombre}-$(date +%Y%m%d)"
+
+  set +e
+  err=$(printf '{}' | PATH="$stub" TMPDIR="$td" bash "$h" 2>&1 >/dev/null)
+  rc=$?
+  set -e
+  { [ "$rc" -eq 0 ] && case "$err" in *"jq no encontrado"*) true ;; *) false ;; esac; } \
+    && pass "$nombre sin jq: falla abierto y avisa" \
+    || fail "$nombre sin jq: rc=$rc, stderr=$err"
+  [ -d "$marcador" ] \
+    && pass "$nombre sin jq: deja el marcador del día como directorio" \
+    || fail "$nombre sin jq: no dejó marcador en $marcador"
+
+  err=$(printf '{}' | PATH="$stub" TMPDIR="$td" bash "$h" 2>&1 >/dev/null || true)
+  [ -z "$err" ] \
+    && pass "$nombre sin jq: no repite el aviso el mismo día" \
+    || fail "$nombre sin jq: avisó dos veces"
+
+  # Y con el marcador del día presembrado como enlace, no escribe a su destino.
+  td=$(mktemp -d -p "$TMP" nojq.XXXXXX)
+  ln -s "$TMP/inexistente-nojq-$nombre.txt" "$td/dotmesh-nojq-${nombre}-$(date +%Y%m%d)"
+  printf '{}' | PATH="$stub" TMPDIR="$td" bash "$h" >/dev/null 2>&1 || true
+  [ ! -e "$TMP/inexistente-nojq-$nombre.txt" ] \
+    && pass "$nombre sin jq: no crea el destino del enlace" \
+    || fail "$nombre sin jq: escribió a través del enlace"
+done
 
 section "commit por slice: falla abierto y está registrado"
 run_slice "$TMP/no-existe.jsonl" "$slicerepo"
