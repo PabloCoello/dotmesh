@@ -138,6 +138,11 @@
             "type": "command",
             "command": "~/.claude/hooks/close-review-gate.sh",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/verify-slice-commit.sh",
+            "timeout": 15
           }
         ]
       }

@@ -708,6 +708,112 @@ else
   fail "close-review-gate.sh no está registrado en la plantilla"
 fi
 
+section "commit por slice: el turno no cierra con el slice sin commitear"
+# I1 e I2 del examen: cero commits en los 6 runs de I1 y en los 3 del brazo
+# inline de I2. Los únicos que commitearon fueron los orquestados, con
+# verify-phase-close.sh activo. La prosa lleva escrita desde siempre en
+# AGENTS.md y no basta; el hook sí.
+SLICE="$HOOKS/verify-slice-commit.sh"
+
+# Registro de una edición del agente sobre un fichero.
+edit_line() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"e1","name":"%s","input":{"file_path":"%s"}}]}}\n' "${2:-Edit}" "$1"; }
+
+# $1 = transcript, $2 = cwd, $3 = TMPDIR (opcional), $4 = stop_hook_active (si|no)
+run_slice() {
+  local tp="$1" cwd="$2" td="${3:-}" active="${4:-no}" input
+  [ -z "$td" ] && td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+  input=$(jq -nc --arg t "$tp" --arg c "$cwd" \
+    --argjson a "$([ "$active" = si ] && echo true || echo false)" \
+    '{hook_event_name:"Stop",session_id:"sesion-slice",transcript_path:$t,cwd:$c,stop_hook_active:$a}')
+  set +e
+  printf '%s' "$input" | TMPDIR="$td" bash "$SLICE" >"$TMP/slice_out" 2>"$TMP/slice_err"
+  printf '%s' "$?" > "$TMP/slice_rc"
+  set -e
+}
+slice_rc() { cat "$TMP/slice_rc" 2>/dev/null || echo 0; }
+slice_err() { cat "$TMP/slice_err" 2>/dev/null || true; }
+
+if bash -n "$SLICE" 2>/dev/null; then pass "verify-slice-commit.sh compila"; else fail "verify-slice-commit.sh no compila"; fi
+
+# Repositorio de trabajo con un fichero ya commiteado y una zona ignorada.
+slicerepo="$TMP/repo-slice"
+git init -q -b main "$slicerepo"
+printf 'contenido\n' > "$slicerepo/modulo.sh"
+printf '.ai/\n' > "$slicerepo/.gitignore"
+mkdir -p "$slicerepo/.ai/tasks"
+git -C "$slicerepo" add -A
+git -C "$slicerepo" -c user.name=t -c user.email=t@t commit -q -m base
+git -C "$slicerepo" checkout -q -b una-rama
+
+# Sin ediciones en la sesión no hay slice que commitear.
+tp=$(principal_text "he contestado una pregunta" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "sesión sin ediciones, deja cerrar" || fail "bloqueó sin ediciones (rc=$(slice_rc))"
+
+# Editado y ya commiteado: el contrato está cumplido.
+tp=$(edit_line "$slicerepo/modulo.sh" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "lo editado ya está commiteado, deja cerrar" || fail "bloqueó con el árbol limpio (rc=$(slice_rc))"
+
+# El defecto medido: editado, verde y sin commitear.
+printf 'cambio\n' >> "$slicerepo/modulo.sh"
+tp=$(edit_line "$slicerepo/modulo.sh" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+if [ "$(slice_rc)" -eq 2 ]; then
+  case "$(slice_err)" in
+    *modulo.sh*) pass "editado y sin commitear, no deja cerrar y nombra el fichero" ;;
+    *) fail "bloqueó sin nombrar el fichero: $(slice_err)" ;;
+  esac
+else
+  fail "el turno cerró con el slice sin commitear (rc=$(slice_rc))"
+fi
+
+# Bloquear en bucle sería peor que no bloquear.
+td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+run_slice "$tp" "$slicerepo" "$td"
+[ "$(slice_rc)" -eq 2 ] && pass "el primer cierre bloquea" || fail "el primer cierre no bloqueó"
+run_slice "$tp" "$slicerepo" "$td"
+[ "$(slice_rc)" -eq 0 ] && pass "el segundo cierre pasa, sin bucle" || fail "el segundo cierre volvió a bloquear"
+
+run_slice "$tp" "$slicerepo" "" si
+[ "$(slice_rc)" -eq 0 ] && pass "con stop_hook_active no encadena bloqueos" || fail "encadenó un bloqueo sobre otro"
+
+git -C "$slicerepo" checkout -q -- modulo.sh
+
+# Un fichero nuevo sin trackear también es trabajo sin commitear.
+printf 'nuevo\n' > "$slicerepo/nuevo.sh"
+tp=$(edit_line "$slicerepo/nuevo.sh" Write | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 2 ] && pass "un fichero nuevo sin trackear cuenta" || fail "el fichero nuevo pasó (rc=$(slice_rc))"
+rm -f "$slicerepo/nuevo.sh"
+
+# Lo que Git ignora no es un slice: planes, scratch y artefactos de IA.
+printf 'plan\n' > "$slicerepo/.ai/tasks/plan.md"
+tp=$(edit_line "$slicerepo/.ai/tasks/plan.md" Write | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "un fichero ignorado por Git no cuenta como slice" || fail "bloqueó por un fichero ignorado (rc=$(slice_rc))"
+
+# Fuera de un repositorio no hay nada que afirmar.
+printf 'suelto\n' > "$TMP/suelto.txt"
+tp=$(edit_line "$TMP/suelto.txt" Write | make_close_transcript)
+run_slice "$tp" "$TMP"
+[ "$(slice_rc)" -eq 0 ] && pass "fuera de un repositorio, deja cerrar" || fail "bloqueó fuera de un repositorio (rc=$(slice_rc))"
+
+section "commit por slice: falla abierto y está registrado"
+run_slice "$TMP/no-existe.jsonl" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "sin transcript, falla abierto" || fail "bloqueó sin transcript"
+
+roto=$(printf 'esto no es json\n' | make_close_transcript)
+run_slice "$roto" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "con un transcript ilegible, falla abierto" || fail "bloqueó con un transcript ilegible"
+
+if jq -e '.hooks.Stop[]? | .hooks[] | select(.command | test("verify-slice-commit"))' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
+  pass "verify-slice-commit.sh está registrado en Stop"
+else
+  fail "verify-slice-commit.sh no está registrado en la plantilla"
+fi
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
