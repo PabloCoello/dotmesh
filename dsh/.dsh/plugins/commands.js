@@ -8,7 +8,7 @@
 //   name: '../../plugins/commands.js'
 // relativo al directorio del perfil (~/.dsh/profiles/web/).
 
-import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -53,6 +53,7 @@ function writeState(patch) {
   const current = readState()
   const next = { ...current, ...patch, updatedAt: new Date().toISOString() }
   if (next.title !== undefined) next.title = oneLine(next.title)
+  if (next.status !== undefined) next.status = oneLine(next.status, 50)
   const dir = join(DSH_HOME, 'state')
   mkdirSync(dir, { recursive: true })
   const tmp = STATE_FILE + '.tmp'
@@ -142,7 +143,7 @@ export function apply(ctx) {
         return { kind: 'error', text: 'argos get superó el tiempo límite (10 s).' }
       }
       if (r.status !== 0) {
-        const detail = (r.stderr ?? '').trim() || r.stdout?.trim() || 'error desconocido'
+        const detail = (r.stderr ?? '').trim() || r.stdout?.trim() || r.error?.message || 'error desconocido'
         return { kind: 'error', text: `argos get falló: ${detail}` }
       }
 
@@ -203,7 +204,7 @@ export function apply(ctx) {
         // argos diagnose sale con código 0 tanto si hay hallazgos como si no;
         // un código distinto de 0 indica fallo de ejecución (p.ej. no hay proyecto argos).
         if (r.status !== 0) {
-          const detail = (r.stderr ?? '').trim().slice(0, 300) || 'error desconocido'
+          const detail = (r.stderr ?? '').trim().slice(0, 300) || r.error?.message || 'error desconocido'
           return { kind: 'error', text: `argos diagnose falló (exit ${r.status}): ${detail}` }
         }
         const out = r.stdout ?? ''
@@ -255,13 +256,6 @@ export function apply(ctx) {
 
       const dest = join(cwd, '.ai', 'tasks', slug, 'handoff.md')
 
-      if (existsSync(dest)) {
-        return {
-          kind: 'error',
-          text: `Ya existe ${dest}. Elige un slug diferente o elimínalo antes de continuar.`,
-        }
-      }
-
       const reqLine = state.req
         ? `${state.req}${state.title ? ` — ${state.title}` : ''}`
         : '(ninguno)'
@@ -307,7 +301,17 @@ export function apply(ctx) {
       ].join('\n')
 
       mkdirSync(join(cwd, '.ai', 'tasks', slug), { recursive: true })
-      writeFileSync(dest, content, 'utf8')
+      try {
+        writeFileSync(dest, content, { encoding: 'utf8', flag: 'wx' })
+      } catch (err) {
+        if (err.code === 'EEXIST') {
+          return {
+            kind: 'error',
+            text: `Ya existe ${dest}. Elige un slug diferente o elimínalo antes de continuar.`,
+          }
+        }
+        throw err
+      }
 
       return { kind: 'success', text: `Handoff escrito en ${dest}` }
     },
