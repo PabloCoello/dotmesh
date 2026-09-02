@@ -131,7 +131,7 @@ Rule of thumb: **no shape yet → `idea-refine`; ready to converge → `grilling
 
 Enforcement rules:
 
-- **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour. For a multi-file change with **three or more distinct steps**, write at least a short `.ai/tasks/<slug>/plan.md` before coding, even without phase subagents; reserve subagent orchestration for genuinely multi-phase work.
+- **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour. For a multi-file change with **three or more distinct steps**, write at least a short `.ai/tasks/<slug>/plan.md` before coding and then implement it inline; reserve subagent orchestration for work that does not fit one session, needs an isolated tree or toolset, or has phases that can run in parallel.
 - **Specificity wins.** When two skills overlap, the more specific phase owns the rule; the conventions in this file override any skill.
 - **Spanish prose in deliverables** (READMEs, docs, fichas) loads `castellano-peninsular` and `anti-ai-style`. Chat replies load neither: they are working conversation, not final output. When the user asks for an explanation in chat, give it in business terms — what it does, why it matters, what changes — with technical detail as support, not as the lead.
 
@@ -140,9 +140,11 @@ Enforcement rules:
 Quality degrades well before the context window fills (around 100k tokens, regardless of a 1M window). Don't fight this by stuffing more into one session — keep the durable truth on disk and the live context lean.
 
 - **The plan lives on disk, not in context.** `planning-and-task-breakdown` writes the plan and a phase checklist to `.ai/tasks/<slug>/plan.md`. That file is the source of truth; the conversation is disposable. Mark phases done there as you go.
-- **Commit per slice — automatic, not "on request".** `incremental-implementation` means each completed, green slice is committed **on the working branch** as you go. These per-slice checkpoints do **not** require the user to ask first: the "commit and push only when asked" rule governs **push, PR, and committing on the default branch** — not the incremental commits of an already-approved implementation on a work branch. If you're on the default branch, create a work branch first, then commit each slice. Git history is durable state a fresh session can read to re-orient. `/super-git` is the lifecycle arm of this: per-slice commits happen inside each phase subagent, while sync, push and PR are the orchestrator's single finalization step once the phases land.
+- **Commit per slice — automatic, not "on request".** `incremental-implementation` means each completed, green slice is committed **on the working branch** as you go. These per-slice checkpoints do **not** require the user to ask first: the "commit and push only when asked" rule governs **push, PR, and committing on the default branch** — not the incremental commits of an already-approved implementation on a work branch. If you're on the default branch, create a work branch first, then commit each slice. Git history is durable state a fresh session can read to re-orient. `/super-git` is the lifecycle arm of this: sync, push and PR are a single finalization step once the slices land. This is the rule the exam found least respected — zero commits across nine runs that were writing code — so `verify-slice-commit.sh` blocks the stop when a file the session edited is still uncommitted.
 - **Watch the counter.** The statusline shows absolute tokens (`~/.claude/statusline.sh`): gold at ~90k means wrap up the current phase; rose at ~160k means stop and hand off.
-- **Orchestrate multi-phase work with subagents — don't carry it in one context.** For a plan with several phases, the main session is a thin orchestrator: run each phase in a fresh `build` subagent (isolated context), let it implement, test and commit that phase, and return a short summary plus the commit range. Because the `build` agent does not have `Agent` in its tool allowlist, a delegated `build` cannot run the `review`/`security` gates itself: it self-checks with the `code-review-and-quality` and `security-and-hardening` skills, and the **orchestrator** runs the blocking `review`/`security` subagents between phases over the commits each phase landed (`maths` too when relevant). The orchestrator's context grows by summaries, not by the work — so it drives many phases without degrading. This is the automatic alternative to a manual `/handoff` → `/clear` → resume cycle between phases. (The agent cannot reset its own context mid-session; fresh subagents are how you get the same effect.)
+- **Inline is the default; delegate when the work does not fit one session.** Measured on 2026-09-02 (I2 of the maker-flow exam: five dependent phases, inline against orchestrated, three runs each): both arms scored 31/31 on the hidden tests, late phases included; the orchestrated arm cost 4.87× and took 6.66× longer; and the orchestrator's peak context did **not** drop (108.2k inline against 111.6k orchestrated) — it reads the summaries, verifies them and runs the gates, so it ends up just as loaded. The inline arm reached 100–116k, the zone this file calls degraded, and did not degrade. So drive the phases inline with the plan on disk, and delegate to `build` for a concrete reason: the work genuinely does not fit one session, a phase needs an isolated tree or toolset, or independent phases can run in parallel. Several phases on their own is not that reason. When you do delegate, the split still holds: `build` has no `Agent` in its tool allowlist, so it self-checks with the `code-review-and-quality` and `security-and-hardening` skills, and the **orchestrator** runs the blocking `review`/`security` subagents over the commits each phase landed (`maths` too when relevant).
+
+- **The gate closes before the turn does.** Every `Agent` launch here returns `async_launched`: the subagent runs in the background and its report arrives later as a task notification. Delegating `review`/`security` and then closing the turn therefore ships unreviewed work while claiming the opposite — measured in I1 of the same exam, along with a `blocker` that the principal received and never mentioned. Wait for the notification, read the report, and name every `blocker` when you close, whether you fixed it or decided not to. A blocker never closes in silence. `close-review-gate.sh` blocks the stop when either half is missing.
 - **Cross real session boundaries with `handoff`.** When you stop for the day, `handoff` writes the curated state to `.ai/tasks/<slug>/handoff.md`. The next session reads it — or orients itself from git history and `.ai/tasks/` — and continues.
 
 ## Personas and subagents
@@ -150,7 +152,8 @@ Quality degrades well before the context window fills (around 100k tokens, regar
 The agent system has two layers, identical in concept across the three tools.
 
 - **Two personas** — the stance you operate in: `maker` (engineering: spec → plan
-  → build → review → security, delegating aggressively) and `scribe`
+  → build → review → security, driving the phases itself and gating each one)
+  and `scribe`
   (prose/research: outline → draft → editor). They are output styles in Claude
   Code (`~/.claude/output-styles/`, configured via `outputStyle` in `settings.json`, default
   `maker`), `mode: primary` agents in OpenCode (native selector), and workflow
@@ -159,12 +162,16 @@ The agent system has two layers, identical in concept across the three tools.
 - **Seven subagents** — the workers a persona delegates to, never switched into by
   hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
-  situation, not on the user naming them. The `remind-load-skills`,
-  `remind-review-gate` and `verify-phase-close` hooks are the safety net under
-  that delegation: the first two gate a subagent before it commits, the third
-  fires on `SubagentStop` and hands the orchestrator the state of the working
-  tree plus the last commits, so a phase is accepted against the repository
-  rather than against the subagent’s own summary.
+  situation, not on the user naming them. Five hooks are the safety net under
+  the contract. `remind-load-skills` and `remind-review-gate` gate a subagent
+  before it commits. `verify-phase-close` fires on `SubagentStop` and hands the
+  orchestrator the state of the working tree plus the last commits, so a phase
+  is accepted against the repository rather than against the subagent’s own
+  summary. `close-review-gate` and `verify-slice-commit` fire on `Stop`, which
+  only the principal reaches: the first refuses to close a turn that left a gate
+  unharvested or a `blocker` unnamed, the second one that left an edited file
+  uncommitted. All of them block once and then step aside — a hook that loops is
+  worse than no hook.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
