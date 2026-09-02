@@ -19,11 +19,15 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the check is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
+  # mkdir is the check and the write in one step: it succeeds only for the first
+  # caller of the day, and it never follows a symlink in the final component, so
+  # a marker pre-seeded in a shared TMPDIR cannot make this hook create or
+  # truncate a file elsewhere. Anyone able to pre-seed that path silences the
+  # day's warning; the UID check this replaces traded that for re-warning on
+  # every single call, which is noisier for no gain. Audited 2026-09-02.
+  if mkdir "$_jqw" 2>/dev/null; then
+    printf 'dotmesh hook: jq no encontrado; cierre de fase sin verificar (fail-open). Instala jq.\n' >&2
   fi
-  printf 'dotmesh hook: jq no encontrado; cierre de fase sin verificar (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
   exit 0
 fi
 

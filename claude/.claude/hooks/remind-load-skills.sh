@@ -29,13 +29,15 @@ set -euo pipefail
 # Warn once per day so a fresh install notices the guardrail is sleeping.
 if ! command -v jq >/dev/null 2>&1; then
   _jqw="${TMPDIR:-/tmp}/dotmesh-nojq-$(basename "$0" .sh)-$(date +%Y%m%d)"
-  # Honour the marker only if it belongs to the current UID (prevents a
-  # world-writable /tmp pre-creation from silently suppressing the warning).
-  if [ -f "$_jqw" ] && [ "$(stat -c %u "$_jqw" 2>/dev/null)" = "$(id -u)" ]; then
-    exit 0
+  # mkdir is the check and the write in one step: it succeeds only for the first
+  # caller of the day, and it never follows a symlink in the final component, so
+  # a marker pre-seeded in a shared TMPDIR cannot make this hook create or
+  # truncate a file elsewhere. Anyone able to pre-seed that path silences the
+  # day's warning; the UID check this replaces traded that for re-warning on
+  # every single call, which is noisier for no gain. Audited 2026-09-02.
+  if mkdir "$_jqw" 2>/dev/null; then
+    printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
   fi
-  printf 'dotmesh hook: jq no encontrado; guardarraíl desactivado (fail-open). Instala jq.\n' >&2
-  : > "$_jqw" 2>/dev/null || true
   exit 0
 fi
 
@@ -75,8 +77,12 @@ aid=$(printf '%s' "$input" | jq -r '.agent_id // empty' | tr -cd 'A-Za-z0-9_-')
 [ -z "$sid" ] && sid="nosession"
 [ -z "$aid" ] && aid="main"
 marker="${TMPDIR:-/tmp}/dotmesh-skill-reminder-${sid}-${aid}"
-[ -e "$marker" ] && exit 0
-: > "$marker" 2>/dev/null || true
+# mkdir is the check and the write in one step: it never follows a symlink in the
+# final component, so a marker pre-seeded in a shared TMPDIR cannot make this
+# hook create or truncate a file elsewhere, and it succeeds for exactly one
+# caller. When it fails the reminder is skipped, which is the cheap direction for
+# a hook that only nudges. Audited 2026-09-02.
+mkdir "$marker" 2>/dev/null || exit 0
 
 read -r -d '' msg <<'EOF' || true
 Recordatorio dotmesh (una vez por agente): vas a implementar. Carga la skill que

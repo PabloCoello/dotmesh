@@ -566,6 +566,534 @@ guard_blocks "git push origin ma\\in" "una barra invertida en medio del nombre"
 guard_blocks "git p\\ush origin main" "el propio subcomando escapado"
 guard_allows "git push origin \$'otra-rama'" "entrecomillado ANSI-C de una rama de trabajo"
 GUARD_CWD=""
+
+section "cierre del gate: un blocker no se cierra en silencio"
+# I1 del examen del flujo maker: `review` marcó un defecto como blocker y el
+# principal cerró el turno aplicando los otros hallazgos sin mencionarlo. En
+# otro run lanzó el gate en segundo plano y cerró sin esperar el resultado.
+# Medido además al diseñar el arreglo: toda delegación al Agent en esta
+# instalación devuelve status "async_launched", así que "esperar el gate" es una
+# propiedad comprobable, no una recomendación.
+CLOSEGATE="$HOOKS/close-review-gate.sh"
+
+# Lanzamiento de un subagente: registro assistant con tool_use de nombre Agent.
+gate_launch() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"%s","name":"Agent","input":{"subagent_type":"%s","description":"gate"}}]}}\n' "$1" "$2"; }
+# Resultado inmediato del lanzamiento: asíncrono (queda pendiente de cosechar).
+gate_async_result() { printf '{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a-%s"},"message":{"content":[{"type":"tool_result","tool_use_id":"%s","content":"lanzado"}]}}\n' "$1" "$1"; }
+# Resultado inmediato síncrono: el informe ya está en el tool_result.
+gate_sync_result() { printf '{"type":"user","toolUseResult":{"content":"%s"},"message":{"content":[{"type":"tool_result","tool_use_id":"%s","content":"%s"}]}}\n' "$2" "$1" "$2"; }
+# Notificación de cierre del subagente, que es donde llega el informe. La forma
+# está copiada de un transcript real (2026-09-02): el informe viaja en <result>,
+# dentro del mismo bloque, y hay tres elementos más entre medias.
+# $3 = estado (por defecto completed).
+gate_notification() { printf '{"type":"user","message":{"content":"<task-notification>\\n<task-id>a-%s</task-id>\\n<tool-use-id>%s</tool-use-id>\\n<output-file>/tmp/tasks/a-%s.output</output-file>\\n<status>%s</status>\\n<summary>Agent \\"gate\\" finished</summary>\\n<note>A task-notification fires each time this agent stops.</note>\\n<result>%s</result>\\n</task-notification>"}}\n' "$1" "$1" "$1" "${3:-completed}" "$2"; }
+# La misma notificación tal y como aparece en un registro queue-operation: el
+# contenido cuelga de la raíz, no de message. Medido en transcripts reales, hay
+# notificaciones que solo existen con esta forma.
+gate_notification_queue() { printf '{"type":"queue-operation","operation":"add","content":"<task-notification>\\n<task-id>a-%s</task-id>\\n<tool-use-id>%s</tool-use-id>\\n<status>%s</status>\\n<result>%s</result>\\n</task-notification>"}\n' "$1" "$1" "${3:-completed}" "$2"; }
+# Texto del principal.
+principal_text() { printf '{"type":"assistant","message":{"content":[{"type":"text","text":"%s"}]}}\n' "$1"; }
+
+# Ejecuta el hook de cierre. $1 = transcript, $2 = TMPDIR (para encadenar dos
+# cierres de la misma sesión), $3 = stop_hook_active (si|no).
+run_close_gate() {
+  local tp="$1" td="${2:-}" active="${3:-no}" input
+  [ -z "$td" ] && td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+  input=$(jq -nc --arg t "$tp" --argjson a "$([ "$active" = si ] && echo true || echo false)" \
+    '{hook_event_name:"Stop",session_id:"sesion-1",transcript_path:$t,stop_hook_active:$a}')
+  set +e
+  printf '%s' "$input" | TMPDIR="$td" bash "$CLOSEGATE" >"$TMP/close_out" 2>"$TMP/close_err"
+  printf '%s' "$?" > "$TMP/close_rc"
+  set -e
+}
+close_rc() { cat "$TMP/close_rc" 2>/dev/null || echo 0; }
+close_err() { cat "$TMP/close_err" 2>/dev/null || true; }
+
+# Monta un transcript en un fichero nuevo y devuelve su ruta. Recibe las líneas
+# ya formadas por stdin.
+make_close_transcript() {
+  local dir
+  dir=$(mktemp -d -p "$TMP" close.XXXXXX)
+  cat > "$dir/sesion.jsonl"
+  printf '%s' "$dir/sesion.jsonl"
+}
+
+if bash -n "$CLOSEGATE" 2>/dev/null; then pass "close-review-gate.sh compila"; else fail "close-review-gate.sh no compila"; fi
+
+# Sin gate lanzado no hay nada que cerrar.
+tp=$(principal_text "he hecho un cambio trivial" | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "sin gate lanzado, deja cerrar" || fail "bloqueó sin gate alguno (rc=$(close_rc))"
+
+# El defecto medido: gate lanzado en asíncrono y el turno se cierra sin él.
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo, revisión aplicada"; } | make_close_transcript)
+run_close_gate "$tp"
+if [ "$(close_rc)" -eq 2 ]; then
+  case "$(close_err)" in
+    *sin*cosechar*|*sin*resultado*|*espera*) pass "gate asíncrono sin resultado, no deja cerrar" ;;
+    *) fail "bloqueó con un mensaje inesperado: $(close_err)" ;;
+  esac
+else
+  fail "el turno cerró con el gate aún en vuelo (rc=$(close_rc))"
+fi
+
+# Cosechado y limpio: cerrar es correcto.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification t1 "OK"; principal_text "revisión OK"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "gate cosechado y limpio, deja cerrar" || fail "bloqueó con el gate ya cosechado (rc=$(close_rc))"
+
+# El otro defecto medido: el blocker llega y el principal cierra sin nombrarlo.
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification t1 "1. blocker - el quoting de la ruta rompe con espacios (linea 40)";
+       principal_text "he aplicado los otros dos hallazgos, listo"; } | make_close_transcript)
+run_close_gate "$tp"
+if [ "$(close_rc)" -eq 2 ]; then
+  case "$(close_err)" in
+    *blocker*) pass "blocker sin mencionar, no deja cerrar" ;;
+    *) fail "bloqueó sin nombrar el blocker: $(close_err)" ;;
+  esac
+else
+  fail "el blocker se cerró en silencio (rc=$(close_rc))"
+fi
+
+# Mencionado al cerrar: el contrato se cumple y no hay que estorbar.
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification t1 "1. blocker - el quoting de la ruta rompe con espacios";
+       principal_text "el blocker del quoting queda arreglado en el commit b3f1a2c"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "blocker mencionado al cerrar, deja cerrar" || fail "bloqueó pese a mencionarlo (rc=$(close_rc))"
+
+# Falso positivo que haría inservible el hook: un veredicto limpio nombra la
+# severidad para negarla.
+for veredicto in "sin blockers, dos nits" "no blockers found" "ningun blocker; 2 optional" "blockers: ninguno"; do
+  tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification t1 "$veredicto"; principal_text "cerrado"; } | make_close_transcript)
+  run_close_gate "$tp"
+  [ "$(close_rc)" -eq 0 ] && pass "veredicto limpio no cuenta como blocker: $veredicto" || fail "falso positivo con: $veredicto"
+done
+
+# Bloquear en bucle sería peor que no bloquear.
+td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp" "$td"
+[ "$(close_rc)" -eq 2 ] && pass "el primer cierre bloquea" || fail "el primer cierre no bloqueó"
+run_close_gate "$tp" "$td"
+[ "$(close_rc)" -eq 0 ] && pass "el segundo cierre pasa, sin bucle" || fail "el segundo cierre volvió a bloquear"
+
+# stop_hook_active dice que ya venimos de un bloqueo: no encadenar otro.
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp" "" si
+[ "$(close_rc)" -eq 0 ] && pass "con stop_hook_active no encadena bloqueos" || fail "encadenó un bloqueo sobre otro"
+
+# Un gate síncrono ya trae el informe en el tool_result: no hay nada pendiente.
+tp=$({ gate_launch t1 review; gate_sync_result t1 "OK"; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "un gate síncrono no queda pendiente" || fail "trató un gate síncrono como pendiente"
+
+# Solo review y security son gates. Un build en vuelo es trabajo, no un gate.
+tp=$({ gate_launch t1 build; gate_async_result t1; principal_text "fase lanzada"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "un build asíncrono no es un gate" || fail "bloqueó por un subagente que no es gate"
+
+# security cuenta igual que review.
+tp=$({ gate_launch t1 security; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "el gate de security cuenta como gate" || fail "no vigiló el gate de security"
+
+# La notificación no siempre llega en un registro `user`. En transcripts reales
+# aparece también (y a veces solo) como `queue-operation`, con el contenido
+# colgando de la raíz. Leer solo message.content deja el gate por cosechar para
+# siempre y pierde su blocker.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification_queue t1 "OK"; principal_text "revisión OK"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "una notificación en queue-operation cosecha el gate" || fail "no vio la notificación fuera de message.content (rc=$(close_rc))"
+
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification_queue t1 "1. blocker - el quoting rompe con espacios";
+       principal_text "aplicados los otros hallazgos"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "un blocker en queue-operation también bloquea" || fail "el blocker de queue-operation se cerró en silencio"
+
+# Un subagente que termina mal ya no está en vuelo: pedir que esperes una
+# notificación que ya llegó es una instrucción imposible de cumplir.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_notification t1 "abortado" failed; principal_text "el gate falló, lo relanzo"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 0 ] && pass "un gate que terminó en error no queda en vuelo" || fail "pidió esperar una notificación ya recibida (rc=$(close_rc))"
+
+# Con dos gates, cosechar uno no exime del otro.
+tp=$({ gate_launch t1 review; gate_async_result t1; gate_launch t2 security; gate_async_result t2;
+       gate_notification t1 "OK"; principal_text "review OK"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "cosechar un gate no exime del otro" || fail "el segundo gate quedó sin vigilar"
+
+# El fallo exacto que se midió: el cierre dice "sin blockers" sobre un blocker
+# real. Negar la severidad no es nombrarla.
+tp=$({ gate_launch t1 review; gate_async_result t1;
+       gate_notification t1 "1. blocker - el quoting rompe con espacios";
+       principal_text "revisión aplicada, sin blockers"; } | make_close_transcript)
+run_close_gate "$tp"
+[ "$(close_rc)" -eq 2 ] && pass "negar la severidad no descarga el blocker" || fail "\"sin blockers\" descargó un blocker real"
+
+section "cierre del gate: falla abierto"
+run_close_gate "$TMP/no-existe.jsonl"
+[ "$(close_rc)" -eq 0 ] && pass "sin transcript, falla abierto" || fail "bloqueó sin transcript"
+
+roto=$(printf 'esto no es json\n' | make_close_transcript)
+run_close_gate "$roto"
+[ "$(close_rc)" -eq 0 ] && pass "con un transcript ilegible, falla abierto" || fail "bloqueó con un transcript ilegible"
+
+section "cierre del gate: el marcador no es una vía para truncar ficheros"
+# Auditoría del 2026-09-02: `: > "$marcador"` sigue symlinks. Con un TMPDIR
+# compartido, un tercero que adivine el session_id puede presembrar el marcador
+# como enlace a un fichero del usuario y el hook lo trunca al escribirlo.
+tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+
+# La vía de escritura es un enlace cuyo destino aún no existe: ahí la
+# redirección crea el fichero en la ruta que elija el atacante.
+td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+ln -s "$TMP/inexistente-gate.txt" "$td/dotmesh-close-gate-pending-sesion-1"
+run_close_gate "$tp" "$td"
+[ ! -e "$TMP/inexistente-gate.txt" ] \
+  && pass "un marcador presembrado como symlink no crea su destino" \
+  || fail "el hook creó el fichero al que apuntaba el marcador"
+
+# Con el destino ya existente la escritura lo truncaría.
+td=$(mktemp -d -p "$TMP" closetmp.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-gate.txt"
+ln -s "$TMP/victima-gate.txt" "$td/dotmesh-close-gate-pending-sesion-1"
+run_close_gate "$tp" "$td"
+[ -s "$TMP/victima-gate.txt" ] \
+  && pass "un marcador presembrado como symlink no trunca su destino" \
+  || fail "el hook truncó el fichero al que apuntaba el marcador"
+
+# Y con el marcador saboteado tampoco puede quedarse bloqueando cada turno:
+# repetir el bloqueo sin salida es peor que saltárselo.
+run_close_gate "$tp" "$td"
+[ "$(close_rc)" -eq 0 ] \
+  && pass "con el marcador saboteado no bloquea en bucle" \
+  || fail "el marcador saboteado deja la sesión sin poder cerrar"
+
+section "cierre del gate: registro en la plantilla de settings.json"
+if jq -e '.hooks.Stop[]? | .hooks[] | select(.command | test("close-review-gate"))' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
+  pass "close-review-gate.sh está registrado en Stop"
+else
+  fail "close-review-gate.sh no está registrado en la plantilla"
+fi
+
+# Una clave repetida dentro de `hooks` no la ve jq: se queda con la última y
+# pierde en silencio los hooks de la primera, y sync-claude-hooks escribe esa
+# pérdida en el settings.json vivo. Hay que mirar el fichero crudo.
+repes=$(grep -oE '^    "[A-Za-z]+": \[' "$REPO_ROOT/claude/.claude/settings.json" | sort | uniq -d)
+[ -z "$repes" ] \
+  && pass "ninguna clave de evento está declarada dos veces en hooks" \
+  || fail "clave de evento duplicada en hooks: $(printf '%s' "$repes" | tr '\n' ' ')"
+
+section "commit por slice: el turno no cierra con el slice sin commitear"
+# I1 e I2 del examen: cero commits en los 6 runs de I1 y en los 3 del brazo
+# inline de I2. Los únicos que commitearon fueron los orquestados, con
+# verify-phase-close.sh activo. La prosa lleva escrita desde siempre en
+# AGENTS.md y no basta; el hook sí.
+SLICE="$HOOKS/verify-slice-commit.sh"
+
+# Registro de una edición del agente sobre un fichero.
+edit_line() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"e1","name":"%s","input":{"file_path":"%s"}}]}}\n' "${2:-Edit}" "$1"; }
+
+# $1 = transcript, $2 = cwd, $3 = TMPDIR (opcional), $4 = stop_hook_active (si|no)
+run_slice() {
+  local tp="$1" cwd="$2" td="${3:-}" active="${4:-no}" input
+  [ -z "$td" ] && td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+  input=$(jq -nc --arg t "$tp" --arg c "$cwd" \
+    --argjson a "$([ "$active" = si ] && echo true || echo false)" \
+    '{hook_event_name:"Stop",session_id:"sesion-slice",transcript_path:$t,cwd:$c,stop_hook_active:$a}')
+  set +e
+  printf '%s' "$input" | TMPDIR="$td" bash "$SLICE" >"$TMP/slice_out" 2>"$TMP/slice_err"
+  printf '%s' "$?" > "$TMP/slice_rc"
+  set -e
+}
+slice_rc() { cat "$TMP/slice_rc" 2>/dev/null || echo 0; }
+slice_err() { cat "$TMP/slice_err" 2>/dev/null || true; }
+
+if bash -n "$SLICE" 2>/dev/null; then pass "verify-slice-commit.sh compila"; else fail "verify-slice-commit.sh no compila"; fi
+
+# Repositorio de trabajo con un fichero ya commiteado y una zona ignorada.
+slicerepo="$TMP/repo-slice"
+git init -q -b main "$slicerepo"
+printf 'contenido\n' > "$slicerepo/modulo.sh"
+printf '.ai/\n' > "$slicerepo/.gitignore"
+mkdir -p "$slicerepo/.ai/tasks"
+git -C "$slicerepo" add -A
+git -C "$slicerepo" -c user.name=t -c user.email=t@t commit -q -m base
+git -C "$slicerepo" checkout -q -b una-rama
+
+# Sin ediciones en la sesión no hay slice que commitear.
+tp=$(principal_text "he contestado una pregunta" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "sesión sin ediciones, deja cerrar" || fail "bloqueó sin ediciones (rc=$(slice_rc))"
+
+# Editado y ya commiteado: el contrato está cumplido.
+tp=$(edit_line "$slicerepo/modulo.sh" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "lo editado ya está commiteado, deja cerrar" || fail "bloqueó con el árbol limpio (rc=$(slice_rc))"
+
+# El defecto medido: editado, verde y sin commitear.
+printf 'cambio\n' >> "$slicerepo/modulo.sh"
+tp=$(edit_line "$slicerepo/modulo.sh" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+if [ "$(slice_rc)" -eq 2 ]; then
+  case "$(slice_err)" in
+    *modulo.sh*) pass "editado y sin commitear, no deja cerrar y nombra el fichero" ;;
+    *) fail "bloqueó sin nombrar el fichero: $(slice_err)" ;;
+  esac
+else
+  fail "el turno cerró con el slice sin commitear (rc=$(slice_rc))"
+fi
+
+# Bloquear en bucle sería peor que no bloquear.
+td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+run_slice "$tp" "$slicerepo" "$td"
+[ "$(slice_rc)" -eq 2 ] && pass "el primer cierre bloquea" || fail "el primer cierre no bloqueó"
+run_slice "$tp" "$slicerepo" "$td"
+[ "$(slice_rc)" -eq 0 ] && pass "el segundo cierre pasa, sin bucle" || fail "el segundo cierre volvió a bloquear"
+
+run_slice "$tp" "$slicerepo" "" si
+[ "$(slice_rc)" -eq 0 ] && pass "con stop_hook_active no encadena bloqueos" || fail "encadenó un bloqueo sobre otro"
+
+git -C "$slicerepo" checkout -q -- modulo.sh
+
+# Un fichero nuevo sin trackear también es trabajo sin commitear.
+printf 'nuevo\n' > "$slicerepo/nuevo.sh"
+tp=$(edit_line "$slicerepo/nuevo.sh" Write | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 2 ] && pass "un fichero nuevo sin trackear cuenta" || fail "el fichero nuevo pasó (rc=$(slice_rc))"
+rm -f "$slicerepo/nuevo.sh"
+
+# Git interpreta el pathspec como patrón aunque vaya tras `--`. Una ruta con
+# corchetes es normal en proyectos web y se perdía sin avisar.
+mkdir -p "$slicerepo/app/[id]"
+printf 'pagina\n' > "$slicerepo/app/[id]/page.tsx"
+tp=$(edit_line "$slicerepo/app/[id]/page.tsx" Write | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 2 ] \
+  && pass "una ruta con metacaracteres de glob se compara literal" \
+  || fail "la ruta con corchetes se perdió (rc=$(slice_rc))"
+rm -rf "$slicerepo/app"
+
+# Lo que Git ignora no es un slice: planes, scratch y artefactos de IA.
+printf 'plan\n' > "$slicerepo/.ai/tasks/plan.md"
+tp=$(edit_line "$slicerepo/.ai/tasks/plan.md" Write | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "un fichero ignorado por Git no cuenta como slice" || fail "bloqueó por un fichero ignorado (rc=$(slice_rc))"
+
+# Fuera de un repositorio no hay nada que afirmar.
+printf 'suelto\n' > "$TMP/suelto.txt"
+tp=$(edit_line "$TMP/suelto.txt" Write | make_close_transcript)
+run_slice "$tp" "$TMP"
+[ "$(slice_rc)" -eq 0 ] && pass "fuera de un repositorio, deja cerrar" || fail "bloqueó fuera de un repositorio (rc=$(slice_rc))"
+
+# El transcript puede nombrar ficheros de cualquier repositorio de la máquina.
+# Mirar ahí filtra estado ajeno al trabajo de la sesión y filtra el nombre del
+# fichero al agente: solo cuenta el repositorio en el que corre la sesión.
+otro="$TMP/repo-ajeno"
+git init -q -b main "$otro"
+printf 'a\n' > "$otro/secreto.txt"
+git -C "$otro" add -A
+git -C "$otro" -c user.name=t -c user.email=t@t commit -q -m base
+printf 'modificado\n' >> "$otro/secreto.txt"
+tp=$(edit_line "$otro/secreto.txt" | make_close_transcript)
+run_slice "$tp" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] \
+  && pass "un fichero de otro repositorio no cuenta como slice" \
+  || fail "bloqueó por el estado de un repositorio ajeno: $(slice_err)"
+
+# Mismo ataque de symlink que en el otro hook de Stop.
+printf 'cambio\n' >> "$slicerepo/modulo.sh"
+tp=$(edit_line "$slicerepo/modulo.sh" | make_close_transcript)
+
+td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+ln -s "$TMP/inexistente-slice.txt" "$td/dotmesh-slice-commit-sesion-slice"
+run_slice "$tp" "$slicerepo" "$td"
+[ ! -e "$TMP/inexistente-slice.txt" ] \
+  && pass "un marcador presembrado como symlink no crea su destino" \
+  || fail "el hook creó el fichero al que apuntaba el marcador"
+
+td=$(mktemp -d -p "$TMP" slicetmp.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-slice.txt"
+ln -s "$TMP/victima-slice.txt" "$td/dotmesh-slice-commit-sesion-slice"
+run_slice "$tp" "$slicerepo" "$td"
+[ -s "$TMP/victima-slice.txt" ] \
+  && pass "un marcador presembrado como symlink no trunca su destino" \
+  || fail "el hook truncó el fichero al que apuntaba el marcador"
+
+run_slice "$tp" "$slicerepo" "$td"
+[ "$(slice_rc)" -eq 0 ] \
+  && pass "con el marcador saboteado no bloquea en bucle" \
+  || fail "el marcador saboteado deja la sesión sin poder cerrar"
+git -C "$slicerepo" checkout -q -- modulo.sh
+
+section "marcadores: ningún hook escribe a través de un enlace"
+# La auditoría del 2026-09-02 encontró la vía en los hooks de Stop, pero el
+# patrón `: > "$marcador"` era el de la casa y estaba en los siete. Con un
+# TMPDIR compartido, quien acierte el session_id presiembra el marcador como
+# enlace y el hook crea o vacía el fichero de destino.
+# El invariante no puede quedarse en el literal exacto: `touch`, `printf '' >` y
+# `cat /dev/null >` crean el destino igual, y un glob sin coincidencias no puede
+# pasar por bueno.
+hooks_escaneados=$(find "$HOOKS" -maxdepth 1 -name '*.sh' | wc -l)
+[ "$hooks_escaneados" -ge 7 ] \
+  && pass "el invariante escanea los $hooks_escaneados hooks del directorio" \
+  || fail "el invariante no encontró hooks que escanear ($hooks_escaneados)"
+
+peligrosas=$(grep -lE '(:|printf +.{0,4}|cat +/dev/null) *> *"?\$(marker|_jqw|m)"?|touch +"?\$(marker|_jqw|m)"?' \
+  "$HOOKS"/*.sh 2>/dev/null || true)
+[ -z "$peligrosas" ] \
+  && pass "ningún hook crea marcadores por una vía que siga enlaces" \
+  || fail "crean marcadores siguiendo enlaces: $(printf '%s' "$peligrosas" | xargs -n1 basename | tr '\n' ' ')"
+
+# Y el invariante positivo: quien define un marcador lo crea con mkdir.
+sin_mkdir=""
+for h in "$HOOKS"/*.sh; do
+  grep -qE '^[[:space:]]*(marker|_jqw)=' "$h" || continue
+  grep -qE 'mkdir "\$(marker|_jqw)"' "$h" || sin_mkdir="$sin_mkdir $(basename "$h")"
+done
+[ -z "$sin_mkdir" ] \
+  && pass "todo hook que define un marcador lo crea con mkdir" \
+  || fail "definen un marcador sin crearlo con mkdir:$sin_mkdir"
+
+# Todos compilan, incluido handoff-signal.sh, que no tiene más cobertura.
+no_compilan=""
+for h in "$HOOKS"/*.sh; do
+  bash -n "$h" 2>/dev/null || no_compilan="$no_compilan $(basename "$h")"
+done
+[ -z "$no_compilan" ] && pass "los $hooks_escaneados hooks compilan" || fail "no compilan:$no_compilan"
+
+# remind-load-skills: ni crea el destino del enlace, ni lo trunca, ni deja de
+# avisar por tener el marcador envenenado.
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
+msg=$(run_skills Write /tmp/x.txt "" "$td")
+[ ! -e "$TMP/inexistente-skills.txt" ] \
+  && pass "remind-load-skills no crea el destino del enlace" \
+  || fail "remind-load-skills escribió a través del enlace"
+[ -z "$msg" ] \
+  && pass "con el marcador envenenado, remind-load-skills calla en vez de repetirse" \
+  || fail "el marcador envenenado no se respetó como gastado"
+
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-skills.txt"
+ln -s "$TMP/victima-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
+run_skills Write /tmp/x.txt "" "$td" >/dev/null
+[ -s "$TMP/victima-skills.txt" ] \
+  && pass "remind-load-skills no trunca el destino del enlace" \
+  || fail "remind-load-skills truncó el fichero enlazado"
+
+# remind-review-gate: igual, y sin quedarse bloqueando cada commit.
+td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
+ln -s "$TMP/inexistente-gate2.txt" "$td/dotmesh-review-gate-sesion-1-abc123"
+tp=$(make_transcripts no no)
+msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+[ ! -e "$TMP/inexistente-gate2.txt" ] \
+  && pass "remind-review-gate no crea el destino del enlace" \
+  || fail "remind-review-gate escribió a través del enlace"
+[ "$(gate_rc)" -eq 0 ] \
+  && pass "con el marcador envenenado, el commit no queda bloqueado para siempre" \
+  || fail "el marcador envenenado bloquea todos los commits (rc=$(gate_rc))"
+
+td=$(mktemp -d -p "$TMP" gatetmp.XXXXXX)
+printf 'contenido que no se debe perder\n' > "$TMP/victima-gate2.txt"
+ln -s "$TMP/victima-gate2.txt" "$td/dotmesh-review-gate-sesion-1-abc123"
+msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+[ -s "$TMP/victima-gate2.txt" ] \
+  && pass "remind-review-gate no trunca el destino del enlace" \
+  || fail "remind-review-gate truncó el fichero enlazado"
+
+# Si el marcador no se puede crear, comprobar antes y escribir después deja el
+# bloqueo sin memoria: se repite en cada llamada y contradice el fallo abierto
+# que prometen estos hooks. Crear y comprobar en una sola operación lo cierra.
+if [ "$(id -u)" != 0 ]; then
+  td=$(mktemp -d -p "$TMP" sinescritura.XXXXXX)
+  chmod 500 "$td"
+  tp=$(make_transcripts no no)
+  msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+  primero=$(gate_rc)
+  msg=$(run_gate 'git commit -m "algo"' "$tp" abc123 "$td")
+  { [ "$primero" -eq 0 ] && [ "$(gate_rc)" -eq 0 ]; } \
+    && pass "sin poder escribir el marcador, remind-review-gate falla abierto" \
+    || fail "sin marcador escribible bloquea sin memoria (rc=$primero y $(gate_rc))"
+  chmod 700 "$td"
+
+  td=$(mktemp -d -p "$TMP" sinescritura.XXXXXX)
+  chmod 500 "$td"
+  tp=$({ gate_launch t1 review; gate_async_result t1; principal_text "listo"; } | make_close_transcript)
+  run_close_gate "$tp" "$td"
+  primero=$(close_rc)
+  run_close_gate "$tp" "$td"
+  { [ "$primero" -eq 0 ] && [ "$(close_rc)" -eq 0 ]; } \
+    && pass "sin poder escribir el marcador, close-review-gate falla abierto" \
+    || fail "sin marcador escribible el turno no cierra nunca (rc=$primero y $(close_rc))"
+  chmod 700 "$td"
+else
+  echo "salto el caso de TMPDIR sin escritura: como root todo es escribible"
+fi
+
+section "marcadores: la rama sin jq de los siete hooks"
+# Cinco de los siete sitios tocados están en la rama que salta cuando falta jq,
+# y ninguna prueba entraba ahí: el aviso diario, el fallo abierto y la seguridad
+# del marcador quedaban solo bajo la vigilancia del grep del invariante.
+stub="$TMP/bin-sin-jq"
+mkdir -p "$stub"
+for b in bash basename date mkdir id stat printf cat; do
+  ruta=$(command -v "$b" 2>/dev/null) && ln -sf "$ruta" "$stub/$b"
+done
+command -v jq >/dev/null 2>&1 && [ ! -e "$stub/jq" ] \
+  && pass "el PATH de prueba no tiene jq" \
+  || fail "el PATH de prueba no aísla jq"
+
+for h in "$HOOKS"/*.sh; do
+  nombre=$(basename "$h" .sh)
+  grep -q '_jqw' "$h" || continue
+  td=$(mktemp -d -p "$TMP" nojq.XXXXXX)
+  marcador="$td/dotmesh-nojq-${nombre}-$(date +%Y%m%d)"
+
+  set +e
+  err=$(printf '{}' | PATH="$stub" TMPDIR="$td" bash "$h" 2>&1 >/dev/null)
+  rc=$?
+  set -e
+  { [ "$rc" -eq 0 ] && case "$err" in *"jq no encontrado"*) true ;; *) false ;; esac; } \
+    && pass "$nombre sin jq: falla abierto y avisa" \
+    || fail "$nombre sin jq: rc=$rc, stderr=$err"
+  [ -d "$marcador" ] \
+    && pass "$nombre sin jq: deja el marcador del día como directorio" \
+    || fail "$nombre sin jq: no dejó marcador en $marcador"
+
+  err=$(printf '{}' | PATH="$stub" TMPDIR="$td" bash "$h" 2>&1 >/dev/null || true)
+  [ -z "$err" ] \
+    && pass "$nombre sin jq: no repite el aviso el mismo día" \
+    || fail "$nombre sin jq: avisó dos veces"
+
+  # Y con el marcador del día presembrado como enlace, no escribe a su destino.
+  td=$(mktemp -d -p "$TMP" nojq.XXXXXX)
+  ln -s "$TMP/inexistente-nojq-$nombre.txt" "$td/dotmesh-nojq-${nombre}-$(date +%Y%m%d)"
+  printf '{}' | PATH="$stub" TMPDIR="$td" bash "$h" >/dev/null 2>&1 || true
+  [ ! -e "$TMP/inexistente-nojq-$nombre.txt" ] \
+    && pass "$nombre sin jq: no crea el destino del enlace" \
+    || fail "$nombre sin jq: escribió a través del enlace"
+done
+
+section "commit por slice: falla abierto y está registrado"
+run_slice "$TMP/no-existe.jsonl" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "sin transcript, falla abierto" || fail "bloqueó sin transcript"
+
+roto=$(printf 'esto no es json\n' | make_close_transcript)
+run_slice "$roto" "$slicerepo"
+[ "$(slice_rc)" -eq 0 ] && pass "con un transcript ilegible, falla abierto" || fail "bloqueó con un transcript ilegible"
+
+if jq -e '.hooks.Stop[]? | .hooks[] | select(.command | test("verify-slice-commit"))' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
+  pass "verify-slice-commit.sh está registrado en Stop"
+else
+  fail "verify-slice-commit.sh no está registrado en la plantilla"
+fi
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
