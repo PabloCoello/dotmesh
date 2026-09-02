@@ -15,11 +15,6 @@
           },
           {
             "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/pretooluse-approve.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
-          },
-          {
-            "type": "command",
             "command": "~/.claude/hooks/remind-review-gate.sh"
           },
           {
@@ -34,21 +29,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/remind-load-skills.sh"
-          },
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/pretooluse-approve.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
-          }
-        ]
-      },
-      {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/pretooluse-ask.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
           }
         ]
       },
@@ -62,26 +42,7 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/userpromptsubmit-watch.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0"
-          }
-        ]
-      }
-    ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/stop-reprompt.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
-          }
-        ]
-      },
       {
         "matcher": "*",
         "hooks": [
@@ -94,36 +55,6 @@
             "type": "command",
             "command": "~/.claude/hooks/verify-slice-commit.sh",
             "timeout": 15
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "idle_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/notification-notify.sh\"; [ -x \"$f\" ] && exec \"$f\" idle_prompt; exit 0"
-          }
-        ]
-      },
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/notification-notify.sh\"; [ -x \"$f\" ] && exec \"$f\" permission_prompt; exit 0"
-          }
-        ]
-      }
-    ],
-    "StopFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/stopfailure-notify.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0"
           }
         ]
       }
