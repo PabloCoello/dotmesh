@@ -67,10 +67,10 @@
     maxBytes: 16384
 
 # ── 3. Superficie ────────────────────────────────────────────────────────────
-# Desactivar la marca oficial de dsh. El plugin de interfaz (Fase 8) sustituirá
-# los slots sidebar.brand.mark / sidebar.brand.name /
-# conversation.hero.brand.mark con la marca dotmesh; dsh-client-ui-brand-official
-# los ocupa por defecto y debe apagarse para que el registro posterior surta efecto.
+# Desactivar la marca oficial de dsh. El plugin de interfaz registra los slots
+# sidebar.brand.mark / sidebar.brand.name / conversation.hero.brand.mark con la
+# marca dotmesh; ui-brand-official los ocupa por defecto y debe apagarse para
+# que el registro del plugin surta efecto.
 - id: ui-brand-official
   disabled: true
 

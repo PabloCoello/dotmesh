@@ -37,7 +37,7 @@ help:
 	@echo "  make run-install    - Instala mesh-run en VS Code (requiere node y code)"
 	@echo "  make render-build   - Compila la extensión mesh-render"
 	@echo "  make render-install - Instala mesh-render en VS Code (requiere node y code)"
-	@echo "  make dsh-ui-build   - Compila el plugin de interfaz dsh-ui (requiere node; pendiente Fase 7)"
+	@echo "  make dsh-ui-build   - Compila el plugin de interfaz dsh-ui (requiere node)"
 	@echo "  make dsh-ui-install - Instala dsh-ui en el perfil web de dsh (requiere dsh o npx)"
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
@@ -192,10 +192,6 @@ render-install:
 .PHONY: dsh-ui-build
 dsh-ui-build:
 	@echo "→ build dsh-ui"
-	@if [ ! -f "$(abspath dsh/dsh-ui/package.json)" ]; then \
-		echo "  !!  dsh/dsh-ui/package.json no existe; pendiente la Fase 7 del paquete dsh"; \
-		exit 1; \
-	fi
 	@(cd dsh/dsh-ui && npm run build)
 
 .PHONY: dsh-ui-install
