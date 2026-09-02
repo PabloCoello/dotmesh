@@ -128,22 +128,23 @@ Cuando pares con trabajo en vuelo, crea un documento de traspaso con estas secci
 ```markdown
 # Handoff: <slug del task>
 
-## Goal
+## Objetivo
 Qué se intenta conseguir.
 
-## State
-- Done: qué está completado y commiteado.
-- In flight: qué está empezado pero no cerrado.
-- Blocked: qué no puede avanzar y por qué.
+## Estado
+- REQ activo: REQ-XXXXX-N — título breve
+- Status argos: DRAFT / APPROVED / IMPLEMENTED
+- Proyecto: ruta absoluta al directorio
+- Gate: OK o FALLÓ (N hallazgos). Fecha de la última ejecución.
 
-## Decisions
+## Decisiones
 Decisiones tomadas y por qué. Referencia commits, PRs, REQs y paths
 por nombre; no los dupliques aquí.
 
-## Next steps
+## Próximos pasos
 Acciones concretas que la siguiente sesión debe ejecutar en orden.
 
-## Suggested skills
+## Skills sugeridas
 Skills que el siguiente agente debería cargar (p. ej. `argos-traza`, `incremental-implementation`).
 ```
 

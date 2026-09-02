@@ -296,6 +296,26 @@ cp -R <otro-DSH_HOME>/profiles/web ~/.dsh/profiles/web
 Es reversible: borra `~/.dsh/profiles/web/` y dsh lo reconstruye solo. No copies
 encima de un perfil existente.
 
+### Banco de trabajo
+
+Tras instalar, selecciona el preset `taller` en la interfaz de dsh. No viene activo
+por defecto en una máquina nueva porque `~/.dsh/settings.yaml` no se versiona; el
+preset queda registrado solo cuando lo seleccionas manualmente en el selector de
+workspace.
+
+Tres comandos definen el ciclo de trabajo:
+
+- `/req <ID>` — fija el requisito activo consultando `argos get <ID> --json` y escribe el estado en `~/.dsh/state/workbench.json`.
+- `/gate` — corre `make gate` si el proyecto lo tiene; si no, `argos diagnose --new --json`. Registra el resultado (ok, hallazgos, marca de tiempo) en el mismo fichero.
+- `/handoff [slug]` — escribe `.ai/tasks/<slug>/handoff.md` en el directorio del proyecto activo con el formato estándar de dotmesh. Rechaza sobrescribir si el fichero ya existe.
+
+El estado persiste en `~/.dsh/state/workbench.json`. El panel de la interfaz lo lee
+por HTTP; un fichero ausente equivale a «sin REQ activo».
+
+`make install` llama a `make dsh-ui-install` solo si `dsh` está en el PATH como
+binario. Si usas dsh vía `npx`, ejecuta `make dsh-ui-install` a mano una vez: no
+queremos que `make install` descargue paquetes por npx en una instalación limpia.
+
 ## MCP en Codex
 
 Codex lee los servidores MCP directamente desde
