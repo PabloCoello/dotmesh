@@ -120,7 +120,6 @@ También se mantienen skills locales adicionales:
 - `grilling`, `grill-me`, `grill-with-docs`: entrevistas convergentes para afinar planes antes de implementar.
 - `domain-modeling`: mantiene la terminología y el glosario del dominio.
 - `handoff`: compacta el estado de una sesión para retomarla en otra.
-- `watch-summary`: resumen automático del historial de sesión.
 - `dotmesh-design`: diseño del sistema visual dotmesh (Paper · Ink · Syntax) empaquetado como skill; solo se invoca con `/dotmesh-design` (lleva `disable-model-invocation`).
 
 El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
