@@ -200,7 +200,12 @@ export function apply(ctx) {
         if (r.error?.code === 'ETIMEDOUT') {
           return { kind: 'error', text: 'argos diagnose superó el tiempo límite (30 s).' }
         }
-        // argos diagnose sale con código 1 cuando hay hallazgos
+        // argos diagnose sale con código 0 tanto si hay hallazgos como si no;
+        // un código distinto de 0 indica fallo de ejecución (p.ej. no hay proyecto argos).
+        if (r.status !== 0) {
+          const detail = (r.stderr ?? '').trim().slice(0, 300) || 'error desconocido'
+          return { kind: 'error', text: `argos diagnose falló (exit ${r.status}): ${detail}` }
+        }
         const out = r.stdout ?? ''
         findings = countArgosFindings(out)
         ok = findings === 0
