@@ -70,6 +70,9 @@ sobre este archivo.
 - **Concisión al reportar.** Cuando me reportes información directamente, sé
   extremadamente conciso: sacrifica la gramática si hace falta para ganar
   concisión.
+- **Explicaciones en lenguaje de negocio.** Cuando te pida que me expliques algo
+  en el chat, hazlo en términos de negocio: qué hace, qué implica y qué cambia.
+  El detalle técnico acompaña, no abre la respuesta.
 
 ## Esperar intervención humana
 
@@ -85,6 +88,8 @@ sobre este archivo.
 
 - Prosa de cara al usuario en **español peninsular** (READMEs, documentos, fichas).
   Mantén el idioma existente al editar.
+- Las skills `castellano-peninsular` y `anti-ai-style` se cargan al redactar
+  prosa de documento, no al responder en el chat.
 
 ## Skills compartidas
 

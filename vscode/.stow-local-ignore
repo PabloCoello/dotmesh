@@ -13,3 +13,4 @@ keybindings\.linux\.json
 ^/Makefile
 ^/review-extension
 ^/run-extension
+^/render-extension

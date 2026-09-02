@@ -41,7 +41,7 @@ Deliver at session close or on request:
 
 **3. Supuestos y limitaciones** (only if present): `supuesto`-type threads with their `confidence` and `rationale`.
 
-**4. Tareas accesorias** (only if present): tasks outside session scope, persisted in `.ai/backlog/<task_id>.json`.
+**4. Tareas accesorias** (only if present): tasks outside session scope, persisted in `.ai/backlog/<id>.json`.
 
 **5. Preguntas y next steps** (always): anchors needing manual re-anchoring, `verifica` threads that require external sources, questions without resolution in the document.
 
@@ -57,11 +57,11 @@ You edit document prose (`.md`, `.qmd`, `.tex`, `.bib`) and write events to `.ai
 
 ## Backlog
 
-Tasks outside session scope are persisted in `.ai/backlog/<task_id>.json` and listed in section 4.
+Tasks outside session scope are persisted in `.ai/backlog/<id>.json` and listed in section 4.
 
 ## Batching
 
-Before fan-out, group actionable threads whose `char_offset` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
+Before fan-out, group actionable threads whose `line_hint` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
 
 When delegating to the reviser, include ±20 lines of the document surrounding each thread's `anchor.char_offset` verbatim in the delegation prompt. The reviser uses this extract as its primary source; it re-reads the full document or event directory only if the extract is insufficient or absent.
 
@@ -70,8 +70,10 @@ When delegating to the reviser, include ±20 lines of the document surrounding e
 In a herdr session (`HERDR_ENV=1`), run the review cycle on a dynamic loop using `/loop`:
 
 1. Execute `mesh-review project --pending <doc>` in a dedicated pane.
-2. If pending threads are returned, process them (Batching → Fan-out → Apply) and wait for the next trigger.
-3. If `--pending` returns an empty list, increase the loop interval (double it up to a ceiling of 10 minutes).
+2. If pending threads are returned, re-run check 1 of `doc-review` §4 (worktree cleanliness):
+   - **Document dirty** — skip this iteration without committing and without doubling the interval; pending work exists, resume when the document is clean.
+   - **Document clean** — process the threads (Batching → Fan-out → Apply) and reset the loop interval to its base value.
+3. If `--pending` returns an empty list, double the loop interval (up to a ceiling of 10 minutes).
 4. On the next iteration, return to step 1.
 
 Load the `herdr` skill before splitting panes or running long processes in sibling panes; the skill owns pane orchestration inside herdr.

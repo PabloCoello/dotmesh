@@ -156,12 +156,13 @@
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
     "install-ext": "npm run package && code --install-extension \"$(ls mesh-review-*.vsix | head -1)\" --force",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts src/diff-utils.test.ts src/cli/cli.test.ts src/scribe-bridge-utils.test.ts"
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/sidecar.test.ts src/anchor.test.ts src/decorations.test.ts src/decorations-utils.test.ts src/thread-cards-utils.test.ts src/diff-utils.test.ts src/cli/cli.test.ts src/cli/cli.schema.test.ts src/scribe-bridge-utils.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.93.0",
     "@vscode/vsce": "^3.0.0",
+    "ajv": "8.20.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.4.0"
   }

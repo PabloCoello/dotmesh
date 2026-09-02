@@ -1,0 +1,59 @@
+# Paleta de comandos de agente de Collie — dotmesh.
+#
+# Enlazado por `make collie-install`. Vive junto al `.env`, que NO se versiona.
+#
+# Semántica (ADR 0018 de Collie): en un pane que estas filas direccionen, son la paleta
+# ENTERA y el catálogo de serie se pierde. Por eso aquí solo hay filas con scope y solo
+# para los agentes en los que dotmesh aporta comandos que ningún catálogo puede conocer.
+#
+# Codex queda deliberadamente sin direccionar: dotmesh no le da comandos propios (los
+# resuelve en lenguaje natural, ver la tabla de paridad de AGENTS.md), así que sus panes
+# conservan el catálogo de serie en lugar de perderlo a cambio de nada.
+#
+# Estas cadenas se sirven a cualquier navegador que pueda leer este Collie: son etiquetas,
+# no secretos. Se releen en caliente.
+
+# --- Claude Code ------------------------------------------------------------
+# `/super-git` hace push y abre PR: acción de cara afuera, detrás de doble toque.
+[[commands]]
+scope = "claude"
+command = "/super-git"
+description = "Ciclo Git completo: rama, commits, verificación, push y PR"
+confirm = true
+
+[[commands]]
+scope = "claude"
+command = "/handoff"
+description = "Compacta el estado en .ai/tasks para retomarlo en otra sesión"
+
+[[commands]]
+scope = "claude"
+command = "/code-review"
+description = "Revisa el diff de la rama en busca de fallos y simplificaciones"
+
+[[commands]]
+scope = "claude"
+command = "/compact"
+description = "Compacta la conversación cuando el contador se acerca al límite"
+
+[[commands]]
+scope = "claude"
+command = "/context"
+description = "Cuánto contexto queda en esta sesión"
+
+# --- OpenCode ---------------------------------------------------------------
+[[commands]]
+scope = "opencode"
+command = "/super-git"
+description = "Ciclo Git completo: rama, commits, verificación, push y PR"
+confirm = true
+
+[[commands]]
+scope = "opencode"
+command = "/checkpoint"
+description = "Guarda el estado de la tarea en curso"
+
+[[commands]]
+scope = "opencode"
+command = "/check-last"
+description = "Revisa lo último que se hizo antes de seguir"

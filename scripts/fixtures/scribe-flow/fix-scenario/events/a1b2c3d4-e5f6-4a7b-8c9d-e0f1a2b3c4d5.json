@@ -1,0 +1,19 @@
+{
+  "id": "a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5",
+  "version": 2,
+  "type": "thread.opened",
+  "thread_id": "a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5",
+  "author": {
+    "kind": "human"
+  },
+  "created_at": "2026-08-31T10:00:00.000Z",
+  "commit": null,
+  "dirty": false,
+  "anchor": {
+    "quote": "El sistema evalua resultados.",
+    "line_hint": 6,
+    "char_offset": 61
+  },
+  "commentType": "edita",
+  "body": "Reformula esta frase para que sea mas especifica: indica que el sistema evalua la cobertura de tests y la revision de codigo."
+}

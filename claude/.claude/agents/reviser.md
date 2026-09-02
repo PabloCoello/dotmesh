@@ -58,7 +58,15 @@ Load the `doc-review` skill for the full event vocabulary, schema reference, and
 
 `confidence` is optional. Include it when the thread `commentType` is `verifica` or `supuesto` to express how certain you are of your assessment. Omit it for `edita`, `sugerencia`, `pregunta`, `nota`, `referencia`, and whenever certainty is not meaningful. The review panel displays it next to the author label.
 
-Generate a fresh UUID v4 for `id`. Use the current UTC time with milliseconds for `created_at`.
+Generate a fresh UUID v4 for `id`. UUID v4 format (required — the CLI validates strictly):
+
+```
+xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+```
+
+where `x` is a random lowercase hex digit and `y` is one of `8`, `9`, `a`, or `b` (variant nibble). The version nibble (third group, first character) is always `4`. Example: `f47ac10b-58cc-4372-a567-0e02b2c3d479`. Use your runtime's UUID generator, never write one by hand.
+
+Use the current UTC time with milliseconds for `created_at`.
 
 The `commit: null` field is intentional and permanent: the reviser never executes `git commit`. After receiving this event, the principal applies the proposed edit to the document, creates a commit, and writes a new `message.posted` event with the resulting SHA — which then becomes the `fixCommit` visible in the review panel.
 

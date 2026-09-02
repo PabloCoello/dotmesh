@@ -132,6 +132,18 @@ export async function runFix(argv: string[]): Promise<void> {
     process.stderr.write('mesh-review fix: se requiere --body <respuesta>\n');
     process.exit(1);
   }
+  if (body.length > 10_000) {
+    process.stderr.write(
+      `mesh-review fix: --body supera el límite de 10000 caracteres (${body.length})\n`
+    );
+    process.exit(1);
+  }
+  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/.test(body)) {
+    process.stderr.write(
+      'mesh-review fix: --body contiene caracteres de control no permitidos\n'
+    );
+    process.exit(1);
+  }
   if (!isUuid(threadId)) {
     process.stderr.write(`mesh-review fix: thread_id no es un UUID válido: ${threadId}\n`);
     process.exit(1);
@@ -150,12 +162,25 @@ export async function runFix(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const docRelPath = path.relative(gitRoot, docAbs);
-  if (docRelPath.startsWith('..')) {
+  // Use path.resolve + path.sep prefix check — same pattern as sidecarPathForDoc
+  // in sidecar.ts — to catch embedded traversal (e.g. foo/../../bar) that the
+  // simpler startsWith('..') check misses.
+  const reviewDir = path.resolve(gitRoot, '.ai', 'review');
+  const eventDir  = path.resolve(reviewDir, path.relative(gitRoot, docAbs));
+  if (!eventDir.startsWith(reviewDir + path.sep)) {
     process.stderr.write('mesh-review: el documento no está dentro del git root\n');
     process.exit(1);
   }
-  const eventDir = path.join(gitRoot, '.ai', 'review', docRelPath);
+
+  // Verify the target thread exists before committing — a typo'd UUID would
+  // otherwise produce a real commit + an orphan event silently dropped by the reader.
+  // (Same referential integrity check as reply/resolve/retract.)
+  const existingEvents = await readEvents(eventDir);
+  const existingThreads = project(existingEvents);
+  if (!existingThreads.some(t => t.thread_id === threadId)) {
+    process.stderr.write(`mesh-review fix: el hilo ${threadId} no existe en este documento\n`);
+    process.exit(1);
+  }
 
   const sha = await resolveCommit({ gitRoot, docAbs, commitMsg, alreadyDone });
 

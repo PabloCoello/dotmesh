@@ -33,12 +33,40 @@ fail() { say "  !!  $*"; FAIL=$((FAIL + 1)); }
 
 canonical_path() {
   local path="$1"
+  local dir
 
   if [ -d "$path" ]; then
     cd "$path" && pwd -P
-  else
-    printf '%s/%s\n' "$(cd "$(dirname "$path")" && pwd -P)" "$(basename "$path")"
+    return
   fi
+
+  dir="$(dirname "$path")"
+  if [ -d "$dir" ]; then
+    printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$(basename "$path")"
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
+# Where a path really lands. It follows the leaf symlink chain, and leaves the
+# parents to canonical_path: a Stow-folded install links a whole directory, so
+# the files underneath resolve to the repository without being symlinks
+# themselves.
+resolve_path() {
+  local path="$1"
+  local target
+  local hops=0
+
+  while [ -L "$path" ] && [ "$hops" -lt 40 ]; do
+    target="$(readlink "$path")"
+    case "$target" in
+      /*) path="$target" ;;
+      *) path="$(dirname "$path")/$target" ;;
+    esac
+    hops=$((hops + 1))
+  done
+
+  canonical_path "$path"
 }
 
 frontmatter_value() {
@@ -294,27 +322,27 @@ check_install_symlink() {
   local path="$1"
   local label="$2"
   local expected_target="$3"
-  local actual_target actual_abs expected_abs
+  local actual_abs expected_abs
 
-  if [ -L "$path" ] && [ -e "$path" ]; then
-    actual_target="$(readlink "$path")"
-    if [ "${actual_target#/}" = "$actual_target" ]; then
-      actual_target="$(dirname "$path")/$actual_target"
-    fi
-    actual_abs="$(canonical_path "$actual_target")"
-    expected_abs="$(canonical_path "$expected_target")"
-
-    if [ "$actual_abs" = "$expected_abs" ]; then
-      pass "$label"
-    else
-      warn "$label apunta a otro destino"
-    fi
-  elif [ -L "$path" ]; then
-    warn "$label roto"
-  elif [ -e "$path" ]; then
-    warn "$label existe, pero no es symlink"
-  else
+  if [ ! -e "$path" ] && [ ! -L "$path" ]; then
     warn "$label ausente"
+    return
+  fi
+
+  if [ ! -e "$path" ]; then
+    warn "$label roto"
+    return
+  fi
+
+  actual_abs="$(resolve_path "$path")"
+  expected_abs="$(canonical_path "$expected_target")"
+
+  if [ "$actual_abs" = "$expected_abs" ]; then
+    pass "$label"
+  elif [ -L "$path" ]; then
+    warn "$label apunta a otro destino"
+  else
+    warn "$label existe, pero no es symlink"
   fi
 }
 
@@ -343,17 +371,9 @@ check_local_install() {
     warn "instalación ~/.agents/skills ausente"
   fi
 
-  if [ -L "$HOME_DIR/.claude/skills" ] && [ -e "$HOME_DIR/.claude/skills" ]; then
-    check_install_symlink "$HOME_DIR/.claude/skills" \
-      "instalación ~/.claude/skills" \
-      "$HOME_DIR/.agents/skills"
-  elif [ -L "$HOME_DIR/.claude/skills" ]; then
-    warn "instalación ~/.claude/skills symlink roto"
-  elif [ -e "$HOME_DIR/.claude/skills" ]; then
-    warn "instalación ~/.claude/skills existe, pero no es symlink"
-  else
-    warn "instalación ~/.claude/skills ausente"
-  fi
+  check_install_symlink "$HOME_DIR/.claude/skills" \
+    "instalación ~/.claude/skills" \
+    "$HOME_DIR/.agents/skills"
 }
 
 main() {

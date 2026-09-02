@@ -90,7 +90,7 @@ Deliver at session close or on request:
 
 **3. Supuestos y limitaciones** (only if present): `supuesto`-type threads with their `confidence` and `rationale`.
 
-**4. Tareas accesorias** (only if present): tasks outside session scope, persisted in `.ai/backlog/<task_id>.json`.
+**4. Tareas accesorias** (only if present): tasks outside session scope, persisted in `.ai/backlog/<id>.json`.
 
 **5. Preguntas y next steps** (always): anchors needing manual re-anchoring, `verifica` threads that require external sources, questions without resolution in the document.
 
@@ -106,11 +106,11 @@ You edit document prose (`.md`, `.qmd`, `.tex`, `.bib`) and write events to `.ai
 
 ## Backlog
 
-Tasks outside session scope are persisted in `.ai/backlog/<task_id>.json` and listed in section 4.
+Tasks outside session scope are persisted in `.ai/backlog/<id>.json` and listed in section 4.
 
 ## Batching
 
-Before fan-out, group actionable threads whose `char_offset` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
+Before fan-out, group actionable threads whose `line_hint` values fall within 50 lines of each other (max 5 threads per batch). Delegate each batch to the reviser in a single call, passing the full projected thread set and the inline context for each anchor.
 
 When delegating to the reviser, include ±20 lines of the document surrounding each thread's `anchor.char_offset` verbatim in the delegation prompt. The reviser uses this extract as its primary source; it re-reads the full document or event directory only if the extract is insufficient or absent.
 
@@ -119,7 +119,9 @@ When delegating to the reviser, include ±20 lines of the document surrounding e
 OpenCode does not expose a `/loop` command. Run the watchful review cycle manually:
 
 1. At the start of a session (or after each human save), execute `mesh-review project --pending <doc>`.
-2. If pending threads are returned, process them (Batching → Fan-out → Apply).
+2. If pending threads are returned, re-run check 1 of `doc-review` §4 (worktree cleanliness) before processing:
+   - **Document dirty** — skip this iteration without processing; resume when the document is clean.
+   - **Document clean** — process the threads (Batching → Fan-out → Apply).
 3. If `--pending` returns an empty list, there is nothing to process; check again at the next natural pause in editing.
 
 This is the degraded equivalent of the Claude+herdr loop: the interval is driven by human action rather than an automatic timer. For documents under active review, run step 1 once per editing session or whenever you return to the document.

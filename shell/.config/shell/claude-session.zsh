@@ -12,6 +12,11 @@
 # nada: el settings.json compartido no se toca y las demás instancias no se
 # ven afectadas. Combinable con --isolate.
 #
+# `--style` es azúcar de este wrapper: la CLI de Claude Code no lo conoce
+# ("error: unknown option --style"). Cualquier lanzamiento programático que no
+# pase por esta función —extensión mesh-review, panes de herdr, scripts— debe
+# usar `--settings '{"outputStyle":…}'` directamente.
+#
 # Si el repo tiene `.claude-session-init.sh` ejecutable en la raíz, se
 # ejecuta tras crear el worktree (hook por repo: agora ids, docker-compose,
 # direnv, etc.). Los flags `--isolate` y `--style` se consumen y no se

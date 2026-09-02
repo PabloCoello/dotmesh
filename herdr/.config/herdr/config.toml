@@ -1,8 +1,15 @@
+onboarding = false
 # herdr — config de dotmesh.
 # Multiplexor de terminal consciente del estado de los agentes (claude, codex,
 # opencode). Corre dentro de Ghostty; hereda su paleta.
 #
 # El esquema completo por defecto: `herdr --default-config`.
+#
+# Requiere herdr >= 0.8.2: `sidebar_bg`, `active_row_bg`, `selection_bg` y
+# `ui.status_indicators` se añadieron ahí, y el estilo por token de
+# `[ui.sidebar.*]` en 0.7.5. En versiones anteriores herdr los ignora en
+# silencio y cae a su cromo de fábrica, con la fila activa deliberadamente
+# tenue y los estados en puntos de color sin glifo.
 
 [theme]
 # `terminal` hace que herdr use la paleta ANSI del terminal anfitrión: con Ghostty
@@ -10,13 +17,178 @@
 name = "terminal"
 
 [theme.custom]
-# Acento teal canónico para bordes, resaltados y navegación (docs/DESIGN.md).
-accent = "#6CB6B0"
-# Panel transparente: hereda el fondo Ink de Ghostty en vez de pintar el suyo.
-panel_bg = "reset"
+# herdr hereda la paleta ANSI de Ghostty, pero sus tokens de tema son de origen
+# catppuccin y con `terminal` caen en los ANSI crudos: el cromo se llena de
+# grises intermedios y los estados de agente acaban en verde y cian a la vez.
+# Aquí se fija el mapa dotmesh completo (docs/DESIGN.md).
 
-[ui.sound]
-enabled = true
+# --- Cromo: monocromo, solo el acento lleva color ---------------------------
+# Teal canónico para bordes, resaltados, navegación y pestaña activa. Es el
+# único sitio donde vive el teal: ya no se usa para ningún estado.
+accent        = "#6CB6B0"
+# Paneles y overlays transparentes: heredan el fondo Ink de Ghostty.
+panel_bg      = "reset"
+# La lateral se queda en el mismo Ink-0 que los paneles. Elevarla a Ink-1
+# subía el suelo y apagaba todo el texto de encima; la separación la hace ya la
+# fila activa, que no necesita panel propio.
+sidebar_bg    = "reset"
+# Fila del espacio activo y del agente con foco. Ink-3 (`#2a2a2a`) sobre Ink-0
+# daba 1,31:1: a un vistazo no se distinguía de las filas inactivas. Este teal
+# apagado sube a 1,66:1 y, sobre todo, cambia de tono; en visión periférica el
+# salto de color se lee antes que el de luminosidad. No se aclara más porque el
+# relleno y lo que se imprime encima tiran en sentidos opuestos: a #234643 la
+# fila llega a 1,81:1, pero la rama y el nombre de agente (`overlay0`) caen de
+# 4,21:1 a 3,86:1. Se prioriza leer la fila sobre notarla.
+active_row_bg = "#20403D"
+# Cursor del modo navegar: gris neutro, un escalón por encima de la fila activa
+# (2,40:1 sobre Ink-0 frente a 1,66:1). #3a3a3a no valía: cae en L=0,042, la
+# misma luminancia que el teal, y el cursor solo se habría distinguido por tono.
+# El escalón canónico de la escala, #5c5c5c, deja el texto en 4,25:1; este se
+# queda en 4,97:1, por encima del mínimo AA.
+selection_bg  = "#525252"
+# Superficies: pestaña inactiva (surface0), hover (surface1) y el contraste del
+# texto sobre el acento (surface_dim, casi negro sobre la pastilla teal).
+surface0      = "#202020"
+surface1      = "#2a2a2a"
+surface_dim   = "#121212"
+
+# --- Texto: tres escalones de grafito, sin empates --------------------------
+# text: primario · subtext0: nombre de espacio inactivo · overlay0: rama,
+# separadores, nombre de agente y el punto de estado desconocido. Un escalón
+# entre cada uno basta para la jerarquía; bajar más apaga la lista entera.
+text          = "#cecece"
+subtext0      = "#c6c6c6"
+overlay0      = "#9e9e9e"
+overlay1      = "#dedede"
+# Rama del espacio activo: un paso por encima de la de los inactivos.
+mauve         = "#c6c6c6"
+
+# --- Estados de agente ------------------------------------------------------
+# Los nombres de token son herencia de catppuccin; lo que importa es el estado
+# que pinta cada uno (src/ui/status.rs de herdr):
+#   red   -> blocked  ●   rose, pide atención
+#   yellow-> working  ●   gold, en marcha
+#   teal  -> done     ●   sage, terminado y sin ver
+#   green -> idle     ○   grafito, en reposo: sin señal, sin color
+red           = "#E59A9A"
+yellow        = "#E3C58A"
+teal          = "#A8CBA0"
+green         = "#767676"
+# Acento de notificación «terminado» y estados interrumpidos.
+blue          = "#8FB4E3"
+peach         = "#FFAA7A"
 
 [ui]
 show_agent_labels_on_pane_borders = true
+# Un poco más de aire horizontal: las ramas largas dejan de truncarse a la
+# tercera palabra.
+sidebar_width = 30
+# Cada estado lleva glifo propio además de color (× blocked · ◐ working ·
+# ✓ done · ○ idle · · unknown): la forma se lee antes que el tono. `dots` vuelve
+# a los puntos de siempre.
+status_indicators = "symbols"
+
+[ui.sidebar.spaces]
+# Una fila en blanco entre espacios: sin ella el nombre de un espacio y la rama
+# del siguiente se leen como el mismo bloque.
+row_gap = 1
+rows = [
+  ["state_icon", "workspace"],
+  # ↑/↓ ya distinguen adelanto y retraso; el color se queda fuera del cromo.
+  ["branch", { token = "git_status", fg = "#9e9e9e" }],
+]
+
+[ui.sidebar.agents]
+row_gap = 1
+rows = [
+  # `$later` es un token propio, no un built-in: lo reporta
+  # `bin/mark-later.sh` con `herdr pane report-metadata`. Abre las dos filas,
+  # y como su valor es un medio bloque (`▌`), los dos apilados forman una
+  # barra lilac continua por el borde izquierdo de la tarjeta. Es lo más
+  # parecido a resaltar el componente entero: herdr solo estiliza tokens con
+  # `fg`/`bold`/`dim`, no admite fondo por token ni por fila, y `rows` es
+  # estático, así que el resto de tokens no se pueden teñir solo cuando hay
+  # marca. El único elemento condicional es este.
+  #
+  # La barra manda sobre el icono de estado a propósito: un agente en `idle`
+  # puede ser «visto y cerrado» o «no lo he mirado», y esto es lo único que
+  # los separa. Lilac es el único acento de dotmesh sin uso en este cromo (el
+  # teal está tomado por `accent` y la fila activa), así que no se confunde
+  # con ningún estado.
+  #
+  # La marca vive en memoria: herdr no la escribe en `session.json`, así que
+  # aguanta cerrar el terminal pero no un reinicio del servidor (arranque de
+  # la máquina, `herdr update`, `herdr server stop`). Asumido a propósito: es
+  # una marca de «vuelvo esta tarde», no un pendiente de la semana.
+  ["state_icon", { token = "$later", fg = "#CBAACB", bold = true, dim = false }, "workspace", "tab"],
+  # La segunda fila decía «claude» siete veces; con el estado al lado informa.
+  # herdr atenúa ambos tokens por defecto y sobre Ink quedaban ilegibles:
+  # `dim = false` los devuelve a su gris real. El agente se queda en el gris
+  # secundario (7:1 sobre Ink-0); por debajo vuelve a leerse como apagado.
+  [{ token = "$later", fg = "#CBAACB", bold = true, dim = false }, { token = "agent", fg = "#9e9e9e", dim = false }, { token = "state_text", dim = false }],
+]
+
+[ui.sound]
+enabled = false
+
+[keys]
+# Chords directos ctrl+alt que espejan la capa META del Voyager, uno a uno.
+# Se conservan todos los atajos de prefijo por defecto: la lista añade el chord
+# directo, no lo sustituye. Ver keymesh/keymap.c, donde los keycodes HRD_*
+# mandan exactamente estas combinaciones.
+#
+# ctrl+alt es la única familia que queda casi libre en los tres anfitriones
+# (macOS, Windows y GNOME) y se transmite incluso en terminales sin protocolo
+# de teclado moderno. No se usa ninguna ctrl+alt+flecha, que en GNOME cambia de
+# espacio de trabajo, ni ctrl+alt+t, que en Ubuntu abre un terminal.
+prefix = "ctrl+b"
+
+# Foco de panel, sobre las teclas h j k l reales
+focus_pane_left  = ["prefix+h", "ctrl+alt+h"]
+focus_pane_down  = ["prefix+j", "ctrl+alt+j"]
+focus_pane_up    = ["prefix+k", "ctrl+alt+k"]
+# ctrl+alt+l es bloqueo de pantalla en KDE. En GNOME, Windows y macOS está
+# libre. Si algún día usas KDE, cámbialo aquí y en HRD_RIGHT del keymap.
+focus_pane_right = ["prefix+l", "ctrl+alt+l"]
+
+# Paneles
+zoom             = ["prefix+z", "ctrl+alt+z"]
+split_vertical   = ["prefix+v", "ctrl+alt+d"]
+split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"]
+close_pane       = ["prefix+x", "ctrl+alt+x"]
+
+# Pestañas
+new_tab          = ["prefix+c", "ctrl+alt+c"]
+next_tab         = ["prefix+n", "ctrl+alt+n"]
+previous_tab     = ["prefix+p", "ctrl+alt+p"]
+
+# Sesión
+workspace_picker = ["prefix+w", "ctrl+alt+w"]
+goto             = ["prefix+g", "ctrl+alt+g"]
+detach           = ["prefix+q", "ctrl+alt+q"]
+
+# --- Comandos propios -------------------------------------------------------
+# Marca el agente enfocado como pendiente de volver sobre él. `type = "shell"`
+# lo lanza detached, sin abrir panel ni tocar el layout: la marca tiene que
+# costar una pulsación y cero contexto, porque el momento en que hace falta es
+# justo cuando te vas con prisa. herdr inyecta `HERDR_ACTIVE_PANE_ID` con el
+# panel que tenía el foco, que es lo que el script usa para saber a quién
+# marcar.
+#
+# ctrl+alt+m sigue a la familia del resto de chords y está libre en macOS,
+# GNOME y Windows. No tiene tecla dedicada en el Voyager: keymesh/keymap.c no
+# manda ningún HRD_* para esta, así que aquí solo existe el chord.
+#
+# La ruta lleva `$HOME` y no una absoluta porque el fichero se comparte entre
+# macOS y Linux. Verificado en 0.8.2: `type = "shell"` pasa el comando por un
+# shell y la variable se expande. Si una versión futura dejara de hacerlo, el
+# atajo no haría nada en silencio; el síntoma es ese.
+[[keys.command]]
+key     = "prefix+m"
+type    = "shell"
+command = "$HOME/.config/herdr/bin/mark-later.sh"
+
+[[keys.command]]
+key     = "ctrl+alt+m"
+type    = "shell"
+command = "$HOME/.config/herdr/bin/mark-later.sh"

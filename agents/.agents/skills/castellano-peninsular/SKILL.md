@@ -1,6 +1,6 @@
 ---
 name: castellano-peninsular
-description: Spanish writing rules for peninsular formal Spanish. Load whenever output text is in Spanish for a peninsular Spanish reader. Covers RAE orthography, peninsular lexicon, accents on capitals, and avoidance of voseo.
+description: Spanish writing rules for peninsular formal Spanish. Load when drafting or editing Spanish prose that lands in a deliverable (README, doc, report, ficha). Chat replies to the user do not load it. Covers RAE orthography, peninsular lexicon, accents on capitals, and avoidance of voseo.
 ---
 
 # Castellano peninsular

@@ -1,0 +1,50 @@
+# Presets de la bandeja de teclas de Collie — dotmesh.
+#
+# Enlazado por `make collie-install`. Vive junto al `.env`, que NO se versiona.
+#
+# Semántica (ADR 0018 de Collie, resuelta en web/src/lib/operator-scope.ts): en un pane
+# que alguna de estas filas direccione, estas filas son la lista ENTERA. Por eso las seis
+# teclas que Collie trae de serie (Ctrl C/D/U/R/L/Z) están repetidas aquí: declarar una
+# sola fila sin scope las tiraría todas. Entre filas propias gana la más específica por
+# `label`; con etiquetas distintas se suman.
+#
+# El acorde se escribe como lo deletrea `pane.send_keys` de herdr, no como tmux:
+# `ctrl+c`, nunca `C-c`. herdr no acepta PageUp, PageDown, Home, End ni Delete.
+#
+# Se releen en caliente: no hace falta reiniciar el puente, solo recargar la página.
+
+# --- Las seis de serie, restituidas -----------------------------------------
+[[keys]]
+label = "Ctrl-C"
+keys = ["ctrl+c"]
+
+# `danger` solo aquí. Ctrl-D cierra el pane y desde el móvil se pulsa sin querer;
+# Ctrl-C es justo lo contrario, el freno que quieres inmediato y sin doble toque.
+[[keys]]
+label = "Ctrl-D"
+keys = ["ctrl+d"]
+danger = true
+
+[[keys]]
+label = "Ctrl-U"
+keys = ["ctrl+u"]
+
+[[keys]]
+label = "Ctrl-R"
+keys = ["ctrl+r"]
+
+[[keys]]
+label = "Ctrl-L"
+keys = ["ctrl+l"]
+
+[[keys]]
+label = "Ctrl-Z"
+keys = ["ctrl+z"]
+
+# --- Añadido de dotmesh -----------------------------------------------------
+# En Claude Code shift+tab rota el modo de permisos (plan / auto-aceptar / normal).
+# Es la tecla que más falta hace desde el móvil y no está en el teclado fijo.
+[[keys]]
+scope = "claude"
+label = "Modo"
+keys = ["shift+tab"]

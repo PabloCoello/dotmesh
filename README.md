@@ -7,6 +7,7 @@ Dotfiles personales para macOS y Linux. Gestiona la configuración del terminal 
 ```bash
 # macOS
 brew install stow
+brew install --cask rectangle       # gestor de ventanas; lo asume el layout del Voyager
 
 # Linux (Ubuntu/Debian)
 sudo apt install stow
@@ -23,6 +24,10 @@ exec zsh                            # recarga la shell
 make vscode-install
 make gnome-rice                     # opcional; solo si usas GNOME
 ```
+
+En macOS, `make install` incluye `make macos-rectangle`, que fija las prefs de
+Rectangle que el layout del Voyager da por supuestas. Ábrelo una vez antes para
+concederle Accesibilidad: ver [docs/INSTALL.md](docs/INSTALL.md#rectangle-macos).
 
 ## Stack
 
@@ -56,6 +61,7 @@ dotmesh/
 ├── codex/      .codex/{config.toml,AGENTS.md}
 ├── claude/     .claude/{CLAUDE.md,AGENTS.md,settings.json,hooks/,statusline.sh,agents/,commands/,mcp/}
 ├── agents/     .agents/skills/<skill>/SKILL.md   (skills globales)
+├── nvim/       .config/nvim/   (Neovim; instalar con make nvim-install + make stow)
 ├── dsh/        .dsh/{cordis.patch.yml,.agent-presets/taller/,skills/,plugins/}   (banco de trabajo dsh)
 ├── gnome/      .config/gtk-{3,4}.0/gtk.css   (rice GNOME, Linux; fuera de PACKAGES)
 ├── windows-terminal/  themes/dotmesh.json + scripts/install.sh   (esquema WT, solo WSL; fuera de PACKAGES)
@@ -116,7 +122,6 @@ También se mantienen skills locales adicionales:
 - `grilling`, `grill-me`, `grill-with-docs`: entrevistas convergentes para afinar planes antes de implementar.
 - `domain-modeling`: mantiene la terminología y el glosario del dominio.
 - `handoff`: compacta el estado de una sesión para retomarla en otra.
-- `watch-summary`: resumen automático del historial de sesión.
 - `dotmesh-design`: diseño del sistema visual dotmesh (Paper · Ink · Syntax) empaquetado como skill; solo se invoca con `/dotmesh-design` (lleva `disable-model-invocation`).
 
 El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/skills/README.md).
@@ -244,6 +249,19 @@ El script vive en el root del repo como fichero normal. Tres formas de gestionar
 
 `.git/info/exclude` es un `.gitignore` privado de tu clone: no se versiona, no se sincroniza, solo lo lee tu git local. El fichero existe en disco del repo origen, el wrapper lo encuentra (vía fallback al repo origen, porque el worktree nuevo no recibe ficheros untracked) y lo ejecuta, pero `git status` lo ignora y `git add .` no lo incluye. Caveat: si re-clonas el repo, pierdes tanto el script como la regla de exclude — en ese caso, prefiere la opción de symlink.
 
+## Montar un espacio de herdr: `hspace`
+
+`shell/.config/shell/functions.zsh` define `hspace`, que prepara el espacio de trabajo actual de herdr desde el pane en el que lo ejecutas. Crea dos pestañas nuevas sin robarte el foco, ambas con el cwd del directorio donde lanzas el comando: una ejecuta el harness (primer argumento, `claude` por defecto) y la otra abre `nvim .`. Junto con la terminal desde la que lo ejecutas, el espacio queda con tres pestañas: terminal, harness y editor.
+
+```bash
+cd ~/proyectos/mi-repo
+hspace                     # terminal + claude + nvim
+hspace opencode            # terminal + opencode + nvim
+hspace "claude --resume"   # el harness admite el comando completo, entre comillas
+```
+
+Requiere ejecutarse dentro de herdr (`HERDR_ENV=1`); fuera, avisa y devuelve error. Las pestañas se crean en el workspace enfocado: herdr solo arranca el shell de una pestaña nueva cuando su workspace está a la vista, así que `hspace` no sirve para preparar workspaces en segundo plano. La función usa sintaxis común a bash y zsh, como el resto de `functions.zsh`; si trabajas en bash, sourcéalo igual que `claude-session.zsh`: `source ~/Documentos/GitHub/dotmesh/shell/.config/shell/functions.zsh` en tu `~/.bashrc`.
+
 ## Comandos del Makefile
 
 ```bash
@@ -254,9 +272,11 @@ make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
 make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
+make sync-claude-hooks # lleva el bloque hooks de la plantilla a ~/.claude/settings.json
 make vendor-check # comprueba metadatos upstream de componentes vendorizados
 make health         # comprueba binarios
 make opencode-doctor # diagnóstico estático de OpenCode
+make macos-rectangle # fija las prefs de Rectangle (solo macOS)
 make wsl-terminal   # instala el esquema dotmesh en Windows Terminal (solo WSL)
 make clean          # vacía ~/dotfiles-backup
 ```

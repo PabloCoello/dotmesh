@@ -49,7 +49,31 @@ Al pulsar "Responder" o "Editar" en una tarjeta, aparece un textarea bajo ella. 
 
 ### Asignación
 
-El botón `Asignar` en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección escribe un evento `thread.assigned` en el log.
+El botón `Asignar` en una tarjeta abierta muestra un QuickPick con los subagentes disponibles: `security`, `maths`, `reviser`, `editor`. La selección invoca `mesh-review assign` vía el CLI bundleado, que valida la existencia del hilo y escribe el evento `thread.assigned`. Si el bundle no está disponible en las rutas conocidas (`~/.claude/skills/` o `~/.agents/skills/`), la extensión cae de vuelta a `writeEvent` directa con aviso en el canal de output. Este fallback escribe el evento sin validar que el hilo exista en el sidecar, a diferencia del CLI; en la práctica el id siempre procede de una tarjeta ya proyectada por la extensión, por lo que el riesgo es teórico.
+
+### Puente scribe
+
+El panel de hilos incluye tres botones para interactuar con la persona `scribe` de Claude Code:
+
+| Botón | Acción |
+|---|---|
+| **Lanzar sesión scribe** | Abre un terminal integrado de VS Code con `claude --settings '{"outputStyle":"scribe"}'` y lo registra como sesión scribe activa. El terminal se lanza con `hideFromUser: true`, de modo que no aparece en la lista de terminales del panel; queda en segundo plano esperando prompts. |
+| **Enviar pendientes** | Envía a la sesión scribe activa el prompt para procesar todos los hilos pendientes del documento activo (`mesh-review project --pending '<ruta>'`). Si no hay sesión activa, la lanza primero. |
+| **Enviar hilo** | Botón por hilo en cada tarjeta abierta (icono scribe). Envía a la sesión scribe el contexto de ese único hilo, con `mesh-review project` sin `--pending` para que un hilo ya respondido por la IA pero reabierto siga visible. Si no hay sesión activa, la lanza primero. |
+
+**Comando de lanzamiento.** La sesión se arranca con:
+
+```
+claude --settings '{"outputStyle":"scribe"}'
+```
+
+Esto garantiza que Claude Code active la persona `scribe` desde el primer turno, sin que el usuario tenga que cambiarla manualmente.
+
+**`hideFromUser`.** El terminal se crea con `hideFromUser: true` para mantener la interfaz limpia. La sesión procesa los hilos en segundo plano; el resultado llega a través de los eventos del log (`.ai/review/`), que la extensión detecta y refleja en el panel.
+
+**Tiempo de espera.** La extensión espera a que la sesión esté lista antes de enviar el primer prompt. El tiempo de espera base es configurable con `mesh-review.scribe.launchDelayMs` (véase Configuración).
+
+**Limitación del alive-check.** Antes de enviar un prompt, la extensión comprueba si el proceso scribe sigue activo mediante señal 0 sobre el PID del terminal. Ese PID pertenece a la shell anfitriona, no al proceso claude: si claude termina pero el terminal permanece abierto, el check devuelve `true` y el texto llega a la shell. La extensión no puede leer la pantalla del terminal para distinguir los dos casos, a diferencia del cliente Neovim, que usa herdr pane read.
 
 ### Diff por hilo
 
@@ -69,6 +93,7 @@ El icono de la extensión en la barra de actividad muestra el número de respues
 |---|---|---|---|
 | `mesh-review.badge.toast` | `boolean` | `false` | Muestra una notificación al recibir respuestas IA nuevas. |
 | `mesh-review.navigation.cyclic` | `boolean` | `true` | La navegación entre hilos cicla al llegar al último o al primero. |
+| `mesh-review.scribe.launchDelayMs` | `number` | `2000` | Milisegundos que la extensión espera tras lanzar la sesión scribe antes de enviar el primer prompt. Aumenta este valor si el agente no está listo a tiempo en máquinas lentas. |
 
 ## Modelo de datos
 

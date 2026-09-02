@@ -15,12 +15,11 @@
           },
           {
             "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/pretooluse-approve.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
+            "command": "~/.claude/hooks/remind-review-gate.sh"
           },
           {
             "type": "command",
-            "command": "~/.claude/hooks/remind-review-gate.sh"
+            "command": "~/.claude/hooks/remind-load-skills.sh"
           }
         ]
       },
@@ -30,72 +29,32 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/remind-load-skills.sh"
-          },
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/pretooluse-approve.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
           }
         ]
       },
       {
-        "matcher": "AskUserQuestion",
+        "matcher": "Skill",
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/pretooluse-ask.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/userpromptsubmit-watch.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0"
+            "command": "~/.claude/hooks/handoff-signal.sh"
           }
         ]
       }
     ],
     "Stop": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/stop-reprompt.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0",
-            "timeout": 310
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "idle_prompt",
-        "hooks": [
+            "command": "~/.claude/hooks/close-review-gate.sh",
+            "timeout": 15
+          },
           {
             "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/notification-notify.sh\"; [ -x \"$f\" ] && exec \"$f\" idle_prompt; exit 0"
-          }
-        ]
-      },
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/notification-notify.sh\"; [ -x \"$f\" ] && exec \"$f\" permission_prompt; exit 0"
-          }
-        ]
-      }
-    ],
-    "StopFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "f=\"$HOME/.claude/bridge-approver/stopfailure-notify.sh\"; [ -x \"$f\" ] && exec \"$f\"; exit 0"
+            "command": "~/.claude/hooks/verify-slice-commit.sh",
+            "timeout": 15
           }
         ]
       }
@@ -116,6 +75,18 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "build",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/verify-phase-close.sh",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "enableWorkflows": true,
@@ -125,6 +96,7 @@
     "padding": 1
   },
   "enabledPlugins": {
+    "bait-skills@bait": true,
     "miro@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {

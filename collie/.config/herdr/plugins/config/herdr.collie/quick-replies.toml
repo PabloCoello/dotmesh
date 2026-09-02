@@ -1,0 +1,37 @@
+# Respuestas de un toque del dock Quick de Collie — dotmesh.
+#
+# Enlazado por `make collie-install`. Vive junto al `.env`, que NO se versiona.
+#
+# Semántica (ADR 0018 de Collie): en un pane que estas filas direccionen, son el dock
+# ENTERO; el que trae de serie se pierde. La identidad de una fila es su `title`, así que
+# la fila con scope `shell` de abajo sustituye a la de arriba solo en panes de shell.
+#
+# Cada elemento se teclea en el pane y se envía tal cual. Se releen en caliente.
+#
+# El motivo de que estén en castellano es el contrato `WAIT_FOR_USER` de AGENTS.md: el
+# agente para y pide una decisión cerrada, y esto es lo que la contesta desde el móvil.
+
+[[replies]]
+title = "confirmar"
+items = ["sí", "no"]
+
+# Las opciones numeradas de una pregunta cerrada del contrato `WAIT_FOR_USER`.
+[[replies]]
+title = "decisión"
+items = ["1", "2", "3"]
+
+[[replies]]
+title = "seguir"
+items = ["continúa", "adelante", "reintenta", "sáltalo"]
+
+[[replies]]
+title = "parar"
+items = ["para aquí", "haz handoff y para"]
+
+# Un shell no entiende "sí": sus prompts esperan y/n. Sustituye a `confirmar` solo ahí.
+# Los otros tres grupos también le llegan y no le sirven de nada; se acepta ese ruido a
+# cambio de no repetir cada grupo por cada familia de agente.
+[[replies]]
+scope = "shell"
+title = "confirmar"
+items = ["y", "n"]
