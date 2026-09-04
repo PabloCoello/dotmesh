@@ -21,8 +21,8 @@ set -o pipefail
 PLUGIN_ID="herdr.collie"
 PLUGIN_REPO="AltanS/collie"
 # Pin. Sincronizado con scripts/vendor/upstreams.tsv; `make vendor-check` lo compara.
-PLUGIN_REF="v1.0.0-beta.32"
-PLUGIN_COMMIT="42b00f4378eea568ce8ef1c40103fda779ef0fa3"
+PLUGIN_REF="v1.5.0"
+PLUGIN_COMMIT="2eff683d74511398923d4cb5a5ee7ac4f758ff32"
 UNIT="collie.service"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -99,10 +99,16 @@ if [ -n "$INSTALLED_REF" ]; then
   if [ "$INSTALLED_COMMIT" = "$PLUGIN_COMMIT" ]; then
     ok "plugin ya instalado en $PLUGIN_REF (${PLUGIN_COMMIT:0:7})"
   else
-    # Reinstalar se llevaría el checkout por delante. Avisar y seguir, no decidir por él.
+    # Mover el checkout por debajo de un puente en marcha no es decisión de este script.
+    # Avisar y seguir. La orden que se imprime es `install --ref` sobre lo ya instalado, no
+    # `uninstall`: install reemplaza el checkout y refresca el registro de herdr respetando
+    # el directorio de config (y el .env), mientras que uninstall lo borra todo. Tampoco
+    # vale la acción `update` del propio Collie: mueve el checkout sin que herdr se entere
+    # y este script seguiría leyendo el commit viejo.
     echo "  !!  el plugin está en '$INSTALLED_REF' (${INSTALLED_COMMIT:0:7}) y el pin de"
     echo "      dotmesh es '$PLUGIN_REF' (${PLUGIN_COMMIT:0:7})."
-    echo "      Para moverlo:  herdr plugin uninstall $PLUGIN_ID && $0"
+    echo "      Para moverlo:  herdr plugin action invoke stop --plugin $PLUGIN_ID"
+    echo "                     herdr plugin install $PLUGIN_REPO --ref $PLUGIN_REF --yes && $0"
   fi
 else
   info "instalando $PLUGIN_REPO en $PLUGIN_REF"
