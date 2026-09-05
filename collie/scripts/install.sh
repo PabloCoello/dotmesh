@@ -22,8 +22,8 @@ PLUGIN_ID="herdr.collie"
 PLUGIN_REPO="AltanS/collie"
 # Pin. Hay que cambiarlo a la vez que local_ref en scripts/vendor/upstreams.tsv: nada
 # comprueba que coincidan (`make vendor-check` compara la TSV con upstream, no con esto).
-PLUGIN_REF="v1.5.0"
-PLUGIN_COMMIT="2eff683d74511398923d4cb5a5ee7ac4f758ff32"
+PLUGIN_REF="v1.5.1"
+PLUGIN_COMMIT="ba39c05c6350a52bcb0a88f118cd0680ff85a1c5"
 UNIT="collie.service"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
