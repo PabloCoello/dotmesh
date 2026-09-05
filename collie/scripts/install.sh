@@ -20,9 +20,10 @@ set -o pipefail
 
 PLUGIN_ID="herdr.collie"
 PLUGIN_REPO="AltanS/collie"
-# Pin. Sincronizado con scripts/vendor/upstreams.tsv; `make vendor-check` lo compara.
-PLUGIN_REF="v1.0.0-beta.32"
-PLUGIN_COMMIT="42b00f4378eea568ce8ef1c40103fda779ef0fa3"
+# Pin. Hay que cambiarlo a la vez que local_ref en scripts/vendor/upstreams.tsv: nada
+# comprueba que coincidan (`make vendor-check` compara la TSV con upstream, no con esto).
+PLUGIN_REF="v1.5.1"
+PLUGIN_COMMIT="ba39c05c6350a52bcb0a88f118cd0680ff85a1c5"
 UNIT="collie.service"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -99,10 +100,16 @@ if [ -n "$INSTALLED_REF" ]; then
   if [ "$INSTALLED_COMMIT" = "$PLUGIN_COMMIT" ]; then
     ok "plugin ya instalado en $PLUGIN_REF (${PLUGIN_COMMIT:0:7})"
   else
-    # Reinstalar se llevaría el checkout por delante. Avisar y seguir, no decidir por él.
+    # Mover el checkout por debajo de un puente en marcha no es decisión de este script.
+    # Avisar y seguir. La orden que se imprime es `install --ref` sobre lo ya instalado, no
+    # `uninstall`: install reemplaza el checkout y refresca el registro de herdr respetando
+    # el directorio de config (y el .env), mientras que uninstall lo borra todo. Tampoco
+    # vale la acción `update` del propio Collie: mueve el checkout sin que herdr se entere
+    # y este script seguiría leyendo el commit viejo.
     echo "  !!  el plugin está en '$INSTALLED_REF' (${INSTALLED_COMMIT:0:7}) y el pin de"
     echo "      dotmesh es '$PLUGIN_REF' (${PLUGIN_COMMIT:0:7})."
-    echo "      Para moverlo:  herdr plugin uninstall $PLUGIN_ID && $0"
+    echo "      Para moverlo:  herdr plugin action invoke stop --plugin $PLUGIN_ID"
+    echo "                     herdr plugin install $PLUGIN_REPO --ref $PLUGIN_REF --yes && \"$0\""
   fi
 else
   info "instalando $PLUGIN_REPO en $PLUGIN_REF"
@@ -136,6 +143,15 @@ if [ -e "$ENV_FILE" ]; then
     || die "el .env existente no define COLLIE_TRUSTED_USER: el puente quedaría abierto
       a escritura para cualquiera que alcance el tailnet. Añádelo antes de arrancar:
         echo 'COLLIE_TRUSTED_USER=<tu-login@proveedor>' >> $ENV_FILE" 5
+  # Desde 1.x hay dos escotillas que anulan el gate aunque COLLIE_TRUSTED_USER esté puesto:
+  # _OPTIONAL deja pasar peticiones sin identidad (cualquier nodo etiquetado del tailnet
+  # escribe) y ALLOW_ANY_HOST apaga la validación de Host. Collie las lee con envBool:
+  # on/1/true/yes, sin distinguir mayúsculas. Son para desarrollo local, no para este puente.
+  if grep -iqE '^[[:space:]]*COLLIE_(TRUSTED_USER_OPTIONAL|ALLOW_ANY_HOST)[[:space:]]*=[[:space:]]*["'"'"']?(on|1|true|yes)' "$ENV_FILE"; then
+    die "el .env existente activa COLLIE_TRUSTED_USER_OPTIONAL o COLLIE_ALLOW_ANY_HOST, que
+      anulan el gate de identidad aunque COLLIE_TRUSTED_USER esté definido. Quítalas de
+      $ENV_FILE antes de arrancar." 5
+  fi
   ok ".env existente respetado, con el gate de escritura cerrado"
 else
   TS_LOGIN="$(tailscale status --json 2>/dev/null | jq -r '.Self.UserID as $u | .User[$u|tostring].LoginName // empty')"
