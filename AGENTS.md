@@ -25,7 +25,7 @@ make stow        # symlink every package into ~
 make unstow      # remove the symlinks
 make restow      # unstow + stow (run after adding/removing files in a package)
 make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
-make sync-claude-hooks # push the template's `hooks` block into ~/.claude/settings.json
+make sync-claude-settings # push the template's repo-owned keys into ~/.claude/settings.json
 make gnome-rice  # dotmesh retint of the GNOME desktop (Linux only)
 make clean       # wipe ~/dotfiles-backup/*
 ```
@@ -53,7 +53,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
 | `collie/` | `~/.config/herdr/plugins/config/herdr.collie/{commands,keys,quick-replies}.toml` (Linux/macOS, via `make collie-install`) | Collie, herdr's mobile bridge: a Bun bridge plus a PWA served over `tailscale serve` that drives herdr panes from a phone, with push when an agent blocks. Answers the `WAIT_FOR_USER` contract away from the desk. Pinned in `scripts/vendor/upstreams.tsv`; see `collie/README.md` |
 
-`claude/.claude/settings.json` is **not** stowed (`claude/.stow-local-ignore`): `make seed-claude-settings` copies it once and never overwrites, so per-machine settings don't show up as uncommitted changes. The cost is that a hook added to the repo never reaches an already-installed machine. `make health` reports that drift and `make sync-claude-hooks` merges **only** the `hooks` key — it registers repo files, so it belongs to the repo; every other key belongs to the machine and is left alone. A copy of the previous file lands in `~/dotfiles-backup/<timestamp>/`.
+`claude/.claude/settings.json` is **not** stowed (`claude/.stow-local-ignore`): `make seed-claude-settings` copies it once and never overwrites, so per-machine settings don't show up as uncommitted changes. The cost is that a hook added to the repo never reaches an already-installed machine. `make health` reports that drift and `make sync-claude-settings` merges **only** the repo-owned keys — `hooks` (it registers repo files), `permissions.deny` (policy, not preference) and `sandbox` (containment cannot depend on remembering). Every other key belongs to the machine and is left alone, `permissions.defaultMode` included; a key the template lacks is left untouched rather than nulled. A copy of the previous file lands in `~/dotfiles-backup/<timestamp>/`.
 
 `Makefile:6` defines `PACKAGES` — keep this list in sync when adding or removing a package directory. `IS_WSL`, computed just below, drives WSL-aware conditional logic in `health`, `vscode-install` and `wsl-terminal`.
 

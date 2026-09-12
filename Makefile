@@ -18,7 +18,7 @@ SKILLS_SRC := $(HOME)/.agents/skills
 SKILLS_DST := $(HOME)/.claude/skills
 CLAUDE_SETTINGS_SRC := $(abspath claude/.claude/settings.json)
 CLAUDE_SETTINGS_DST := $(HOME)/.claude/settings.json
-CLAUDE_HOOKS_SYNC := $(abspath scripts/sync-claude-hooks.sh)
+CLAUDE_SETTINGS_SYNC := $(abspath scripts/sync-claude-settings.sh)
 
 .PHONY: help
 help:
@@ -43,7 +43,7 @@ help:
 	@echo "  make nvim-install   - Instala Neovim >= 0.11 y el CLI de tree-sitter en ~/.local/bin (sin sudo, idempotente)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
-	@echo "  make sync-claude-hooks - Propaga el bloque hooks de la plantilla a ~/.claude/settings.json"
+	@echo "  make sync-claude-settings - Propaga hooks, permissions.deny y sandbox de la plantilla a ~/.claude/settings.json"
 	@echo "  make gnome-rice   - Retint dotmesh del escritorio GNOME (solo Linux)"
 	@echo "  make gnome-unrice - Deshace los symlinks de gnome-rice (solo Linux; dconf: manual)"
 	@echo "  make macos-rectangle - Fija las prefs de Rectangle que asume el layout del Voyager (solo macOS)"
@@ -64,7 +64,7 @@ help:
 	@echo "Paquetes: $(PACKAGES)"
 
 .PHONY: install
-install: backup stow vscode-install macos-rectangle review-install run-install render-install seed-claude-settings link-skills
+install: backup stow vscode-install macos-rectangle review-install run-install render-install seed-claude-settings sync-claude-settings link-skills
 	@echo "Instalación completa."
 	@echo "Recarga la shell: exec zsh"
 
@@ -201,11 +201,12 @@ seed-claude-settings:
 		echo "  ok  sembrado $(CLAUDE_SETTINGS_DST) desde la plantilla base"; \
 	fi
 
-# seed-claude-settings no sobreescribe, así que un hook nuevo en el repo no
-# alcanza una máquina ya instalada. Este target fusiona solo la clave `hooks`.
-.PHONY: sync-claude-hooks
-sync-claude-hooks:
-	@bash "$(CLAUDE_HOOKS_SYNC)"
+# seed-claude-settings no sobreescribe, así que un hook nuevo o una regla deny
+# nueva en el repo no alcanzan una máquina ya instalada. Este target fusiona
+# solo las claves que son del repo: hooks, permissions.deny y sandbox.
+.PHONY: sync-claude-settings
+sync-claude-settings:
+	@bash "$(CLAUDE_SETTINGS_SYNC)"
 
 # Prefs de Rectangle (gestor de ventanas de macOS). El layout del Voyager
 # (repo keymesh) resuelve Pant←/Pant→ como Ctrl+Opt+Cmd+flechas, que son los
@@ -339,10 +340,10 @@ health:
 			&& echo "  ok  code (VS Code Windows desde WSL)" \
 			|| echo "  --  code  (añade %CODE_PATH% al PATH de Windows o instala la integración WSL de VS Code)"; \
 	fi
-	@rc=0; bash "$(CLAUDE_HOOKS_SYNC)" --check >/dev/null 2>&1 || rc=$$?; \
-		if [ $$rc -eq 0 ]; then echo "  ok  hooks de Claude alineados con la plantilla"; \
-		elif [ $$rc -eq 1 ]; then echo "  --  hooks de Claude desalineados (corre 'make sync-claude-hooks')"; \
-		else echo "  --  hooks de Claude sin comprobar (falta jq o ~/.claude/settings.json)"; fi
+	@rc=0; bash "$(CLAUDE_SETTINGS_SYNC)" --check >/dev/null 2>&1 || rc=$$?; \
+		if [ $$rc -eq 0 ]; then echo "  ok  ajustes de Claude alineados con la plantilla"; \
+		elif [ $$rc -eq 1 ]; then echo "  --  ajustes de Claude desalineados (corre 'make sync-claude-settings')"; \
+		else echo "  --  ajustes de Claude sin comprobar (falta jq o ~/.claude/settings.json)"; fi
 	@[ -L "$$HOME/.claude/skills" ] && [ -e "$$HOME/.claude/skills" ] && echo "  ok  skills (~/.claude/skills -> ~/.agents/skills)" || echo "  --  skills symlink ausente o roto (corre 'make link-skills')"
 	@[ -L "$$HOME/.zshrc" ] && [ -e "$$HOME/.zshrc" ] && echo "  ok  symlink ~/.zshrc" || echo "  --  ~/.zshrc no es symlink al repo (corre 'make stow')"
 	@[ -L "$$HOME/.gitconfig" ] && [ -e "$$HOME/.gitconfig" ] && echo "  ok  symlink ~/.gitconfig" || echo "  --  ~/.gitconfig no es symlink al repo (corre 'make stow')"
@@ -401,3 +402,4 @@ test-maker-flow:
 test-flow-hooks:
 	@echo "→ hooks del flujo con inputs sintéticos"
 	@bash scripts/test-flow-hooks.sh
+

@@ -303,10 +303,10 @@ case "$out" in
   *) fail "la métrica no descuenta el intento bloqueado: $(printf '%s' "$out" | grep code-review || true)" ;;
 esac
 
-section "propagación: el bloque hooks de la plantilla llega al vivo"
+section "propagación: las claves del repo llegan de la plantilla al vivo"
 # Sin esto, un hook nuevo en el repo no alcanza jamás a una máquina ya
 # instalada: settings.json se siembra una vez y nunca se sobreescribe.
-SYNC="$REPO_ROOT/scripts/sync-claude-hooks.sh"
+SYNC="$REPO_ROOT/scripts/sync-claude-settings.sh"
 SYNC_HOME="$TMP/home"
 mkdir -p "$SYNC_HOME/.claude"
 
@@ -353,9 +353,17 @@ cp "$vivo_inicial" "$dst"
 
 run_sync "$dst" --check && rc=0 || rc=$?
 [ "$rc" = 1 ] && pass "--check detecta la deriva (rc=1)" || fail "--check devolvió rc=$rc con deriva"
-grep -q '+ PreToolUse \[Bash\] ~/.claude/hooks/dos.sh' "$TMP/sync_out" \
+grep -q '+ hooks PreToolUse \[Bash\] .*dos\.sh' "$TMP/sync_out" \
   && pass "--check nombra el hook que falta" \
   || fail "--check no nombra el hook que falta: $(cat "$TMP/sync_out")"
+# El hook se compara entero, no solo por su command: un timeout nuevo en la
+# plantilla es deriva real y el informe tiene que verlo.
+jq '.hooks.PreToolUse[0].hooks[0].timeout = 15' "$tpl" > "$TMP/tpl-timeout.json"
+HOME="$SYNC_HOME" CLAUDE_SETTINGS_SRC="$TMP/tpl-timeout.json" CLAUDE_SETTINGS_DST="$dst" \
+  bash "$SYNC" --check > "$TMP/sync_out" 2>&1 && rc=0 || rc=$?
+[ "$rc" = 1 ] && grep -q '"timeout":15' "$TMP/sync_out" \
+  && pass "--check ve un timeout nuevo, no solo un comando nuevo" \
+  || fail "un timeout nuevo pasó por alineado: rc=$rc, $(cat "$TMP/sync_out")"
 diff -q "$vivo_inicial" "$dst" >/dev/null \
   && pass "--check no escribe" \
   || fail "--check modificó el destino"
@@ -398,6 +406,88 @@ run_sync "$SYNC_HOME/.claude/roto.json" --check && rc=0 || rc=$?
 cp "$tpl" "$dst"
 run_sync "$dst" --check && rc=0 || rc=$?
 [ "$rc" = 0 ] && pass "sin deriva, --check sale 0" || fail "sin deriva --check dio rc=$rc"
+
+# Las otras dos claves del repo. permissions.deny es política y sandbox es
+# confinamiento: si no llegan solas, dependen de que alguien se acuerde.
+tpl_perm="$TMP/plantilla-permisos.json"
+cat > "$tpl_perm" <<'JSON'
+{
+  "permissions": { "defaultMode": "bypassPermissions", "deny": ["Read(./.env)"] },
+  "sandbox": { "enabled": true },
+  "hooks": { "Stop": [ { "matcher": "*", "hooks": [ { "type": "command", "command": "~/x.sh" } ] } ] }
+}
+JSON
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto" }, "model": "opus", "hooks": {} }
+JSON
+sync_perm() {
+  HOME="$SYNC_HOME" CLAUDE_SETTINGS_SRC="$1" CLAUDE_SETTINGS_DST="$dst" \
+    bash "$SYNC" "${2:-}" > "$TMP/sync_out" 2>&1
+}
+# Que la fusión funcione no basta: si --check no ve la deriva de estas dos
+# claves, make health dice "alineados" y nadie corre la fusión nunca.
+sync_perm "$tpl_perm" --check && rc=0 || rc=$?
+[ "$rc" = 1 ] && grep -q '+ permissions.deny Read(\./\.env)' "$TMP/sync_out" \
+  && pass "--check nombra la regla deny que falta" \
+  || fail "--check no vio la deriva de permissions.deny: rc=$rc, $(cat "$TMP/sync_out")"
+grep -q '+ sandbox.enabled true' "$TMP/sync_out" \
+  && pass "--check nombra el sandbox que falta" \
+  || fail "--check no vio la deriva de sandbox: $(cat "$TMP/sync_out")"
+
+sync_perm "$tpl_perm" && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "la fusión con permisos devolvió rc=$rc: $(cat "$TMP/sync_out")"
+[ "$(jq -r '.permissions.deny[0]' "$dst")" = "Read(./.env)" ] \
+  && pass "la fusión propaga permissions.deny" || fail "no propagó permissions.deny"
+[ "$(jq -r '.sandbox.enabled' "$dst")" = true ] \
+  && pass "la fusión propaga sandbox" || fail "no propagó sandbox"
+# defaultMode es de la máquina: una puede estar en sandbox y otra en auto mode.
+[ "$(jq -r '.permissions.defaultMode' "$dst")" = auto ] \
+  && pass "la fusión no pisa el defaultMode de la máquina" \
+  || fail "pisó el defaultMode: $(jq -c '.permissions' "$dst")"
+
+# Una clave que la plantilla no trae se conserva, y no se anuncia como deriva:
+# el script sincroniza, no borra.
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto", "deny": ["Read(~/.ssh/**)"] },
+  "sandbox": { "enabled": true }, "hooks": {} }
+JSON
+sync_perm "$tpl" --check && rc=0 || rc=$?
+# Positiva primero: sin ella, un script que no informe de nada pasaría las dos
+# siguientes por vacuidad.
+[ "$rc" = 1 ] && grep -q '+ hooks PreToolUse' "$TMP/sync_out" \
+  && pass "informa de la deriva de hooks que sí va a aplicar" \
+  || fail "no informó de la deriva de hooks: rc=$rc, $(cat "$TMP/sync_out")"
+grep -q 'sandbox' "$TMP/sync_out" \
+  && fail "anuncia como deriva una clave que no va a tocar: $(cat "$TMP/sync_out")" \
+  || pass "no anuncia como deriva lo que la plantilla no trae"
+sync_perm "$tpl" && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "la fusión sin permisos en la plantilla devolvió rc=$rc"
+[ "$(jq -r '.sandbox.enabled' "$dst")" = true ] \
+  && pass "una plantilla sin sandbox no borra el de la máquina" \
+  || fail "borró el sandbox de la máquina"
+[ "$(jq -r '.permissions.deny[0]' "$dst")" = "Read(~/.ssh/**)" ] \
+  && pass "una plantilla sin deny no borra las de la máquina" \
+  || fail "borró las deny de la máquina"
+
+# Dentro de una clave que la plantilla sí trae, reemplaza y no une: es la única
+# forma de poder retirar una regla desde el repo. Queda fijado a propósito.
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto", "deny": ["Read(~/mia.txt)"] }, "hooks": {} }
+JSON
+sync_perm "$tpl_perm" >/dev/null 2>&1 || true
+[ "$(jq -r '.permissions.deny | join(",")' "$dst")" = "Read(./.env)" ] \
+  && pass "la deny local se reemplaza por la del repo, no se une" \
+  || fail "unió las deny en vez de reemplazarlas: $(jq -c '.permissions.deny' "$dst")"
+
+# Una plantilla con permissions pero sin deny tampoco borra las de la máquina.
+jq 'del(.permissions.deny)' "$tpl_perm" > "$TMP/tpl-sin-deny.json"
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto", "deny": ["Read(~/mia.txt)"] }, "hooks": {} }
+JSON
+sync_perm "$TMP/tpl-sin-deny.json" >/dev/null 2>&1 || true
+[ "$(jq -r '.permissions.deny[0]' "$dst")" = "Read(~/mia.txt)" ] \
+  && pass "una plantilla con permissions pero sin deny deja las de la máquina" \
+  || fail "borró las deny con una plantilla que solo trae defaultMode"
 
 # Una plantilla sin bloque hooks no debe vaciar los del vivo: se rechaza antes
 # de tocar nada.
@@ -872,7 +962,7 @@ else
 fi
 
 # Una clave repetida dentro de `hooks` no la ve jq: se queda con la última y
-# pierde en silencio los hooks de la primera, y sync-claude-hooks escribe esa
+# pierde en silencio los hooks de la primera, y el sync escribe esa
 # pérdida en el settings.json vivo. Hay que mirar el fichero crudo.
 repes=$(grep -oE '^    "[A-Za-z]+": \[' "$REPO_ROOT/claude/.claude/settings.json" | sort | uniq -d)
 [ -z "$repes" ] \
