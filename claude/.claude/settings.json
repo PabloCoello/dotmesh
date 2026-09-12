@@ -1,6 +1,14 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.claude/.credentials.json)"
+    ]
   },
   "model": "opus[1m]",
   "outputStyle": "maker",
@@ -96,16 +104,7 @@
     "padding": 1
   },
   "enabledPlugins": {
-    "bait-skills@bait": true,
-    "miro@claude-plugins-official": true
-  },
-  "extraKnownMarketplaces": {
-    "miro-ai": {
-      "source": {
-        "source": "github",
-        "repo": "miroapp/miro-ai"
-      }
-    }
+    "bait-skills@bait": true
   },
   "effortLevel": "high",
   "tui": "fullscreen",
