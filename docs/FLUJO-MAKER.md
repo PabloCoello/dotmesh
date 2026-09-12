@@ -84,7 +84,7 @@ enseñó que el gate de revisión lo produce el hook, no la prosa.
 
 | Hook | Momento | Efecto |
 |---|---|---|
-| `remind-load-skills.sh` | primera escritura de cada agente (Write/Edit y también Bash) | recuerda cargar la skill de la fase antes de escribir |
+| `remind-load-skills.sh` | primera escritura de cada agente por tipo de fichero (Write/Edit y también Bash) | recuerda cargar la skill de la fase antes de escribir: las de redacción si el destino es un documento, la puerta YAGNI y `source-driven-development` si es código |
 | `remind-review-gate.sh` | `git commit` | en el orquestador recuerda el gate si no consta; dentro de un subagente bloquea el primer commit sin autocomprobación |
 | `block-dangerous-git.sh` | cada comando Bash | bloquea Git y Stow destructivos, el push a la rama por defecto y la atribución de LLM en commits |
 | `verify-phase-close.sh` | al terminar un subagente `build` | inyecta al orquestador el estado real del árbol y los últimos commits para contrastar el resumen de la fase |

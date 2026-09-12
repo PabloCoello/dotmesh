@@ -163,7 +163,7 @@ section "recordatorio de skills: sintaxis y una vez por agente"
 if bash -n "$SKILLS"; then pass "remind-load-skills.sh compila"; else fail "remind-load-skills.sh no compila"; fi
 
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
-msg=$(run_skills Write /tmp/x.txt "" "$td")
+msg=$(run_skills Write /tmp/x.md "" "$td")
 [ -n "$msg" ] && pass "la primera escritura avisa" || fail "la primera escritura no avisó"
 msg=$(run_skills Write /tmp/y.txt "" "$td")
 [ -z "$msg" ] && pass "la segunda escritura del mismo agente calla" || fail "avisó dos veces al mismo agente"
@@ -185,10 +185,101 @@ for cmd in 'ls -la' 'git status --porcelain' 'grep -r foo .' 'echo hola > /dev/n
   [ -z "$msg" ] && pass "no escribe: $cmd" || fail "gastó el aviso en un comando de lectura: $cmd"
 done
 
+section "recordatorio de skills: prosa y código reciben avisos distintos"
+# El aviso único que se daba antes nombraba las tres pistas a la vez, así que
+# escribir un .sh pedía cargar las skills de redacción. Medido el 2026-09-12:
+# 77 de las 251 sesiones que cargaron anti-ai-style no escribieron prosa.
+nombra() { printf '%s' "$1" | grep -q "$2"; }
+
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+msg=$(run_skills Write /tmp/informe.md "" "$td")
+nombra "$msg" anti-ai-style && pass "un .md nombra anti-ai-style" \
+  || fail "un .md no nombró anti-ai-style"
+nombra "$msg" castellano-peninsular && pass "un .md nombra castellano-peninsular" \
+  || fail "un .md no nombró castellano-peninsular"
+nombra "$msg" code-simplification && fail "un .md arrastró la puerta YAGNI" \
+  || pass "un .md no nombra la puerta YAGNI"
+
+# Mismo agente, otra clase: el marcador de prosa no puede silenciar al código.
+msg=$(run_skills Write /tmp/deploy.sh "" "$td")
+nombra "$msg" code-simplification && pass "un .sh del mismo agente nombra la puerta YAGNI" \
+  || fail "el marcador de prosa silenció el aviso de código"
+nombra "$msg" anti-ai-style && fail "un .sh recibió las skills de redacción" \
+  || pass "un .sh no nombra las skills de redacción"
+
+msg=$(run_skills Write /tmp/otro.md "" "$td")
+[ -z "$msg" ] && pass "el segundo documento del mismo agente calla" \
+  || fail "avisó dos veces por prosa al mismo agente"
+
+# Por Bash no hay campo con la ruta: se clasifica por el destino de la escritura.
+msg=$(run_skills Bash 'cat > notas.md')
+nombra "$msg" anti-ai-style && pass "una redirección a .md se clasifica como prosa" \
+  || fail "una redirección a .md no recibió el aviso de redacción"
+msg=$(run_skills Bash 'cat > deploy.sh')
+nombra "$msg" code-simplification && pass "una redirección a .sh nombra la puerta YAGNI" \
+  || fail "una redirección a .sh se quedó sin aviso de código"
+nombra "$msg" anti-ai-style && fail "una redirección a .sh recibió el par de redacción" \
+  || pass "una redirección a .sh no nombra las skills de redacción"
+
+# La trampa que motiva clasificar por destino y no por el comando entero: un
+# heredoc que MENCIONA un .md mientras escribe un .sh.
+msg=$(run_skills Bash 'cat > hook.sh <<EOF
+ver AGENTS.md y docs/FLUJO-MAKER.md
+EOF')
+nombra "$msg" anti-ai-style && fail "el .md del heredoc coló la escritura como prosa" \
+  || pass "un heredoc que menciona un .md sigue siendo código"
+
+# Un punto y coma detrás del destino no debe despistar a la clasificación.
+msg=$(run_skills Bash 'printf x > doc.md; git add .')
+nombra "$msg" anti-ai-style && pass "el destino se corta en el punto y coma" \
+  || fail "un destino seguido de ; no se clasificó como prosa"
+
+# El destino de tee y de sed -i es la última palabra, no una redirección.
+msg=$(run_skills Bash 'tee -a bitacora.md')
+nombra "$msg" anti-ai-style && pass "el destino de tee se clasifica como prosa" \
+  || fail "tee a un .md no se clasificó como prosa"
+
+# El marcador por clase también separa las dos clases llegando por Bash.
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+run_skills Bash 'cat > uno.md' "" "$td" >/dev/null
+msg=$(run_skills Bash 'cat > dos.sh' "" "$td")
+nombra "$msg" code-simplification && pass "por Bash, prosa y código no comparten marcador" \
+  || fail "por Bash, el marcador de prosa silenció el aviso de código"
+
+section "recordatorio de skills: nunca rompe la herramienta que lo dispara"
+# La cabecera del hook promete que nunca bloquea. Con dos ramas nuevas y
+# set -euo pipefail, eso hay que comprobarlo y no suponerlo.
+skills_rc() {
+  local tool="$1" arg="$2" input rc=0 td
+  td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+  input=$(jq -nc --arg t "$tool" --arg a "$arg" \
+    '{hook_event_name:"PreToolUse",tool_name:$t,session_id:"sesion-1"}
+     + (if $t == "Bash" then {tool_input:{command:$a}} else {tool_input:{file_path:$a}} end)')
+  printf '%s' "$input" | TMPDIR="$td" bash "$SKILLS" >/dev/null 2>&1 || rc=$?
+  printf '%s' "$rc"
+}
+for caso in "Write:/tmp/informe.md" "Write:/tmp/deploy.sh" "Bash:cat > notas.md" "Bash:ls -la" "Write:"; do
+  t=${caso%%:*}; a=${caso#*:}
+  [ "$(skills_rc "$t" "$a")" -eq 0 ] && pass "sale con 0: $t ${a:-(sin ruta)}" \
+    || fail "salió con estado distinto de cero: $t ${a:-(sin ruta)}"
+done
+
+# notebook_path es la otra ruta que lee el hook, y no la cubría ninguna prueba.
+nb=$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"NotebookEdit",session_id:"sesion-1",
+              tool_input:{notebook_path:"/tmp/analisis.ipynb"}}')
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+msg=$(printf '%s' "$nb" | TMPDIR="$td" bash "$SKILLS" 2>/dev/null | jq -r '.hookSpecificOutput.additionalContext // ""')
+nombra "$msg" code-simplification && pass "un notebook se clasifica como código" \
+  || fail "el hook no leyó notebook_path"
+
 section "registro en la plantilla de settings.json"
 tpl="$REPO_ROOT/claude/.claude/settings.json"
 n=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | test("remind-load-skills"))] | length' "$tpl")
 [ "$n" -ge 1 ] && pass "remind-load-skills.sh está registrado en el matcher Bash" || fail "falta en el matcher Bash de la plantilla"
+# La vía principal de la clasificación por destino son las herramientas de
+# edición, así que su matcher también tiene que estar registrado.
+n=$(jq '[.hooks.PreToolUse[] | select(.matcher | test("Write")) | .hooks[] | select(.command | test("remind-load-skills"))] | length' "$tpl")
+[ "$n" -ge 1 ] && pass "remind-load-skills.sh está registrado en el matcher de edición" || fail "falta en el matcher Write|Edit de la plantilla"
 
 section "métrica: un commit bloqueado no es un commit"
 # Con el gate bloqueando, la skill se carga entre el intento bloqueado y el
@@ -969,8 +1060,8 @@ done
 # remind-load-skills: ni crea el destino del enlace, ni lo trunca, ni deja de
 # avisar por tener el marcador envenenado.
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
-ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
-msg=$(run_skills Write /tmp/x.txt "" "$td")
+ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main-prosa"
+msg=$(run_skills Write /tmp/x.md "" "$td")
 [ ! -e "$TMP/inexistente-skills.txt" ] \
   && pass "remind-load-skills no crea el destino del enlace" \
   || fail "remind-load-skills escribió a través del enlace"
@@ -980,8 +1071,8 @@ msg=$(run_skills Write /tmp/x.txt "" "$td")
 
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
 printf 'contenido que no se debe perder\n' > "$TMP/victima-skills.txt"
-ln -s "$TMP/victima-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
-run_skills Write /tmp/x.txt "" "$td" >/dev/null
+ln -s "$TMP/victima-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main-prosa"
+run_skills Write /tmp/x.md "" "$td" >/dev/null
 [ -s "$TMP/victima-skills.txt" ] \
   && pass "remind-load-skills no trunca el destino del enlace" \
   || fail "remind-load-skills truncó el fichero enlazado"
