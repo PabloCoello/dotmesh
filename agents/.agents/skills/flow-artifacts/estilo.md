@@ -15,7 +15,7 @@ solo decidir la jerarquía de la página concreta.
 ## Principios
 
 - **Monocromo primero.** Superficies, texto, bordes y botones van en la rampa de
-  grises. El color entra solo como señal: estado, veredicto, delta, error.
+  grises. El color entra solo como señal: estado, delta, error.
   Nunca como decoración ni como acento de marca.
 - **La señal marca, el texto informa.** El color de señal va en el punto, el
   borde o la franja de un chip; el texto del chip va en `--ink`. Varias señales
@@ -134,10 +134,27 @@ en los dos temas sin un hex más.
 
 ## Composición
 
+- **Lo esencial arriba, el detalle plegado.** Cada bloque largo abre con dos o
+  tres frases en lenguaje llano (`.resumen`) y guarda debajo, en un
+  `<details class="detalle">`, el texto completo, las cifras o la jerga. La
+  persona decide cuánto lee; lo que hay que leer para decidir no va plegado.
+
+  ```css
+  .resumen { font-size: 1.02rem; }
+  .detalle { margin-top: .9rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+  .detalle > summary { padding: .5rem .85rem; cursor: pointer; font-size: .86rem; font-weight: 600; color: var(--ink-2); }
+  .detalle > summary:hover { color: var(--ink); }
+  .detalle[open] > summary { border-bottom: 1px solid var(--rule); }
+  .detalle-in { padding: .1rem .95rem .7rem; }
+  ```
+
+  El `summary` dice qué hay dentro («Texto de la spec», «Cifras por caso»), no
+  «Ver más».
 - Anchura de lectura en torno a 70 caracteres; tablas y código en su propio
   contenedor con `overflow-x: auto`.
-- La acción de la página (enviar, aprobar) vive en una barra fija abajo, con el
-  recuento de lo pendiente. Es el elemento que lleva sombra.
-- Los estados van en chips con punto de color y texto: «pendiente», «vale»,
-  «cambia», «hecha», «fallida». La forma del chip dice lo mismo que el color,
-  para quien no distinga el color.
+- La acción de la página (enviar, aprobar) vive en una barra fija abajo. Es el
+  elemento que lleva sombra. Si hay varias preguntas, la barra lleva el
+  recuento de las contestadas.
+- Los estados van en chips con punto de color y texto: «pendiente», «hecha»,
+  «fallida», «cambiado en la versión N». La forma del chip dice lo mismo que el
+  color, para quien no distinga el color.

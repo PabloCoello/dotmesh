@@ -1,7 +1,8 @@
 # Progreso
 
 Para seguir una tanda larga (una corrida del banco, una migración por fases) sin
-mirar la terminal. Solo lectura en esta versión.
+mirar la terminal. No lleva controles: lo que la persona quiera decir de una
+fase va en un comentario sobre ella, como dice `circuito.md`.
 
 ## Coste y granularidad
 
@@ -22,9 +23,11 @@ vía por defecto es republicar.
 - Una fila por fase o brazo con un chip de estado (`pendiente`, `en curso`,
   `hecha`, `fallida`), la hora de inicio y fin en mono y con zona horaria, y el
   coste si se conoce.
+- El detalle de cada fase (casos, comando, salida resumida), plegado bajo su
+  fila con el patrón de `estilo.md`.
 - Si hay un contador, se escribe como texto («12 de 20») y, si ayuda, con una
   barra estática del último valor.
 - Una fase fallida lleva el error en una línea y dónde está el log, con ruta
-  relativa al repositorio.
+  relativa al repositorio. Esa línea va fuera del pliegue.
 - Al terminar, la página pasa a informe: enlaza el informe de resultados o se
   convierte en él siguiendo `informe.md`.

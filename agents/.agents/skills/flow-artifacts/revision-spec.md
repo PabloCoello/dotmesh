@@ -6,22 +6,30 @@ revisarla.
 
 ## Contenido
 
-- La spec entera en el `<template>`, con una `<section data-id="…">` por cada
-  apartado de segundo nivel. El `data-id` sale del título («objetivo»,
-  «limites») y no cambia entre rondas.
-- Cabecera: nombre de la spec, ruta relativa al repositorio, ronda, y el
-  recuento «5 de 9 apartados revisados».
+- La spec en el `<template>`, con una `<section data-id="…">` por cada apartado
+  de segundo nivel. El `data-id` sale del título («objetivo», «limites»), no
+  cambia entre versiones y sirve para marcar el apartado. No lleva respuesta.
+- Cada apartado largo abre con un resumen de dos o tres frases en lenguaje llano
+  (`<p class="resumen">`) y guarda el texto de la spec plegado debajo, con el
+  patrón de `estilo.md`. Los cortos, como los límites o la lista de ficheros,
+  van desplegados.
+- Cabecera: nombre de la spec, ruta relativa al repositorio y número de
+  apartados.
+- Una línea bajo la cabecera dice cómo se contesta: para cambiar o preguntar
+  algo, comentar sobre la frase y enviarlo a Claude; cuando todo valga, marcar
+  «Apruebo la spec» y enviar.
 - Las tablas y el código, en su contenedor con desplazamiento horizontal.
 
 ## Controles
 
-- Por apartado, tres radios en línea: `vale`, `cambia`, `duda`. Con `cambia` o
-  `duda`, un campo de nota que pide qué cambiar o qué no está claro.
-- Una casilla global, «Apruebo la spec» (`data-id="aprobada"`), que solo se
-  activa cuando todos los apartados están en `vale`.
-- Un único botón, «Enviar revisión», en la barra fija.
-- Una línea bajo la cabecera recuerda que para una frase concreta sirven los
-  comentarios anclados de la página.
+- Uno solo: la casilla «Apruebo la spec» (`data-id="aprobada"`), con el botón
+  «Enviar» en la barra fija. El botón está desactivado hasta que la casilla se
+  marca.
+- La casilla no se guarda en el borrador y se pinta desmarcada en cada carga:
+  aprobar vale para la versión que se tiene delante, y un comentario puede
+  haberla cambiado sin subir la ronda.
+- Ni veredicto por apartado ni campo de nota: lo que haya que cambiar va en un
+  comentario sobre la frase.
 
 ## Estado
 
@@ -30,25 +38,26 @@ revisarla.
   "ronda": 1,
   "pendiente": false,
   "cerrada": false,
-  "respuestas": { "objetivo": { "veredicto": "vale" }, "limites": { "veredicto": "cambia", "nota": "..." }, "aprobada": false },
-  "replicas": { "limites": "Cambiado: ..." },
-  "cambiadas": { "limites": 2 }
+  "respuestas": { "aprobada": false },
+  "cambiadas": { "limites": 3 }
 }
 ```
 
-## Al procesar la ronda
+`cambiadas` apunta, por apartado, la versión del artifact en que cambió por
+última vez, y la página la pinta como «cambiado en la versión 3». Es la versión
+del artifact, no la ronda: los cambios llegan por comentario, y un comentario no
+sube la ronda.
 
-- Aplica cada `cambia` en la spec del disco y deja en `replicas` una línea con
-  lo que cambiaste. Cada `duda` se contesta en `replicas` y, si la duda revela
-  un hueco, también se corrige la spec.
-- Reescribe el `<template>` desde la spec corregida, con el escapado que pide
-  el paso 6 de `circuito.md`. Los apartados que cambian entran en `cambiadas`
-  con la ronda, la página los marca («cambiado en la ronda 2») y su veredicto
-  sale de `respuestas`. Los que no cambian conservan el suyo.
-- Con `respuestas.aprobada` a `true` y todos los apartados en `vale`, la spec
+## Al procesar
+
+- Cada comentario sigue el ciclo de `circuito.md`: aplica el cambio en la spec
+  del disco, reescribe el apartado en el `<template>`, pon el apartado en
+  `cambiadas` con la versión que va a salir (la última publicada más uno),
+  republica, contesta en el hilo con lo que cambiaste y resuélvelo. Si la
+  publicación choca con una versión más nueva, recalcula el número a partir de
+  esa.
+- Con `respuestas.aprobada` a `true` y ningún hilo abierto que discuta la spec,
   está aprobada: apúntalo en la spec y en el plan, republica con `cerrada: true`
-  y pasa a planificar. La casilla la desactiva la página, no la lectura: si
-  `aprobada` llega a `true` con algún apartado sin `vale`, no la des por buena,
-  quítala del estado y dilo en la réplica de ese apartado.
-- Los hilos de comentarios que atendiste se contestan y se resuelven; los que no
-  están enviados a Claude se nombran al cerrar la ronda.
+  y pasa a planificar. Si queda un hilo abierto, contéstalo antes y pregunta en
+  el chat si la aprobación sigue en pie.
+- Los hilos que no están enviados a Claude se nombran al cerrar.

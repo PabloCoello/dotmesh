@@ -31,10 +31,14 @@ LIBRES = {"respuestas", "pendiente", "enviado"}
 PELIGROSAS = {"iframe", "frame", "frameset", "object", "embed", "base",
               "noscript", "xmp", "noembed", "noframes", "plaintext",
               "svg", "math"}
+# Solo los controles admiten respuesta. Un apartado lleva data-id para que la página
+# lo marque, y aceptarlo dejaba pasar lo que un borrador de una versión anterior
+# guardaba para controles que ya no existen.
+CONTROLES = {"input", "select", "textarea"}
 
 
 class Piezas(HTMLParser):
-    """Recoge los bloques con id, los data-id y lo que no debería estar."""
+    """Recoge los bloques con id, los data-id de controles y lo que no debería estar."""
 
     def __init__(self, html):
         super().__init__()
@@ -61,7 +65,7 @@ class Piezas(HTMLParser):
             if (nombre.startswith("on") or nombre == "srcdoc" or "</" in (valor or "")
                     or re.search(r"(?:java|vb)script:", valor_limpio)):
                 self.sospechas.append(f"<{tag} {nombre}>")
-            if nombre == "data-id" and valor:
+            if nombre == "data-id" and valor and tag in CONTROLES:
                 self.ids.add(valor)
         if tag == "script":
             self.scripts += 1
@@ -146,7 +150,7 @@ def respuestas_de(estado, ids, donde):
         fallo(f"{donde}: respuestas no es un objeto")
     ajenas = set(respuestas) - ids
     if ajenas:
-        fallo(f"{donde}: respuestas a data-id que no están en el contenido: {sorted(ajenas)[:5]}")
+        fallo(f"{donde}: respuestas a data-id que no son de un control del contenido:{sorted(ajenas)[:5]}")
     return respuestas
 
 
@@ -183,8 +187,8 @@ def volcar(ruta_local, ruta_nueva):
         fallo(f"el estado nuevo no es JSON ({e})")
     if not isinstance(nuevo, dict):
         fallo("el estado nuevo no es un objeto")
-    # Una clave cuyo data-id ya no está haría fallar el siguiente envío.
-    respuestas_de(nuevo, antes.ids, "estado nuevo (edita el template antes de volcar)")
+    # Una clave que no es de un control del template haría fallar el siguiente envío.
+    respuestas_de(nuevo, antes.ids, "estado nuevo (quita esa respuesta o, si el control es nuevo, ponlo antes en el template)")
     # Ningún «<» dentro del script: una respuesta con </script> cerraría el bloque.
     seguro = json.dumps(nuevo, ensure_ascii=False, allow_nan=False).replace("<", "\\u003c")
     salida = re.sub(PATRON_ESTADO, lambda m: m.group(1) + seguro + m.group(3),
