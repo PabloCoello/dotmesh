@@ -1,7 +1,7 @@
 # Revisión y checklist
 
 Abre este fichero cuando vayas a revisar un texto completo ya redactado.
-Contiene las reglas generales de reescritura, el checklist de 25 puntos y la
+Contiene las reglas generales de reescritura, el checklist de 26 puntos y la
 regla final de calidad.
 
 ---
@@ -18,13 +18,13 @@ Siempre preferir:
 - medidas observables.
 
 ## 2. Sustituir tono épico por descripción sobria
-Evitar frases que "suenan importantes" pero no informan.
+Evitar frases que “suenan importantes” pero no informan.
 
 ## 3. Sustituir autoridad implícita por atribución explícita
 No usar prestigio o notoriedad como muleta narrativa.
 
 ## 4. Sustituir verbos vacíos por mecanismos concretos
-No escribir que algo "refleja", "simboliza" o "pone de relieve" sin explicar el mecanismo o la evidencia.
+No escribir que algo “refleja”, “simboliza” o “pone de relieve” sin explicar el mecanismo o la evidencia.
 
 ## 5. Eliminar relleno retórico
 Si una frase puede borrarse sin pérdida de información, probablemente es relleno.
@@ -49,17 +49,17 @@ Antes de dar un texto por bueno, comprobar:
 - ¿Hay verbos abstractos que parecen análisis pero no aportan contenido?
 - ¿Hay adjetivos promocionales o institucionales innecesarios?
 - ¿Hay atribuciones vagas sin fuente concreta?
-- ¿Se mencionan "retos" o "dificultades" sin especificarlos?
+- ¿Se mencionan “retos” o “dificultades” sin especificarlos?
 - ¿Hay palabras que suenan típicas de IA y pueden simplificarse?
-- ¿Se están evitando innecesariamente verbos simples como "es" o "tiene"?
-- ¿Hay estructuras del tipo "no es X, es Y" que podrían decirse de forma directa?
+- ¿Se están evitando innecesariamente verbos simples como “es” o “tiene”?
+- ¿Hay estructuras del tipo “no es X, es Y” que podrían decirse de forma directa?
 - ¿Hay listas de tres elementos forzadas por estilo?
 - ¿Se están alternando sinónimos solo para evitar repetir una palabra clara?
-- ¿Hay construcciones del tipo "de X a Y" que no delimitan nada con precisión?
+- ¿Hay construcciones del tipo “de X a Y” que no delimitan nada con precisión?
 - ¿Aparece alguna raya larga (—) que deba sustituirse por comas, paréntesis, dos puntos o punto?
 - ¿Hay punto medio (·) decorativo en prosa que debería ser coma o conjunción?
 - ¿Se están usando negritas como decoración y no como ayuda estructural?
-- ¿Hay frases tipo "Etiqueta: contenido" que deberían convertirse en prosa?
+- ¿Hay frases tipo “Etiqueta: contenido” que deberían convertirse en prosa?
 - ¿Los encabezados siguen el uso natural del español?
 - ¿Aparecen emojis impropios del tono del documento?
 - ¿El uso de comillas es consistente y adecuado al contexto técnico o documental?
@@ -79,7 +79,7 @@ Si la respuesta es sí en cualquiera de estos puntos, reescribir.
 
 Si una frase parece escrita para sonar inteligente, fluida o importante, pero no añade información concreta, debe reescribirse o eliminarse.
 
-El criterio de calidad no es que el texto "suene bien", sino que:
+El criterio de calidad no es que el texto “suene bien”, sino que:
 
 - diga algo preciso,
 - pueda sostenerse con hechos,
