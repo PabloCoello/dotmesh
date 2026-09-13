@@ -660,6 +660,51 @@ while IFS= read -r _h; do
   fi
 done <<< "$_stop_hooks"
 
+section "sandbox: la postura de la plantilla, no solo que la clave exista"
+# El sandbox es el único guardarraíl que queda cuando `defaultMode` es
+# `bypassPermissions`, que es como corre esta máquina. La propagación ya se
+# comprueba más arriba; aquí se fija la postura, porque cada agujero abierto es
+# una decisión que alguien tomó y debería costar tocar una prueba.
+#
+# Medido el 13-09-2026 sobre esta máquina: dentro de la caja solo se puede
+# escribir en el directorio de trabajo, el temporal de sesión y lo que conceda
+# `filesystem.allowWrite`.
+_tpl="$REPO_ROOT/claude/.claude/settings.json"
+
+[ "$(jq -r '.sandbox.enabled' "$_tpl")" = true ] \
+  && pass "la plantilla enciende el sandbox" \
+  || fail "la plantilla no enciende el sandbox"
+
+# La escotilla queda abierta a propósito hasta que una semana de uso diga si se
+# puede cerrar, pero escrita: heredarla del valor por defecto no es una postura.
+jq -e '.sandbox | has("allowUnsandboxedCommands")' "$_tpl" >/dev/null 2>&1 \
+  && pass "la escotilla está declarada de forma explícita" \
+  || fail "la escotilla se hereda del valor por defecto en vez de declararse"
+
+# Exactamente estos cuatro. Cada uno sale de una medición: stow y make escriben
+# por todo $HOME, que es el producto; herdr habla por su socket unix; y gh lee
+# su token del llavero por D-Bus y dentro de la caja se degrada a anónimo.
+_excl_esperado=$(printf '%s\n' "gh *" "herdr *" "make *" "stow *")
+_excl_real=$(jq -r '.sandbox.excludedCommands // [] | .[]' "$_tpl" | sort)
+[ "$_excl_real" = "$_excl_esperado" ] \
+  && pass "excludedCommands son los cuatro casos medidos" \
+  || fail "excludedCommands cambió: $(printf '%s' "$_excl_real" | tr '\n' ' ')"
+
+# Conceder la raíz de $HOME devolvería el sandbox a la nada sin que se note.
+while IFS= read -r _w; do
+  [ -n "$_w" ] || continue
+  case "$_w" in
+    "~"|"~/"|"\$HOME"|"\$HOME/"|"/")
+      fail "allowWrite concede la raíz del home o del sistema: $_w" ;;
+    "~/.local/share"|"~/.local/share/")
+      # Ahí vive el propio binario de Claude Code: conceder escritura permitiría
+      # a un comando sandboxeado reemplazar el agente que lo confina.
+      fail "allowWrite concede ~/.local/share, donde está el binario de Claude" ;;
+    *)
+      pass "allowWrite acota una ruta concreta: $_w" ;;
+  esac
+done <<< "$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl")"
+
 section "guardarraíl: dónde acaba el cuerpo de un heredoc"
 # La propiedad que importa: quitar el cuerpo no puede tragarse el resto del
 # comando, o cualquier cosa detrás de un heredoc quedaría sin escanear.

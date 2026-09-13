@@ -296,6 +296,14 @@ health:
 			|| echo "  --  integraciones herdr (ver docs/INSTALL.md)"; \
 	fi
 	@command -v jq       >/dev/null && echo "  ok  jq"       || echo "  --  jq  (requerido por los hooks de seguridad)"
+	@if [ "$$(uname -s)" = "Linux" ]; then \
+		command -v bwrap >/dev/null \
+			&& echo "  ok  bubblewrap (sandbox de Bash)" \
+			|| echo "  --  bubblewrap  (sin él el sandbox avisa y se aparta: sudo apt install bubblewrap)"; \
+		command -v socat >/dev/null \
+			&& echo "  ok  socat (sandbox de Bash)" \
+			|| echo "  --  socat  (sin él el sandbox avisa y se aparta: sudo apt install socat)"; \
+	fi
 	@command -v nvim         >/dev/null && echo "  ok  nvim"         || echo "  --  nvim"
 	@command -v tree-sitter  >/dev/null && echo "  ok  tree-sitter"  || echo "  --  tree-sitter  (Linux: make nvim-install · macOS: brew install tree-sitter-cli)"
 	@command -v npx          >/dev/null && echo "  ok  npx"          || echo "  --  npx"

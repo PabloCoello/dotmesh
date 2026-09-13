@@ -179,6 +179,29 @@ The agent system has two layers, identical in concept across the three tools.
   summary was buried under an `Ok.` or a bare `.` that the orchestrator received
   in its place. So an orchestrator that wants the state of the repository after a
   phase reads it with `git log` and `git status`, and never through a hook.
+- **The Bash sandbox** — `sandbox.enabled` is on in the template, so every Bash
+  command Claude runs is confined by the OS: writable are the working directory,
+  the session temp directory, and `~/.npm`; everything else under `$HOME` is not.
+  This is the guardrail that matters most here, because `permissions.defaultMode`
+  is `bypassPermissions` on this machine and the prompts are gone. On Linux it
+  needs `bubblewrap` and `socat`; `make health` reports them, and without them
+  the sandbox warns and steps aside rather than failing the session.
+
+  Four commands are listed in `excludedCommands` and run outside it, each for a
+  measured reason: `stow` and `make` write all over `$HOME`, which is the
+  product; `herdr` talks to its Unix socket at `~/.config/herdr/herdr.sock`,
+  which seccomp blocks; and `gh` reads its token from the keyring over D-Bus, so
+  inside the sandbox it silently degrades to anonymous (`gh api /rate_limit`
+  returns 60 instead of 5000). Exclusion applies to the command Claude runs
+  directly, not to what a script it launches runs: a command inside a shell
+  script inherits the sandbox.
+
+  Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
+  logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
+  merged into the sandbox's read policy — so run the headless harnesses through
+  their `make` targets, which are excluded, not by calling the script directly.
+  And `sandbox.filesystem.denyRead` is not duplicated in the template on
+  purpose: the `permissions.deny` Read rules are merged into it by the runtime.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old

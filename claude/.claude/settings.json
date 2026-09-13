@@ -10,6 +10,21 @@
       "Read(~/.claude/.credentials.json)"
     ]
   },
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": true,
+    "excludedCommands": [
+      "stow *",
+      "make *",
+      "herdr *",
+      "gh *"
+    ],
+    "filesystem": {
+      "allowWrite": [
+        "~/.npm"
+      ]
+    }
+  },
   "model": "opus[1m]",
   "outputStyle": "maker",
   "hooks": {
