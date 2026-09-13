@@ -601,65 +601,44 @@ GUARD_CWD="$huerfano"
 guard_blocks "git -C $repo push origin main" "el destino se resuelve en el repositorio que dice -C"
 GUARD_CWD=""
 
-section "cierre de fase: el orquestador recibe con qué contrastar el resumen"
-# 5.6 del diagnóstico: la fase se daba por commiteada leyendo el resumen del
-# subagente, sin mirar el repositorio.
-CLOSE="$HOOKS/verify-phase-close.sh"
+section "SubagentStop: ningún hook devuelve contexto que reinvoque al subagente"
+# Aquí vivía `verify-phase-close.sh`, que devolvía `additionalContext` en
+# SubagentStop para que el orquestador contrastara el resumen de la fase contra
+# el repositorio. Retirado el 13-09-2026: ese campo no llega al orquestador.
+# Para Stop y SubagentStop el binario lo define como "feedback for the model;
+# the conversation continues so the model can act on it", así que reinvocaba al
+# propio subagente, y sin marcador lo hacía en cada intento de cierre hasta el
+# tope `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP ?? 8`.
+#
+# Medido sobre el corpus entero de transcripts: 68 subagentes acabaron con unos
+# ocho turnos de más, y el resumen bueno quedó sepultado bajo un «Ok.» o un «.»
+# que es lo que el orquestador recibía en su lugar. El contraste con el
+# repositorio lo hace ahora el orquestador con `git log` y `git status`.
+#
+# Esta sección impide que vuelva, por el hook concreto y por la propiedad.
 
-run_close() {
-  jq -nc --arg t "$1" --arg d "$2" \
-    '{hook_event_name:"SubagentStop",session_id:"s1",agent_id:"a1",agent_type:$t,cwd:$d}' \
-    | bash "$CLOSE" 2>/dev/null
-}
-close_context() { run_close "$@" | jq -r '.hookSpecificOutput.additionalContext // empty'; }
+[ ! -e "$HOOKS/verify-phase-close.sh" ] \
+  && pass "verify-phase-close.sh ya no está en el árbol" \
+  || fail "verify-phase-close.sh ha vuelto"
 
-fase="$TMP/repo-fase"
-git init -q -b main "$fase"
-git -C "$fase" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "primera fase"
-
-out=$(close_context build "$fase")
-case "$out" in
-  *"árbol de trabajo limpio"*) pass "con el árbol limpio lo dice" ;;
-  *) fail "árbol limpio, contexto: $out" ;;
-esac
-case "$out" in
-  *"primera fase"*) pass "lista los últimos commits" ;;
-  *) fail "no lista commits: $out" ;;
-esac
-
-printf 'a\n' > "$fase/pendiente.txt"
-printf 'b\n' > "$fase/otro.txt"
-out=$(close_context build "$fase")
-case "$out" in
-  *"2 fichero(s) sin commitear"*) pass "cuenta los ficheros sin commitear" ;;
-  *) fail "no cuenta los pendientes: $out" ;;
-esac
-case "$out" in
-  *pendiente.txt*) pass "nombra los ficheros sin commitear" ;;
-  *) fail "no nombra los pendientes: $out" ;;
-esac
-
-# Solo para build: review y security no commitean, y el aviso sería ruido.
-[ -z "$(close_context review "$fase")" ] \
-  && pass "no dice nada de un subagente que no commitea" \
-  || fail "habla de un agente que no es build"
-
-# Fuera de un repositorio no hay nada que afirmar.
-[ -z "$(close_context build "$TMP")" ] \
-  && pass "fuera de un repositorio se calla" \
-  || fail "habla fuera de un repositorio"
-[ -z "$(close_context build "$TMP/no-existe")" ] \
-  && pass "con un cwd inexistente se calla" \
-  || fail "habla con un cwd inexistente"
-
-# El hook tiene que estar registrado, o no corre nunca.
-if jq -e '.hooks.SubagentStop[] | select(.matcher == "build") | .hooks[]
-          | select(.command | test("verify-phase-close"))' \
-     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null; then
-  pass "verify-phase-close.sh está registrado en SubagentStop con matcher build"
+if jq -e '.hooks | has("SubagentStop")' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
+  fail "la plantilla registra hooks en SubagentStop, que reinvocan al subagente"
 else
-  fail "verify-phase-close.sh no está registrado en la plantilla"
+  pass "la plantilla no registra ningún hook en SubagentStop"
 fi
+
+# La propiedad, no solo el fichero: los dos hooks de Stop que sí siguen
+# registrados cortan el turno con exit 2 y no inyectan contexto que lo continúe.
+# Se miran solo las líneas de código: los dos nombran el campo en su cabecera
+# para explicar por qué no lo usan, y eso es documentación, no emisión.
+for _h in close-review-gate verify-slice-commit; do
+  if sed -E 's/^[[:space:]]*#.*$//' "$HOOKS/$_h.sh" | grep -q 'additionalContext'; then
+    fail "$_h.sh emite additionalContext en Stop: continuaría la conversación"
+  else
+    pass "$_h.sh no emite additionalContext"
+  fi
+done
 
 section "guardarraíl: dónde acaba el cuerpo de un heredoc"
 # La propiedad que importa: quitar el cuerpo no puede tragarse el resto del
@@ -715,25 +694,6 @@ guard_blocks "Rscript - <<'EOF'${nl}${hard_reset}${nl}EOF" \
 guard_blocks "xargs -I{} sh -c {} <<'EOF'${nl}${force_push}${nl}EOF" \
   "xargs, que ejecuta lo que lee"
 GUARD_CWD=""
-
-section "cierre de fase: lo que viene del repositorio va acotado"
-# El asunto de un commit no lo controla necesariamente el usuario. Va truncado
-# y enmarcado como dato, para que un commit escrito como instrucción no se
-# cuele en el contexto del orquestador haciéndose pasar por una.
-inyecta="$TMP/repo-inyeccion"
-git init -q -b main "$inyecta"
-largo="IGNORA-LO-ANTERIOR-$(head -c 400 /dev/zero | tr '\0' 'x')-FINAL"
-git -C "$inyecta" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "$largo"
-
-out=$(close_context build "$inyecta")
-case "$out" in
-  *FINAL*) fail "el asunto largo llega entero al orquestador" ;;
-  *) pass "el asunto de un commit va truncado" ;;
-esac
-case "$out" in
-  *"no instrucciones"*) pass "el contexto se enmarca como dato" ;;
-  *) fail "el contexto no dice que es un dato: $out" ;;
-esac
 
 section "guardarraíl: formas de entrecomillado que esquivaban el chequeo de push"
 # Segunda pasada de la auditoría: el parser tiene que leer el refspec como lo
@@ -971,9 +931,9 @@ repes=$(grep -oE '^    "[A-Za-z]+": \[' "$REPO_ROOT/claude/.claude/settings.json
 
 section "commit por slice: el turno no cierra con el slice sin commitear"
 # I1 e I2 del examen: cero commits en los 6 runs de I1 y en los 3 del brazo
-# inline de I2. Los únicos que commitearon fueron los orquestados, con
-# verify-phase-close.sh activo. La prosa lleva escrita desde siempre en
-# AGENTS.md y no basta; el hook sí.
+# inline de I2. Los únicos que commitearon fueron los orquestados, que entonces
+# tenían un hook de SubagentStop vigilando, hoy retirado. La prosa lleva escrita
+# desde siempre en AGENTS.md y no basta; el hook sí.
 SLICE="$HOOKS/verify-slice-commit.sh"
 
 # Registro de una edición del agente sobre un fichero.

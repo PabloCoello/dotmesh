@@ -162,17 +162,23 @@ The agent system has two layers, identical in concept across the three tools.
 - **Seven subagents** — the workers a persona delegates to, never switched into by
   hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
-  situation, not on the user naming them. Five hooks are the safety net under
+  situation, not on the user naming them. Four hooks are the safety net under
   the contract. `remind-load-skills` and `remind-review-gate` gate a subagent
-  before it commits. `verify-phase-close` fires on `SubagentStop` and hands the
-  orchestrator the state of the working tree plus the last commits, so a phase
-  is accepted against the repository rather than against the subagent’s own
-  summary. `close-review-gate` and `verify-slice-commit` fire on `Stop`, which
-  only the principal reaches: the first refuses to close a turn that left a gate
-  unharvested or a `blocker` unnamed, the second one that left an edited file
-  uncommitted. Of the five, only three ever block: the two `Stop` hooks, once per
-  session, and `remind-review-gate` inside a subagent, once per task. The rest
-  inject context and step aside. A hook that loops is worse than no hook.
+  before it commits. `close-review-gate` and `verify-slice-commit` fire on
+  `Stop`, which only the principal reaches: the first refuses to close a turn
+  that left a gate unharvested or a `blocker` unnamed, the second one that left
+  an edited file uncommitted. Of the four, three ever block: the two `Stop`
+  hooks, once per session, and `remind-review-gate` inside a subagent, once per
+  task. A hook that loops is worse than no hook, and there used to be a fifth
+  that proved it: `verify-phase-close` returned `additionalContext` on
+  `SubagentStop` to hand the orchestrator the state of the tree. That field does
+  not reach the orchestrator. For `Stop` and `SubagentStop` it is feedback that
+  continues the conversation, so it re-invoked the subagent until the runtime cap
+  of eight ended the turn. Measured across the whole transcript corpus on
+  2026-09-13: 68 subagents finished with about eight extra turns, and the real
+  summary was buried under an `Ok.` or a bare `.` that the orchestrator received
+  in its place. So an orchestrator that wants the state of the repository after a
+  phase reads it with `git log` and `git status`, and never through a hook.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
