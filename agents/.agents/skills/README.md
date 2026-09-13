@@ -53,6 +53,7 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 | `anti-ai-style` | Para revisar o redactar textos evitando estilo genérico de IA. |
 | `castellano-peninsular` | Para textos en español peninsular formal. |
 | `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |
+| `flow-artifacts` | Para las fases interactivas del flujo (interrogar un plan con tres o más preguntas cerradas e independientes, revisar una spec, informar de resultados medidos, seguir una tanda larga): publica una página de artifact en claude.ai con la paleta dotmesh y la persona contesta allí con un clic o un comentario anclado. Solo Claude Code, porque necesita la herramienta Artifact; se carga junto a `artifact-design`. |
 | `herdr` | Para controlar herdr desde dentro de un pane: workspaces, tabs, splits, lectura de panes vecinos y esperas (`herdr wait`). Solo actúa dentro de herdr (`HERDR_ENV=1`). Snapshot vendorizado de [ogulcancelik/herdr](https://github.com/ogulcancelik/herdr) (commit `6cbdba434fd1`, 2026-05-19); se actualiza a mano desde el upstream, no con `npx skills add`. |
 | `structured-search` | Para búsqueda estructural con `ast-grep` cuando la forma sintáctica importa más que el texto. `ast-grep` es opcional. |
 
