@@ -90,10 +90,17 @@ enseñó que el gate de revisión lo produce el hook, no la prosa.
 | `close-review-gate.sh` | al cerrar el turno el principal | no deja cerrar con un gate lanzado y sin cosechar, ni con un `blocker` que el cierre no nombra |
 | `verify-slice-commit.sh` | al cerrar el turno el principal | no deja cerrar con un fichero que la sesión ha editado y sigue sin commitear |
 
-Los dos últimos van en `Stop`, que solo alcanza al principal: los subagentes
-paran por `SubagentStop`. Bloquean una vez y se apartan, porque un hook que
-entra en bucle es peor que no tenerlo. La medición que los motiva está en
-`.ai/tasks/2026-08-31-examen-flujo-maker/` (off-git).
+Los dos últimos van en `Stop`, que solo alcanza al principal. Bloquean una vez y
+se apartan, porque un hook que entra en bucle es peor que no tenerlo. La
+medición que los motiva está en `.ai/tasks/2026-08-31-examen-flujo-maker/`
+(off-git).
+
+En `SubagentStop` no hay ninguno, y es deliberado. Un hook ahí solo puede
+devolver `additionalContext`, que no llega al orquestador: continúa la
+conversación del propio subagente. Hubo uno, `verify-phase-close.sh`, y lo que
+hacía era reinvocar al subagente hasta el tope del runtime y sepultar el resumen
+que el orquestador esperaba. El estado del árbol tras una fase se lee con
+`git log` y `git status`, no por un hook.
 
 En OpenCode el equivalente son los permisos por frontmatter de cada agente; en
 Codex, el sandbox y las aprobaciones. La tabla de paridad completa está en

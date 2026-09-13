@@ -628,17 +628,37 @@ else
   pass "la plantilla no registra ningún hook en SubagentStop"
 fi
 
-# La propiedad, no solo el fichero: los dos hooks de Stop que sí siguen
-# registrados cortan el turno con exit 2 y no inyectan contexto que lo continúe.
-# Se miran solo las líneas de código: los dos nombran el campo en su cabecera
-# para explicar por qué no lo usan, y eso es documentación, no emisión.
-for _h in close-review-gate verify-slice-commit; do
-  if sed -E 's/^[[:space:]]*#.*$//' "$HOOKS/$_h.sh" | grep -q 'additionalContext'; then
-    fail "$_h.sh emite additionalContext en Stop: continuaría la conversación"
-  else
-    pass "$_h.sh no emite additionalContext"
+# La propiedad, no solo el fichero: un hook de cierre corta el turno con exit 2 y
+# no inyecta contexto que lo continúe. La lista sale de settings.json, no de
+# nombres escritos aquí: así un hook de Stop que se registre mañana entra en la
+# comprobación sin que nadie se acuerde de añadirlo. Se miran solo las líneas de
+# código, porque los dos actuales nombran el campo en su cabecera para explicar
+# por qué no lo usan, y eso es documentación, no emisión.
+#
+# `additionalContext` sí es legítimo en SessionStart, que es para lo que existe;
+# por eso la propiedad se acota a los hooks registrados en Stop.
+_stop_hooks=$(jq -r '.hooks.Stop // [] | .[].hooks[]?.command' \
+  "$REPO_ROOT/claude/.claude/settings.json" 2>/dev/null \
+  | sed -E 's/[[:space:]].*$//' | xargs -r -n1 basename | sort -u)
+
+if [ -z "$_stop_hooks" ]; then
+  fail "no se ha podido leer ningún hook de Stop de settings.json"
+else
+  pass "hooks de Stop leídos de settings.json: $(echo "$_stop_hooks" | tr '\n' ' ')"
+fi
+
+while IFS= read -r _h; do
+  [ -n "$_h" ] || continue
+  if [ ! -f "$HOOKS/$_h" ]; then
+    fail "settings.json registra $_h en Stop y no está en $HOOKS"
+    continue
   fi
-done
+  if sed -E 's/^[[:space:]]*#.*$//' "$HOOKS/$_h" | grep -q 'additionalContext'; then
+    fail "$_h emite additionalContext en Stop: continuaría la conversación"
+  else
+    pass "$_h no emite additionalContext"
+  fi
+done <<< "$_stop_hooks"
 
 section "guardarraíl: dónde acaba el cuerpo de un heredoc"
 # La propiedad que importa: quitar el cuerpo no puede tragarse el resto del
