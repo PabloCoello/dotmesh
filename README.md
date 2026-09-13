@@ -303,4 +303,6 @@ make clean          # vacía ~/dotfiles-backup
 - [docs/INSTALL.md](docs/INSTALL.md) — guía de instalación detallada.
 - [docs/SECRETS.md](docs/SECRETS.md) — tokens y cómo cargarlos.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problemas comunes.
+- [docs/adr/README.md](docs/adr/README.md) — decisiones de configuración, lo descartado y qué lo reabriría.
+- [docs/RESERVAS-AUDITORIA.md](docs/RESERVAS-AUDITORIA.md) — afirmaciones de la auditoría externa que no se sostienen tal como están escritas.
 - [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md) — flujo de los agentes y comandos.
