@@ -151,8 +151,8 @@ Además guarda su estado en `~/.local/state/terminal-browser/`.
 1. **Pane en negro.** Falta `kitty_graphics = true` en herdr, o el terminal que hospeda
    herdr no admite gráficos de kitty. Ghostty sí los admite.
 2. **Dentro del sandbox de Bash de Claude Code no funciona**, porque `terminal-browser`
-   usa sockets locales que la caja bloquea. El agente lo lanza fuera del sandbox,
-   comando a comando.
+   escribe su estado en `~/.local/share` en cada llamada, también en `ls`, y la caja no
+   deja escribir ahí. El agente lo lanza fuera del sandbox, comando a comando.
 3. **Stow plegado.** Si `~/.agents` o `~/.agents/skills` es un symlink al repo (Stow los
    pliega cuando no existían), el `setup` crea el enlace de la skill dentro de
    `agents/.agents/skills/`. Aparece como fichero sin seguimiento y no se commitea. Lo
