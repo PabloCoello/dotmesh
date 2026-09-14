@@ -106,12 +106,18 @@ git update-index --no-skip-worktree codex/.codex/config.toml
 
 ### Plugins no se cargan
 
-Comprueba que [claude/.claude/settings.json](../claude/.claude/settings.json)
-contiene tus marketplaces y plugins. Tras editar:
+Los plugins son una clave de máquina y viven en `~/.claude/settings.json`, no en
+la plantilla del repo: `settings.json` no se stowea (está en
+`claude/.stow-local-ignore`), así que `make restow` no lo toca. Edita
+`enabledPlugins` y `extraKnownMarketplaces` en tu fichero y reinicia Claude Code.
+
+La plantilla del repo solo aporta las claves que son suyas: `hooks`,
+`permissions.deny` y `sandbox`. Si añadiste un hook o una regla deny al repo y
+esta máquina no los tiene:
 
 ```bash
-make restow                                    # solo si has cambiado el repo
-# Reinicia Claude Code.
+make sync-claude-settings   # fusiona esas tres claves; deja copia previa
+# Reinicia las sesiones de Claude abiertas.
 ```
 
 ## Backups

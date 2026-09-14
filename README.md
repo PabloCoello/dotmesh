@@ -270,7 +270,7 @@ make stow        # crea los symlinks
 make unstow      # elimina los symlinks
 make restow      # unstow + stow (tras añadir o quitar ficheros del repo)
 make link-skills # crea ~/.claude/skills -> ~/.agents/skills (idempotente)
-make sync-claude-hooks # lleva el bloque hooks de la plantilla a ~/.claude/settings.json
+make sync-claude-settings # lleva hooks, permissions.deny y sandbox de la plantilla a ~/.claude/settings.json
 make vendor-check # comprueba metadatos upstream de componentes vendorizados
 make health         # comprueba binarios
 make opencode-doctor # diagnóstico estático de OpenCode
@@ -303,4 +303,6 @@ make clean          # vacía ~/dotfiles-backup
 - [docs/INSTALL.md](docs/INSTALL.md) — guía de instalación detallada.
 - [docs/SECRETS.md](docs/SECRETS.md) — tokens y cómo cargarlos.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problemas comunes.
+- [docs/adr/README.md](docs/adr/README.md) — decisiones de configuración, lo descartado y qué lo reabriría.
+- [docs/RESERVAS-AUDITORIA.md](docs/RESERVAS-AUDITORIA.md) — afirmaciones de la auditoría externa que no se sostienen tal como están escritas.
 - [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md) — flujo de los agentes y comandos.

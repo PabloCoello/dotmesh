@@ -50,6 +50,29 @@ sobre este archivo.
   fuera de banda. Los servidores MCP reciben secretos por variables de entorno, no
   por configuración commiteada.
 
+## Sandbox de Bash
+
+Activo en toda la máquina desde el 13-09-2026 (`sandbox.enabled` en
+`~/.claude/settings.json`). Con `defaultMode: bypassPermissions` es el único
+freno real que queda, así que no lo esquives por comodidad.
+
+- **Dentro de la caja solo se escribe** en el directorio de trabajo, el temporal
+  de sesión y `~/.npm`. El resto de `$HOME` no, aunque el comando parezca
+  inofensivo. Para temporales usa `$TMPDIR`, nunca `/tmp` a pelo.
+- **Cuatro comandos corren fuera** (`excludedCommands`): `stow` y `make`, que
+  escriben por todo `$HOME` cuando instalan dotfiles; `herdr`, que necesita su
+  socket unix; y `gh`, que dentro de la caja pierde el token del llavero y se
+  degrada a anónimo sin decirlo.
+- **La exclusión vale para el comando que lanzas, no para lo que ese comando
+  lance.** Dentro de un script todo hereda la caja. Por eso un harness que
+  arranca sesiones headless se corre por su target de `make`, no llamando al
+  script: un `claude -p` anidado dentro de la caja falla con «Not logged in».
+- **`dangerouslyDisableSandbox` solo tras un fallo con evidencia** (`Operation
+  not permitted`, socket denegado, ruta fuera de lo permitido), y comando a
+  comando. No lo actives preventivamente ni lo arrastres al siguiente.
+- Si algo se sale de la caja de forma recurrente, se apunta y se decide si entra
+  en la configuración. No se resuelve abriendo la escotilla cada vez.
+
 ## Recuperación de errores de herramientas
 
 - Carga `tool-error-recovery` antes de reintentar una herramienta fallida. Como

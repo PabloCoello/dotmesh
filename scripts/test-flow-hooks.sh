@@ -163,7 +163,7 @@ section "recordatorio de skills: sintaxis y una vez por agente"
 if bash -n "$SKILLS"; then pass "remind-load-skills.sh compila"; else fail "remind-load-skills.sh no compila"; fi
 
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
-msg=$(run_skills Write /tmp/x.txt "" "$td")
+msg=$(run_skills Write /tmp/x.md "" "$td")
 [ -n "$msg" ] && pass "la primera escritura avisa" || fail "la primera escritura no avisó"
 msg=$(run_skills Write /tmp/y.txt "" "$td")
 [ -z "$msg" ] && pass "la segunda escritura del mismo agente calla" || fail "avisó dos veces al mismo agente"
@@ -185,10 +185,101 @@ for cmd in 'ls -la' 'git status --porcelain' 'grep -r foo .' 'echo hola > /dev/n
   [ -z "$msg" ] && pass "no escribe: $cmd" || fail "gastó el aviso en un comando de lectura: $cmd"
 done
 
+section "recordatorio de skills: prosa y código reciben avisos distintos"
+# El aviso único que se daba antes nombraba las tres pistas a la vez, así que
+# escribir un .sh pedía cargar las skills de redacción. Medido el 2026-09-12:
+# 77 de las 251 sesiones que cargaron anti-ai-style no escribieron prosa.
+nombra() { printf '%s' "$1" | grep -q "$2"; }
+
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+msg=$(run_skills Write /tmp/informe.md "" "$td")
+nombra "$msg" anti-ai-style && pass "un .md nombra anti-ai-style" \
+  || fail "un .md no nombró anti-ai-style"
+nombra "$msg" castellano-peninsular && pass "un .md nombra castellano-peninsular" \
+  || fail "un .md no nombró castellano-peninsular"
+nombra "$msg" code-simplification && fail "un .md arrastró la puerta YAGNI" \
+  || pass "un .md no nombra la puerta YAGNI"
+
+# Mismo agente, otra clase: el marcador de prosa no puede silenciar al código.
+msg=$(run_skills Write /tmp/deploy.sh "" "$td")
+nombra "$msg" code-simplification && pass "un .sh del mismo agente nombra la puerta YAGNI" \
+  || fail "el marcador de prosa silenció el aviso de código"
+nombra "$msg" anti-ai-style && fail "un .sh recibió las skills de redacción" \
+  || pass "un .sh no nombra las skills de redacción"
+
+msg=$(run_skills Write /tmp/otro.md "" "$td")
+[ -z "$msg" ] && pass "el segundo documento del mismo agente calla" \
+  || fail "avisó dos veces por prosa al mismo agente"
+
+# Por Bash no hay campo con la ruta: se clasifica por el destino de la escritura.
+msg=$(run_skills Bash 'cat > notas.md')
+nombra "$msg" anti-ai-style && pass "una redirección a .md se clasifica como prosa" \
+  || fail "una redirección a .md no recibió el aviso de redacción"
+msg=$(run_skills Bash 'cat > deploy.sh')
+nombra "$msg" code-simplification && pass "una redirección a .sh nombra la puerta YAGNI" \
+  || fail "una redirección a .sh se quedó sin aviso de código"
+nombra "$msg" anti-ai-style && fail "una redirección a .sh recibió el par de redacción" \
+  || pass "una redirección a .sh no nombra las skills de redacción"
+
+# La trampa que motiva clasificar por destino y no por el comando entero: un
+# heredoc que MENCIONA un .md mientras escribe un .sh.
+msg=$(run_skills Bash 'cat > hook.sh <<EOF
+ver AGENTS.md y docs/FLUJO-MAKER.md
+EOF')
+nombra "$msg" anti-ai-style && fail "el .md del heredoc coló la escritura como prosa" \
+  || pass "un heredoc que menciona un .md sigue siendo código"
+
+# Un punto y coma detrás del destino no debe despistar a la clasificación.
+msg=$(run_skills Bash 'printf x > doc.md; git add .')
+nombra "$msg" anti-ai-style && pass "el destino se corta en el punto y coma" \
+  || fail "un destino seguido de ; no se clasificó como prosa"
+
+# El destino de tee y de sed -i es la última palabra, no una redirección.
+msg=$(run_skills Bash 'tee -a bitacora.md')
+nombra "$msg" anti-ai-style && pass "el destino de tee se clasifica como prosa" \
+  || fail "tee a un .md no se clasificó como prosa"
+
+# El marcador por clase también separa las dos clases llegando por Bash.
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+run_skills Bash 'cat > uno.md' "" "$td" >/dev/null
+msg=$(run_skills Bash 'cat > dos.sh' "" "$td")
+nombra "$msg" code-simplification && pass "por Bash, prosa y código no comparten marcador" \
+  || fail "por Bash, el marcador de prosa silenció el aviso de código"
+
+section "recordatorio de skills: nunca rompe la herramienta que lo dispara"
+# La cabecera del hook promete que nunca bloquea. Con dos ramas nuevas y
+# set -euo pipefail, eso hay que comprobarlo y no suponerlo.
+skills_rc() {
+  local tool="$1" arg="$2" input rc=0 td
+  td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+  input=$(jq -nc --arg t "$tool" --arg a "$arg" \
+    '{hook_event_name:"PreToolUse",tool_name:$t,session_id:"sesion-1"}
+     + (if $t == "Bash" then {tool_input:{command:$a}} else {tool_input:{file_path:$a}} end)')
+  printf '%s' "$input" | TMPDIR="$td" bash "$SKILLS" >/dev/null 2>&1 || rc=$?
+  printf '%s' "$rc"
+}
+for caso in "Write:/tmp/informe.md" "Write:/tmp/deploy.sh" "Bash:cat > notas.md" "Bash:ls -la" "Write:"; do
+  t=${caso%%:*}; a=${caso#*:}
+  [ "$(skills_rc "$t" "$a")" -eq 0 ] && pass "sale con 0: $t ${a:-(sin ruta)}" \
+    || fail "salió con estado distinto de cero: $t ${a:-(sin ruta)}"
+done
+
+# notebook_path es la otra ruta que lee el hook, y no la cubría ninguna prueba.
+nb=$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"NotebookEdit",session_id:"sesion-1",
+              tool_input:{notebook_path:"/tmp/analisis.ipynb"}}')
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+msg=$(printf '%s' "$nb" | TMPDIR="$td" bash "$SKILLS" 2>/dev/null | jq -r '.hookSpecificOutput.additionalContext // ""')
+nombra "$msg" code-simplification && pass "un notebook se clasifica como código" \
+  || fail "el hook no leyó notebook_path"
+
 section "registro en la plantilla de settings.json"
 tpl="$REPO_ROOT/claude/.claude/settings.json"
 n=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | test("remind-load-skills"))] | length' "$tpl")
 [ "$n" -ge 1 ] && pass "remind-load-skills.sh está registrado en el matcher Bash" || fail "falta en el matcher Bash de la plantilla"
+# La vía principal de la clasificación por destino son las herramientas de
+# edición, así que su matcher también tiene que estar registrado.
+n=$(jq '[.hooks.PreToolUse[] | select(.matcher | test("Write")) | .hooks[] | select(.command | test("remind-load-skills"))] | length' "$tpl")
+[ "$n" -ge 1 ] && pass "remind-load-skills.sh está registrado en el matcher de edición" || fail "falta en el matcher Write|Edit de la plantilla"
 
 section "métrica: un commit bloqueado no es un commit"
 # Con el gate bloqueando, la skill se carga entre el intento bloqueado y el
@@ -212,10 +303,10 @@ case "$out" in
   *) fail "la métrica no descuenta el intento bloqueado: $(printf '%s' "$out" | grep code-review || true)" ;;
 esac
 
-section "propagación: el bloque hooks de la plantilla llega al vivo"
+section "propagación: las claves del repo llegan de la plantilla al vivo"
 # Sin esto, un hook nuevo en el repo no alcanza jamás a una máquina ya
 # instalada: settings.json se siembra una vez y nunca se sobreescribe.
-SYNC="$REPO_ROOT/scripts/sync-claude-hooks.sh"
+SYNC="$REPO_ROOT/scripts/sync-claude-settings.sh"
 SYNC_HOME="$TMP/home"
 mkdir -p "$SYNC_HOME/.claude"
 
@@ -262,9 +353,17 @@ cp "$vivo_inicial" "$dst"
 
 run_sync "$dst" --check && rc=0 || rc=$?
 [ "$rc" = 1 ] && pass "--check detecta la deriva (rc=1)" || fail "--check devolvió rc=$rc con deriva"
-grep -q '+ PreToolUse \[Bash\] ~/.claude/hooks/dos.sh' "$TMP/sync_out" \
+grep -q '+ hooks PreToolUse \[Bash\] .*dos\.sh' "$TMP/sync_out" \
   && pass "--check nombra el hook que falta" \
   || fail "--check no nombra el hook que falta: $(cat "$TMP/sync_out")"
+# El hook se compara entero, no solo por su command: un timeout nuevo en la
+# plantilla es deriva real y el informe tiene que verlo.
+jq '.hooks.PreToolUse[0].hooks[0].timeout = 15' "$tpl" > "$TMP/tpl-timeout.json"
+HOME="$SYNC_HOME" CLAUDE_SETTINGS_SRC="$TMP/tpl-timeout.json" CLAUDE_SETTINGS_DST="$dst" \
+  bash "$SYNC" --check > "$TMP/sync_out" 2>&1 && rc=0 || rc=$?
+[ "$rc" = 1 ] && grep -q '"timeout":15' "$TMP/sync_out" \
+  && pass "--check ve un timeout nuevo, no solo un comando nuevo" \
+  || fail "un timeout nuevo pasó por alineado: rc=$rc, $(cat "$TMP/sync_out")"
 diff -q "$vivo_inicial" "$dst" >/dev/null \
   && pass "--check no escribe" \
   || fail "--check modificó el destino"
@@ -307,6 +406,88 @@ run_sync "$SYNC_HOME/.claude/roto.json" --check && rc=0 || rc=$?
 cp "$tpl" "$dst"
 run_sync "$dst" --check && rc=0 || rc=$?
 [ "$rc" = 0 ] && pass "sin deriva, --check sale 0" || fail "sin deriva --check dio rc=$rc"
+
+# Las otras dos claves del repo. permissions.deny es política y sandbox es
+# confinamiento: si no llegan solas, dependen de que alguien se acuerde.
+tpl_perm="$TMP/plantilla-permisos.json"
+cat > "$tpl_perm" <<'JSON'
+{
+  "permissions": { "defaultMode": "bypassPermissions", "deny": ["Read(./.env)"] },
+  "sandbox": { "enabled": true },
+  "hooks": { "Stop": [ { "matcher": "*", "hooks": [ { "type": "command", "command": "~/x.sh" } ] } ] }
+}
+JSON
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto" }, "model": "opus", "hooks": {} }
+JSON
+sync_perm() {
+  HOME="$SYNC_HOME" CLAUDE_SETTINGS_SRC="$1" CLAUDE_SETTINGS_DST="$dst" \
+    bash "$SYNC" "${2:-}" > "$TMP/sync_out" 2>&1
+}
+# Que la fusión funcione no basta: si --check no ve la deriva de estas dos
+# claves, make health dice "alineados" y nadie corre la fusión nunca.
+sync_perm "$tpl_perm" --check && rc=0 || rc=$?
+[ "$rc" = 1 ] && grep -q '+ permissions.deny Read(\./\.env)' "$TMP/sync_out" \
+  && pass "--check nombra la regla deny que falta" \
+  || fail "--check no vio la deriva de permissions.deny: rc=$rc, $(cat "$TMP/sync_out")"
+grep -q '+ sandbox.enabled true' "$TMP/sync_out" \
+  && pass "--check nombra el sandbox que falta" \
+  || fail "--check no vio la deriva de sandbox: $(cat "$TMP/sync_out")"
+
+sync_perm "$tpl_perm" && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "la fusión con permisos devolvió rc=$rc: $(cat "$TMP/sync_out")"
+[ "$(jq -r '.permissions.deny[0]' "$dst")" = "Read(./.env)" ] \
+  && pass "la fusión propaga permissions.deny" || fail "no propagó permissions.deny"
+[ "$(jq -r '.sandbox.enabled' "$dst")" = true ] \
+  && pass "la fusión propaga sandbox" || fail "no propagó sandbox"
+# defaultMode es de la máquina: una puede estar en sandbox y otra en auto mode.
+[ "$(jq -r '.permissions.defaultMode' "$dst")" = auto ] \
+  && pass "la fusión no pisa el defaultMode de la máquina" \
+  || fail "pisó el defaultMode: $(jq -c '.permissions' "$dst")"
+
+# Una clave que la plantilla no trae se conserva, y no se anuncia como deriva:
+# el script sincroniza, no borra.
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto", "deny": ["Read(~/.ssh/**)"] },
+  "sandbox": { "enabled": true }, "hooks": {} }
+JSON
+sync_perm "$tpl" --check && rc=0 || rc=$?
+# Positiva primero: sin ella, un script que no informe de nada pasaría las dos
+# siguientes por vacuidad.
+[ "$rc" = 1 ] && grep -q '+ hooks PreToolUse' "$TMP/sync_out" \
+  && pass "informa de la deriva de hooks que sí va a aplicar" \
+  || fail "no informó de la deriva de hooks: rc=$rc, $(cat "$TMP/sync_out")"
+grep -q 'sandbox' "$TMP/sync_out" \
+  && fail "anuncia como deriva una clave que no va a tocar: $(cat "$TMP/sync_out")" \
+  || pass "no anuncia como deriva lo que la plantilla no trae"
+sync_perm "$tpl" && rc=0 || rc=$?
+[ "$rc" = 0 ] || fail "la fusión sin permisos en la plantilla devolvió rc=$rc"
+[ "$(jq -r '.sandbox.enabled' "$dst")" = true ] \
+  && pass "una plantilla sin sandbox no borra el de la máquina" \
+  || fail "borró el sandbox de la máquina"
+[ "$(jq -r '.permissions.deny[0]' "$dst")" = "Read(~/.ssh/**)" ] \
+  && pass "una plantilla sin deny no borra las de la máquina" \
+  || fail "borró las deny de la máquina"
+
+# Dentro de una clave que la plantilla sí trae, reemplaza y no une: es la única
+# forma de poder retirar una regla desde el repo. Queda fijado a propósito.
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto", "deny": ["Read(~/mia.txt)"] }, "hooks": {} }
+JSON
+sync_perm "$tpl_perm" >/dev/null 2>&1 || true
+[ "$(jq -r '.permissions.deny | join(",")' "$dst")" = "Read(./.env)" ] \
+  && pass "la deny local se reemplaza por la del repo, no se une" \
+  || fail "unió las deny en vez de reemplazarlas: $(jq -c '.permissions.deny' "$dst")"
+
+# Una plantilla con permissions pero sin deny tampoco borra las de la máquina.
+jq 'del(.permissions.deny)' "$tpl_perm" > "$TMP/tpl-sin-deny.json"
+cat > "$dst" <<'JSON'
+{ "permissions": { "defaultMode": "auto", "deny": ["Read(~/mia.txt)"] }, "hooks": {} }
+JSON
+sync_perm "$TMP/tpl-sin-deny.json" >/dev/null 2>&1 || true
+[ "$(jq -r '.permissions.deny[0]' "$dst")" = "Read(~/mia.txt)" ] \
+  && pass "una plantilla con permissions pero sin deny deja las de la máquina" \
+  || fail "borró las deny con una plantilla que solo trae defaultMode"
 
 # Una plantilla sin bloque hooks no debe vaciar los del vivo: se rechaza antes
 # de tocar nada.
@@ -420,65 +601,109 @@ GUARD_CWD="$huerfano"
 guard_blocks "git -C $repo push origin main" "el destino se resuelve en el repositorio que dice -C"
 GUARD_CWD=""
 
-section "cierre de fase: el orquestador recibe con qué contrastar el resumen"
-# 5.6 del diagnóstico: la fase se daba por commiteada leyendo el resumen del
-# subagente, sin mirar el repositorio.
-CLOSE="$HOOKS/verify-phase-close.sh"
+section "SubagentStop: ningún hook devuelve contexto que reinvoque al subagente"
+# Aquí vivía `verify-phase-close.sh`, que devolvía `additionalContext` en
+# SubagentStop para que el orquestador contrastara el resumen de la fase contra
+# el repositorio. Retirado el 13-09-2026: ese campo no llega al orquestador.
+# Para Stop y SubagentStop el binario lo define como "feedback for the model;
+# the conversation continues so the model can act on it", así que reinvocaba al
+# propio subagente, y sin marcador lo hacía en cada intento de cierre hasta el
+# tope `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP ?? 8`.
+#
+# Medido sobre el corpus entero de transcripts: 68 subagentes acabaron con unos
+# ocho turnos de más, y el resumen bueno quedó sepultado bajo un «Ok.» o un «.»
+# que es lo que el orquestador recibía en su lugar. El contraste con el
+# repositorio lo hace ahora el orquestador con `git log` y `git status`.
+#
+# Esta sección impide que vuelva, por el hook concreto y por la propiedad.
 
-run_close() {
-  jq -nc --arg t "$1" --arg d "$2" \
-    '{hook_event_name:"SubagentStop",session_id:"s1",agent_id:"a1",agent_type:$t,cwd:$d}' \
-    | bash "$CLOSE" 2>/dev/null
-}
-close_context() { run_close "$@" | jq -r '.hookSpecificOutput.additionalContext // empty'; }
+[ ! -e "$HOOKS/verify-phase-close.sh" ] \
+  && pass "verify-phase-close.sh ya no está en el árbol" \
+  || fail "verify-phase-close.sh ha vuelto"
 
-fase="$TMP/repo-fase"
-git init -q -b main "$fase"
-git -C "$fase" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "primera fase"
-
-out=$(close_context build "$fase")
-case "$out" in
-  *"árbol de trabajo limpio"*) pass "con el árbol limpio lo dice" ;;
-  *) fail "árbol limpio, contexto: $out" ;;
-esac
-case "$out" in
-  *"primera fase"*) pass "lista los últimos commits" ;;
-  *) fail "no lista commits: $out" ;;
-esac
-
-printf 'a\n' > "$fase/pendiente.txt"
-printf 'b\n' > "$fase/otro.txt"
-out=$(close_context build "$fase")
-case "$out" in
-  *"2 fichero(s) sin commitear"*) pass "cuenta los ficheros sin commitear" ;;
-  *) fail "no cuenta los pendientes: $out" ;;
-esac
-case "$out" in
-  *pendiente.txt*) pass "nombra los ficheros sin commitear" ;;
-  *) fail "no nombra los pendientes: $out" ;;
-esac
-
-# Solo para build: review y security no commitean, y el aviso sería ruido.
-[ -z "$(close_context review "$fase")" ] \
-  && pass "no dice nada de un subagente que no commitea" \
-  || fail "habla de un agente que no es build"
-
-# Fuera de un repositorio no hay nada que afirmar.
-[ -z "$(close_context build "$TMP")" ] \
-  && pass "fuera de un repositorio se calla" \
-  || fail "habla fuera de un repositorio"
-[ -z "$(close_context build "$TMP/no-existe")" ] \
-  && pass "con un cwd inexistente se calla" \
-  || fail "habla con un cwd inexistente"
-
-# El hook tiene que estar registrado, o no corre nunca.
-if jq -e '.hooks.SubagentStop[] | select(.matcher == "build") | .hooks[]
-          | select(.command | test("verify-phase-close"))' \
-     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null; then
-  pass "verify-phase-close.sh está registrado en SubagentStop con matcher build"
+if jq -e '.hooks | has("SubagentStop")' \
+     "$REPO_ROOT/claude/.claude/settings.json" >/dev/null 2>&1; then
+  fail "la plantilla registra hooks en SubagentStop, que reinvocan al subagente"
 else
-  fail "verify-phase-close.sh no está registrado en la plantilla"
+  pass "la plantilla no registra ningún hook en SubagentStop"
 fi
+
+# La propiedad, no solo el fichero: un hook de cierre corta el turno con exit 2 y
+# no inyecta contexto que lo continúe. La lista sale de settings.json, no de
+# nombres escritos aquí: así un hook de Stop que se registre mañana entra en la
+# comprobación sin que nadie se acuerde de añadirlo. Se miran solo las líneas de
+# código, porque los dos actuales nombran el campo en su cabecera para explicar
+# por qué no lo usan, y eso es documentación, no emisión.
+#
+# `additionalContext` sí es legítimo en SessionStart, que es para lo que existe;
+# por eso la propiedad se acota a los hooks registrados en Stop.
+_stop_hooks=$(jq -r '.hooks.Stop // [] | .[].hooks[]?.command' \
+  "$REPO_ROOT/claude/.claude/settings.json" 2>/dev/null \
+  | sed -E 's/[[:space:]].*$//' | xargs -r -n1 basename | sort -u)
+
+if [ -z "$_stop_hooks" ]; then
+  fail "no se ha podido leer ningún hook de Stop de settings.json"
+else
+  pass "hooks de Stop leídos de settings.json: $(echo "$_stop_hooks" | tr '\n' ' ')"
+fi
+
+while IFS= read -r _h; do
+  [ -n "$_h" ] || continue
+  if [ ! -f "$HOOKS/$_h" ]; then
+    fail "settings.json registra $_h en Stop y no está en $HOOKS"
+    continue
+  fi
+  if sed -E 's/^[[:space:]]*#.*$//' "$HOOKS/$_h" | grep -q 'additionalContext'; then
+    fail "$_h emite additionalContext en Stop: continuaría la conversación"
+  else
+    pass "$_h no emite additionalContext"
+  fi
+done <<< "$_stop_hooks"
+
+section "sandbox: la postura de la plantilla, no solo que la clave exista"
+# El sandbox es el único guardarraíl que queda cuando `defaultMode` es
+# `bypassPermissions`, que es como corre esta máquina. La propagación ya se
+# comprueba más arriba; aquí se fija la postura, porque cada agujero abierto es
+# una decisión que alguien tomó y debería costar tocar una prueba.
+#
+# Medido el 13-09-2026 sobre esta máquina: dentro de la caja solo se puede
+# escribir en el directorio de trabajo, el temporal de sesión y lo que conceda
+# `filesystem.allowWrite`.
+_tpl="$REPO_ROOT/claude/.claude/settings.json"
+
+[ "$(jq -r '.sandbox.enabled' "$_tpl")" = true ] \
+  && pass "la plantilla enciende el sandbox" \
+  || fail "la plantilla no enciende el sandbox"
+
+# La escotilla queda abierta a propósito hasta que una semana de uso diga si se
+# puede cerrar, pero escrita: heredarla del valor por defecto no es una postura.
+jq -e '.sandbox | has("allowUnsandboxedCommands")' "$_tpl" >/dev/null 2>&1 \
+  && pass "la escotilla está declarada de forma explícita" \
+  || fail "la escotilla se hereda del valor por defecto en vez de declararse"
+
+# Exactamente estos cuatro. Cada uno sale de una medición: stow y make escriben
+# por todo $HOME, que es el producto; herdr habla por su socket unix; y gh lee
+# su token del llavero por D-Bus y dentro de la caja se degrada a anónimo.
+_excl_esperado=$(printf '%s\n' "gh *" "herdr *" "make *" "stow *")
+_excl_real=$(jq -r '.sandbox.excludedCommands // [] | .[]' "$_tpl" | sort)
+[ "$_excl_real" = "$_excl_esperado" ] \
+  && pass "excludedCommands son los cuatro casos medidos" \
+  || fail "excludedCommands cambió: $(printf '%s' "$_excl_real" | tr '\n' ' ')"
+
+# Conceder la raíz de $HOME devolvería el sandbox a la nada sin que se note.
+while IFS= read -r _w; do
+  [ -n "$_w" ] || continue
+  case "$_w" in
+    "~"|"~/"|"\$HOME"|"\$HOME/"|"/")
+      fail "allowWrite concede la raíz del home o del sistema: $_w" ;;
+    "~/.local/share"|"~/.local/share/")
+      # Ahí vive el propio binario de Claude Code: conceder escritura permitiría
+      # a un comando sandboxeado reemplazar el agente que lo confina.
+      fail "allowWrite concede ~/.local/share, donde está el binario de Claude" ;;
+    *)
+      pass "allowWrite acota una ruta concreta: $_w" ;;
+  esac
+done <<< "$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl")"
 
 section "guardarraíl: dónde acaba el cuerpo de un heredoc"
 # La propiedad que importa: quitar el cuerpo no puede tragarse el resto del
@@ -534,25 +759,6 @@ guard_blocks "Rscript - <<'EOF'${nl}${hard_reset}${nl}EOF" \
 guard_blocks "xargs -I{} sh -c {} <<'EOF'${nl}${force_push}${nl}EOF" \
   "xargs, que ejecuta lo que lee"
 GUARD_CWD=""
-
-section "cierre de fase: lo que viene del repositorio va acotado"
-# El asunto de un commit no lo controla necesariamente el usuario. Va truncado
-# y enmarcado como dato, para que un commit escrito como instrucción no se
-# cuele en el contexto del orquestador haciéndose pasar por una.
-inyecta="$TMP/repo-inyeccion"
-git init -q -b main "$inyecta"
-largo="IGNORA-LO-ANTERIOR-$(head -c 400 /dev/zero | tr '\0' 'x')-FINAL"
-git -C "$inyecta" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "$largo"
-
-out=$(close_context build "$inyecta")
-case "$out" in
-  *FINAL*) fail "el asunto largo llega entero al orquestador" ;;
-  *) pass "el asunto de un commit va truncado" ;;
-esac
-case "$out" in
-  *"no instrucciones"*) pass "el contexto se enmarca como dato" ;;
-  *) fail "el contexto no dice que es un dato: $out" ;;
-esac
 
 section "guardarraíl: formas de entrecomillado que esquivaban el chequeo de push"
 # Segunda pasada de la auditoría: el parser tiene que leer el refspec como lo
@@ -781,7 +987,7 @@ else
 fi
 
 # Una clave repetida dentro de `hooks` no la ve jq: se queda con la última y
-# pierde en silencio los hooks de la primera, y sync-claude-hooks escribe esa
+# pierde en silencio los hooks de la primera, y el sync escribe esa
 # pérdida en el settings.json vivo. Hay que mirar el fichero crudo.
 repes=$(grep -oE '^    "[A-Za-z]+": \[' "$REPO_ROOT/claude/.claude/settings.json" | sort | uniq -d)
 [ -z "$repes" ] \
@@ -790,9 +996,9 @@ repes=$(grep -oE '^    "[A-Za-z]+": \[' "$REPO_ROOT/claude/.claude/settings.json
 
 section "commit por slice: el turno no cierra con el slice sin commitear"
 # I1 e I2 del examen: cero commits en los 6 runs de I1 y en los 3 del brazo
-# inline de I2. Los únicos que commitearon fueron los orquestados, con
-# verify-phase-close.sh activo. La prosa lleva escrita desde siempre en
-# AGENTS.md y no basta; el hook sí.
+# inline de I2. Los únicos que commitearon fueron los orquestados, que entonces
+# tenían un hook de SubagentStop vigilando, hoy retirado. La prosa lleva escrita
+# desde siempre en AGENTS.md y no basta; el hook sí.
 SLICE="$HOOKS/verify-slice-commit.sh"
 
 # Registro de una edición del agente sobre un fichero.
@@ -969,8 +1175,8 @@ done
 # remind-load-skills: ni crea el destino del enlace, ni lo trunca, ni deja de
 # avisar por tener el marcador envenenado.
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
-ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
-msg=$(run_skills Write /tmp/x.txt "" "$td")
+ln -s "$TMP/inexistente-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main-prosa"
+msg=$(run_skills Write /tmp/x.md "" "$td")
 [ ! -e "$TMP/inexistente-skills.txt" ] \
   && pass "remind-load-skills no crea el destino del enlace" \
   || fail "remind-load-skills escribió a través del enlace"
@@ -980,8 +1186,8 @@ msg=$(run_skills Write /tmp/x.txt "" "$td")
 
 td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
 printf 'contenido que no se debe perder\n' > "$TMP/victima-skills.txt"
-ln -s "$TMP/victima-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main"
-run_skills Write /tmp/x.txt "" "$td" >/dev/null
+ln -s "$TMP/victima-skills.txt" "$td/dotmesh-skill-reminder-sesion-1-main-prosa"
+run_skills Write /tmp/x.md "" "$td" >/dev/null
 [ -s "$TMP/victima-skills.txt" ] \
   && pass "remind-load-skills no trunca el destino del enlace" \
   || fail "remind-load-skills truncó el fichero enlazado"

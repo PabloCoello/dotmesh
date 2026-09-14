@@ -174,3 +174,5 @@ cache/
 *.tfstate.*
 .terraform/
 terraform.tfvars
+
+**/.claude/.cc-writes/

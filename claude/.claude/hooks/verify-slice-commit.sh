@@ -5,17 +5,23 @@
 # the working branch as you go, and AGENTS.md says it explicitly does not need
 # the user to ask first. Measured on 2026-09-01/02 (I1 and I2 of the maker-flow
 # exam): zero commits across the six I1 runs and the three inline I2 runs. The
-# only arm that committed was the orchestrated one, where verify-phase-close.sh
-# was watching. The prose has been written all along and does not carry; the
-# hook does.
+# only arm that committed was the orchestrated one, which then had a SubagentStop
+# hook watching (retired on 2026-09-13: its additionalContext re-invoked the
+# subagent instead of reaching the orchestrator). The prose has been written all
+# along and does not carry; the hook does.
 #
 # The check is what this session actually touched: the file paths from its own
 # Write/Edit tool calls, contrasted against git. Looking at the whole tree would
 # fire on dirt that predates the session and belongs to somebody else. Anything
 # git ignores — plans, scratch, AI artefacts — is not a slice.
 #
-# Blocks once per session (additionalContext on Stop reaches an agent that has
-# already decided to stop, so it changes nothing) and fails open everywhere else.
+# Blocks once per session and fails open everywhere else. Blocking is the only
+# option here: `additionalContext` on Stop is documented by the binary as
+# "feedback for the model; the conversation continues so the model can act on
+# it", so it does not annotate a closing turn, it reopens it. A SubagentStop hook
+# that returned it re-invoked its subagent until the runtime cap of eight and
+# buried the summary the orchestrator was waiting for; it was retired on
+# 2026-09-13 for exactly that.
 #
 # Stowed by claude/ to ~/.claude/hooks/ and registered in settings.json under
 # hooks.Stop.
@@ -92,8 +98,8 @@ st=$(git -C "$root" status --porcelain -- "${specs[@]}" 2>/dev/null || true)
 [ -n "$st" ] || exit 0
 
 count=$(printf '%s\n' "$st" | grep -c . || true)
-# The names go into the agent's context, so they are capped and framed as data,
-# the same as verify-phase-close.sh does with commit subjects.
+# The names go into the agent's context, so they are capped and framed as data:
+# a path is read from the repository and is not always the user's to trust.
 dirty=$(printf '%s\n' "$st" | head -5 | sed -E 's/^.{3}//' \
   | cut -c1-60 | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
 [ "$count" -gt 5 ] && dirty="$dirty, …"

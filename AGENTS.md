@@ -25,7 +25,7 @@ make stow        # symlink every package into ~
 make unstow      # remove the symlinks
 make restow      # unstow + stow (run after adding/removing files in a package)
 make link-skills # create ~/.claude/skills -> ~/.agents/skills (idempotent)
-make sync-claude-hooks # push the template's `hooks` block into ~/.claude/settings.json
+make sync-claude-settings # push the template's repo-owned keys into ~/.claude/settings.json
 make gnome-rice  # dotmesh retint of the GNOME desktop (Linux only)
 make clean       # wipe ~/dotfiles-backup/*
 ```
@@ -53,7 +53,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `windows-terminal/` | Windows Terminal `LocalState/settings.json` on the Windows side (WSL only, via `make wsl-terminal`) | dotmesh colour scheme and install script |
 | `collie/` | `~/.config/herdr/plugins/config/herdr.collie/{commands,keys,quick-replies}.toml` (Linux/macOS, via `make collie-install`) | Collie, herdr's mobile bridge: a Bun bridge plus a PWA served over `tailscale serve` that drives herdr panes from a phone, with push when an agent blocks. Answers the `WAIT_FOR_USER` contract away from the desk. Pinned in `scripts/vendor/upstreams.tsv`; see `collie/README.md` |
 
-`claude/.claude/settings.json` is **not** stowed (`claude/.stow-local-ignore`): `make seed-claude-settings` copies it once and never overwrites, so per-machine settings don't show up as uncommitted changes. The cost is that a hook added to the repo never reaches an already-installed machine. `make health` reports that drift and `make sync-claude-hooks` merges **only** the `hooks` key — it registers repo files, so it belongs to the repo; every other key belongs to the machine and is left alone. A copy of the previous file lands in `~/dotfiles-backup/<timestamp>/`.
+`claude/.claude/settings.json` is **not** stowed (`claude/.stow-local-ignore`): `make seed-claude-settings` copies it once and never overwrites, so per-machine settings don't show up as uncommitted changes. The cost is that a hook added to the repo never reaches an already-installed machine. `make health` reports that drift and `make sync-claude-settings` merges **only** the repo-owned keys — `hooks` (it registers repo files), `permissions.deny` (policy, not preference) and `sandbox` (containment cannot depend on remembering). Every other key belongs to the machine and is left alone, `permissions.defaultMode` included; a key the template lacks is left untouched rather than nulled. A copy of the previous file lands in `~/dotfiles-backup/<timestamp>/`.
 
 `Makefile:6` defines `PACKAGES` — keep this list in sync when adding or removing a package directory. `IS_WSL`, computed just below, drives WSL-aware conditional logic in `health`, `vscode-install` and `wsl-terminal`.
 
@@ -77,7 +77,7 @@ The `collie/` package is Linux/macOS-only and intentionally **not** in `PACKAGES
 
 Do **not** create a parallel skill source (e.g. `.opencode/skills/`, an upstream marketplace plugin) without updating the sync story here and in the README.
 
-The daily core pack lives in `agents/.agents/skills/README.md`. `tool-error-recovery` is the shared policy for failed tool calls: at most one retry, only for clearly idempotent reads; no retries for writes, destructive Git/Stow, authenticated network calls, or mutable MCP calls; preserve exit/status and a redacted stderr summary, then stop after a repeated failure. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement the divergent-exploration stance now folded into `grilling`, `idea-refine` and the `maker` persona (the former `debate` agent). `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`. `herdr` is a vendored snapshot of herdr's official agent skill (upstream [ogulcancelik/herdr](https://github.com/ogulcancelik/herdr), commit `6cbdba434fd1`): it lets an agent running inside a herdr pane drive workspaces, tabs, panes and waits through the `herdr` CLI, and self-disables outside herdr (`HERDR_ENV != 1`). Like the agent-state hooks, it is refreshed by hand from upstream, not installed via `npx skills add`. Inside a herdr pane (`HERDR_ENV=1`) the skill owns pane orchestration — load it before splitting panes, running long processes in siblings, or waiting on other agents. In Claude Code a `SessionStart` hook (`remind-herdr-skill.sh`) injects that reminder automatically; OpenCode and Codex rely on this paragraph. `doc-review` is a local addition paired with the mesh-review VS Code extension: it teaches an agent to read the `.ai/review/` JSON sidecars of line-anchored review comments (schema at `agents/.agents/skills/doc-review/schema.json`), act on the document by type and priority, and close the review by marking each comment resolved.
+The daily core pack lives in `agents/.agents/skills/README.md`. `tool-error-recovery` is the shared policy for failed tool calls: at most one retry, only for clearly idempotent reads; no retries for writes, destructive Git/Stow, authenticated network calls, or mutable MCP calls; preserve exit/status and a redacted stderr summary, then stop after a repeated failure. `anti-ai-style` and `castellano-peninsular` are intentional local additions on top of the core pack — keep them. So are the grilling skills (`grilling`, `grill-me`, `grill-with-docs`, `domain-modeling`) and `handoff`, adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). They complement the divergent-exploration stance now folded into `grilling`, `idea-refine` and the `maker` persona (the former `debate` agent). `dotmesh-design` is a further local addition: the personal design system (Paper · Ink · Syntax) packaged as a skill. It carries `disable-model-invocation`, so it applies only when invoked explicitly with `/dotmesh-design`, never automatically. It is a snapshot export that distils the visual language whose source of truth remains `docs/DESIGN.md`. `herdr` is a vendored snapshot of herdr's official agent skill (upstream [ogulcancelik/herdr](https://github.com/ogulcancelik/herdr), commit `6cbdba434fd1`): it lets an agent running inside a herdr pane drive workspaces, tabs, panes and waits through the `herdr` CLI, and self-disables outside herdr (`HERDR_ENV != 1`). Like the agent-state hooks, it is refreshed by hand from upstream, not installed via `npx skills add`. Inside a herdr pane (`HERDR_ENV=1`) the skill owns pane orchestration — load it before splitting panes, running long processes in siblings, or waiting on other agents. In Claude Code a `SessionStart` hook (`remind-herdr-skill.sh`) injects that reminder automatically; OpenCode and Codex rely on this paragraph. `doc-review` is a local addition paired with the mesh-review VS Code extension: it teaches an agent to read the `.ai/review/` JSON sidecars of line-anchored review comments (schema at `agents/.agents/skills/doc-review/schema.json`), act on the document by type and priority, and close the review by marking each comment resolved. `flow-artifacts` is a further local addition, Claude Code only: when a phase of the flow asks the user to read a lot or decide several things at once (grilling three or more independent closed questions, reviewing a long spec, reporting measured results, following a long run) it publishes a claude.ai artifact page in the dotmesh palette. The page opens with a plain-language summary and folds the detail; the user refines it with anchored comments sent to Claude and answers closed choices with a click, which comes back to the session as a republish. Whether a phase gets a page is decided per phase. It layers on the bundled `artifact-design` skill and needs the Artifact tool, so OpenCode and Codex skip it.
 
 ## Skill flow is the default, not a request
 
@@ -162,17 +162,46 @@ The agent system has two layers, identical in concept across the three tools.
 - **Seven subagents** — the workers a persona delegates to, never switched into by
   hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
-  situation, not on the user naming them. Five hooks are the safety net under
+  situation, not on the user naming them. Four hooks are the safety net under
   the contract. `remind-load-skills` and `remind-review-gate` gate a subagent
-  before it commits. `verify-phase-close` fires on `SubagentStop` and hands the
-  orchestrator the state of the working tree plus the last commits, so a phase
-  is accepted against the repository rather than against the subagent’s own
-  summary. `close-review-gate` and `verify-slice-commit` fire on `Stop`, which
-  only the principal reaches: the first refuses to close a turn that left a gate
-  unharvested or a `blocker` unnamed, the second one that left an edited file
-  uncommitted. Of the five, only three ever block: the two `Stop` hooks, once per
-  session, and `remind-review-gate` inside a subagent, once per task. The rest
-  inject context and step aside. A hook that loops is worse than no hook.
+  before it commits. `close-review-gate` and `verify-slice-commit` fire on
+  `Stop`, which only the principal reaches: the first refuses to close a turn
+  that left a gate unharvested or a `blocker` unnamed, the second one that left
+  an edited file uncommitted. Of the four, three ever block: the two `Stop`
+  hooks, once per session, and `remind-review-gate` inside a subagent, once per
+  task. A hook that loops is worse than no hook, and there used to be a fifth
+  that proved it: `verify-phase-close` returned `additionalContext` on
+  `SubagentStop` to hand the orchestrator the state of the tree. That field does
+  not reach the orchestrator. For `Stop` and `SubagentStop` it is feedback that
+  continues the conversation, so it re-invoked the subagent until the runtime cap
+  of eight ended the turn. Measured across the whole transcript corpus on
+  2026-09-13: 68 subagents finished with about eight extra turns, and the real
+  summary was buried under an `Ok.` or a bare `.` that the orchestrator received
+  in its place. So an orchestrator that wants the state of the repository after a
+  phase reads it with `git log` and `git status`, and never through a hook.
+- **The Bash sandbox** — `sandbox.enabled` is on in the template, so every Bash
+  command Claude runs is confined by the OS: writable are the working directory,
+  the session temp directory, and `~/.npm`; everything else under `$HOME` is not.
+  This is the guardrail that matters most here, because `permissions.defaultMode`
+  is `bypassPermissions` on this machine and the prompts are gone. On Linux it
+  needs `bubblewrap` and `socat`; `make health` reports them, and without them
+  the sandbox warns and steps aside rather than failing the session.
+
+  Four commands are listed in `excludedCommands` and run outside it, each for a
+  measured reason: `stow` and `make` write all over `$HOME`, which is the
+  product; `herdr` talks to its Unix socket at `~/.config/herdr/herdr.sock`,
+  which seccomp blocks; and `gh` reads its token from the keyring over D-Bus, so
+  inside the sandbox it silently degrades to anonymous (`gh api /rate_limit`
+  returns 60 instead of 5000). Exclusion applies to the command Claude runs
+  directly, not to what a script it launches runs: a command inside a shell
+  script inherits the sandbox.
+
+  Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
+  logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
+  merged into the sandbox's read policy — so run the headless harnesses through
+  their `make` targets, which are excluded, not by calling the script directly.
+  And `sandbox.filesystem.denyRead` is not duplicated in the template on
+  purpose: the `permissions.deny` Read rules are merged into it by the runtime.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
