@@ -75,8 +75,8 @@ bash terminal-browser/scripts/site-isolation.sh --status   # exit 0 con parche, 
 bash terminal-browser/scripts/site-isolation.sh --revert   # restaura el main.js original
 ```
 
-Antes de escribir comprueba que su punto de inserción aparece exactamente una vez. Si
-Terminal Browser ha cambiado, se niega y no deja rastro. Guarda el original en
+El script comprueba antes de escribir que su punto de inserción aparece exactamente una
+vez. Si Terminal Browser ha cambiado, se niega y no deja rastro. Guarda el original en
 `main.js.orig`. El daemon conserva las opciones con las que arrancó, así que tras
 aplicar o revertir hay que correr `terminal-browser shutdown`.
 
