@@ -40,6 +40,7 @@ help:
 	@echo "  make cli-build      - Compila el CLI mesh-review (genera agents/.agents/skills/doc-review/bin/mesh-review.mjs)"
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
 	@echo "  make collie-install - Instala Collie (puente móvil de herdr) y enlaza sus presets"
+	@echo "  make terminal-browser-install - Instala Terminal Browser fijado y con el parche para artefactos de claude.ai"
 	@echo "  make nvim-install   - Instala Neovim >= 0.11 y el CLI de tree-sitter en ~/.local/bin (sin sudo, idempotente)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
@@ -261,6 +262,13 @@ wsl-terminal:
 collie-install:
 	@bash "$(abspath collie/scripts/install.sh)"
 
+# Instala Terminal Browser, el navegador que abre los artefactos de claude.ai en un pane
+# de herdr. Fuera de PACKAGES y de `make install`: su parche rebaja el aislamiento de
+# Chromium y se instala a propósito (ver terminal-browser/README.md). Sin sudo, idempotente.
+.PHONY: terminal-browser-install
+terminal-browser-install:
+	@bash "$(abspath terminal-browser/scripts/install.sh)"
+
 .PHONY: nvim-install
 nvim-install:
 	@bash "$(abspath nvim/scripts/install-nvim.sh)"
@@ -333,6 +341,11 @@ health:
 		[ -L "$$HOME/.config/herdr/plugins/config/herdr.collie/keys.toml" ] \
 			&& echo "  ok  presets de collie enlazados" \
 			|| echo "  --  presets de collie sin enlazar (corre 'make collie-install')"; \
+	fi
+	@if [ -d "$${XDG_DATA_HOME:-$$HOME/.local/share}/terminal-browser/app" ]; then \
+		st=$$(bash "$(abspath terminal-browser/scripts/site-isolation.sh)" --status 2>&1) \
+			&& echo "  ok  terminal-browser $$st" \
+			|| echo "  --  terminal-browser $$st: los artefactos no aceptan comentarios (corre 'make terminal-browser-install')"; \
 	fi
 	@if [ "$(IS_WSL)" = "1" ]; then \
 		command -v code >/dev/null \
