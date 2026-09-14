@@ -1,0 +1,176 @@
+# Agent preset: taller — banco de trabajo para proyectos gobernados por argos.
+#
+# Estructura derivada del preset `standard` de dsh (dsh-web-app). Los grupos
+# `compaction` y `delegation` usan `isolate` por la misma razón que en el
+# estándar: `compaction-basic` lee `toolResultPruner` via ctx.get y debe
+# compartir realm con él; los subagentes no necesitan aislamiento de
+# workflowEngine pero siguen la misma forma para legibilidad.
+#
+# El padre monta la UNIÓN de todas las herramientas que cualquier delegado
+# necesita; los `toolFilter` solo restringen hacia abajo.
+
+# ── identidad ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a project conductor for argos-governed repositories, running on
+      {{model}} in {{cwd}}. You coordinate — the detailed file reading and code
+      writing are handled inside your named delegates.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 16384
+
+# ── shell ────────────────────────────────────────────────────────────────────
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+
+# ── sistema de ficheros ──────────────────────────────────────────────────────
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+# sampleOverCapGlobResults no tiene valor por defecto en el esquema del plugin
+# (z.boolean().required()): sin él la fila no valida y el preset entero falla al
+# montarse, que a su vez rompe la creación de sesión y el selector de workspace.
+# false = mismo comportamiento que el plano host de dsh-base: por encima del tope
+# devuelve la cabeza ordenada por mtime en lugar de un muestreo del árbol.
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# Necesario para el implementador y el redactor (str_replace_editor).
+- id: tool-str-replace-editor
+  name: '@deepseek-ai/dsh-tool-str-replace-editor'
+  config:
+    maxOutputChars: 16000
+
+# ── skills y tareas ──────────────────────────────────────────────────────────
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# ── cliente MCP: argos ───────────────────────────────────────────────────────
+# `argos mcp` arranca y responde por stdio (verificado: initialize → 200 OK,
+# servidor argos 1.28.1). Las herramientas resultantes se registran como
+# `mcp__argos__<nombre>` y llegan también a los delegados por herencia de
+# composición, pero sus `toolFilter.allow` son listas explícitas que no las
+# enumeran, así que quedan fuera por construcción sin cambios en los subagentes.
+#
+# `reconnect.maxAttempts: 3` evita reintentos prolongados si argos no está
+# disponible en PATH; el resto de valores son los defecto del plugin
+# (initialDelayMs: 500, maxDelayMs: 30 000, enabled: true).
+
+- id: mcp-client-argos
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: argos
+    transport: stdio
+    command: argos
+    args: ['mcp']
+    reconnect:
+      maxAttempts: 3
+
+# ── pregunta al usuario ───────────────────────────────────────────────────────
+# `ask_user_question` es la herramienta bloqueante para el paso de aprobación:
+# en un proyecto QM solo el Owner humano puede aprobar un REQ o VER, y ese
+# punto de parada es exclusivo del taller (el conductor). Los delegados no
+# necesitan preguntar; sus `toolFilter.allow` no incluyen `ask_user_question`,
+# así que la herramienta queda fuera de su alcance por construcción.
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+# ── compactación ──────────────────────────────────────────────────────────────
+# `compaction-basic` lee `toolResultPruner` via ctx.get, así que ambos deben
+# compartir el mismo realm (isolate). Los valores son más conservadores que
+# los defecto para preservar ventana con el modelo local de 131 072 tokens.
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 4096
+        headChars: 2048
+        tailChars: 512
+
+# ── delegados ─────────────────────────────────────────────────────────────────
+# Cuatro filas dsh-tool-subagent. `provider: spawn` arranca el hijo en contexto
+# vacío; `fork` copiaría el log del padre, lo que queremos evitar.
+# `backgroundMode: one-shot` es suficiente: cada delegado hace una tarea
+# acotada y devuelve texto libre.
+
+- id: subagent-localizador
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_localizador
+    backgroundMode: one-shot
+    persona: >-
+      You are a code locator for argos-governed repositories. Given a REQ or
+      VER id, find and return only file paths and line numbers — never quote
+      file bodies.
+    toolFilter:
+      allow: [grep, glob, read]
+
+- id: subagent-implementador
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_implementador
+    backgroundMode: one-shot
+    persona: >-
+      You are a focused implementor. You receive a pre-scoped brief (paths,
+      lines, REQ, VER) and write the minimum change that satisfies the
+      requirement; use skill when you need workflow guidance.
+    toolFilter:
+      allow: [read, write, edit, str_replace_editor, glob, grep, bash, skill, todo_write]
+
+- id: subagent-gate
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_gate
+    backgroundMode: one-shot
+    persona: >-
+      You run the quality gate and return only new findings. Execute make gate
+      and argos diagnose --new; report only issues absent from main.
+    toolFilter:
+      allow: [bash, read, grep]
+
+- id: subagent-redactor
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent_redactor
+    backgroundMode: one-shot
+    persona: >-
+      You draft REQ and VER artefacts in DRAFT status only. You never set
+      status to APPROVED — that is the human Owner's action.
+    toolFilter:
+      allow: [read, write, edit, str_replace_editor, grep, glob, skill]

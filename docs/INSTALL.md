@@ -83,6 +83,7 @@ make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa St
 | `codex` | `~/.codex/{config.toml,AGENTS.md,hooks.json,herdr-agent-state.sh}` |
 | `claude` | `~/.claude/{settings.json,agents/,commands/,hooks/,mcp/,output-styles/,statusline.sh}` |
 | `agents` | `~/.agents/skills/<skill>/` |
+| `dsh` | `~/.dsh/{cordis.patch.yml,.agent-presets/,skills/,plugins/}` |
 
 ## Tras la instalación
 
@@ -95,6 +96,7 @@ opencode agent list                         # debe listar 2 primary + 7 subagent
 codex mcp list                              # debe listar notion/github/tavily/openalex/zotero
 ls -la ~/.claude/skills                     # debe ser symlink a ~/.agents/skills
 ls ~/.claude/agents/                        # debe listar 7 subagentes de Claude Code
+make health | grep dsh                      # ok dsh / ok dsh (no instalado globalmente…) / -- dsh
 ```
 
 Si OpenCode no carga las skills al instante, ejecuta `/setup` dentro de una
@@ -233,6 +235,89 @@ inventariados en el script; los valores que empiezan por `-` y los refs fuera de
 locales completos, desactiva credential helpers y aísla el entorno y la
 configuración de Git para evitar reglas `url.*.insteadOf` locales. También
 ejecuta `git -C /` para no leer `.git/config` del repo actual.
+
+## dsh
+
+dsh es el banco de trabajo interactivo para proyectos gobernados por argos. No está instalado globalmente; se invoca vía `npx @deepseek-ai/dsh`. Con la caché de npx poblada el arranque del CLI ronda el segundo; crear el perfil `web` por primera vez es bastante más lento, porque pnpm resuelve los bundles del cliente.
+
+### Instalación
+
+```bash
+# 1. Enlaza la configuración en ~/.dsh/ (parte del make stow habitual)
+make stow
+
+# 2. Instala el plugin de interfaz en el perfil web
+make dsh-ui-install
+```
+
+`make dsh-ui-install` compila `dsh/dsh-ui/` con esbuild y registra el bundle resultante en el perfil `web` de dsh. Requiere `node` en el PATH. Si `dsh` no está disponible como binario, el target cae a `npx @deepseek-ai/dsh`.
+
+### Proveedor local
+
+La configuración apunta al servidor llama.cpp en `http://127.0.0.1:8081/v1`. Sin ese servidor levantado dsh arranca y carga la interfaz, pero las llamadas al modelo no obtienen respuesta. El endpoint no autentica, pero el esquema del proveedor exige que la clave **exista**: sin ella el
+turno falla con `MISSING_CREDENTIAL`. Crea el fichero de credenciales fuera del repositorio, con
+permisos restrictivos:
+
+```bash
+umask 077 && cat > ~/.dsh/.credentials.yaml <<'YAML'
+version: 1
+refs:
+  LLAMACPP_API_KEY: unused-llama-cpp-does-not-authenticate
+YAML
+```
+
+El valor es un relleno: llama.cpp lo ignora. La página Models de la interfaz escribe este mismo
+fichero, así que también sirve rellenarlo desde ahí. Nunca se versiona; ver [SECRETS.md](SECRETS.md).
+
+### Primera arrancada
+
+```bash
+npx @deepseek-ai/dsh --profile web
+```
+
+Si `~/.dsh/profiles/web/` no existe, la primera ejecución lo construye resolviendo los bundles con pnpm. Las siguientes arrancan de inmediato.
+
+Comprobar el árbol compuesto sin arrancar la interfaz, útil tras tocar el parche:
+
+```bash
+npx @deepseek-ai/dsh --profile web --dump-config
+```
+
+### Reaprovechar un perfil ya construido
+
+Solo si `~/.dsh/profiles/web/` **no** existe y quieres ahorrarte la reconstrucción,
+partiendo de otro perfil de la misma versión de dsh:
+
+```bash
+mkdir -p ~/.dsh/profiles
+cp -R <otro-DSH_HOME>/profiles/web ~/.dsh/profiles/web
+```
+
+Es reversible: borra `~/.dsh/profiles/web/` y dsh lo reconstruye solo. No copies
+encima de un perfil existente.
+
+### Banco de trabajo
+
+Tras instalar, selecciona el preset `Taller` en la interfaz de dsh (directorio
+`taller` en `dsh/.dsh/.agent-presets/`). No viene activo por defecto en una máquina
+nueva porque `~/.dsh/settings.yaml` no se versiona.
+
+Tres comandos definen el ciclo de trabajo. Los registra el parche cordis en el plano
+host, así que funcionan con cualquier preset del perfil `web`:
+
+- `/req <ID>` — fija el requisito activo consultando `argos get <ID> --json` y escribe el estado en `~/.dsh/state/workbench.json`.
+- `/gate` — corre `make gate` si el proyecto lo tiene; si no, `argos diagnose --new --json`. Registra el resultado (ok, hallazgos, marca de tiempo) en el mismo fichero.
+- `/handoff [slug]` — escribe `.ai/tasks/<slug>/handoff.md` en el directorio del proyecto activo con el formato estándar de dotmesh. Rechaza sobrescribir si el fichero ya existe.
+
+El estado vive en `~/.dsh/state/workbench.json` y es único por máquina: guarda el
+REQ activo y la ruta del proyecto en que se fijó, y `/handoff` escribe en esa ruta.
+Dos sesiones de dsh sobre proyectos distintos comparten el fichero; fija el REQ con
+`/req` antes de trabajar en cada una. El panel de la interfaz lo lee por HTTP; un
+fichero ausente equivale a «sin REQ activo».
+
+`make install` llama a `make dsh-ui-install` solo si `dsh` está en el PATH como
+binario, para que una instalación limpia no descargue paquetes por npx. Con dsh vía
+`npx`, ejecuta `make dsh-ui-install` a mano una vez.
 
 ## MCP en Codex
 

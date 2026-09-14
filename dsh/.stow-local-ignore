@@ -1,0 +1,3 @@
+# Exclude build artifacts and UI plugin: dsh-ui/ is installed via
+# "make dsh-ui-install", not stowed into ~/.
+^/dsh-ui

@@ -72,6 +72,20 @@ El paquete `collie/` enlaza los tres presets `.toml` de ese directorio, pero **n
 `.env`**. Por eso el stow va con `--no-folding`: si el directorio entero se sustituyera
 por un symlink al repo, el `.env` dejaría de existir donde el puente lo busca.
 
+## Las credenciales de dsh
+
+El proveedor local de llama.cpp no autentica, pero el esquema de proveedores de dsh
+exige que la clave exista. Sin ella, el turno falla con `MISSING_CREDENTIAL`.
+
+El fichero es `~/.dsh/.credentials.yaml` (`version: 1` y un mapa `refs:` con
+`LLAMACPP_API_KEY`); el bloque exacto está en [INSTALL.md](INSTALL.md), sección dsh.
+El valor es un relleno: llama.cpp lo ignora, pero el proveedor lo exige. Vive fuera
+del repositorio, con permisos 600. `.gitignore` ya cubre `dsh/.dsh/.credentials.yaml`,
+por lo que si el fichero acaba dentro del worktree por error no se versiona.
+
+La página Models de la interfaz también crea este fichero al guardar la configuración del
+modelo, así que se puede dejar que la propia interfaz lo escriba en la primera arrancada.
+
 ## Notas
 
 - **OpenAlex** (búsqueda de papers) no necesita token.

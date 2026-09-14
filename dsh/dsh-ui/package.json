@@ -1,0 +1,31 @@
+{
+  "name": "dotmesh-ui",
+  "version": "0.1.0",
+  "description": "dotmesh UI plugin for dsh — theme, brand, and workbench surface",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.1",
+    "esbuild": "^0.25.0"
+  }
+}
