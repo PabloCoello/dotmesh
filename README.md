@@ -126,6 +126,8 @@ El índice completo vive en [`agents/.agents/skills/README.md`](agents/.agents/s
 
 OpenCode las consume mediante `/setup` (ver [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md)). Claude Code las descubre automáticamente desde `~/.claude/skills/` (symlink). Codex mantiene [codex/.codex/AGENTS.md](codex/.codex/AGENTS.md) como punto de entrada.
 
+La skill `terminal-browser` es la excepción: no vive en `agents/.agents/skills/`. La enlaza el `setup` de Terminal Browser en `~/.claude/skills`, `~/.agents/skills` y `~/.codex/skills`, apuntando a la app instalada, y se actualiza con ella. Ver [terminal-browser/README.md](terminal-browser/README.md).
+
 ### Comprobación manual de vendorizados
 
 Algunos componentes se mantienen como copia local. Para detectar desfases sin tocar
