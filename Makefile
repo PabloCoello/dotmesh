@@ -342,10 +342,14 @@ health:
 			&& echo "  ok  presets de collie enlazados" \
 			|| echo "  --  presets de collie sin enlazar (corre 'make collie-install')"; \
 	fi
-	@if [ -d "$${XDG_DATA_HOME:-$$HOME/.local/share}/terminal-browser/app" ]; then \
+	@app="$${XDG_DATA_HOME:-$$HOME/.local/share}/terminal-browser/app"; \
+	if [ -d "$$app" ]; then \
 		st=$$(bash "$(abspath terminal-browser/scripts/site-isolation.sh)" --status 2>&1) \
 			&& echo "  ok  terminal-browser $$st" \
-			|| echo "  --  terminal-browser $$st: los artefactos no aceptan comentarios (corre 'make terminal-browser-install')"; \
+			|| echo "  --  terminal-browser: $$st (corre 'make terminal-browser-install')"; \
+		pin=$$(sed -n 's/^TB_TAG="\(.*\)"$$/\1/p' "$(abspath terminal-browser/scripts/install.sh)"); \
+		ver=$$(cat "$$app/VERSION" 2>/dev/null || echo desconocida); \
+		[ "$$ver" = "$$pin" ] || echo "  --  terminal-browser $$ver fuera del pin $$pin: binario y skill sin revisar (ver terminal-browser/README.md)"; \
 	fi
 	@if [ "$(IS_WSL)" = "1" ]; then \
 		command -v code >/dev/null \

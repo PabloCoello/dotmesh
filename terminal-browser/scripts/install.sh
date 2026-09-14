@@ -54,11 +54,12 @@ elif [ -n "$INSTALLED" ] && [ "$NEWEST" = "$INSTALLED" ]; then
   # a newer Chromium profile to an older browser, and that can cost the claude.ai
   # login. Warn and leave it; the patch below still checks its anchor.
   warn "instalada $INSTALLED, más nueva que el pin $TB_TAG; no se toca."
-  warn "Para volver al pin:  rm -rf \"$APP\" && $0"
+  warn "Para volver al pin, a riesgo de perder la sesión de claude.ai:  rm -rf \"$APP\" && $0"
 else
   command -v curl >/dev/null || die "falta curl" 2
   TMP="$(mktemp -d)"
-  trap 'rm -rf "$TMP"' EXIT
+  # A half-extracted $APP.new would leave hundreds of MB behind.
+  trap 'rm -rf "$TMP" "$APP.new"' EXIT
   TARBALL="$TMP/terminal-browser.tar.gz"
   info "descargando terminal-browser $TB_TAG ($TARGET, unos 135 MB)"
   curl -fL --retry 3 --retry-delay 2 --progress-bar -o "$TARBALL" \
@@ -72,18 +73,20 @@ else
   [ "$GOT" = "$SHA256" ] || die "el SHA-256 no coincide con el pin (esperado $SHA256, recibido $GOT); no se instala nada" 2
   ok "SHA-256 verificado contra el pin"
 
-  rm -rf "$APP.new"
+  rm -rf "$APP.new" "$APP.old"
   mkdir -p "$APP.new"
-  tar -xzf "$TARBALL" -C "$APP.new" --strip-components 1
+  tar -xzf "$TARBALL" -C "$APP.new" --strip-components 1 || die "no se ha podido extraer el paquete" 2
   [ "$(cat "$APP.new/VERSION" 2>/dev/null || true)" = "$TB_TAG" ] \
-    || { rm -rf "$APP.new"; die "el paquete descargado no declara la versión $TB_TAG" 2; }
-  if [ -n "$INSTALLED" ]; then
-    # The daemon of this install would keep running the replaced files.
-    info "sustituyendo $INSTALLED: se cierran los navegadores abiertos"
-    pkill -f "$APP/browser/dist/main.js" 2>/dev/null || true
+    || die "el paquete descargado no declara la versión $TB_TAG" 2
+  # A daemon of the replaced install keeps running its old files, even deleted ones.
+  if pkill -f "$APP/browser/dist/main.js" 2>/dev/null; then
+    info "cerrados los navegadores abiertos: corrían la instalación sustituida"
   fi
-  rm -rf "$APP"
-  mv "$APP.new" "$APP"
+  # The old install goes aside first, so a failed swap can put it back.
+  [ ! -e "$APP" ] || mv "$APP" "$APP.old"
+  mv "$APP.new" "$APP" \
+    || { [ ! -e "$APP.old" ] || mv "$APP.old" "$APP"; die "no se ha podido sustituir $APP" 2; }
+  rm -rf "$APP.old"
   ok "instalado en $APP"
 fi
 
@@ -149,7 +152,7 @@ cat <<EOF
 Terminal Browser listo. Para abrir un artefacto junto a la conversación:
   terminal-browser open <url del artefacto> --split right
 La primera vez inicia sesión en claude.ai dentro del navegador; el perfil persiste.
-Úsalo solo para artefactos propios y actualízalo con este script, nunca con
+Úsalo solo con páginas propias y actualízalo con este script, nunca con
 'terminal-browser upgrade'. Reglas y trampas: terminal-browser/README.md
 EOF
 [ -z "$PENDING" ] || printf '\nQueda pendiente:\n%s' "$PENDING"

@@ -33,6 +33,7 @@ case "${1:-apply}" in
     ;;
   apply)
     if grep -qF "$MARKER" "$MAIN"; then echo "ya tenía el parche ($VERSION)"; exit 0; fi
+    command -v python3 >/dev/null || { echo "falta python3: no se aplica el parche" >&2; exit 1; }
     # Validate first, then back up, then swap atomically: a refused patch leaves no trace.
     MAIN="$MAIN" ORIG="$ORIG" MARKER="$MARKER" python3 - <<'EOF'
 import os, re, shutil, sys
@@ -50,12 +51,16 @@ def add(m):
     return (m.group(0) + f' {e}.app.commandLine.appendSwitch("disable-site-isolation-trials");'
             f' {e}.app.commandLine.appendSwitch("disable-features", "IsolateOrigins,site-per-process"); {marker}')
 tmp = path + ".tmp"
-with open(tmp, "w", encoding="utf-8") as f:
-    f.write(anchor.sub(add, src, count=1))
-shutil.copy2(path, orig)
-os.replace(tmp, path)
+try:
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(anchor.sub(add, src, count=1))
+    shutil.copy2(path, orig)
+    os.replace(tmp, path)
+finally:
+    if os.path.exists(tmp):
+        os.remove(tmp)
 EOF
     echo "parche aplicado ($VERSION); corre: terminal-browser shutdown"
     ;;
-  *) echo "uso: $0 [--status|--revert]" >&2; exit 2 ;;
+  *) echo "uso: $0 [apply|--status|--revert]" >&2; exit 2 ;;
 esac
