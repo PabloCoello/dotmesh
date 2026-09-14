@@ -83,9 +83,12 @@ else
     info "cerrados los navegadores abiertos: corrían la instalación sustituida"
   fi
   # The old install goes aside first, so a failed swap can put it back.
-  [ ! -e "$APP" ] || mv "$APP" "$APP.old"
-  mv "$APP.new" "$APP" \
-    || { [ ! -e "$APP.old" ] || mv "$APP.old" "$APP"; die "no se ha podido sustituir $APP" 2; }
+  [ ! -e "$APP" ] || mv "$APP" "$APP.old" || die "no se ha podido apartar $APP" 2
+  mv "$APP.new" "$APP" || {
+    [ ! -e "$APP.old" ] || mv "$APP.old" "$APP" \
+      || die "no se ha podido sustituir $APP; la instalación anterior está en $APP.old" 2
+    die "no se ha podido sustituir $APP" 2
+  }
   rm -rf "$APP.old"
   ok "instalado en $APP"
 fi

@@ -349,7 +349,8 @@ health:
 			|| echo "  --  terminal-browser: $$st (corre 'make terminal-browser-install')"; \
 		pin=$$(sed -n 's/^TB_TAG="\(.*\)"$$/\1/p' "$(abspath terminal-browser/scripts/install.sh)"); \
 		ver=$$(cat "$$app/VERSION" 2>/dev/null || echo desconocida); \
-		[ "$$ver" = "$$pin" ] || echo "  --  terminal-browser $$ver fuera del pin $$pin: binario y skill sin revisar (ver terminal-browser/README.md)"; \
+		if [ -z "$$pin" ]; then echo "  --  terminal-browser: no se encuentra TB_TAG en install.sh"; \
+		elif [ "$$ver" != "$$pin" ]; then echo "  --  terminal-browser $$ver fuera del pin $$pin: binario y skill sin revisar (corre 'make terminal-browser-install' y sigue su aviso)"; fi; \
 	fi
 	@if [ "$(IS_WSL)" = "1" ]; then \
 		command -v code >/dev/null \

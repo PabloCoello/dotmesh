@@ -108,8 +108,8 @@ depende también de esas CDN.
    aceptar comentarios sin avisar. `make health` lo detecta: avisa si falta el parche y
    si la versión instalada no es la fijada.
 
-La skill `terminal-browser` está disponible en cualquier proyecto, así que las dos
-primeras reglas se repiten en las instrucciones globales de los tres agentes
+La skill `terminal-browser` está disponible en cualquier proyecto, así que las tres
+reglas se repiten en las instrucciones globales de los tres agentes
 (`claude/.claude/AGENTS.md`, `codex/.codex/AGENTS.md` y
 `opencode/.config/opencode/AGENTS.md`). Sin eso, un agente que trabaja en otro repo no
 las leería.
