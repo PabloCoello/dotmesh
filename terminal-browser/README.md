@@ -91,17 +91,28 @@ proceso, y en esa memoria está la sesión de claude.ai.
 Con artefactos propios el riesgo es bajo, porque su código lo escribe Claude a petición
 tuya. Con páginas ajenas no lo es.
 
+Un artefacto propio puede cargar además bibliotecas de CDN públicas, como cdnjs o
+jsDelivr. Ese código es de terceros y corre en el mismo proceso, así que el riesgo
+depende también de esas CDN.
+
 ## Reglas de uso
 
-1. **Solo artefactos propios.** Un artefacto que te comparta otra persona se abre en el
+1. **Solo páginas propias**: tus artefactos de claude.ai, ficheros HTML locales o un
+   servidor en `localhost`. Un artefacto que te comparta otra persona se abre en el
    navegador normal.
 2. **No navegues por otras webs** en Terminal Browser. El parche afecta a todo el
    navegador, no solo a claude.ai.
 3. **Actualiza solo con `make terminal-browser-install`**, nunca con
    `terminal-browser upgrade`. `upgrade` se salta el pin y la instalación nueva llega
    sin parche: vuelve el aislamiento, que es lo seguro, pero los artefactos dejan de
-   aceptar comentarios sin avisar. `make health` lo detecta
-   (`terminal-browser sin parche`).
+   aceptar comentarios sin avisar. `make health` lo detecta: avisa si falta el parche y
+   si la versión instalada no es la fijada.
+
+La skill `terminal-browser` está disponible en cualquier proyecto, así que las dos
+primeras reglas se repiten en las instrucciones globales de los tres agentes
+(`claude/.claude/AGENTS.md`, `codex/.codex/AGENTS.md` y
+`opencode/.config/opencode/AGENTS.md`). Sin eso, un agente que trabaja en otro repo no
+las leería.
 
 Si ya se hizo `upgrade`, el instalador no baja de versión por su cuenta, porque un
 Chromium más viejo sobre un perfil más nuevo puede perder la sesión de claude.ai. Avisa,

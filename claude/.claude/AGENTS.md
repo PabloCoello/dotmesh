@@ -96,3 +96,13 @@ sobre este archivo.
 - Las skills viven en `~/.claude/skills/` (symlink a `~/.agents/skills/`, fuente
   canónica en `dotmesh/agents/.agents/skills/`). No las dupliques dentro de un
   proyecto.
+
+## Terminal Browser
+
+- Lleva un parche que apaga el aislamiento de sitios de Chromium, y su perfil tiene
+  abierta la sesión de claude.ai. Ábrelo solo con páginas propias: artefactos de
+  claude.ai del usuario, ficheros HTML locales o un servidor en `localhost`. Nada de
+  webs externas ni de artefactos que haya compartido otra persona; para eso está el
+  navegador normal.
+- Nunca ejecutes `terminal-browser upgrade`: se salta el pin y quita el parche. Se
+  actualiza con `make terminal-browser-install` en dotmesh.

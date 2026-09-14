@@ -58,6 +58,8 @@ primary/orchestrating flow instead of asking a native question directly.
 
 Shared agent skills live in `~/.agents/skills/` and are managed from the `agents/` package in this dotfiles repository. Refer to `agents/.agents/skills/README.md` for the current core pack.
 
+Terminal Browser (the `terminal-browser` skill, linked by that tool's own setup) runs with Chromium site isolation turned off, and its profile holds the user's claude.ai session. Open it only on the user's own pages: their claude.ai artifacts, local HTML files or a `localhost` server. Never external websites or artifacts shared by other people; those go to the regular browser. Never run `terminal-browser upgrade`: it skips dotmesh's pin and drops the patch. dotmesh updates it with `make terminal-browser-install`.
+
 Load `tool-error-recovery` before retrying a failed tool call. Retry at most once and only for clearly idempotent reads. Do not retry writes, destructive Git or Stow operations, authenticated network calls, or mutable MCP calls. Preserve the exit/status and a redacted stderr summary, then stop after a repeated failure. Use native sandboxing and approvals before plugins or hooks. Do not rely on `wait-for-user` or `reflect`.
 
 ## Git
