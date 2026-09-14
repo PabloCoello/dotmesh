@@ -203,6 +203,21 @@ The agent system has two layers, identical in concept across the three tools.
   And `sandbox.filesystem.denyRead` is not duplicated in the template on
   purpose: the `permissions.deny` Read rules are merged into it by the runtime.
 
+  A third, seen on 2026-09-14 in `deriva/traza` and documented upstream. To hold
+  a write denial on a protected file that does not exist yet — `.mcp.json` in
+  the working directory and every directory above it, `.claude/settings*.json`,
+  shell startup files, `.gitconfig` — the sandbox creates a 0-byte read-only
+  placeholder while each command runs and removes it afterwards. A session
+  killed before that cleanup (SIGKILL, a pane closed hard) leaves it on disk. An
+  empty `.mcp.json` fails with "MCP config is not a valid JSON", and one in a
+  parent directory is read by every session opened below it; an empty
+  `.claude/settings.local.json` makes "Yes, and don't ask again" fail to save.
+  `claude doctor` lists them (v2.1.257 and later). Delete them with `rm` outside
+  the sandbox while no other session runs in that folder; `/sandbox` cannot
+  help, because these paths are a fixed list that `allowWrite` does not open.
+  Inside the sandbox the same paths show as `/dev/null` character devices even
+  when nothing is on disk, so check from outside before deleting anything.
+
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
 ten-agent setup went unused. Keep this 2 + 7 shape in sync across

@@ -67,6 +67,15 @@ freno real que queda, así que no lo esquives por comodidad.
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
   arranca sesiones headless se corre por su target de `make`, no llamando al
   script: un `claude -p` anidado dentro de la caja falla con «Not logged in».
+- **Un `.mcp.json` o un settings vacío lo ha dejado el sandbox.** Mientras
+  corre cada comando, la caja pone un fichero de 0 bytes y solo lectura en cada
+  ruta protegida que no existe (`.mcp.json` aquí y en las carpetas superiores,
+  `.claude/settings*.json`, `.bashrc`, `.gitconfig`) y lo quita al acabar. Si la
+  sesión muere de golpe, se queda: «MCP config is not a valid JSON» o permisos
+  que no se guardan. `claude doctor` los lista; bórralos con `rm` fuera de la
+  caja y sin otra sesión abierta en esa carpeta. `/sandbox` no los arregla,
+  porque la lista es fija. Desde dentro de la caja esas rutas se ven como
+  `/dev/null` aunque no haya nada en disco: compruébalo fuera.
 - **`dangerouslyDisableSandbox` solo tras un fallo con evidencia** (`Operation
   not permitted`, socket denegado, ruta fuera de lo permitido), y comando a
   comando. No lo actives preventivamente ni lo arrastres al siguiente.
