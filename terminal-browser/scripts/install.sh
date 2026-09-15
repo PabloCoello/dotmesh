@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Installs Terminal Browser at dotmesh's pinned release and applies the site
-# isolation patch that makes claude.ai artifacts usable inside a herdr pane.
+# Installs Terminal Browser at dotmesh's pinned release, applies the site
+# isolation patch that makes claude.ai artifacts usable inside a herdr pane, and
+# hardens it (no web MIDI, no downloads).
 #
 # Mirrors upstream's installer (https://terminal-browser.sh/install) with three
 # changes: the version and checksums are pinned here instead of served as
@@ -10,13 +11,14 @@
 # an AppArmor profile with sudo when the kernel asks for one; here that step is
 # skipped and printed as an instruction instead. Idempotent.
 #
-# Exit codes: 1 platform · 2 download · 3 patch.
+# Exit codes: 1 platform · 2 download · 3 patch or hardening.
 set -e
 set -o pipefail
 
 # Pin. Synced with scripts/vendor/upstreams.tsv. Bump: TB_TAG and the four sums
-# below, then check that site-isolation.sh still finds its anchor. When this pin
-# was adopted, GitHub's asset digests and upstream's latest.json agreed.
+# below, then check that site-isolation.sh and harden.sh still find their
+# anchors. When this pin was adopted, GitHub's asset digests and upstream's
+# latest.json agreed.
 TB_TAG="v0.8.1"
 TB_REPO="zenbu-labs/terminal-browser"
 
@@ -122,7 +124,11 @@ fi
 TERMINAL_BROWSER_SKIP_APPARMOR=1 "$APP/bin/terminal-browser" setup \
   || warn "terminal-browser setup ha fallado: puede faltar la skill o las imágenes del editor"
 
-# --- 6. The patch -----------------------------------------------------------
+# --- 6. The hardening and the patch -----------------------------------------
+# Hardening first: it works in either order, and a patch refused after an
+# upgrade must not leave the browser unhardened as well.
+bash "$SCRIPT_DIR/harden.sh" \
+  || die "sin endurecer: las páginas conservan el MIDI y las descargas" 3
 bash "$SCRIPT_DIR/site-isolation.sh" \
   || die "sin el parche, los artefactos no aceptan scroll, selección ni comentarios" 3
 

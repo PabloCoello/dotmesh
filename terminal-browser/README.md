@@ -16,9 +16,10 @@ make terminal-browser-install
 
 El script descarga la release fijada (v0.8.1), comprueba su SHA-256 contra el valor
 apuntado en el propio script, deja el comando en `~/.local/bin/terminal-browser`,
-ejecuta el `setup` de upstream y aplica el parche. Es idempotente y no usa sudo. Si la
-versión fijada ya está instalada no descarga nada ni cierra los navegadores abiertos,
-así que se puede repetir para comprobar que el parche sigue puesto.
+ejecuta el `setup` de upstream, aplica el parche y endurece el navegador. Es idempotente
+y no usa sudo. Si la versión fijada ya está instalada no descarga nada ni cierra los
+navegadores abiertos, así que se puede repetir para comprobar que el parche y el
+endurecimiento siguen puestos.
 
 `terminal-browser/` **no está en `PACKAGES`** ni en `make install`: no enlaza nada con
 Stow, y el parche se instala a propósito, nunca de arrastre.
@@ -95,6 +96,37 @@ Un artefacto propio puede cargar además bibliotecas de CDN públicas, como cdnj
 jsDelivr. Ese código es de terceros y corre en el mismo proceso, así que el riesgo
 depende también de esas CDN.
 
+## El endurecimiento
+
+De serie, Terminal Browser concede a cualquier página el acceso a los dispositivos MIDI
+y guarda las descargas en la carpeta de descargas sin preguntar. Para ver artefactos
+propios no hace falta ninguna de las dos cosas, y las dos dejan a una página actuar
+fuera del navegador. `scripts/harden.sh` las corta con dos inserciones en
+`browser/dist/main.js`: el gestor de permisos deniega `midi` y `midiSysex`, y cada
+descarga se cancela antes de empezar. Al pulsar un enlace de descarga no pasa nada ni
+aparece ningún aviso.
+
+El corte vale para lo que hacen las páginas. Un programa que maneje el navegador por su
+puerto de depuración, como hace `terminal-browser action`, puede reactivar las descargas.
+Ese puerto solo escucha en `127.0.0.1`, y quien llega a él controla ya el navegador
+entero.
+
+```bash
+bash terminal-browser/scripts/harden.sh            # aplica (idempotente)
+bash terminal-browser/scripts/harden.sh --status   # exit 0 endurecido, 1 sin endurecer
+bash terminal-browser/scripts/harden.sh --revert   # quita las dos inserciones
+```
+
+Igual que el parche, comprueba sus puntos de inserción antes de escribir y se niega si
+Terminal Browser ha cambiado. No guarda copia: solo inserta texto, y `--revert` quita
+exactamente lo insertado. Si existe `main.js.orig`, lo edita también, así que revertir el
+parche de aislamiento no se lleva el endurecimiento. Tras aplicarlo o revertirlo hay que
+correr `terminal-browser shutdown`.
+
+Se probó el 15-09-2026 con v0.8.1 en un daemon aislado. Sin endurecer, la página
+obtenía el permiso `midi` y el fichero llegaba a la carpeta de descargas. Endurecido, el
+permiso sale `denied` y la carpeta queda vacía.
+
 ## Reglas de uso
 
 1. **Solo páginas propias**: tus artefactos de claude.ai, ficheros HTML locales o un
@@ -105,8 +137,8 @@ depende también de esas CDN.
 3. **Actualiza solo con `make terminal-browser-install`**, nunca con
    `terminal-browser upgrade`. `upgrade` se salta el pin y la instalación nueva llega
    sin parche: vuelve el aislamiento, que es lo seguro, pero los artefactos dejan de
-   aceptar comentarios sin avisar. `make health` lo detecta: avisa si falta el parche y
-   si la versión instalada no es la fijada.
+   aceptar comentarios sin avisar. `make health` lo detecta: avisa si falta el parche o
+   el endurecimiento y si la versión instalada no es la fijada.
 
 La skill `terminal-browser` está disponible en cualquier proyecto, así que las tres
 reglas se repiten en las instrucciones globales de los tres agentes
@@ -116,7 +148,8 @@ las leería.
 
 Si ya se hizo `upgrade`, el instalador no baja de versión por su cuenta, porque un
 Chromium más viejo sobre un perfil más nuevo puede perder la sesión de claude.ai. Avisa,
-deja la instalación como está y aplica el parche si encuentra su punto de inserción.
+deja la instalación como está y aplica el endurecimiento y el parche si encuentran sus
+puntos de inserción.
 
 ## Subir de versión
 
@@ -126,8 +159,10 @@ deja la instalación como está y aplica el parche si encuentra su punto de inse
 2. Actualiza la fila `terminal-browser` de `scripts/vendor/upstreams.tsv`.
 3. Corre `make terminal-browser-install`. Detecta la versión vieja, descarga la nueva y
    cierra los navegadores abiertos.
-4. Si para con exit 3, `main.js` ha cambiado: busca dónde se añaden ahora las opciones
-   de Chromium antes de `app.whenReady` y ajusta el ancla de `site-isolation.sh`.
+4. Si para con exit 3, `main.js` ha cambiado. Si se niega `site-isolation.sh`, busca
+   dónde se añaden ahora las opciones de Chromium antes de `app.whenReady` y ajusta su
+   ancla. Si se niega `harden.sh`, busca `function granted(` y el gestor de
+   `will-download`.
 
 `make vendor-check` no vigila esta fila (sale `blocked_upstream`, como neovim), así que
 las versiones nuevas se miran a mano.
