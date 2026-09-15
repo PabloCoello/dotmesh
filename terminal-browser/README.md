@@ -56,6 +56,13 @@ Todos los panes comparten un mismo proceso de navegador: cerrar un pane no lo pa
 Claude Code también puede abrirlo. La skill `terminal-browser` le enseña los comandos
 (ver [lo que toca fuera del paquete](#lo-que-toca-fuera-del-paquete)).
 
+Cuando Claude Code publica un artefacto por primera vez dentro de un pane de herdr, el
+hook `claude/.claude/hooks/offer-terminal-browser.sh` le recuerda que ofrezca abrirlo al
+lado. Solo lo ofrece: el navegador se abre si aceptas. Calla al republicar, porque la
+vista abierta se actualiza sola, y fuera de herdr o sin `terminal-browser` instalado. Del
+resultado de la publicación solo pasa al agente una URL de artefacto de claude.ai con la
+forma exacta; cualquier otra cosa se descarta.
+
 ## El parche
 
 Terminal Browser dibuja las páginas fuera de pantalla y reenvía él mismo el ratón y el
@@ -148,8 +155,9 @@ las leería.
 
 Si ya se hizo `upgrade`, el instalador no baja de versión por su cuenta, porque un
 Chromium más viejo sobre un perfil más nuevo puede perder la sesión de claude.ai. Avisa,
-deja la instalación como está y aplica el endurecimiento y el parche si encuentran sus
-puntos de inserción.
+deja la instalación como está y aplica el endurecimiento y después el parche. Si el
+endurecimiento no encuentra sus puntos de inserción, se detiene con exit 3 sin intentar
+el parche.
 
 ## Subir de versión
 
