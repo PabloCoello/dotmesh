@@ -240,14 +240,23 @@ if [ "$AT_PIN" = "1" ]; then
       # trabajo, la orden) sin que la consulta lo vea. Los drop-ins se buscan en disco, en
       # todas las rutas salvo las del sistema, que solo escribe root, porque sobreviven a
       # `collie uninstall` y se aplicarían en el primer `collie start`, cuando la unidad
-      # todavía no existe.
+      # todavía no existe. A la lista de systemd se suman las rutas de usuario conocidas, por
+      # si una versión no las enumera todas.
       UNIT_FILE="$HOME/.config/systemd/user/$UNIT"
+      RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      UNIT_PATHS="$UNIT_PATHS
+$HOME/.config/systemd/user
+$HOME/.config/systemd/user.control
+$HOME/.local/share/systemd/user
+$RUNTIME_DIR/systemd/user
+$RUNTIME_DIR/systemd/user.control
+$RUNTIME_DIR/systemd/transient"
       STRAY="$(while IFS= read -r d; do
           case "$d" in /etc/* | /usr/* | /lib/* | /run/systemd/*) continue ;; esac
           for f in "$d/$UNIT" "$d/$UNIT.d"/* "$d/service.d"/*; do
             if [ -e "$f" ] && [ "$f" != "$UNIT_FILE" ]; then echo "$f"; fi
           done
-        done <<<"$UNIT_PATHS")"
+        done <<<"$UNIT_PATHS" | sort -u)"
       [ -z "$STRAY" ] || die "systemd --user aplicaría a $UNIT ficheros que no son la unidad de Collie:
       ${STRAY//$'\n'/, }
       y esta comprobación no ve lo que cambian. Quítalos y vuelve a correr el script." 5
@@ -290,13 +299,18 @@ if [ "$AT_PIN" = "1" ]; then
         UNIT_VARS="$(grep -oE '(^|[[:space:]"])[A-Za-z_][A-Za-z0-9_]*=' <<<"$UNIT_ENV" \
           | grep -oE '[A-Za-z_][A-Za-z0-9_]*' \
           | grep -vxE 'HERDR_SOCKET_PATH|HERDR_PLUGIN_CONFIG_DIR|COLLIE_(PORT|PLUGIN_ROOT|TAILSCALE_HOSTS)' || true)"
-        UNIT_CONFIG_DIR="$(grep -oE '(^|[[:space:]])"?HERDR_PLUGIN_CONFIG_DIR=[^[:space:]"]*' <<<"$UNIT_ENV" \
-          | sed -E 's/^[[:space:]]*"?HERDR_PLUGIN_CONFIG_DIR=//' || true)"
+        unit_env() {
+          grep -oE "(^|[[:space:]])\"?$1=[^[:space:]\"]*" <<<"$UNIT_ENV" \
+            | sed -E "s/^[[:space:]]*\"?$1=//" || true
+        }
         UNIT_FILES="$(sed -n 's/^EnvironmentFiles=//p' <<<"$UNIT_PROPS" \
           | sed -E 's/ \(ignore_errors=(yes|no)\)$//' | grep -vxF "$ENV_FILE" || true)"
         UNIT_CWD="$(sed -n 's/^WorkingDirectory=//p' <<<"$UNIT_PROPS")"
         UNIT_EXEC="$(sed -nE 's/^ExecStart=.* argv\[\]=([^;]*) ;.*/\1/p' <<<"$UNIT_PROPS")"
-        [ -z "$UNIT_VARS" ] && [ "$UNIT_CONFIG_DIR" = "$CONFIG_DIR" ] && [ -z "$UNIT_FILES" ] \
+        # HERDR_SOCKET_PATH y COLLIE_PORT no se comparan: no abren el gate y el script no sabe
+        # qué valor les ha dado Collie.
+        [ -z "$UNIT_VARS" ] && [ "$(unit_env HERDR_PLUGIN_CONFIG_DIR)" = "$CONFIG_DIR" ] \
+          && [ "$(unit_env COLLIE_PLUGIN_ROOT)" = "$PLUGIN_ROOT" ] && [ -z "$UNIT_FILES" ] \
           && [ "$UNIT_CWD" = "$PLUGIN_ROOT" ] && [ "$UNIT_EXEC" = "$COLLIE_BIN _exec-bridge" ] \
           || die "la unidad $UNIT no arranca el puente como lo escribe Collie para este
       plugin y esta configuración (variables, ficheros de entorno, directorio de trabajo
