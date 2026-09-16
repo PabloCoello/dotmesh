@@ -98,12 +98,16 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
    `config.toml` junto al `.env`. Por eso, con el plugin ya en el pin, el script pregunta
    además a Collie por la configuración efectiva (`collie config show`) en las condiciones
    de la unidad, y para si falta la identidad o si alguna de las cuatro está encendida,
-   venga del fichero que venga. También para en tres casos en que la unidad vería algo que
-   la consulta no ve: si el `.env` define `COLLIE_CONFIG`, si el gestor de `systemd --user`
-   exporta alguna variable `COLLIE_` y si un drop-in de la unidad añade variables `COLLIE_`,
-   otro fichero de entorno u otro directorio de trabajo, del que el binario cargaría otro
-   `.env`. Si el plugin no está en el pin, se salta la consulta y lo avisa; muévelo y vuelve
-   a correr el script antes de arrancar.
+   venga del fichero que venga. También para cuando el puente vería algo que la consulta no
+   ve: si el `.env` define `COLLIE_CONFIG`, si el gestor de `systemd --user` exporta alguna
+   variable `COLLIE_` y si la unidad no es la que escribe Collie. Lo último cubre tres
+   cosas: un drop-in o una copia de la unidad fuera de las rutas del sistema, incluidos los
+   de `service.d`, que se aplican a todas las unidades del usuario; directivas añadidas o
+   quitadas respecto a la copia de referencia que trae el plugin; y otras variables, otro
+   fichero de entorno, otro directorio de trabajo u otra orden en lo que systemd tiene
+   cargado. Si lo cargado no es lo que hay en disco, pide `systemctl --user daemon-reload`.
+   Si el plugin no está en el pin, se salta la consulta y lo avisa; muévelo y vuelve a
+   correr el script antes de arrancar.
 5. **Brave en Android trae «Use Google services for push messaging» desactivado** por
    defecto, y sin eso el web push no llega nunca aunque la suscripción parezca correcta.
    La prueba del 2026-08-28 se hizo en Chrome.
