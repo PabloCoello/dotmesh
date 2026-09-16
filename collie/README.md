@@ -99,15 +99,18 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
    además a Collie por la configuración efectiva (`collie config show`) en las condiciones
    de la unidad, y para si falta la identidad o si alguna de las cuatro está encendida,
    venga del fichero que venga. También para cuando el puente vería algo que la consulta no
-   ve: si el `.env` define `COLLIE_CONFIG`, si el gestor de `systemd --user` exporta alguna
-   variable `COLLIE_` y si la unidad no es la que escribe Collie. Lo último cubre tres
-   cosas: un drop-in o una copia de la unidad fuera de las rutas del sistema, incluidos los
-   de `service.d`, que se aplican a todas las unidades del usuario; directivas añadidas o
-   quitadas respecto a la copia de referencia que trae el plugin; y otras variables, otro
-   fichero de entorno, otro directorio de trabajo u otra orden en lo que systemd tiene
-   cargado. Si lo cargado no es lo que hay en disco, pide `systemctl --user daemon-reload`.
-   Si el plugin no está en el pin, se salta la consulta y lo avisa; muévelo y vuelve a
-   correr el script antes de arrancar.
+   ve: si el `.env` define `COLLIE_CONFIG`; si el gestor de `systemd --user` exporta alguna
+   variable `COLLIE_`, `NODE_ENV` (Bun elige con ella qué `.env` carga) o un `HOME` distinto
+   del tuyo (decide qué `~/.collie/config.toml` se lee); y si la unidad no es la que escribe
+   Collie. Lo último cubre tres cosas: drop-ins, copias o alias de la unidad fuera de las
+   rutas del sistema, incluidos los drop-ins de `service.d`, que se aplican a todas las
+   unidades del usuario; directivas añadidas o quitadas respecto a la copia de referencia
+   que trae el plugin; y, en lo que systemd tiene cargado, variables que Collie no escribe,
+   otro directorio de config u otra raíz del plugin, otro fichero de entorno, otro
+   directorio de trabajo u otra orden. Si systemd carga la unidad desde otra ruta, lo dice;
+   si lo cargado no es lo que hay en disco, pide `systemctl --user daemon-reload`. Si el
+   plugin no está en el pin, se salta la consulta y lo avisa; muévelo y vuelve a correr el
+   script antes de arrancar.
 5. **Brave en Android trae «Use Google services for push messaging» desactivado** por
    defecto, y sin eso el web push no llega nunca aunque la suscripción parezca correcta.
    La prueba del 2026-08-28 se hizo en Chrome.
@@ -171,3 +174,7 @@ incrusta en las peticiones que van a los servicios push de Google y Mozilla. Se 
 - En macOS el instalador no revisa el entorno que launchd da al puente: ni lo fijado con
   `launchctl setenv` ni las `EnvironmentVariables` del plist. En Linux sí mira el del
   gestor y el de la unidad.
+- `COLLIE_TAILSCALE_HOSTS` y `COLLIE_PUBLIC_HOSTS` añaden nombres a la validación de Host,
+  y un nombre ajeno deja entrar peticiones con ese Host, como `COLLIE_ALLOW_ANY_HOST` con
+  todos. El instalador no revisa esas listas en el `.env`, en `config.toml` ni en la
+  unidad: Collie las rellena desde Tailscale y el script no sabe qué valor es el bueno.

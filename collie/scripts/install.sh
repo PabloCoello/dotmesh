@@ -217,8 +217,8 @@ if [ "$AT_PIN" = "1" ]; then
   # fichero de home: el puente lo toma del .env (le llega por EnvironmentFile y además lo
   # funde antes de leer la config), pero `config show` elige el fichero antes de fundir el
   # .env. Y el entorno que da systemd --user, el del gestor y el de la unidad con sus
-  # drop-ins, no pasa por `env -i`, y la unidad puede cambiar el directorio de trabajo, del
-  # que el binario carga otro .env, o el de config.
+  # drop-ins y alias, no pasa por `env -i`, y la unidad puede cambiar la orden, el
+  # directorio de trabajo, del que el binario carga otro .env, o el de config.
   PLUGIN_ROOT="$(plugin_field '.plugin_root' || true)"
   COLLIE_BIN="$PLUGIN_ROOT/bin/collie"
   [ -n "$PLUGIN_ROOT" ] && [ -x "$COLLIE_BIN" ] \
@@ -229,34 +229,59 @@ if [ "$AT_PIN" = "1" ]; then
       comprobación no ve. Quítalo de $ENV_FILE; dotmesh no lo usa." 5
   fi
   if [ "$(uname -s)" = "Linux" ]; then
+    # Las rutas de unidades las pide al gestor y no a systemd-analyze, que las calcula con el
+    # entorno de esta shell.
     if MANAGER_ENV="$(systemctl --user show-environment 2>/dev/null)" \
-      && UNIT_PATHS="$(systemd-analyze --user unit-paths 2>/dev/null)"; then
-      MANAGER_VARS="$(grep -oE '^COLLIE_[A-Za-z0-9_]*' <<<"$MANAGER_ENV" || true)"
+      && UNIT_PATHS="$(systemctl --user show -p UnitPath --value 2>/dev/null)"; then
+      # HOME decide qué ~/.collie/config.toml lee el puente y NODE_ENV qué .env carga Bun del
+      # directorio de trabajo; la consulta usa los de esta shell.
+      MANAGER_VARS="$(grep -oE '^(COLLIE_[A-Za-z0-9_]*|NODE_ENV)=' <<<"$MANAGER_ENV" | tr -d = || true)"
+      MANAGER_HOME="$(sed -n 's/^HOME=//p' <<<"$MANAGER_ENV")"
+      [ -z "$MANAGER_HOME" ] || [ "$MANAGER_HOME" = "$HOME" ] \
+        || MANAGER_VARS="${MANAGER_VARS:+$MANAGER_VARS$'\n'}HOME"
       [ -z "$MANAGER_VARS" ] || die "el gestor de systemd --user pasa a todas sus unidades ${MANAGER_VARS//$'\n'/, },
       y esta comprobación no lo ve. Quítalo de ~/.config/environment.d o con
       'systemctl --user unset-environment'." 5
-      # La unidad tiene que ser la que escribe Collie y nada más: un drop-in o una directiva
-      # añadida a mano cambian lo que lee el puente (HOME, su directorio de config, el de
-      # trabajo, la orden) sin que la consulta lo vea. Los drop-ins se buscan en disco, en
-      # todas las rutas salvo las del sistema, que solo escribe root, porque sobreviven a
+      # La unidad tiene que ser la que escribe Collie y nada más: un drop-in, un alias o una
+      # directiva añadida a mano cambian lo que lee el puente (HOME, su directorio de config,
+      # el de trabajo, la orden) sin que la consulta lo vea. Se buscan en disco, en todas las
+      # rutas salvo las del sistema, que solo escribe root, porque sobreviven a
       # `collie uninstall` y se aplicarían en el primer `collie start`, cuando la unidad
-      # todavía no existe. A la lista de systemd se suman las rutas de usuario conocidas, por
+      # todavía no existe. A la lista del gestor se suman las rutas de usuario conocidas, por
       # si una versión no las enumera todas.
       UNIT_FILE="$HOME/.config/systemd/user/$UNIT"
       RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-      UNIT_PATHS="$UNIT_PATHS
+      UNIT_PATHS="${UNIT_PATHS// /$'\n'}
 $HOME/.config/systemd/user
 $HOME/.config/systemd/user.control
 $HOME/.local/share/systemd/user
 $RUNTIME_DIR/systemd/user
 $RUNTIME_DIR/systemd/user.control
 $RUNTIME_DIR/systemd/transient"
+      is_system_path() {
+        case "$1" in /etc/* | /usr/* | /lib/* | /run/systemd/*) return 0 ;; esac
+        return 1
+      }
       STRAY="$(while IFS= read -r d; do
-          case "$d" in /etc/* | /usr/* | /lib/* | /run/systemd/*) continue ;; esac
+          if [ -z "$d" ] || is_system_path "$d"; then continue; fi
           for f in "$d/$UNIT" "$d/$UNIT.d"/* "$d/service.d"/*; do
             if [ -e "$f" ] && [ "$f" != "$UNIT_FILE" ]; then echo "$f"; fi
           done
+          # Un enlace a la unidad es un alias, y los drop-ins del alias también se aplican.
+          for f in "$d"/*; do
+            if [ -L "$f" ] && [ "$(basename -- "$(readlink -- "$f")")" = "$UNIT" ]; then echo "$f"; fi
+          done
         done <<<"$UNIT_PATHS" | sort -u)"
+      # Y lo que systemd ha cargado de verdad, con los drop-ins del sistema incluidos.
+      UNIT_PROPS="$(systemctl --user show "$UNIT" -p FragmentPath -p NeedDaemonReload \
+        -p Names -p DropInPaths -p WorkingDirectory -p ExecStart -p Environment \
+        -p EnvironmentFiles 2>/dev/null)" \
+        || die "systemctl --user show $UNIT ha fallado; no se puede comprobar la unidad" 5
+      while IFS= read -r f; do
+        if [ -n "$f" ] && ! is_system_path "$f"; then STRAY="${STRAY:+$STRAY$'\n'}$f"; fi
+      done <<<"$(sed -n 's/^DropInPaths=//p' <<<"$UNIT_PROPS" | tr ' ' '\n')"
+      [ "$(sed -n 's/^Names=//p' <<<"$UNIT_PROPS")" = "$UNIT" ] \
+        || STRAY="${STRAY:+$STRAY$'\n'}alias: $(sed -n 's/^Names=//p' <<<"$UNIT_PROPS")"
       [ -z "$STRAY" ] || die "systemd --user aplicaría a $UNIT ficheros que no son la unidad de Collie:
       ${STRAY//$'\n'/, }
       y esta comprobación no ve lo que cambian. Quítalos y vuelve a correr el script." 5
@@ -284,34 +309,42 @@ $RUNTIME_DIR/systemd/transient"
           || die "$UNIT_FILE no tiene las directivas de la unidad de Collie; alguien la ha
       editado. Compárala con $PLUGIN_ROOT/systemd/$UNIT y deja solo esas." 5
       fi
-      # Y lo que systemd ha cargado de verdad, con los drop-ins del sistema incluidos.
-      UNIT_PROPS="$(systemctl --user show "$UNIT" -p FragmentPath -p NeedDaemonReload \
-        -p WorkingDirectory -p ExecStart -p Environment -p EnvironmentFiles 2>/dev/null)" \
-        || die "systemctl --user show $UNIT ha fallado; no se puede comprobar la unidad" 5
       WANT_FRAGMENT=""
       [ ! -e "$UNIT_FILE" ] || WANT_FRAGMENT="$UNIT_FILE"
-      [ "$(sed -n 's/^FragmentPath=//p' <<<"$UNIT_PROPS")" = "$WANT_FRAGMENT" ] \
-        && grep -qx 'NeedDaemonReload=no' <<<"$UNIT_PROPS" \
+      LOADED_FRAGMENT="$(sed -n 's/^FragmentPath=//p' <<<"$UNIT_PROPS")"
+      [ -z "$LOADED_FRAGMENT" ] || [ "$LOADED_FRAGMENT" = "$WANT_FRAGMENT" ] \
+        || die "systemd --user carga $UNIT desde $LOADED_FRAGMENT y no desde $UNIT_FILE,
+      y esta comprobación no revisa esa copia. Quítala, corre 'systemctl --user daemon-reload'
+      y vuelve a correr el script." 5
+      [ "$LOADED_FRAGMENT" = "$WANT_FRAGMENT" ] && grep -qx 'NeedDaemonReload=no' <<<"$UNIT_PROPS" \
         || die "systemd --user no tiene cargada la unidad que hay en disco. Corre
       'systemctl --user daemon-reload' y vuelve a correr el script." 5
       if [ -n "$WANT_FRAGMENT" ]; then
+        # systemctl escribe cada asignación suelta o entre comillas dobles, y con barras o
+        # $'…' cuando el valor lleva caracteres raros; eso no se interpreta, se rechaza.
         UNIT_ENV="$(sed -n 's/^Environment=//p' <<<"$UNIT_PROPS")"
-        UNIT_VARS="$(grep -oE '(^|[[:space:]"])[A-Za-z_][A-Za-z0-9_]*=' <<<"$UNIT_ENV" \
-          | grep -oE '[A-Za-z_][A-Za-z0-9_]*' \
-          | grep -vxE 'HERDR_SOCKET_PATH|HERDR_PLUGIN_CONFIG_DIR|COLLIE_(PORT|PLUGIN_ROOT|TAILSCALE_HOSTS)' || true)"
-        unit_env() {
-          grep -oE "(^|[[:space:]])\"?$1=[^[:space:]\"]*" <<<"$UNIT_ENV" \
-            | sed -E "s/^[[:space:]]*\"?$1=//" || true
-        }
+        QUOTES="$(tr -cd '"' <<<"$UNIT_ENV")"
+        UNIT_ASSIGN=""
+        case "$UNIT_ENV" in
+          *\\* | *\$\'* | *$'\n'*) ;;
+          *) [ $(( ${#QUOTES} % 2 )) -ne 0 ] \
+               || UNIT_ASSIGN="$(grep -oE '"[^"]*"|[^[:space:]"]+' <<<"$UNIT_ENV" | sed -E 's/^"(.*)"$/\1/' || true)" ;;
+        esac
+        UNIT_VARS="$(grep -vE '^(HERDR_SOCKET_PATH|HERDR_PLUGIN_CONFIG_DIR|COLLIE_(PORT|PLUGIN_ROOT|TAILSCALE_HOSTS))=' \
+          <<<"$UNIT_ASSIGN" || true)"
+        unit_env() { sed -n "s/^$1=//p" <<<"$UNIT_ASSIGN"; }
         UNIT_FILES="$(sed -n 's/^EnvironmentFiles=//p' <<<"$UNIT_PROPS" \
           | sed -E 's/ \(ignore_errors=(yes|no)\)$//' | grep -vxF "$ENV_FILE" || true)"
         UNIT_CWD="$(sed -n 's/^WorkingDirectory=//p' <<<"$UNIT_PROPS")"
-        UNIT_EXEC="$(sed -nE 's/^ExecStart=.* argv\[\]=([^;]*) ;.*/\1/p' <<<"$UNIT_PROPS")"
+        # path= es el binario que se ejecuta y argv[] lo que recibe; con @ son distintos.
+        UNIT_EXEC="$(sed -nE 's/^(ExecStart=\{ path=[^;]* ; argv\[\]=[^;]* ; ignore_errors=[a-z]+ ;).*/\1/p' <<<"$UNIT_PROPS")"
         # HERDR_SOCKET_PATH y COLLIE_PORT no se comparan: no abren el gate y el script no sabe
         # qué valor les ha dado Collie.
-        [ -z "$UNIT_VARS" ] && [ "$(unit_env HERDR_PLUGIN_CONFIG_DIR)" = "$CONFIG_DIR" ] \
+        [ -n "$UNIT_ASSIGN" ] && [ -z "$UNIT_VARS" ] \
+          && [ "$(unit_env HERDR_PLUGIN_CONFIG_DIR)" = "$CONFIG_DIR" ] \
           && [ "$(unit_env COLLIE_PLUGIN_ROOT)" = "$PLUGIN_ROOT" ] && [ -z "$UNIT_FILES" ] \
-          && [ "$UNIT_CWD" = "$PLUGIN_ROOT" ] && [ "$UNIT_EXEC" = "$COLLIE_BIN _exec-bridge" ] \
+          && [ "$UNIT_CWD" = "$PLUGIN_ROOT" ] \
+          && [ "$UNIT_EXEC" = "ExecStart={ path=$COLLIE_BIN ; argv[]=$COLLIE_BIN _exec-bridge ; ignore_errors=no ;" ] \
           || die "la unidad $UNIT no arranca el puente como lo escribe Collie para este
       plugin y esta configuración (variables, ficheros de entorno, directorio de trabajo
       u orden), y esta comprobación no vería lo que cambia. Revísala con
