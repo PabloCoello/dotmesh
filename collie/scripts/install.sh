@@ -32,6 +32,13 @@ ok()   { echo "  ok  $*"; }
 info() { echo "→ $*"; }
 die()  { echo "  --  $1" >&2; exit "${2:-1}"; }
 
+# Para la unidad si el script sale con error. Se arma donde herdr ha podido arrancar un
+# puente sin .env: al instalar el plugin y al crear el .env. En el camino bueno la para la
+# sección 8.
+stop_unit_on_failure() {
+  trap '[ $? -eq 0 ] || systemctl --user stop "$UNIT" >/dev/null 2>&1 || true' EXIT
+}
+
 # --- 1. Plataforma ----------------------------------------------------------
 # El plugin declara linux y macos. herdr no corre en WSL, así que allí no hay nada
 # que instalar y salir en verde es lo correcto, no un fallo.
@@ -115,6 +122,7 @@ if [ -n "$INSTALLED_REF" ]; then
   fi
 else
   info "instalando $PLUGIN_REPO en $PLUGIN_REF"
+  stop_unit_on_failure
   herdr plugin install "$PLUGIN_REPO" --ref "$PLUGIN_REF" --yes
   # Las etiquetas de GitHub se pueden mover, así que el pin no significa nada si no se
   # comprueba también aquí: sin esto solo protegería de la segunda corrida en adelante.
@@ -135,9 +143,17 @@ mkdir -p "$CONFIG_DIR"
 
 # --- 6. El .env -------------------------------------------------------------
 # Nunca se sobrescribe y nunca se versiona: acaba llevando las claves VAPID.
-# COLLIE_TRUSTED_USER es el gate de escritura. Se escribe ANTES del primer arranque a
-# propósito: un .env sin esa variable deja el puente abierto a escritura mientras exista.
+# COLLIE_TRUSTED_USER es el gate de escritura: un .env sin esa variable deja el puente
+# abierto a escritura mientras exista. Se escribe antes de que arranques el puente; si
+# herdr lo arrancó al instalar el plugin, sin .env, lo para la sección 8 o el trap.
 ENV_FILE="$CONFIG_DIR/.env"
+# Las variables que anulan el gate aunque COLLIE_TRUSTED_USER esté puesto. Collie las lee
+# con envBool: on/1/true/yes, sin distinguir mayúsculas. TRUSTED_USER_OPTIONAL y SKIP_SERVE
+# dejan pasar peticiones sin identidad (cualquier nodo etiquetado del tailnet escribe),
+# ALLOW_ANY_HOST apaga la validación de Host y ALLOW_NON_LOOPBACK_BIND saca el puerto de
+# loopback, donde cualquiera puede poner la cabecera de identidad. Sirven para desarrollo
+# local o para un proxy propio, no para este puente.
+HATCHES=(COLLIE_TRUSTED_USER_OPTIONAL COLLIE_SKIP_SERVE COLLIE_ALLOW_ANY_HOST COLLIE_ALLOW_NON_LOOPBACK_BIND)
 ENV_CREATED=0
 if [ -e "$ENV_FILE" ]; then
   # Respetar un .env ajeno está bien; respetarlo sin mirar el gate es fallar en abierto.
@@ -146,14 +162,11 @@ if [ -e "$ENV_FILE" ]; then
     || die "el .env existente no define COLLIE_TRUSTED_USER: el puente quedaría abierto
       a escritura para cualquiera que alcance el tailnet. Añádelo antes de arrancar:
         echo 'COLLIE_TRUSTED_USER=<tu-login@proveedor>' >> $ENV_FILE" 5
-  # Desde 1.x hay dos escotillas que anulan el gate aunque COLLIE_TRUSTED_USER esté puesto:
-  # _OPTIONAL deja pasar peticiones sin identidad (cualquier nodo etiquetado del tailnet
-  # escribe) y ALLOW_ANY_HOST apaga la validación de Host. Collie las lee con envBool:
-  # on/1/true/yes, sin distinguir mayúsculas. Son para desarrollo local, no para este puente.
-  if grep -iqE '^[[:space:]]*COLLIE_(TRUSTED_USER_OPTIONAL|ALLOW_ANY_HOST)[[:space:]]*=[[:space:]]*["'"'"']?(on|1|true|yes)' "$ENV_FILE"; then
-    die "el .env existente activa COLLIE_TRUSTED_USER_OPTIONAL o COLLIE_ALLOW_ANY_HOST, que
-      anulan el gate de identidad aunque COLLIE_TRUSTED_USER esté definido. Quítalas de
-      $ENV_FILE antes de arrancar." 5
+  HATCH_RE="$(IFS='|'; echo "${HATCHES[*]}")"
+  if grep -iqE '^[[:space:]]*('"$HATCH_RE"')[[:space:]]*=[[:space:]]*["'"'"']?(on|1|true|yes)' "$ENV_FILE"; then
+    die "el .env existente activa alguna de estas variables, que anulan el gate de identidad
+      aunque COLLIE_TRUSTED_USER esté definido: ${HATCHES[*]}.
+      Quítalas de $ENV_FILE antes de arrancar." 5
   fi
   ok ".env existente respetado, con el gate de escritura cerrado"
 else
@@ -170,45 +183,65 @@ EOF
   )
   chmod 600 "$ENV_FILE"
   ENV_CREATED=1
-  # La sección 8 para el puente que herdr haya podido arrancar sin .env. Si algo falla
-  # antes de llegar a ella (la config efectiva, stow), hay que pararlo igual al salir.
-  trap '[ $? -eq 0 ] || systemctl --user stop "$UNIT" >/dev/null 2>&1 || true' EXIT
+  stop_unit_on_failure
 fi
 
 # --- 6b. La config efectiva -------------------------------------------------
 # Desde 1.9.0 cualquier ajuste se puede fijar también en ~/.collie/config.toml y en un
 # config.toml junto al .env. El .env gana a los dos, pero una clave que el .env no nombra
 # la decide el fichero, así que las comprobaciones de arriba ya no bastan: se pregunta a
-# Collie por el valor efectivo. Con el entorno que tendrá la unidad y no con el de esta
+# Collie por el valor efectivo, en las condiciones de la unidad: en su directorio de
+# trabajo, porque el binario carga el .env que encuentre ahí, y sin el entorno de esta
 # shell, para que una variable suelta no tape lo que el servicio va a leer.
 # Solo con el commit del pin, que es el que se sabe que trae `config show`; si no, la
 # sección 5 ya ha dicho cómo moverlo y volver a correr este script.
 if [ "$AT_PIN" = "1" ]; then
-  PLUGIN_ROOT="$(plugin_field '.plugin_root')"
+  # Dos entradas que la unidad ve y esta consulta no, y que dotmesh no usa. COLLIE_CONFIG
+  # cambia el fichero de home y Collie solo lo lee del entorno del proceso: en el .env lo
+  # recibe la unidad (EnvironmentFile) y no `config show`, que funde el .env después. Y el
+  # gestor de systemd --user pasa su entorno a todas sus unidades.
+  if grep -qE '^[[:space:]]*(export[[:space:]]+)?COLLIE_CONFIG[[:space:]]*=' "$ENV_FILE"; then
+    die "el .env define COLLIE_CONFIG, y con él el puente leería un fichero que esta
+      comprobación no ve. Quítalo de $ENV_FILE; dotmesh no lo usa." 5
+  fi
+  if [ "$(uname -s)" = "Linux" ]; then
+    MANAGER_VARS="$(systemctl --user show-environment 2>/dev/null | grep -oE '^COLLIE_[A-Za-z0-9_]*' || true)"
+    [ -z "$MANAGER_VARS" ] || die "el gestor de systemd --user pasa a todas sus unidades ${MANAGER_VARS//$'\n'/, },
+      y esta comprobación no lo ve. Quítalo de ~/.config/environment.d o con
+      'systemctl --user unset-environment'." 5
+  fi
+  PLUGIN_ROOT="$(plugin_field '.plugin_root' || true)"
   COLLIE_BIN="$PLUGIN_ROOT/bin/collie"
   [ -n "$PLUGIN_ROOT" ] && [ -x "$COLLIE_BIN" ] \
-    || die "no se encuentra el binario de Collie (${COLLIE_BIN}); sin él no se puede comprobar el gate" 5
-  EFFECTIVE="$(env -i HOME="$HOME" PATH="$PATH" HERDR_PLUGIN_CONFIG_DIR="$CONFIG_DIR" \
-    "$COLLIE_BIN" config show --json 2>/dev/null)" \
+    || die "no se encuentra el binario de Collie (plugin_root: '${PLUGIN_ROOT:-vacío}');
+      sin él no se puede comprobar el gate" 5
+  EFFECTIVE="$(cd "$PLUGIN_ROOT" && env -i HOME="$HOME" PATH="$PATH" \
+    HERDR_PLUGIN_CONFIG_DIR="$CONFIG_DIR" "$COLLIE_BIN" config show --json)" \
     || die "'collie config show' ha fallado; no se puede comprobar el gate de identidad" 5
-  # Los booleanos llegan como los lee envBool: on/1/true/yes, sin distinguir mayúsculas.
-  OPEN_HATCHES="$(jq -r '.settings[]
-      | select(.env == "COLLIE_TRUSTED_USER_OPTIONAL" or .env == "COLLIE_ALLOW_ANY_HOST")
+  # Cada variable del gate tiene que salir una vez. Si no, el binario o su salida no son los
+  # que se esperan, y parar es mejor que dar el gate por cerrado.
+  jq -e --args '[.settings[].env] as $seen
+      | all($ARGS.positional[]; . as $k | ($seen | map(select(. == $k)) | length) == 1)' \
+      COLLIE_TRUSTED_USER "${HATCHES[@]}" <<<"$EFFECTIVE" >/dev/null \
+    || die "la salida de 'collie config show' no trae las variables del gate; no se puede
+      comprobar" 5
+  OPEN_HATCHES="$(jq -r --args '.settings[]
+      | select(.env | IN($ARGS.positional[]))
       | select(.value | test("^\\s*(on|1|true|yes)\\s*$"; "i"))
-      | "\(.env) (\(.source))"' <<<"$EFFECTIVE")" \
+      | "\(.env) (\(.source))"' "${HATCHES[@]}" <<<"$EFFECTIVE")" \
     || die "la salida de 'collie config show' no se entiende; no se puede comprobar el gate" 5
   [ -z "$OPEN_HATCHES" ] || die "la config efectiva abre el gate de identidad:
       ${OPEN_HATCHES//$'\n'/, }
-      file:home es ~/.collie/config.toml y file:instance, $CONFIG_DIR/config.toml.
-      Quita cada clave de donde dice el paréntesis antes de arrancar ('env' es el .env).
-      El detalle, con:  HERDR_PLUGIN_CONFIG_DIR=\"$CONFIG_DIR\" \"$COLLIE_BIN\" config show" 5
-  jq -e '[.settings[] | select(.env == "COLLIE_TRUSTED_USER" and .value != "(unset)")]
-      | length == 1' <<<"$EFFECTIVE" >/dev/null \
+      file:home es ~/.collie/config.toml, file:instance es $CONFIG_DIR/config.toml
+      y env es el .env. Quita cada variable de donde dice el paréntesis antes de arrancar." 5
+  jq -e '[.settings[] | select(.env == "COLLIE_TRUSTED_USER")][0].value
+      | IN("(unset)", "unset", "") | not' <<<"$EFFECTIVE" >/dev/null \
     || die "la config efectiva no define COLLIE_TRUSTED_USER: el puente quedaría abierto
       a escritura para cualquiera que alcance el tailnet." 5
   ok "config efectiva con el gate de identidad cerrado"
 else
-  echo "  !!  config efectiva sin comprobar hasta que el plugin esté en el pin"
+  echo "  !!  config efectiva sin comprobar porque el plugin no está en el pin. Muévelo y"
+  echo "      vuelve a correr este script antes de arrancar el puente."
 fi
 
 # --- 7. Los presets ---------------------------------------------------------

@@ -21,9 +21,11 @@ emparejar el móvil.
 
 Dos cosas que hace y no se deducen de lo anterior. Tras una instalación nueva compara el
 commit que ha resuelto la etiqueta con el pin y desinstala si no coinciden, porque las
-etiquetas de GitHub se pueden mover. Y si es él quien acaba de crear el `.env`, para la
-unidad: herdr decide si arranca el servicio al instalar el plugin, y en esa ventana el
-puente correría sin gate de escritura. Si el `.env` ya existía, no toca el servicio.
+etiquetas de GitHub se pueden mover. Y para la unidad cuando ha podido arrancar sin gate:
+herdr decide si arranca el servicio al instalar el plugin, y mientras no exista el `.env`
+el puente correría sin gate de escritura. Por eso la para al terminar si acaba de crear el
+`.env`, y también si falla a medias después de instalar el plugin o de crear el `.env`. Si
+los dos ya existían, no toca el servicio.
 
 `collie/` **no está en `PACKAGES`** ni en `make install`. El puente es acceso a shell
 remoto y se instala a propósito, nunca de arrastre.
@@ -70,7 +72,7 @@ perder el catálogo no compraría nada.
 
 ## Trampas conocidas
 
-Ninguna está documentada en el repo de Collie y todas vuelven a morder en una máquina nueva.
+Casi ninguna está documentada en el repo de Collie y todas vuelven a morder en una máquina nueva.
 Las cuatro primeras son guardas del instalador; la última no se puede automatizar.
 
 1. **`bunx` no viene con el binario suelto de Bun.** El build lo invoca para el typecheck y
@@ -81,14 +83,22 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
    el síntoma es `CertDomains` ausente en `tailscale status --json`.
 3. **Hace falta ser operador de `tailscaled`**: `sudo tailscale set --operator=$USER`.
 4. **Sin `COLLIE_TRUSTED_USER` el puente queda abierto a escritura**, y lo mismo pasa si
-   se enciende `COLLIE_ALLOW_ANY_HOST` o `COLLIE_TRUSTED_USER_OPTIONAL`. El script escribe
-   el `.env` antes del primer arranque para que no exista esa ventana, deduciendo la
-   identidad del tailnet, y si encuentra un `.env` ajeno sin esa variable se niega a seguir
-   en lugar de respetarlo en silencio. Desde la 1.9.0 cualquier ajuste puede venir también
-   de `~/.collie/config.toml` o de un `config.toml` junto al `.env`, así que además pide a
-   Collie la configuración efectiva (`collie config show`) con el entorno que tendrá la
-   unidad, y para si falta la identidad o si alguna de las dos variables está encendida,
-   venga del fichero que venga.
+   se enciende cualquiera de estas cuatro: `COLLIE_TRUSTED_USER_OPTIONAL` y
+   `COLLIE_SKIP_SERVE` dejan pasar peticiones sin identidad, `COLLIE_ALLOW_ANY_HOST` apaga
+   la validación de Host y `COLLIE_ALLOW_NON_LOOPBACK_BIND` saca el puerto de loopback,
+   donde cualquiera puede poner la cabecera de identidad. El script escribe el `.env` con la
+   identidad del tailnet antes de que arranques el puente, y si encuentra un `.env` ajeno
+   sin ella o con alguna de las cuatro encendida se niega a seguir en lugar de respetarlo en
+   silencio.
+
+   Desde la 1.9.0 cualquier ajuste puede venir también de `~/.collie/config.toml` o de un
+   `config.toml` junto al `.env`. Por eso, con el plugin ya en el pin, el script pregunta
+   además a Collie por la configuración efectiva (`collie config show`) en las condiciones
+   de la unidad, y para si falta la identidad o si alguna de las cuatro está encendida,
+   venga del fichero que venga. También para si el `.env` define `COLLIE_CONFIG` o si el
+   gestor de `systemd --user` exporta alguna variable `COLLIE_`: la unidad las vería y la
+   consulta no. Si el plugin no está en el pin, se salta la consulta y lo avisa; muévelo y
+   vuelve a correr el script antes de arrancar.
 5. **Brave en Android trae «Use Google services for push messaging» desactivado** por
    defecto, y sin eso el web push no llega nunca aunque la suscripción parezca correcta.
    La prueba del 2026-08-28 se hizo en Chrome.
