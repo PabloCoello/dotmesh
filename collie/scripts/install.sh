@@ -144,31 +144,43 @@ mkdir -p "$CONFIG_DIR"
 # --- 6. El .env -------------------------------------------------------------
 # Nunca se sobrescribe y nunca se versiona: acaba llevando las claves VAPID.
 # COLLIE_TRUSTED_USER es el gate de escritura: un .env sin esa variable deja el puente
-# abierto a escritura mientras exista. Se escribe antes de que arranques el puente; si
-# herdr lo arrancó al instalar el plugin, sin .env, lo para la sección 8 o el trap.
+# abierto a escritura mientras exista. Se escribe antes de que arranques el puente; si el
+# puente ha podido quedar en marcha sin .env, lo para la sección 8 o el trap.
 ENV_FILE="$CONFIG_DIR/.env"
 # Las variables que anulan el gate aunque COLLIE_TRUSTED_USER esté puesto. Collie las lee
 # con envBool: on/1/true/yes, sin distinguir mayúsculas. TRUSTED_USER_OPTIONAL y SKIP_SERVE
 # dejan pasar peticiones sin identidad (cualquier nodo etiquetado del tailnet escribe),
-# ALLOW_ANY_HOST apaga la validación de Host y ALLOW_NON_LOOPBACK_BIND saca el puerto de
-# loopback, donde cualquiera puede poner la cabecera de identidad. Sirven para desarrollo
-# local o para un proxy propio, no para este puente.
+# ALLOW_ANY_HOST apaga la validación de Host y ALLOW_NON_LOOPBACK_BIND deja que COLLIE_HOST
+# saque el puerto de loopback sin comprobar quién se conecta, así que cualquiera que llegue
+# puede poner la cabecera de identidad. Sirven para desarrollo local o para un proxy propio,
+# no para este puente.
 HATCHES=(COLLIE_TRUSTED_USER_OPTIONAL COLLIE_SKIP_SERVE COLLIE_ALLOW_ANY_HOST COLLIE_ALLOW_NON_LOOPBACK_BIND)
 ENV_CREATED=0
 if [ -e "$ENV_FILE" ]; then
   # Respetar un .env ajeno está bien; respetarlo sin mirar el gate es fallar en abierto.
   # Un .env sin COLLIE_TRUSTED_USER deja el puente escribible para cualquiera que llegue.
-  grep -qE '^COLLIE_TRUSTED_USER=.+' "$ENV_FILE" \
+  # Se lee como Collie: `export` opcional, sin espacios junto al = y gana la última
+  # asignación. Tras los espacios y la comilla, el valor tiene que empezar por algo que no
+  # sea espacio, comilla ni #.
+  grep -E '^[[:space:]]*(export[[:space:]]+)?COLLIE_TRUSTED_USER=' "$ENV_FILE" | tail -n 1 \
+    | grep -E "=[[:space:]]*[\"']?[^\"'[:space:]#]" >/dev/null \
     || die "el .env existente no define COLLIE_TRUSTED_USER: el puente quedaría abierto
       a escritura para cualquiera que alcance el tailnet. Añádelo antes de arrancar:
         echo 'COLLIE_TRUSTED_USER=<tu-login@proveedor>' >> $ENV_FILE" 5
+  # Una escotilla solo cuenta como apagada con off/0/false/no. Vacía no vale: el puente la
+  # rellena con config.toml y `config show` no lo refleja, así que la 6b no lo vería. Aquí
+  # se avisa de más a propósito: también de asignaciones que Collie ignoraría, como las que
+  # llevan espacios junto al =.
   HATCH_RE="$(IFS='|'; echo "${HATCHES[*]}")"
-  if grep -iqE '^[[:space:]]*('"$HATCH_RE"')[[:space:]]*=[[:space:]]*["'"'"']?(on|1|true|yes)' "$ENV_FILE"; then
-    die "el .env existente activa alguna de estas variables, que anulan el gate de identidad
-      aunque COLLIE_TRUSTED_USER esté definido: ${HATCHES[*]}.
-      Quítalas de $ENV_FILE antes de arrancar." 5
-  fi
-  ok ".env existente respetado, con el gate de escritura cerrado"
+  OFF_RE='(off|0|false|no)'
+  SET_HATCHES="$(grep -iE '^[[:space:]]*(export[[:space:]]+)?('"$HATCH_RE"')[[:space:]]*=' "$ENV_FILE" \
+    | grep -ivE "=[[:space:]]*($OFF_RE|\"$OFF_RE\"|'$OFF_RE')[[:space:]]*(#.*)?\$" \
+    | sed -E 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z0-9_]+).*/\2/' || true)"
+  [ -z "$SET_HATCHES" ] || die "el .env existente asigna ${SET_HATCHES//$'\n'/, } con un valor que no es
+      off/0/false/no. Estas variables anulan el gate de identidad aunque COLLIE_TRUSTED_USER
+      esté definido, y vacías tampoco valen: Collie las rellena con config.toml.
+      Quítalas de $ENV_FILE o ponlas a false. Si el puente está en marcha, páralo." 5
+  ok ".env existente respetado: define la identidad y no enciende escotillas"
 else
   TS_LOGIN="$(tailscale status --json 2>/dev/null | jq -r '.Self.UserID as $u | .User[$u|tostring].LoginName // empty')"
   [ -n "$TS_LOGIN" ] || die "no se ha podido deducir tu identidad de Tailscale.
@@ -196,25 +208,49 @@ fi
 # Solo con el commit del pin, que es el que se sabe que trae `config show`; si no, la
 # sección 5 ya ha dicho cómo moverlo y volver a correr este script.
 if [ "$AT_PIN" = "1" ]; then
-  # Dos entradas que la unidad ve y esta consulta no, y que dotmesh no usa. COLLIE_CONFIG
-  # cambia el fichero de home y Collie solo lo lee del entorno del proceso: en el .env lo
-  # recibe la unidad (EnvironmentFile) y no `config show`, que funde el .env después. Y el
-  # gestor de systemd --user pasa su entorno a todas sus unidades.
-  if grep -qE '^[[:space:]]*(export[[:space:]]+)?COLLIE_CONFIG[[:space:]]*=' "$ENV_FILE"; then
-    die "el .env define COLLIE_CONFIG, y con él el puente leería un fichero que esta
-      comprobación no ve. Quítalo de $ENV_FILE; dotmesh no lo usa." 5
-  fi
-  if [ "$(uname -s)" = "Linux" ]; then
-    MANAGER_VARS="$(systemctl --user show-environment 2>/dev/null | grep -oE '^COLLIE_[A-Za-z0-9_]*' || true)"
-    [ -z "$MANAGER_VARS" ] || die "el gestor de systemd --user pasa a todas sus unidades ${MANAGER_VARS//$'\n'/, },
-      y esta comprobación no lo ve. Quítalo de ~/.config/environment.d o con
-      'systemctl --user unset-environment'." 5
-  fi
+  # Lo que la unidad ve y esta consulta no, y que dotmesh no usa. COLLIE_CONFIG cambia el
+  # fichero de home: el puente lo toma del .env (le llega por EnvironmentFile y además lo
+  # funde antes de leer la config), pero `config show` elige el fichero antes de fundir el
+  # .env. Y el entorno que da systemd --user, el del gestor y el de la unidad con sus
+  # drop-ins, no pasa por `env -i`; tampoco un directorio de trabajo distinto, del que el
+  # binario cargaría otro .env.
   PLUGIN_ROOT="$(plugin_field '.plugin_root' || true)"
   COLLIE_BIN="$PLUGIN_ROOT/bin/collie"
   [ -n "$PLUGIN_ROOT" ] && [ -x "$COLLIE_BIN" ] \
     || die "no se encuentra el binario de Collie (plugin_root: '${PLUGIN_ROOT:-vacío}');
       sin él no se puede comprobar el gate" 5
+  if grep -qE '^[[:space:]]*(export[[:space:]]+)?COLLIE_CONFIG[[:space:]]*=' "$ENV_FILE"; then
+    die "el .env define COLLIE_CONFIG, y con él el puente leería un fichero que esta
+      comprobación no ve. Quítalo de $ENV_FILE; dotmesh no lo usa." 5
+  fi
+  if [ "$(uname -s)" = "Linux" ]; then
+    if MANAGER_ENV="$(systemctl --user show-environment 2>/dev/null)"; then
+      MANAGER_VARS="$(grep -oE '^COLLIE_[A-Za-z0-9_]*' <<<"$MANAGER_ENV" || true)"
+      [ -z "$MANAGER_VARS" ] || die "el gestor de systemd --user pasa a todas sus unidades ${MANAGER_VARS//$'\n'/, },
+      y esta comprobación no lo ve. Quítalo de ~/.config/environment.d o con
+      'systemctl --user unset-environment'." 5
+      # Collie escribe en la unidad estas cuatro variables, el .env como EnvironmentFile y el
+      # plugin como directorio de trabajo. Cualquier otra cosa viene de un drop-in
+      # (systemctl --user edit) o de una mano. Sin unidad, las tres consultas salen vacías.
+      UNIT_VARS="$(systemctl --user show "$UNIT" -p Environment --value 2>/dev/null \
+        | grep -oE '(^|[[:space:]"])COLLIE_[A-Za-z0-9_]*=' | grep -oE 'COLLIE_[A-Za-z0-9_]*' \
+        | grep -vxE 'COLLIE_(PORT|PLUGIN_ROOT|INSTANCE|TAILSCALE_HOSTS)' || true)"
+      [ -z "$UNIT_VARS" ] || die "la unidad $UNIT define ${UNIT_VARS//$'\n'/, } en Environment=,
+      y esta comprobación no lo ve. Quítalo del drop-in (systemctl --user edit $UNIT)." 5
+      UNIT_FILES="$(systemctl --user show "$UNIT" -p EnvironmentFiles --value 2>/dev/null \
+        | sed -E 's/ \(ignore_errors=(yes|no)\)$//' | grep -vxF "$ENV_FILE" || true)"
+      [ -z "$UNIT_FILES" ] || die "la unidad $UNIT carga más ficheros de entorno que el .env:
+      ${UNIT_FILES//$'\n'/, }
+      y esta comprobación no los ve. Quítalos del drop-in (systemctl --user edit $UNIT)." 5
+      UNIT_CWD="$(systemctl --user show "$UNIT" -p WorkingDirectory --value 2>/dev/null || true)"
+      [ -z "$UNIT_CWD" ] || [ "$UNIT_CWD" = "$PLUGIN_ROOT" ] || die "la unidad $UNIT arranca en $UNIT_CWD
+      y no en el plugin; el binario cargaría el .env de ese directorio y esta comprobación
+      no lo ve. Quítalo del drop-in (systemctl --user edit $UNIT)." 5
+    else
+      echo "  !!  no se llega a systemd --user: el entorno que el gestor y la unidad dan al"
+      echo "      puente queda sin revisar."
+    fi
+  fi
   EFFECTIVE="$(cd "$PLUGIN_ROOT" && env -i HOME="$HOME" PATH="$PATH" \
     HERDR_PLUGIN_CONFIG_DIR="$CONFIG_DIR" "$COLLIE_BIN" config show --json)" \
     || die "'collie config show' ha fallado; no se puede comprobar el gate de identidad" 5
@@ -233,11 +269,13 @@ if [ "$AT_PIN" = "1" ]; then
   [ -z "$OPEN_HATCHES" ] || die "la config efectiva abre el gate de identidad:
       ${OPEN_HATCHES//$'\n'/, }
       file:home es ~/.collie/config.toml, file:instance es $CONFIG_DIR/config.toml
-      y env es el .env. Quita cada variable de donde dice el paréntesis antes de arrancar." 5
+      y env es el .env. Quita cada variable de donde dice el paréntesis antes de arrancar.
+      Si el puente está en marcha, páralo." 5
   jq -e '[.settings[] | select(.env == "COLLIE_TRUSTED_USER")][0].value
-      | IN("(unset)", "unset", "") | not' <<<"$EFFECTIVE" >/dev/null \
+      | (type == "string") and (IN("(unset)", "unset") | not) and (test("^\\s*$") | not)' \
+      <<<"$EFFECTIVE" >/dev/null \
     || die "la config efectiva no define COLLIE_TRUSTED_USER: el puente quedaría abierto
-      a escritura para cualquiera que alcance el tailnet." 5
+      a escritura para cualquiera que alcance el tailnet. Si está en marcha, páralo." 5
   ok "config efectiva con el gate de identidad cerrado"
 else
   echo "  !!  config efectiva sin comprobar porque el plugin no está en el pin. Muévelo y"
@@ -256,10 +294,19 @@ ok "presets enlazados y .env intacto"
 # --- 8. El servicio ---------------------------------------------------------
 # Política de dotmesh: el puente es acceso a shell remoto, así que existe solo mientras
 # lo usas. Sin linger y sin enable; lo arrancas al empezar una sesión larga.
-if [ "$(uname -s)" = "Linux" ] && systemctl --user list-unit-files 2>/dev/null | grep -q "^$UNIT"; then
-  # Si el .env acaba de nacer, el puente pudo arrancar antes que él (herdr decide eso, no
-  # este script) y estaría corriendo con el gate abierto: ahí sí hay que pararlo. En
-  # cualquier otro caso no se toca, para no matar un puente sano en cada corrida.
+# Collie solo escribe la unidad en `collie start`; en una máquina nueva todavía no existe.
+# La lista se lee entera antes de buscar: con pipefail, grep cierra la tubería al primer
+# acierto (también con la salida a /dev/null), systemctl muere con SIGPIPE y la sección
+# entera se saltaría.
+UNIT_PRESENT=0
+if [ "$(uname -s)" = "Linux" ]; then
+  UNIT_LIST="$(systemctl --user list-unit-files 2>/dev/null || true)"
+  if grep -q "^$UNIT" <<<"$UNIT_LIST"; then UNIT_PRESENT=1; fi
+fi
+if [ "$UNIT_PRESENT" = "1" ]; then
+  # Si el .env acaba de nacer, un puente en marcha (este script no controla cuándo arranca)
+  # estaría corriendo con el gate abierto: ahí sí hay que pararlo. En cualquier otro caso
+  # no se para, para no matar un puente sano en cada corrida.
   if [ "$ENV_CREATED" = "1" ]; then
     systemctl --user stop "$UNIT" >/dev/null 2>&1 || true
   fi
@@ -268,6 +315,12 @@ if [ "$(uname -s)" = "Linux" ] && systemctl --user list-unit-files 2>/dev/null |
 fi
 
 PLUGIN_ROOT="$(plugin_field '.plugin_root' || true)"
+START_STEP="systemctl --user start $UNIT"
+if [ "$(uname -s)" = "Linux" ] && [ "$UNIT_PRESENT" = "0" ]; then
+  # La primera vez no hay otra forma de tener la unidad; luego se vuelve a la política.
+  START_STEP="${PLUGIN_ROOT:-<plugin_root>}/bin/collie start    # escribe la unidad y la habilita
+       systemctl --user disable $UNIT"
+fi
 
 cat <<EOF
 
@@ -278,7 +331,7 @@ Collie instalado. Lo que queda, una sola vez:
   2. Publicar el puente en el tailnet:
        tailscale serve --bg 8787
   3. Arrancar y emparejar el móvil:
-       systemctl --user start $UNIT
+       $START_STEP
        ${PLUGIN_ROOT:-<plugin_root>}/bin/collie pair
 
 Al terminar la sesión:  systemctl --user stop $UNIT

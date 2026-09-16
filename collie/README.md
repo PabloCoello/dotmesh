@@ -21,19 +21,17 @@ emparejar el móvil.
 
 Dos cosas que hace y no se deducen de lo anterior. Tras una instalación nueva compara el
 commit que ha resuelto la etiqueta con el pin y desinstala si no coinciden, porque las
-etiquetas de GitHub se pueden mover. Y para la unidad cuando ha podido arrancar sin gate:
-herdr decide si arranca el servicio al instalar el plugin, y mientras no exista el `.env`
-el puente correría sin gate de escritura. Por eso la para al terminar si acaba de crear el
-`.env`, y también si falla a medias después de instalar el plugin o de crear el `.env`. Si
-los dos ya existían, no toca el servicio.
+etiquetas de GitHub se pueden mover. Y para la unidad cuando el puente ha podido quedar en
+marcha sin gate: mientras no exista el `.env`, correría sin gate de escritura. Por eso la
+para al terminar si acaba de crear el `.env`, y también si falla una vez empezada la
+instalación del plugin o creado el `.env`. Si los dos ya existían, no la para.
 
 `collie/` **no está en `PACKAGES`** ni en `make install`. El puente es acceso a shell
 remoto y se instala a propósito, nunca de arrastre.
 
 ## Política de arranque
 
-La unidad queda instalada pero **deshabilitada**, y sin `linger`. El puente existe solo
-mientras lo usas:
+La unidad queda **deshabilitada** y sin `linger`. El puente existe solo mientras lo usas:
 
 ```bash
 systemctl --user start collie    # al empezar una sesión larga
@@ -42,7 +40,10 @@ systemctl --user stop  collie    # al terminar
 
 No lo arranques con `collie start` ni con la acción `start` del plugin: las dos ejecutan
 `systemctl --user enable --now` y dejan la unidad habilitada para el siguiente inicio de
-sesión.
+sesión. La excepción es el primer arranque: Collie solo escribe la unidad en `collie start`,
+así que en una máquina nueva no existe hasta entonces. El script lo detecta y en sus pasos
+finales pone `collie start` seguido de `systemctl --user disable collie`, que la devuelve a
+esta política.
 
 Esto es deliberado. El interruptor de seguridad es el servicio, no Tailscale: con
 `RouteAll=false` y sin nodo de salida, Tailscale aquí es una red privada entre tus
@@ -85,20 +86,24 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
 4. **Sin `COLLIE_TRUSTED_USER` el puente queda abierto a escritura**, y lo mismo pasa si
    se enciende cualquiera de estas cuatro: `COLLIE_TRUSTED_USER_OPTIONAL` y
    `COLLIE_SKIP_SERVE` dejan pasar peticiones sin identidad, `COLLIE_ALLOW_ANY_HOST` apaga
-   la validación de Host y `COLLIE_ALLOW_NON_LOOPBACK_BIND` saca el puerto de loopback,
-   donde cualquiera puede poner la cabecera de identidad. El script escribe el `.env` con la
-   identidad del tailnet antes de que arranques el puente, y si encuentra un `.env` ajeno
-   sin ella o con alguna de las cuatro encendida se niega a seguir en lugar de respetarlo en
-   silencio.
+   la validación de Host y `COLLIE_ALLOW_NON_LOOPBACK_BIND` deja escuchar fuera de loopback
+   con `COLLIE_HOST` sin comprobar quién se conecta, así que cualquiera que llegue al puerto
+   puede poner la cabecera de identidad. El script escribe el `.env` con la identidad del
+   tailnet antes de que arranques el puente. Si encuentra un `.env` ajeno, se niega a seguir
+   cuando le falta la identidad o cuando asigna alguna de las cuatro con un valor que no sea
+   `off`, `0`, `false` o `no`. Vacía tampoco vale: Collie rellena las variables vacías con el
+   `config.toml`.
 
    Desde la 1.9.0 cualquier ajuste puede venir también de `~/.collie/config.toml` o de un
    `config.toml` junto al `.env`. Por eso, con el plugin ya en el pin, el script pregunta
    además a Collie por la configuración efectiva (`collie config show`) en las condiciones
    de la unidad, y para si falta la identidad o si alguna de las cuatro está encendida,
-   venga del fichero que venga. También para si el `.env` define `COLLIE_CONFIG` o si el
-   gestor de `systemd --user` exporta alguna variable `COLLIE_`: la unidad las vería y la
-   consulta no. Si el plugin no está en el pin, se salta la consulta y lo avisa; muévelo y
-   vuelve a correr el script antes de arrancar.
+   venga del fichero que venga. También para en tres casos en que la unidad vería algo que
+   la consulta no ve: si el `.env` define `COLLIE_CONFIG`, si el gestor de `systemd --user`
+   exporta alguna variable `COLLIE_` y si un drop-in de la unidad añade variables `COLLIE_`,
+   otro fichero de entorno u otro directorio de trabajo, del que el binario cargaría otro
+   `.env`. Si el plugin no está en el pin, se salta la consulta y lo avisa; muévelo y vuelve
+   a correr el script antes de arrancar.
 5. **Brave en Android trae «Use Google services for push messaging» desactivado** por
    defecto, y sin eso el web push no llega nunca aunque la suscripción parezca correcta.
    La prueba del 2026-08-28 se hizo en Chrome.
@@ -159,3 +164,6 @@ incrusta en las peticiones que van a los servicios push de Google y Mozilla. Se 
 
 - `make health` solo comprueba la unidad en Linux; en macOS el puente corre bajo launchd
   y esa fila no lo cubre.
+- En macOS el instalador no revisa el entorno que launchd da al puente: ni lo fijado con
+  `launchctl setenv` ni las `EnvironmentVariables` del plist. En Linux sí mira el del
+  gestor y el de la unidad.
