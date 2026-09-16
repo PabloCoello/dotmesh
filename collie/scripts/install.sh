@@ -94,11 +94,13 @@ plugin_field() {
     | jq -r --arg pid "$PLUGIN_ID" ".result.plugins[]? | select(.plugin_id==\$pid) | $1 // empty"
 }
 
+AT_PIN=0
 INSTALLED_REF="$(plugin_field '.source.requested_ref')"
 if [ -n "$INSTALLED_REF" ]; then
   INSTALLED_COMMIT="$(plugin_field '.source.resolved_commit')"
   if [ "$INSTALLED_COMMIT" = "$PLUGIN_COMMIT" ]; then
     ok "plugin ya instalado en $PLUGIN_REF (${PLUGIN_COMMIT:0:7})"
+    AT_PIN=1
   else
     # Mover el checkout por debajo de un puente en marcha no es decisión de este script.
     # Avisar y seguir. La orden que se imprime es `install --ref` sobre lo ya instalado, no
@@ -124,6 +126,7 @@ else
       tocar PLUGIN_COMMIT en este script." 5
   fi
   ok "instalado y verificado contra el pin (${PLUGIN_COMMIT:0:7})"
+  AT_PIN=1
 fi
 
 CONFIG_DIR="$(herdr plugin config-dir "$PLUGIN_ID" 2>/dev/null || true)"
@@ -167,6 +170,45 @@ EOF
   )
   chmod 600 "$ENV_FILE"
   ENV_CREATED=1
+  # La sección 8 para el puente que herdr haya podido arrancar sin .env. Si algo falla
+  # antes de llegar a ella (la config efectiva, stow), hay que pararlo igual al salir.
+  trap '[ $? -eq 0 ] || systemctl --user stop "$UNIT" >/dev/null 2>&1 || true' EXIT
+fi
+
+# --- 6b. La config efectiva -------------------------------------------------
+# Desde 1.9.0 cualquier ajuste se puede fijar también en ~/.collie/config.toml y en un
+# config.toml junto al .env. El .env gana a los dos, pero una clave que el .env no nombra
+# la decide el fichero, así que las comprobaciones de arriba ya no bastan: se pregunta a
+# Collie por el valor efectivo. Con el entorno que tendrá la unidad y no con el de esta
+# shell, para que una variable suelta no tape lo que el servicio va a leer.
+# Solo con el commit del pin, que es el que se sabe que trae `config show`; si no, la
+# sección 5 ya ha dicho cómo moverlo y volver a correr este script.
+if [ "$AT_PIN" = "1" ]; then
+  PLUGIN_ROOT="$(plugin_field '.plugin_root')"
+  COLLIE_BIN="$PLUGIN_ROOT/bin/collie"
+  [ -n "$PLUGIN_ROOT" ] && [ -x "$COLLIE_BIN" ] \
+    || die "no se encuentra el binario de Collie (${COLLIE_BIN}); sin él no se puede comprobar el gate" 5
+  EFFECTIVE="$(env -i HOME="$HOME" PATH="$PATH" HERDR_PLUGIN_CONFIG_DIR="$CONFIG_DIR" \
+    "$COLLIE_BIN" config show --json 2>/dev/null)" \
+    || die "'collie config show' ha fallado; no se puede comprobar el gate de identidad" 5
+  # Los booleanos llegan como los lee envBool: on/1/true/yes, sin distinguir mayúsculas.
+  OPEN_HATCHES="$(jq -r '.settings[]
+      | select(.env == "COLLIE_TRUSTED_USER_OPTIONAL" or .env == "COLLIE_ALLOW_ANY_HOST")
+      | select(.value | test("^\\s*(on|1|true|yes)\\s*$"; "i"))
+      | "\(.env) (\(.source))"' <<<"$EFFECTIVE")" \
+    || die "la salida de 'collie config show' no se entiende; no se puede comprobar el gate" 5
+  [ -z "$OPEN_HATCHES" ] || die "la config efectiva abre el gate de identidad:
+      ${OPEN_HATCHES//$'\n'/, }
+      file:home es ~/.collie/config.toml y file:instance, $CONFIG_DIR/config.toml.
+      Quita cada clave de donde dice el paréntesis antes de arrancar ('env' es el .env).
+      El detalle, con:  HERDR_PLUGIN_CONFIG_DIR=\"$CONFIG_DIR\" \"$COLLIE_BIN\" config show" 5
+  jq -e '[.settings[] | select(.env == "COLLIE_TRUSTED_USER" and .value != "(unset)")]
+      | length == 1' <<<"$EFFECTIVE" >/dev/null \
+    || die "la config efectiva no define COLLIE_TRUSTED_USER: el puente quedaría abierto
+      a escritura para cualquiera que alcance el tailnet." 5
+  ok "config efectiva con el gate de identidad cerrado"
+else
+  echo "  !!  config efectiva sin comprobar hasta que el plugin esté en el pin"
 fi
 
 # --- 7. Los presets ---------------------------------------------------------

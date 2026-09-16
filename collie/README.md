@@ -38,6 +38,10 @@ systemctl --user start collie    # al empezar una sesión larga
 systemctl --user stop  collie    # al terminar
 ```
 
+No lo arranques con `collie start` ni con la acción `start` del plugin: las dos ejecutan
+`systemctl --user enable --now` y dejan la unidad habilitada para el siguiente inicio de
+sesión.
+
 Esto es deliberado. El interruptor de seguridad es el servicio, no Tailscale: con
 `RouteAll=false` y sin nodo de salida, Tailscale aquí es una red privada entre tus
 dispositivos, no un túnel que encamine tu tráfico. Apagarla no reduce la superficie y sí
@@ -76,10 +80,15 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
    HTTPS. Se activan solo desde [la consola web](https://login.tailscale.com/admin/dns), y
    el síntoma es `CertDomains` ausente en `tailscale status --json`.
 3. **Hace falta ser operador de `tailscaled`**: `sudo tailscale set --operator=$USER`.
-4. **Un `.env` sin `COLLIE_TRUSTED_USER` deja el puente abierto a escritura.** El script lo
-   escribe antes del primer arranque para que no exista esa ventana, deduciendo la identidad
-   del tailnet, y si encuentra un `.env` ajeno sin esa variable se niega a seguir en lugar de
-   respetarlo en silencio.
+4. **Sin `COLLIE_TRUSTED_USER` el puente queda abierto a escritura**, y lo mismo pasa si
+   se enciende `COLLIE_ALLOW_ANY_HOST` o `COLLIE_TRUSTED_USER_OPTIONAL`. El script escribe
+   el `.env` antes del primer arranque para que no exista esa ventana, deduciendo la
+   identidad del tailnet, y si encuentra un `.env` ajeno sin esa variable se niega a seguir
+   en lugar de respetarlo en silencio. Desde la 1.9.0 cualquier ajuste puede venir también
+   de `~/.collie/config.toml` o de un `config.toml` junto al `.env`, así que además pide a
+   Collie la configuración efectiva (`collie config show`) con el entorno que tendrá la
+   unidad, y para si falta la identidad o si alguna de las dos variables está encendida,
+   venga del fichero que venga.
 5. **Brave en Android trae «Use Google services for push messaging» desactivado** por
    defecto, y sin eso el web push no llega nunca aunque la suscripción parezca correcta.
    La prueba del 2026-08-28 se hizo en Chrome.
