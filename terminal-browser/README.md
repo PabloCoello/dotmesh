@@ -16,10 +16,10 @@ make terminal-browser-install
 
 El script descarga la release fijada (v0.8.1), comprueba su SHA-256 contra el valor
 apuntado en el propio script, deja el comando en `~/.local/bin/terminal-browser`,
-ejecuta el `setup` de upstream, aplica el parche y endurece el navegador. Es idempotente
-y no usa sudo. Si la versión fijada ya está instalada no descarga nada ni cierra los
-navegadores abiertos, así que se puede repetir para comprobar que el parche y el
-endurecimiento siguen puestos.
+ejecuta el `setup` de upstream, endurece el navegador, le pone el tope de fotogramas y
+aplica el parche. Es idempotente y no usa sudo. Si la versión fijada ya está instalada
+no descarga nada ni cierra los navegadores abiertos, así que se puede repetir para
+comprobar que los tres siguen puestos.
 
 `terminal-browser/` **no está en `PACKAGES`** ni en `make install`: no enlaza nada con
 Stow, y el parche se instala a propósito, nunca de arrastre.
@@ -134,6 +134,50 @@ Se probó el 15-09-2026 con v0.8.1 en un daemon aislado. Sin endurecer, la pági
 obtenía el permiso `midi` y el fichero llegaba a la carpeta de descargas. Endurecido, el
 permiso sale `denied` y la carpeta queda vacía.
 
+## El tope de fotogramas
+
+Terminal Browser pinta al ritmo de la pantalla, y en Linux no hay salida por GPU: el
+render fuera de pantalla se configura con `useSharedTexture` en falso, así que cada
+fotograma se copia por CPU, se comprime y se escribe en el terminal. A 60 fps eso deja
+el hilo principal de Electron clavado en un núcleo entero, y la entrada se entrega en
+ese mismo hilo, así que la saturación se nota como retraso al desplazar o al
+seleccionar texto.
+
+`scripts/tune.sh` baja el ritmo por defecto a 30 fps con una inserción en
+`frameRate()`. Medido en esta máquina, en un pane de 1694×1957 y con una página que
+repinta en cada fotograma:
+
+| fps | electron | ghostty | herdr | caudal al terminal |
+|---|---|---|---|---|
+| 60 (de serie) | 105 % | 75 % | 40 % | 627 MB/s |
+| 40 | 79 % | — | — | — |
+| 30 | 63 % | 64 % | 27 % | 389 MB/s |
+| 20 | 39 % | — | — | — |
+
+Recortar píxeles no sirve: con `TERMINAL_BROWSER_MAX_PIXELS` el fotograma sigue
+viajando al tamaño del pane y el caudal no baja. Apagar la GPU tampoco: dobla el coste
+(electron al 219 %), pese al aviso de `MESA-LOADER` que sale al arrancar.
+
+```bash
+bash terminal-browser/scripts/tune.sh            # aplica (idempotente)
+bash terminal-browser/scripts/tune.sh --status   # exit 0 con tope, 1 sin él
+bash terminal-browser/scripts/tune.sh --revert   # quita la inserción
+```
+
+Igual que el endurecimiento, comprueba su punto de inserción antes de escribir y se
+niega si Terminal Browser ha cambiado. Edita también `main.js.orig` si existe, así que
+revertir el parche de aislamiento no se lleva el tope por delante.
+
+`TERMINAL_BROWSER_FPS` sigue mandando por encima del tope, con la misma prueba que hace
+el navegador: manda si es un número finito mayor que cero, y con cualquier otro valor se
+queda el tope. Y solo llega si está en el shell del pane que lanza el navegador:
+`open --split` pide a herdr que corra el comando en un pane nuevo, que no hereda el
+entorno de quien llama. Para probar otro
+ritmo hay que montar el pane a mano con `herdr pane split` y lanzar ahí el navegador
+con la variable en línea y `--no-merge`.
+
+Tras aplicarlo o revertirlo hay que correr `terminal-browser shutdown`.
+
 ## Reglas de uso
 
 1. **Solo páginas propias**: tus artefactos de claude.ai, ficheros HTML locales o un
@@ -144,8 +188,9 @@ permiso sale `denied` y la carpeta queda vacía.
 3. **Actualiza solo con `make terminal-browser-install`**, nunca con
    `terminal-browser upgrade`. `upgrade` se salta el pin y la instalación nueva llega
    sin parche: vuelve el aislamiento, que es lo seguro, pero los artefactos dejan de
-   aceptar comentarios sin avisar. `make health` lo detecta: avisa si falta el parche o
-   el endurecimiento y si la versión instalada no es la fijada.
+   aceptar comentarios sin avisar. `make health` lo detecta: avisa si falta el parche,
+   el endurecimiento o el tope de fotogramas, y si la versión instalada no es la
+   fijada.
 
 La skill `terminal-browser` está disponible en cualquier proyecto, así que las tres
 reglas se repiten en las instrucciones globales de los tres agentes
@@ -155,9 +200,9 @@ las leería.
 
 Si ya se hizo `upgrade`, el instalador no baja de versión por su cuenta, porque un
 Chromium más viejo sobre un perfil más nuevo puede perder la sesión de claude.ai. Avisa,
-deja la instalación como está y aplica el endurecimiento y después el parche. Si el
-endurecimiento no encuentra sus puntos de inserción, se detiene con exit 3 sin intentar
-el parche.
+deja la instalación como está y aplica el endurecimiento, el tope de fotogramas y
+después el parche. Si alguno no encuentra sus puntos de inserción, se detiene con
+exit 3 sin intentar los siguientes.
 
 ## Subir de versión
 
@@ -170,7 +215,9 @@ el parche.
 4. Si para con exit 3, `main.js` ha cambiado. Si se niega `site-isolation.sh`, busca
    dónde se añaden ahora las opciones de Chromium antes de `app.whenReady` y ajusta su
    ancla. Si se niega `harden.sh`, busca `function granted(` y el gestor de
-   `will-download`.
+   `will-download`. Si se niega `tune.sh`, busca `function frameRate(`, y comprueba
+   además que la variable sigue llamándose `TERMINAL_BROWSER_FPS`: si upstream la
+   renombra, el tope se aplica igual y deja de haber manera de saltárselo.
 
 `make vendor-check` no vigila esta fila (sale `blocked_upstream`, como neovim), así que
 las versiones nuevas se miran a mano.

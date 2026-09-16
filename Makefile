@@ -350,6 +350,9 @@ health:
 		hd=$$(bash "$(abspath terminal-browser/scripts/harden.sh)" --status 2>&1) \
 			&& echo "  ok  terminal-browser $$hd" \
 			|| echo "  --  terminal-browser: $$hd (corre 'make terminal-browser-install')"; \
+		fc=$$(bash "$(abspath terminal-browser/scripts/tune.sh)" --status 2>&1) \
+			&& echo "  ok  terminal-browser $$fc" \
+			|| echo "  --  terminal-browser: $$fc (corre 'make terminal-browser-install')"; \
 		pin=$$(sed -n 's/^TB_TAG="\(.*\)"$$/\1/p' "$(abspath terminal-browser/scripts/install.sh)"); \
 		ver=$$(cat "$$app/VERSION" 2>/dev/null || echo desconocida); \
 		if [ -z "$$pin" ]; then echo "  --  terminal-browser: no se encuentra TB_TAG en install.sh"; \
