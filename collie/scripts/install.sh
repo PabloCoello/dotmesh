@@ -157,11 +157,18 @@ ENV_FILE="$CONFIG_DIR/.env"
 HATCHES=(COLLIE_TRUSTED_USER_OPTIONAL COLLIE_SKIP_SERVE COLLIE_ALLOW_ANY_HOST COLLIE_ALLOW_NON_LOOPBACK_BIND)
 # El .env se busca como lo lee Collie, que limpia cada línea con trim() de JavaScript: quita
 # también el BOM y los espacios Unicode, y los admite tras `export`. grep no los cuenta como
-# espacio, así que se cambian por espacios antes de buscar. Un NUL o un byte que no sea UTF-8
-# harían que grep callase las líneas siguientes, así que se busca byte a byte y como texto.
+# espacio, así que se cambian por espacios antes de buscar. Un byte que no sea UTF-8 haría
+# que grep callase las líneas siguientes, así que se busca byte a byte y como texto. El NUL y
+# los separadores U+2028 y U+2029 no llegan aquí: env_raw_ok los rechaza antes.
 env_text() {
-  LC_ALL=C tr '\000' ' ' <"$ENV_FILE" | LC_ALL=C sed -e $'s/\xc2\xa0/ /g; s/\xe1\x9a\x80/ /g
-    s/\xe2\x80[\x80-\x8a\xa8\xa9\xaf]/ /g; s/\xe2\x81\x9f/ /g; s/\xe3\x80\x80/ /g; s/\xef\xbb\xbf/ /g'
+  LC_ALL=C sed -e $'s/\xc2\xa0/ /g; s/\xe1\x9a\x80/ /g
+    s/\xe2\x80[\x80-\x8a\xaf]/ /g; s/\xe2\x81\x9f/ /g; s/\xe3\x80\x80/ /g; s/\xef\xbb\xbf/ /g' "$ENV_FILE"
+}
+# Collie no trata el NUL como espacio, y dentro de una línea un U+2028 o un U+2029 hacen que
+# la ignore entera. Leerlos igual que Collie no compensa: ningún .env normal los lleva.
+env_raw_ok() {
+  LC_ALL=C tr -d '\000' <"$ENV_FILE" | cmp -s - "$ENV_FILE" \
+    && ! LC_ALL=C grep -qa $'\xe2\x80[\xa8\xa9]' "$ENV_FILE"
 }
 env_grep() { LC_ALL=C grep -a "$@" <<<"$ENV_TEXT"; }
 ENV_CREATED=0
@@ -170,6 +177,10 @@ if [ -e "$ENV_FILE" ]; then
   # Un .env sin COLLIE_TRUSTED_USER deja el puente escribible para cualquiera que llegue.
   # systemd corta también las líneas en un retorno de carro suelto, y Collie y grep no: lo
   # que vaya detrás solo lo vería la unidad.
+  [ -r "$ENV_FILE" ] || die "no se puede leer $ENV_FILE" 5
+  env_raw_ok || die "el .env existente tiene un NUL o un separador de línea Unicode (U+2028,
+      U+2029), y Collie leería sus líneas de otra forma que esta comprobación. Quítalo de
+      $ENV_FILE." 5
   ENV_TEXT="$(env_text)" || die "no se puede leer $ENV_FILE" 5
   ! env_grep -q $'\r'. \
     || die "el .env existente tiene un retorno de carro en mitad de una línea, y systemd
