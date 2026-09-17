@@ -94,6 +94,12 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
    `off`, `0`, `false` o `no`. Vacía tampoco vale: Collie rellena las variables vacías con el
    `config.toml`.
 
+   El `.env` se lee como lo lee Collie: una asignación precedida de un espacio Unicode o de
+   un BOM cuenta. El script rechaza entero un `.env` que no sea un fichero normal o que lleve
+   un NUL o un separador de línea U+2028 o U+2029. Collie no trata el NUL como espacio e
+   ignora la línea que lleva uno de esos separadores, así que la comprobación vería
+   asignaciones que el puente no lee.
+
    Desde la 1.9.0 cualquier ajuste puede venir también de `~/.collie/config.toml` o de un
    `config.toml` junto al `.env`. Por eso, con el plugin ya en el pin, el script pregunta
    además a Collie por la configuración efectiva (`collie config show`) en las condiciones
@@ -105,9 +111,6 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
      `config.toml` se lee; `NODE_ENV`, `NODE_OPTIONS` y `BUN_OPTIONS`, que cambian cómo
      arranca Bun (con `NODE_ENV`, por ejemplo, qué `.env` carga), y `COLLIE_PLUGIN_ROOT`,
      que gana al de la unidad y cambia desde dónde se sirve la web y se actualiza el puente.
-     El `.env` se lee como lo lee Collie: una asignación precedida de un espacio Unicode o
-     de un BOM cuenta. Un `.env` con un NUL o con los separadores de línea U+2028 o U+2029
-     se rechaza entero, porque Collie los trata de otra forma.
    - En el gestor de `systemd --user`: cualquier variable `COLLIE_`, esas tres de Bun y un
      `HOME` distinto del tuyo.
    - En la unidad, que tiene que ser la que escribe Collie. Eso descarta drop-ins, copias o

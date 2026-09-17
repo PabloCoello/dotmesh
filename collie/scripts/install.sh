@@ -166,22 +166,33 @@ env_text() {
 }
 # Collie no trata el NUL como espacio, y dentro de una línea un U+2028 o un U+2029 hacen que
 # la ignore entera. Leerlos igual que Collie no compensa: ningún .env normal los lleva.
-env_raw_ok() {
-  LC_ALL=C tr -d '\000' <"$ENV_FILE" | cmp -s - "$ENV_FILE" \
-    && ! LC_ALL=C grep -qa $'\xe2\x80[\xa8\xa9]' "$ENV_FILE"
+# Devuelve 1 con un NUL, 2 con un separador y 3 si no puede leer el fichero.
+env_raw_check() {
+  LC_ALL=C tr -d '\000' <"$ENV_FILE" | cmp -s - "$ENV_FILE" || return 1
+  local rc=0
+  LC_ALL=C grep -qa $'\xe2\x80[\xa8\xa9]' "$ENV_FILE" || rc=$?
+  case "$rc" in 0) return 2 ;; 1) return 0 ;; *) return 3 ;; esac
 }
 env_grep() { LC_ALL=C grep -a "$@" <<<"$ENV_TEXT"; }
 ENV_CREATED=0
 if [ -e "$ENV_FILE" ]; then
   # Respetar un .env ajeno está bien; respetarlo sin mirar el gate es fallar en abierto.
   # Un .env sin COLLIE_TRUSTED_USER deja el puente escribible para cualquiera que llegue.
+  # Tiene que ser un fichero: una FIFO o un enlace a un dispositivo colgarían la lectura.
+  { [ -f "$ENV_FILE" ] && [ -r "$ENV_FILE" ]; } || die "$ENV_FILE no es un fichero legible" 5
+  RAW_RC=0
+  env_raw_check || RAW_RC=$?
+  case "$RAW_RC" in
+    0) ;;
+    1) die "el .env existente tiene un NUL, que Collie no trata como espacio: esta
+      comprobación vería asignaciones que el puente ignora. Quítalo de $ENV_FILE." 5 ;;
+    2) die "el .env existente tiene un separador de línea Unicode (U+2028 o U+2029), y Collie
+      ignora la línea entera que lo lleva. Quítalo de $ENV_FILE." 5 ;;
+    *) die "no se puede leer $ENV_FILE" 5 ;;
+  esac
+  ENV_TEXT="$(env_text)" || die "no se puede leer $ENV_FILE" 5
   # systemd corta también las líneas en un retorno de carro suelto, y Collie y grep no: lo
   # que vaya detrás solo lo vería la unidad.
-  [ -r "$ENV_FILE" ] || die "no se puede leer $ENV_FILE" 5
-  env_raw_ok || die "el .env existente tiene un NUL o un separador de línea Unicode (U+2028,
-      U+2029), y Collie leería sus líneas de otra forma que esta comprobación. Quítalo de
-      $ENV_FILE." 5
-  ENV_TEXT="$(env_text)" || die "no se puede leer $ENV_FILE" 5
   ! env_grep -q $'\r'. \
     || die "el .env existente tiene un retorno de carro en mitad de una línea, y systemd
       leería detrás una asignación que esta comprobación no ve. Quítalo de $ENV_FILE." 5
