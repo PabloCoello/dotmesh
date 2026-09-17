@@ -155,20 +155,30 @@ ENV_FILE="$CONFIG_DIR/.env"
 # puede poner la cabecera de identidad. Sirven para desarrollo local o para un proxy propio,
 # no para este puente.
 HATCHES=(COLLIE_TRUSTED_USER_OPTIONAL COLLIE_SKIP_SERVE COLLIE_ALLOW_ANY_HOST COLLIE_ALLOW_NON_LOOPBACK_BIND)
+# El .env se busca como lo lee Collie, que limpia cada línea con trim() de JavaScript: quita
+# también el BOM y los espacios Unicode, y los admite tras `export`. grep no los cuenta como
+# espacio, así que se cambian por espacios antes de buscar. Un NUL o un byte que no sea UTF-8
+# harían que grep callase las líneas siguientes, así que se busca byte a byte y como texto.
+env_text() {
+  LC_ALL=C tr '\000' ' ' <"$ENV_FILE" | LC_ALL=C sed -e $'s/\xc2\xa0/ /g; s/\xe1\x9a\x80/ /g
+    s/\xe2\x80[\x80-\x8a\xa8\xa9\xaf]/ /g; s/\xe2\x81\x9f/ /g; s/\xe3\x80\x80/ /g; s/\xef\xbb\xbf/ /g'
+}
+env_grep() { LC_ALL=C grep -a "$@" <<<"$ENV_TEXT"; }
 ENV_CREATED=0
 if [ -e "$ENV_FILE" ]; then
   # Respetar un .env ajeno está bien; respetarlo sin mirar el gate es fallar en abierto.
   # Un .env sin COLLIE_TRUSTED_USER deja el puente escribible para cualquiera que llegue.
   # systemd corta también las líneas en un retorno de carro suelto, y Collie y grep no: lo
   # que vaya detrás solo lo vería la unidad.
-  ! grep -q $'\r'. "$ENV_FILE" \
+  ENV_TEXT="$(env_text)" || die "no se puede leer $ENV_FILE" 5
+  ! env_grep -q $'\r'. \
     || die "el .env existente tiene un retorno de carro en mitad de una línea, y systemd
       leería detrás una asignación que esta comprobación no ve. Quítalo de $ENV_FILE." 5
   # Se lee como Collie: `export` opcional, sin espacios junto al = y gana la última
   # asignación. Tras el primer =, los espacios y la comilla, el valor tiene que empezar por
   # algo que no sea espacio, comilla ni #.
-  grep -E '^[[:space:]]*(export[[:space:]]+)?COLLIE_TRUSTED_USER=' "$ENV_FILE" | tail -n 1 \
-    | grep -E "^[^=]*=[[:space:]]*[\"']?[^\"'[:space:]#]" >/dev/null \
+  env_grep -E '^[[:space:]]*(export[[:space:]]+)?COLLIE_TRUSTED_USER=' | tail -n 1 \
+    | LC_ALL=C grep -aE "^[^=]*=[[:space:]]*[\"']?[^\"'[:space:]#]" >/dev/null \
     || die "el .env existente no define COLLIE_TRUSTED_USER: el puente quedaría abierto
       a escritura para cualquiera que alcance el tailnet. Añádelo antes de arrancar:
         echo 'COLLIE_TRUSTED_USER=<tu-login@proveedor>' >> $ENV_FILE" 5
@@ -178,9 +188,9 @@ if [ -e "$ENV_FILE" ]; then
   # llevan espacios junto al =.
   HATCH_RE="$(IFS='|'; echo "${HATCHES[*]}")"
   OFF_RE='(off|0|false|no)'
-  SET_HATCHES="$(grep -iE '^[[:space:]]*(export[[:space:]]+)?('"$HATCH_RE"')[[:space:]]*=' "$ENV_FILE" \
-    | grep -ivE "^[^=]*=[[:space:]]*($OFF_RE|\"$OFF_RE\"|'$OFF_RE')[[:space:]]*(#.*)?\$" \
-    | sed -E 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z0-9_]+).*/\2/' || true)"
+  SET_HATCHES="$(env_grep -iE '^[[:space:]]*(export[[:space:]]+)?('"$HATCH_RE"')[[:space:]]*=' \
+    | LC_ALL=C grep -aivE "^[^=]*=[[:space:]]*($OFF_RE|\"$OFF_RE\"|'$OFF_RE')[[:space:]]*(#.*)?\$" \
+    | LC_ALL=C sed -E 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z0-9_]+).*/\2/' || true)"
   [ -z "$SET_HATCHES" ] || die "el .env existente asigna ${SET_HATCHES//$'\n'/, } con un valor que no es
       off/0/false/no. Estas variables anulan el gate de identidad aunque COLLIE_TRUSTED_USER
       esté definido, y vacías tampoco valen: Collie las rellena con config.toml.
@@ -224,20 +234,24 @@ if [ "$AT_PIN" = "1" ]; then
   [ -n "$PLUGIN_ROOT" ] && [ -x "$COLLIE_BIN" ] \
     || die "no se encuentra el binario de Collie (plugin_root: '${PLUGIN_ROOT:-vacío}');
       sin él no se puede comprobar el gate" 5
-  # Lo mismo pasa con lo que el .env da al proceso antes de que arranque: el directorio de
-  # config y HOME deciden qué config.toml se lee, y NODE_ENV y las opciones del runtime,
-  # qué otro .env se carga.
-  ENV_VARS="$(grep -oE '^[[:space:]]*(export[[:space:]]+)?(COLLIE_CONFIG|HERDR_PLUGIN_CONFIG_DIR|HOME|NODE_ENV|NODE_OPTIONS|BUN_OPTIONS)[[:space:]]*=' "$ENV_FILE" \
-    | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/[[:space:]]*=$//' | sort -u || true)"
-  [ -z "$ENV_VARS" ] || die "el .env define ${ENV_VARS//$'\n'/, }, y con eso el puente leería una
-      config que esta comprobación no ve. Quítalo de $ENV_FILE; dotmesh no lo usa." 5
+  # Lo mismo pasa con lo que el .env da al proceso antes de que arranque, que gana a lo que
+  # fija la unidad: el directorio de config y HOME deciden qué config.toml se lee; NODE_ENV y
+  # las opciones del runtime, qué otro .env se carga, y COLLIE_PLUGIN_ROOT, desde dónde se
+  # sirve la web y se actualiza el puente.
+  ENV_TEXT="$(env_text)" || die "no se puede leer $ENV_FILE" 5
+  ENV_VARS="$(env_grep -oE '^[[:space:]]*(export[[:space:]]+)?(COLLIE_CONFIG|COLLIE_PLUGIN_ROOT|HERDR_PLUGIN_CONFIG_DIR|HOME|NODE_ENV|NODE_OPTIONS|BUN_OPTIONS)[[:space:]]*=' \
+    | LC_ALL=C sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/[[:space:]]*=$//' | sort -u || true)"
+  [ -z "$ENV_VARS" ] || die "el .env define ${ENV_VARS//$'\n'/, }, y con eso el puente arrancaría
+      con una config o una raíz del plugin que esta comprobación no ve. Quítalo de
+      $ENV_FILE; dotmesh no lo usa." 5
   if [ "$(uname -s)" = "Linux" ]; then
     # Las rutas de unidades las pide al gestor y no a systemd-analyze, que las calcula con el
     # entorno de esta shell.
     if MANAGER_ENV="$(systemctl --user show-environment 2>/dev/null)" \
       && UNIT_PATHS="$(systemctl --user show -p UnitPath --value 2>/dev/null)"; then
       # HOME decide qué ~/.collie/config.toml lee el puente, y NODE_ENV y las opciones del
-      # runtime, qué .env carga Bun; la consulta usa los de esta shell.
+      # runtime, qué .env carga Bun. La consulta usa el HOME de esta shell y no pasa las otras
+      # tres.
       MANAGER_VARS="$(grep -oE '^(COLLIE_[A-Za-z0-9_]*|NODE_ENV|NODE_OPTIONS|BUN_OPTIONS)=' <<<"$MANAGER_ENV" | tr -d = || true)"
       MANAGER_HOME="$(sed -n 's/^HOME=//p' <<<"$MANAGER_ENV")"
       [ -z "$MANAGER_HOME" ] || [ "$MANAGER_HOME" = "$HOME" ] \
@@ -271,10 +285,13 @@ $RUNTIME_DIR/systemd/transient"
             if [ -e "$f" ] && [ "$f" != "$UNIT_FILE" ]; then echo "$f"; fi
           done
           # Un enlace a la unidad, directo o encadenado, es un alias, y los drop-ins del alias
-          # también se aplican. Collie escribe la unidad como fichero, no como enlace.
+          # también se aplican. Y Collie escribe la unidad como fichero: si es un enlace, apunte
+          # a donde apunte, no la ha escrito Collie.
           for f in "$d"/*; do
-            if [ -L "$f" ] && [ "$(basename -- "$(readlink -f -- "$f")")" = "$UNIT" ]; then
-              if [ "$f" = "$UNIT_FILE" ]; then echo "enlace en lugar de fichero: $f"; else echo "$f"; fi
+            if [ "$f" = "$UNIT_FILE" ]; then
+              if [ -L "$f" ]; then echo "enlace en lugar de fichero: $f"; fi
+            elif [ -L "$f" ] && [ "$(basename -- "$(readlink -f -- "$f")")" = "$UNIT" ]; then
+              echo "$f"
             fi
           done
         done <<<"$UNIT_PATHS" | sort -u)"
@@ -354,14 +371,18 @@ $RUNTIME_DIR/systemd/transient"
           | sed -E 's/ \(ignore_errors=(yes|no)\)$//' | grep -vxF "$ENV_FILE" || true)"
         UNIT_CWD="$(sed -n 's/^WorkingDirectory=//p' <<<"$UNIT_PROPS")"
         # path= es el binario que se ejecuta y argv[] lo que recibe; con @ son distintos.
-        UNIT_EXEC="$(sed -nE 's/^(ExecStart=\{ path=[^;]* ; argv\[\]=[^;]* ; ignore_errors=[a-z]+ ;).*/\1/p' <<<"$UNIT_PROPS")"
+        # systemctl escribe ignore_errors= detrás de argv[], así que un argumento de más lo
+        # saca del principio esperado o lo repite más adelante.
+        EXEC_HEAD="ExecStart={ path=$COLLIE_BIN ; argv[]=$COLLIE_BIN _exec-bridge ; ignore_errors=no ;"
+        UNIT_EXEC="$(sed -n '/^ExecStart=/p' <<<"$UNIT_PROPS")"
+        EXEC_TAIL="${UNIT_EXEC#"$EXEC_HEAD"}"
         # HERDR_SOCKET_PATH y COLLIE_PORT no se comparan: no abren el gate y el script no sabe
         # qué valor les ha dado Collie.
         [ -n "$UNIT_ASSIGN" ] && [ -z "$UNIT_VARS" ] \
           && [ "$(unit_env HERDR_PLUGIN_CONFIG_DIR)" = "$CONFIG_DIR" ] \
           && [ "$(unit_env COLLIE_PLUGIN_ROOT)" = "$PLUGIN_ROOT" ] && [ -z "$UNIT_FILES" ] \
           && [ "$UNIT_CWD" = "$PLUGIN_ROOT" ] \
-          && [ "$UNIT_EXEC" = "ExecStart={ path=$COLLIE_BIN ; argv[]=$COLLIE_BIN _exec-bridge ; ignore_errors=no ;" ] \
+          && [ "$EXEC_TAIL" != "$UNIT_EXEC" ] && [[ "$EXEC_TAIL" != *ignore_errors=* ]] \
           || die "la unidad $UNIT no arranca el puente como lo escribe Collie para este
       plugin y esta configuración (variables, ficheros de entorno, directorio de trabajo
       u orden), y esta comprobación no vería lo que cambia. Revísala con
@@ -371,7 +392,8 @@ $RUNTIME_DIR/systemd/transient"
       fi
     else
       echo "  !!  no se llega a systemd --user: el entorno que el gestor y la unidad dan al"
-      echo "      puente queda sin revisar."
+      echo "      puente queda sin revisar. Vuelve a correr el script desde tu sesión antes de"
+      echo "      arrancarlo."
     fi
   fi
   EFFECTIVE="$(cd "$PLUGIN_ROOT" && env -i HOME="$HOME" PATH="$PATH" \

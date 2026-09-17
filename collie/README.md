@@ -102,8 +102,11 @@ Las cuatro primeras son guardas del instalador; la última no se puede automatiz
    ve, y lo busca en tres sitios:
 
    - En el `.env`: `COLLIE_CONFIG`, `HERDR_PLUGIN_CONFIG_DIR` y `HOME`, que deciden qué
-     `config.toml` se lee, y `NODE_ENV`, `NODE_OPTIONS` y `BUN_OPTIONS`, que cambian cómo
-     arranca Bun (con `NODE_ENV`, por ejemplo, qué `.env` carga).
+     `config.toml` se lee; `NODE_ENV`, `NODE_OPTIONS` y `BUN_OPTIONS`, que cambian cómo
+     arranca Bun (con `NODE_ENV`, por ejemplo, qué `.env` carga), y `COLLIE_PLUGIN_ROOT`,
+     que gana al de la unidad y cambia desde dónde se sirve la web y se actualiza el puente.
+     El `.env` se lee como lo lee Collie: una asignación precedida de un espacio Unicode o
+     de un BOM cuenta, y un NUL no oculta lo que venga detrás.
    - En el gestor de `systemd --user`: cualquier variable `COLLIE_`, esas tres de Bun y un
      `HOME` distinto del tuyo.
    - En la unidad, que tiene que ser la que escribe Collie. Eso descarta drop-ins, copias o
