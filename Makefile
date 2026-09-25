@@ -299,10 +299,10 @@ health:
 	@if [ "$$(uname -s)" = "Linux" ]; then \
 		command -v bwrap >/dev/null \
 			&& echo "  ok  bubblewrap (sandbox de Bash)" \
-			|| echo "  --  bubblewrap  (sin él el sandbox avisa y se aparta: sudo apt install bubblewrap)"; \
+			|| echo "  --  bubblewrap  (sin él Claude Code no arranca: sudo apt install bubblewrap)"; \
 		command -v socat >/dev/null \
 			&& echo "  ok  socat (sandbox de Bash)" \
-			|| echo "  --  socat  (sin él el sandbox avisa y se aparta: sudo apt install socat)"; \
+			|| echo "  --  socat  (sin él Claude Code no arranca: sudo apt install socat)"; \
 	fi
 	@command -v nvim         >/dev/null && echo "  ok  nvim"         || echo "  --  nvim"
 	@command -v tree-sitter  >/dev/null && echo "  ok  tree-sitter"  || echo "  --  tree-sitter  (Linux: make nvim-install · macOS: brew install tree-sitter-cli)"

@@ -681,7 +681,7 @@ _tpl="$REPO_ROOT/claude/.claude/settings.json"
 # pre-commit, sockets, systemd, procesos del host). Cerrarla obligaría a excluir
 # ocho comandos más, y una exclusión es peor que la escotilla: saca de la caja
 # la llamada entera cuando aparece en una cadena, y no deja rastro. La escotilla
-# va comando a comando y queda en el transcript, que es lo que permitió contar.
+# va comando a comando y queda en la transcripción, que es lo que permitió contar.
 [ "$(jq -r '.sandbox.allowUnsandboxedCommands' "$_tpl")" = true ] \
   && pass "la escotilla está declarada y abierta, como decidió T5b" \
   || fail "la escotilla cambió de valor sin revisar la medición de T5b"
@@ -694,7 +694,7 @@ _tpl="$REPO_ROOT/claude/.claude/settings.json"
   || fail "el sandbox puede caerse en silencio"
 
 # Exactamente estos cuatro. Cada uno sale de una medición: stow y make escriben
-# por todo $HOME, que es el producto; herdr habla por su socket unix; y gh lee
+# por todo $HOME, que es el producto; herdr habla por su socket Unix; y gh lee
 # su token del llavero por D-Bus y dentro de la caja se degrada a anónimo.
 _excl_esperado=$(printf '%s\n' "gh *" "herdr *" "make *" "stow *")
 _excl_real=$(jq -r '.sandbox.excludedCommands // [] | .[]' "$_tpl" | sort)
@@ -702,28 +702,51 @@ _excl_real=$(jq -r '.sandbox.excludedCommands // [] | .[]' "$_tpl" | sort)
   && pass "excludedCommands son los cuatro casos medidos" \
   || fail "excludedCommands cambió: $(printf '%s' "$_excl_real" | tr '\n' ' ')"
 
-# Conceder la raíz de $HOME devolvería el sandbox a la nada sin que se note.
+# allowWrite es la lista corta de excepciones a la caja, así que se fija entera:
+# una entrada nueva tiene que pasar por aquí y por el motivo que la justifica.
+_aw_esperado="~/.npm"
+_aw_real=$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl" | sort)
+[ "$_aw_real" = "$_aw_esperado" ] \
+  && pass "allowWrite es solo la caché de npm" \
+  || fail "allowWrite cambió: $(printf '%s' "$_aw_real" | tr '\n' ' ')"
+
+# Y el motivo, escrito como reglas, para la entrada que venga detrás. Conceder
+# la raíz de $HOME devolvería el sandbox a la nada sin que se note.
 while IFS= read -r _w; do
   [ -n "$_w" ] || continue
   case "$_w" in
     "~"|"~/"|"\$HOME"|"\$HOME/"|"/")
       fail "allowWrite concede la raíz del home o del sistema: $_w" ;;
-    "~/.local/share"|"~/.local/share/"|"~/.local/share/claude"|"~/.local/share/claude/"*|"~/.local/bin"|"~/.local/bin/"*)
-      # Ahí vive el propio binario de Claude Code (`~/.local/share/claude/
-      # versions/<v>`, lanzado desde `~/.local/bin/claude`): conceder escritura
-      # permitiría a un comando sandboxeado reemplazar el agente que lo confina.
-      # Un hermano como `~/.local/share/uv` no lo alcanza y sí se concede.
-      fail "allowWrite alcanza el binario de Claude: $_w" ;;
+    "\$HOME/"*)
+      # La plantilla escribe `~`. Que `$HOME` se expanda o no aquí no está
+      # medido, y una ruta que el sandbox no entienda se descarta en silencio.
+      fail "allowWrite usa \$HOME donde la plantilla escribe ~: $_w" ;;
+    "~/.local"|"~/.local/"|"~/.local/share"|"~/.local/share/"*|"~/.local/bin"|"~/.local/bin/"*)
+      # Ahí vive código que se ejecuta fuera de la caja: el propio binario de
+      # Claude (`~/.local/share/claude/versions/<v>`), y los intérpretes y
+      # herramientas que uv deja en `~/.local/share/uv/{python,tools}`, a los
+      # que apuntan los enlaces del PATH (`~/.local/bin/iris`, `python3.12`).
+      # Conceder escritura ahí deja que un comando confinado reemplace algo que
+      # luego corre sin confinar. Bloquear solo `~/.local/bin` no basta: guarda
+      # los enlaces, no sus destinos.
+      fail "allowWrite alcanza ejecutables que corren fuera de la caja: $_w" ;;
+    "~/.cache/pre-commit"|"~/.cache/pre-commit/"*|"~/.cache/uv"|"~/.cache/uv/"*)
+      # Mismo motivo, medido el 25-09-2026 por la puerta de seguridad al cerrar
+      # T5b: `~/.cache/pre-commit` guarda los entornos de cada hook, que ejecuta
+      # `git commit` fuera de la caja; `~/.cache/uv` guarda `environments-v2` y
+      # `archive-v0`, que uv enlaza a los entornos de proyecto. Las dos son
+      # persistencia entre sesiones. Lo que necesiten esos comandos se resuelve
+      # por la escotilla, que va comando a comando y queda en el transcript.
+      fail "allowWrite abre una caché de código ejecutable: $_w" ;;
+    *[\*\?\[]*)
+      # En Linux el sandbox monta rutas concretas y descarta sin avisar
+      # cualquier entrada con `*`, `?` o `[`: quedaría escrita en la plantilla y
+      # sin ningún efecto. Aquí se rechaza también el `/**` final, aunque el
+      # normalizador de Claude Code lo quite antes de mirar: la plantilla se
+      # escribe con rutas literales y no depende de ese detalle.
+      fail "allowWrite lleva un comodín, que Linux ignora en silencio: $_w" ;;
     *)
-      # En Linux el sandbox monta rutas concretas, así que descarta sin avisar
-      # cualquier entrada con `*`, `?` o `[` una vez quitado el `/**` final.
-      # Quedaría escrita en la plantilla y sin ningún efecto.
-      case "${_w%/\*\*}" in
-        *[\*\?\[]*)
-          fail "allowWrite lleva un comodín, que Linux ignora en silencio: $_w" ;;
-        *)
-          pass "allowWrite acota una ruta concreta: $_w" ;;
-      esac ;;
+      pass "allowWrite acota una ruta concreta: $_w" ;;
   esac
 done <<< "$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl")"
 

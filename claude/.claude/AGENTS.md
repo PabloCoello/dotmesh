@@ -57,13 +57,13 @@ Activo en toda la máquina desde el 13-09-2026 (`sandbox.enabled` en
 freno real que queda, así que no lo esquives por comodidad.
 
 - **Dentro de la caja solo se escribe** en el directorio de trabajo, el temporal
-  de sesión y las cachés de `filesystem.allowWrite` (`~/.npm`,
-  `~/.cache/pre-commit`, `~/.cache/uv`, `~/.local/share/uv`). El resto de `$HOME`
-  no, aunque el comando parezca inofensivo. Para temporales usa `$TMPDIR`, nunca
-  `/tmp` a pelo.
+  de sesión y `~/.npm`. El resto de `$HOME` no, aunque el comando parezca
+  inofensivo. Para temporales usa `$TMPDIR`, nunca `/tmp` a pelo.
+- **Sin `bubblewrap` y `socat` la sesión no arranca**, porque la plantilla lleva
+  `failIfUnavailable`. Correr sin caja y no enterarse es peor que no correr.
 - **Cuatro comandos corren fuera** (`excludedCommands`): `stow` y `make`, que
   escriben por todo `$HOME` cuando instalan dotfiles; `herdr`, que necesita su
-  socket unix; y `gh`, que dentro de la caja pierde el token del llavero y se
+  socket Unix; y `gh`, que dentro de la caja pierde el token del llavero y se
   degrada a anónimo sin decirlo.
 - **La exclusión vale para el comando que lanzas, no para lo que ese comando
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
@@ -80,16 +80,18 @@ freno real que queda, así que no lo esquives por comodidad.
   raíz de solo lectura; ahí va una ruta absoluta al scratchpad de la sesión. Y la
   exclusión no entra en un bucle ni en un `$( )`: un `gh` llamado así corre
   dentro y vuelve anónimo, que parece un 401 y no un problema de la caja.
-- **La escotilla se queda abierta a propósito.** Del 13 al 20-09 se usó 601 veces
-  en seis proyectos, unas 404 con causa medida: red por SSH o HTTPS, `pre-commit`,
-  `uv`, sockets unix, `systemctl --user`, mirar procesos del anfitrión. Cerrarla
-  obligaría a excluir ocho comandos más, y una exclusión es peor que la
-  escotilla: arrastra toda la cadena fuera y no deja rastro, mientras que la
-  escotilla va comando a comando y queda en la transcripción. Cuando a una
-  herramienta solo le falta escribir en algún sitio, la vía es
-  `filesystem.allowWrite` con ruta literal; en Linux la caja monta rutas
+- **La escotilla se queda abierta a propósito**, con una semana de uso medida
+  detrás (el recuento y las causas están en el `AGENTS.md` del repo). Cerrarla
+  obligaría a excluir más comandos, y una exclusión es peor: arrastra la cadena
+  entera fuera y no deja rastro, mientras que la escotilla va comando a comando
+  y queda en la transcripción.
+- **`allowWrite` concede una caché de datos, nunca un directorio cuyo contenido
+  se ejecuta desde fuera.** Por eso `~/.cache/pre-commit`, `~/.cache/uv` y
+  `~/.local/share/uv` se evaluaron y se descartaron: guardan entornos de hooks,
+  entornos de proyecto e intérpretes que luego corren sin confinar. Lo que
+  necesiten esos comandos sale por la escotilla. Y en Linux la caja monta rutas
   concretas y descarta en silencio cualquier entrada con comodín.
-- **Un `.mcp.json` o un settings vacío lo ha dejado el sandbox.** Mientras
+- **Un `.mcp.json` o un `settings.json` vacío lo ha dejado el sandbox.** Mientras
   corre cada comando, la caja pone un fichero de 0 bytes y solo lectura en cada
   ruta protegida que no existe (`.mcp.json` aquí y en las carpetas superiores,
   `.claude/settings*.json`, `.bashrc`, `.gitconfig`) y lo quita al acabar. Si la

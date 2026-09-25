@@ -22,10 +22,7 @@
     ],
     "filesystem": {
       "allowWrite": [
-        "~/.npm",
-        "~/.cache/pre-commit",
-        "~/.cache/uv",
-        "~/.local/share/uv"
+        "~/.npm"
       ]
     }
   },

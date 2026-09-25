@@ -181,9 +181,8 @@ The agent system has two layers, identical in concept across the three tools.
   phase reads it with `git log` and `git status`, and never through a hook.
 - **The Bash sandbox** — `sandbox.enabled` is on in the template, so every Bash
   command Claude runs is confined by the OS: writable are the working directory,
-  the session temp directory, and the caches listed in `filesystem.allowWrite`
-  (`~/.npm`, `~/.cache/pre-commit`, `~/.cache/uv`, `~/.local/share/uv`);
-  everything else under `$HOME` is not.
+  the session temp directory, and `~/.npm`; everything else under `$HOME` is
+  not.
   This is the guardrail that matters most here, because `permissions.defaultMode`
   is `bypassPermissions` on this machine and the prompts are gone. On Linux it
   needs `bubblewrap` and `socat`; `make health` reports them, and
@@ -220,12 +219,22 @@ The agent system has two layers, identical in concept across the three tools.
   host process inspection, writes to a second repository. Closing it would mean
   excluding eight more commands to keep the work moving, and an exclusion is
   worse than the hatch: it drags the whole chain out of the sandbox and leaves
-  no trace, while the hatch is per command and shows up in the transcript. Where
-  a tool only needs to write somewhere, `filesystem.allowWrite` with a literal
-  path is the way — that is what `~/.cache/pre-commit`, `~/.cache/uv` and
-  `~/.local/share/uv` are doing in the template. On Linux the sandbox mounts
-  concrete paths and silently drops any `allowWrite` entry containing a
-  wildcard, so those entries have to be literal.
+  no trace, while the hatch is per command and shows up in the transcript.
+
+  `filesystem.allowWrite` is the other way to let a tool through, and it is
+  narrower than the hatch — but only for a cache that holds data. The
+  pre-commit and uv caches were measured as the largest single cause (~110 of
+  those exits) and rejected on 2026-09-25 anyway: `~/.cache/pre-commit` holds
+  the virtualenv of every hook that `git commit` then runs outside the box,
+  `~/.cache/uv` holds the project environments uv links into, and
+  `~/.local/share/uv` holds the interpreters and tools that `~/.local/bin`
+  points at. Granting any of them lets a confined command leave code behind
+  that later runs unconfined, and it survives the session. So those commands
+  keep using the hatch, which at least leaves a trace. The rule the harness
+  now enforces: `allowWrite` grants a cache of data, never a directory whose
+  contents get executed from outside. And on Linux the sandbox mounts concrete
+  paths and silently drops any entry containing a wildcard, so what is there
+  has to be literal.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
