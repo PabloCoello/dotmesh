@@ -12,6 +12,7 @@
   },
   "sandbox": {
     "enabled": true,
+    "failIfUnavailable": true,
     "allowUnsandboxedCommands": true,
     "excludedCommands": [
       "stow *",
@@ -21,7 +22,10 @@
     ],
     "filesystem": {
       "allowWrite": [
-        "~/.npm"
+        "~/.npm",
+        "~/.cache/pre-commit",
+        "~/.cache/uv",
+        "~/.local/share/uv"
       ]
     }
   },

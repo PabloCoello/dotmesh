@@ -675,11 +675,23 @@ _tpl="$REPO_ROOT/claude/.claude/settings.json"
   && pass "la plantilla enciende el sandbox" \
   || fail "la plantilla no enciende el sandbox"
 
-# La escotilla queda abierta a propósito hasta que una semana de uso diga si se
-# puede cerrar, pero escrita: heredarla del valor por defecto no es una postura.
-jq -e '.sandbox | has("allowUnsandboxedCommands")' "$_tpl" >/dev/null 2>&1 \
-  && pass "la escotilla está declarada de forma explícita" \
-  || fail "la escotilla se hereda del valor por defecto en vez de declararse"
+# La escotilla queda abierta, y escrita: heredarla del valor por defecto no es
+# una postura. Medido del 13 al 20-09-2026 sobre seis proyectos: 601 salidas por
+# la escotilla, de las que unas 404 tienen causa medida (red con llavero,
+# pre-commit, sockets, systemd, procesos del host). Cerrarla obligaría a excluir
+# ocho comandos más, y una exclusión es peor que la escotilla: saca de la caja
+# la llamada entera cuando aparece en una cadena, y no deja rastro. La escotilla
+# va comando a comando y queda en el transcript, que es lo que permitió contar.
+[ "$(jq -r '.sandbox.allowUnsandboxedCommands' "$_tpl")" = true ] \
+  && pass "la escotilla está declarada y abierta, como decidió T5b" \
+  || fail "la escotilla cambió de valor sin revisar la medición de T5b"
+
+# Si el sandbox no puede arrancar, la sesión falla en vez de correr sin él. Con
+# `defaultMode` en bypassPermissions, seguir sin caja y no enterarse es el peor
+# de los dos fallos.
+[ "$(jq -r '.sandbox.failIfUnavailable' "$_tpl")" = true ] \
+  && pass "una sesión sin sandbox falla en vez de seguir" \
+  || fail "el sandbox puede caerse en silencio"
 
 # Exactamente estos cuatro. Cada uno sale de una medición: stow y make escriben
 # por todo $HOME, que es el producto; herdr habla por su socket unix; y gh lee
@@ -696,12 +708,22 @@ while IFS= read -r _w; do
   case "$_w" in
     "~"|"~/"|"\$HOME"|"\$HOME/"|"/")
       fail "allowWrite concede la raíz del home o del sistema: $_w" ;;
-    "~/.local/share"|"~/.local/share/")
-      # Ahí vive el propio binario de Claude Code: conceder escritura permitiría
-      # a un comando sandboxeado reemplazar el agente que lo confina.
-      fail "allowWrite concede ~/.local/share, donde está el binario de Claude" ;;
+    "~/.local/share"|"~/.local/share/"|"~/.local/share/claude"|"~/.local/share/claude/"*|"~/.local/bin"|"~/.local/bin/"*)
+      # Ahí vive el propio binario de Claude Code (`~/.local/share/claude/
+      # versions/<v>`, lanzado desde `~/.local/bin/claude`): conceder escritura
+      # permitiría a un comando sandboxeado reemplazar el agente que lo confina.
+      # Un hermano como `~/.local/share/uv` no lo alcanza y sí se concede.
+      fail "allowWrite alcanza el binario de Claude: $_w" ;;
     *)
-      pass "allowWrite acota una ruta concreta: $_w" ;;
+      # En Linux el sandbox monta rutas concretas, así que descarta sin avisar
+      # cualquier entrada con `*`, `?` o `[` una vez quitado el `/**` final.
+      # Quedaría escrita en la plantilla y sin ningún efecto.
+      case "${_w%/\*\*}" in
+        *[\*\?\[]*)
+          fail "allowWrite lleva un comodín, que Linux ignora en silencio: $_w" ;;
+        *)
+          pass "allowWrite acota una ruta concreta: $_w" ;;
+      esac ;;
   esac
 done <<< "$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl")"
 
