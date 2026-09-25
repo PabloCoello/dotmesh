@@ -57,8 +57,10 @@ Activo en toda la máquina desde el 13-09-2026 (`sandbox.enabled` en
 freno real que queda, así que no lo esquives por comodidad.
 
 - **Dentro de la caja solo se escribe** en el directorio de trabajo, el temporal
-  de sesión y `~/.npm`. El resto de `$HOME` no, aunque el comando parezca
-  inofensivo. Para temporales usa `$TMPDIR`, nunca `/tmp` a pelo.
+  de sesión y las cachés de `filesystem.allowWrite` (`~/.npm`,
+  `~/.cache/pre-commit`, `~/.cache/uv`, `~/.local/share/uv`). El resto de `$HOME`
+  no, aunque el comando parezca inofensivo. Para temporales usa `$TMPDIR`, nunca
+  `/tmp` a pelo.
 - **Cuatro comandos corren fuera** (`excludedCommands`): `stow` y `make`, que
   escriben por todo `$HOME` cuando instalan dotfiles; `herdr`, que necesita su
   socket unix; y `gh`, que dentro de la caja pierde el token del llavero y se
@@ -67,6 +69,26 @@ freno real que queda, así que no lo esquives por comodidad.
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
   arranca sesiones headless se corre por su target de `make`, no llamando al
   script: un `claude -p` anidado dentro de la caja falla con «Not logged in».
+- **Si un comando de la cadena está excluido, sale fuera la llamada entera.**
+  Medido el 14-09 y otra vez el 20-09 contra la 2.1.274: en
+  `gh --version; echo "$TMPDIR"` el `echo` también corre fuera, con `TMPDIR`
+  vacío y 826 procesos del anfitrión a la vista frente a 6 desde dentro. Upstream
+  no lo documenta y cerrar la escotilla no lo tapa, así que cada entrada nueva en
+  `excludedCommands` es otra palanca y la lista se queda en cuatro. Al revés pasa
+  lo mismo: un comando lanzado con `dangerouslyDisableSandbox` tampoco tiene
+  `TMPDIR`, así que `"$TMPDIR/cuerpo.md"` queda en `/cuerpo.md` y muere contra la
+  raíz de solo lectura; ahí va una ruta absoluta al scratchpad de la sesión. Y la
+  exclusión no entra en un bucle ni en un `$( )`: un `gh` llamado así corre
+  dentro y vuelve anónimo, que parece un 401 y no un problema de la caja.
+- **La escotilla se queda abierta a propósito.** Del 13 al 20-09 se usó 601 veces
+  en seis proyectos, unas 404 con causa medida: red por SSH o HTTPS, `pre-commit`,
+  `uv`, sockets unix, `systemctl --user`, mirar procesos del anfitrión. Cerrarla
+  obligaría a excluir ocho comandos más, y una exclusión es peor que la
+  escotilla: arrastra toda la cadena fuera y no deja rastro, mientras que la
+  escotilla va comando a comando y queda en la transcripción. Cuando a una
+  herramienta solo le falta escribir en algún sitio, la vía es
+  `filesystem.allowWrite` con ruta literal; en Linux la caja monta rutas
+  concretas y descarta en silencio cualquier entrada con comodín.
 - **Un `.mcp.json` o un settings vacío lo ha dejado el sandbox.** Mientras
   corre cada comando, la caja pone un fichero de 0 bytes y solo lectura en cada
   ruta protegida que no existe (`.mcp.json` aquí y en las carpetas superiores,

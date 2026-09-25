@@ -181,11 +181,14 @@ The agent system has two layers, identical in concept across the three tools.
   phase reads it with `git log` and `git status`, and never through a hook.
 - **The Bash sandbox** — `sandbox.enabled` is on in the template, so every Bash
   command Claude runs is confined by the OS: writable are the working directory,
-  the session temp directory, and `~/.npm`; everything else under `$HOME` is not.
+  the session temp directory, and the caches listed in `filesystem.allowWrite`
+  (`~/.npm`, `~/.cache/pre-commit`, `~/.cache/uv`, `~/.local/share/uv`);
+  everything else under `$HOME` is not.
   This is the guardrail that matters most here, because `permissions.defaultMode`
   is `bypassPermissions` on this machine and the prompts are gone. On Linux it
-  needs `bubblewrap` and `socat`; `make health` reports them, and without them
-  the sandbox warns and steps aside rather than failing the session.
+  needs `bubblewrap` and `socat`; `make health` reports them, and
+  `failIfUnavailable: true` makes a session without them fail at startup instead
+  of carrying on unconfined with a warning.
 
   Four commands are listed in `excludedCommands` and run outside it, each for a
   measured reason: `stow` and `make` write all over `$HOME`, which is the
@@ -195,6 +198,34 @@ The agent system has two layers, identical in concept across the three tools.
   returns 60 instead of 5000). Exclusion applies to the command Claude runs
   directly, not to what a script it launches runs: a command inside a shell
   script inherits the sandbox.
+
+  **The exclusion is coarser than it looks, and it is the widest hole here.**
+  Measured on 2026-09-14 and again on 2026-09-20 against v2.1.274: when any
+  first-level command of a chained call is excluded, the **whole call** runs
+  outside the sandbox. `gh --version >/dev/null; echo "$TMPDIR"` returns an
+  empty `TMPDIR` and sees 826 host processes, against 6 from inside. Upstream
+  documents none of this, and `allowUnsandboxedCommands: false` does not close
+  it, so every entry added to `excludedCommands` is one more lever — which is
+  why the list stays at four. The mirror image holds too: a command run with
+  `dangerouslyDisableSandbox` also loses `TMPDIR`, so `"$TMPDIR/body.md"`
+  becomes `/body.md` and dies on the read-only root. Use an absolute path to the
+  session scratchpad there, never `$TMPDIR`. And the exclusion does not reach
+  inside a loop or a `$( )`: `gh` called that way runs in the sandbox and comes
+  back anonymous, which looks like a 401 rather than a containment error.
+
+  The escape hatch stays open on purpose, and written rather than inherited.
+  Between 2026-09-13 and 2026-09-20, across six projects, it was used 601 times,
+  and some 404 of those had a measured cause: network over SSH or HTTPS (the
+  keyring is unreachable), `pre-commit`, `uv`, Unix sockets, `systemctl --user`,
+  host process inspection, writes to a second repository. Closing it would mean
+  excluding eight more commands to keep the work moving, and an exclusion is
+  worse than the hatch: it drags the whole chain out of the sandbox and leaves
+  no trace, while the hatch is per command and shows up in the transcript. Where
+  a tool only needs to write somewhere, `filesystem.allowWrite` with a literal
+  path is the way — that is what `~/.cache/pre-commit`, `~/.cache/uv` and
+  `~/.local/share/uv` are doing in the template. On Linux the sandbox mounts
+  concrete paths and silently drops any `allowWrite` entry containing a
+  wildcard, so those entries have to be literal.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
