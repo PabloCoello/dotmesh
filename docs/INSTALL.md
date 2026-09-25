@@ -333,7 +333,7 @@ propio proyecto:
 Las dependencias del lado Linux son las mismas que en el bloque «Requisitos» de esta guía (Ubuntu/Debian). Añade `zsh` si no viene en tu imagen de Ubuntu. VS Code no se instala en la distro; `make install` configura el VS Code de Windows de forma automática.
 
 ```bash
-sudo apt install zsh stow git git-delta
+sudo apt install zsh stow git git-delta bubblewrap socat
 curl -sS https://starship.rs/install.sh | sh
 ```
 
