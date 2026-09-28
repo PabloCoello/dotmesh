@@ -795,8 +795,13 @@ while IFS= read -r _d; do
       fail "allowedDomains lleva esquema, y la entrada es un host: $_d" ;;
     */*)
       fail "allowedDomains lleva ruta, y la entrada es un host: $_d" ;;
+    \[*\]|\[*\]:[0-9]*)
+      # IPv6 escrito como toca. Va antes que la rama de abajo porque los dos
+      # puntos de la dirección también casan con ella.
+      pass "allowedDomains acota una IPv6 entre corchetes: $_d" ;;
     *:*:*)
-      # IPv6 sin corchetes es ambiguo y el runtime lo rechaza desde la 2.1.229.
+      # Sin corchetes, el host y el puerto son ambiguos y el runtime la rechaza
+      # desde la 2.1.229. Entre corchetes ya ha pasado por la rama anterior.
       fail "allowedDomains lleva IPv6 sin corchetes: $_d" ;;
     *)
       pass "allowedDomains acota un host concreto: $_d" ;;
