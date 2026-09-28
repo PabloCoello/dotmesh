@@ -107,6 +107,15 @@ freno real que queda, así que no lo esquives por comodidad.
   hace falta de verdad, se apunta con el comando que provocó la denegación y se
   da de alta en la plantilla. Por la escotilla no: quita también el confinamiento
   del sistema de ficheros, así que sale más caro de lo que arregla.
+- **Un fallo de red sin aviso de sandbox no es la lista.** `git` por SSH muere
+  dentro de la caja con `ssh: Could not resolve hostname github.com: Temporary
+  failure in name resolution`, igual con lista que sin ella (medido el
+  28-09-2026). La salida va por un proxy HTTP/HTTPS, así que el puerto 22 no
+  tiene ni DNS ni ruta, y que `github.com` esté listado da lo mismo. Por eso la
+  red por SSH sale por la escotilla, y no es cosa de la lista. La señal es el
+  formato: una denegación de la lista siempre trae un bloque
+  `<sandbox_violations>` con `host:puerto`. Si no lo hay, es otro problema y no
+  se arregla dando de alta un dominio.
 - **La plantilla llega por `make sync-claude-settings`, no por `make stow`.** Este
   fichero sí se stowa, así que puede describir una postura que la máquina todavía
   no tiene. Si la lista de arriba importa para lo que vas a hacer, compruébalo con

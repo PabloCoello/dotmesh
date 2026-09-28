@@ -279,6 +279,16 @@ The agent system has two layers, identical in concept across the three tools.
   `make sync-claude-settings`; run it, or the paragraph above describes a
   posture the machine does not have.
 
+  One failure looks like the list and is not. `git` over SSH fails inside the box
+  with `ssh: Could not resolve hostname github.com: Temporary failure in name
+  resolution` and no violation block — measured on 2026-09-28 with the list and
+  without it, identically. Egress is an HTTP/HTTPS proxy, so port 22 has neither
+  DNS nor a route, and `github.com` sitting on the list changes nothing. That is
+  the measured reason network over SSH goes through the hatch, and it predates
+  the list. The tell is the shape: a denial by the list always carries a
+  `<sandbox_violations>` block naming `host:port`. No block means a different
+  problem, so do not answer it by adding a domain.
+
   What the list still allows is deliberate and worth naming. `registry.npmjs.org`,
   `codeload.github.com` and `objects.githubusercontent.com` let a confined
   command pull code into the working directory — install scripts, repo archives,
