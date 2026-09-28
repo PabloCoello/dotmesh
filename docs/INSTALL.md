@@ -21,8 +21,14 @@ la ventana de monitor, y macOS no trae equivalente nativo. Ver
 **Linux (Ubuntu/Debian)**
 
 ```bash
-sudo apt install stow git git-delta
+sudo apt install stow git git-delta bubblewrap socat
 ```
+
+`bubblewrap` y `socat` son lo que usa el sandbox de Bash de Claude Code en
+Linux. La plantilla lleva `sandbox.failIfUnavailable`, así que sin ellos la
+sesión no arranca en vez de correr sin confinar: es deliberado, porque
+`permissions.defaultMode` es `bypassPermissions` y el sandbox es el único freno.
+`make health` los comprueba.
 
 Starship no está en los repositorios de apt; instálalo con su script oficial:
 
@@ -327,7 +333,7 @@ propio proyecto:
 Las dependencias del lado Linux son las mismas que en el bloque «Requisitos» de esta guía (Ubuntu/Debian). Añade `zsh` si no viene en tu imagen de Ubuntu. VS Code no se instala en la distro; `make install` configura el VS Code de Windows de forma automática.
 
 ```bash
-sudo apt install zsh stow git git-delta
+sudo apt install zsh stow git git-delta bubblewrap socat
 curl -sS https://starship.rs/install.sh | sh
 ```
 

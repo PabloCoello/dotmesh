@@ -184,11 +184,13 @@ The agent system has two layers, identical in concept across the three tools.
   phase reads it with `git log` and `git status`, and never through a hook.
 - **The Bash sandbox** — `sandbox.enabled` is on in the template, so every Bash
   command Claude runs is confined by the OS: writable are the working directory,
-  the session temp directory, and `~/.npm`; everything else under `$HOME` is not.
+  the session temp directory, and `~/.npm`; everything else under `$HOME` is
+  not.
   This is the guardrail that matters most here, because `permissions.defaultMode`
   is `bypassPermissions` on this machine and the prompts are gone. On Linux it
-  needs `bubblewrap` and `socat`; `make health` reports them, and without them
-  the sandbox warns and steps aside rather than failing the session.
+  needs `bubblewrap` and `socat`; `make health` reports them, and
+  `failIfUnavailable: true` makes a session without them fail at startup instead
+  of carrying on unconfined with a warning.
 
   Four commands are listed in `excludedCommands` and run outside it, each for a
   measured reason: `stow` and `make` write all over `$HOME`, which is the
@@ -199,12 +201,65 @@ The agent system has two layers, identical in concept across the three tools.
   directly, not to what a script it launches runs: a command inside a shell
   script inherits the sandbox.
 
+  **The exclusion is coarser than it looks, and it is the widest hole here.**
+  Measured on 2026-09-14 and again on 2026-09-20 against v2.1.274: when any
+  first-level command of a chained call is excluded, the **whole call** runs
+  outside the sandbox. `gh --version >/dev/null; echo "$TMPDIR"` returns an
+  empty `TMPDIR` and sees 826 host processes, against 6 from inside. Upstream
+  documents none of this, and `allowUnsandboxedCommands: false` does not close
+  it, so every entry added to `excludedCommands` is one more lever — which is
+  why the list stays at four. The mirror image holds too: a command run with
+  `dangerouslyDisableSandbox` also loses `TMPDIR`, so `"$TMPDIR/body.md"`
+  becomes `/body.md` and dies on the read-only root. Use an absolute path to the
+  session scratchpad there, never `$TMPDIR`. And the exclusion does not reach
+  inside a loop or a `$( )`: `gh` called that way runs in the sandbox and comes
+  back anonymous, which looks like a 401 rather than a containment error.
+
+  The escape hatch stays open on purpose, and written rather than inherited.
+  Between 2026-09-13 and 2026-09-20, across six projects, it was used 601 times,
+  and some 404 of those had a measured cause: network over SSH or HTTPS (the
+  keyring is unreachable), `pre-commit`, `uv`, Unix sockets, `systemctl --user`,
+  host process inspection, writes to a second repository. Closing it would mean
+  excluding eight more commands to keep the work moving, and an exclusion is
+  worse than the hatch: it drags the whole chain out of the sandbox and leaves
+  no trace, while the hatch is per command and shows up in the transcript.
+
+  `filesystem.allowWrite` is the other way to let a tool through, and it is
+  narrower than the hatch — but only for a cache that holds data. The
+  pre-commit and uv caches were measured as the largest single cause (~110 of
+  those exits) and rejected on 2026-09-25 anyway: `~/.cache/pre-commit` holds
+  the virtualenv of every hook that `git commit` then runs outside the box,
+  `~/.cache/uv` holds the project environments uv links into, and
+  `~/.local/share/uv` holds the interpreters and tools that `~/.local/bin`
+  points at. Granting any of them lets a confined command leave code behind
+  that later runs unconfined, and it survives the session. So those commands
+  keep using the hatch, which at least leaves a trace. The rule the harness
+  now enforces: `allowWrite` grants a cache of data, never a directory whose
+  contents get executed from outside. And on Linux the sandbox mounts concrete
+  paths and silently drops any entry containing a wildcard, so what is there
+  has to be literal.
+
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
   merged into the sandbox's read policy — so run the headless harnesses through
   their `make` targets, which are excluded, not by calling the script directly.
   And `sandbox.filesystem.denyRead` is not duplicated in the template on
   purpose: the `permissions.deny` Read rules are merged into it by the runtime.
+
+  A third, seen on 2026-09-14 in `deriva/traza` and documented upstream. To hold
+  a write denial on a protected file that does not exist yet — `.mcp.json` in
+  the working directory and every directory above it, `.claude/settings*.json`,
+  shell startup files, `.gitconfig` — the sandbox creates a 0-byte read-only
+  placeholder while each command runs and removes it afterwards. A session
+  killed before that cleanup (SIGKILL, a pane closed hard) leaves it on disk. An
+  empty `.mcp.json` fails with "MCP config is not a valid JSON", and one in a
+  parent directory is read by every session opened below it; an empty
+  `.claude/settings.local.json` makes "Yes, and don't ask again" fail to save.
+  `claude doctor` lists them (v2.1.257 and later). Delete them with `rm` outside
+  the sandbox while no other session runs in that folder; `/sandbox` cannot
+  help, because these paths are a fixed list that `allowWrite` does not open.
+  Inside the sandbox the same paths show as `/dev/null` character devices even
+  when nothing is on disk, so check from outside before deleting anything.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old

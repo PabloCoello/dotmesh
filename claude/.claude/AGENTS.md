@@ -59,14 +59,47 @@ freno real que queda, así que no lo esquives por comodidad.
 - **Dentro de la caja solo se escribe** en el directorio de trabajo, el temporal
   de sesión y `~/.npm`. El resto de `$HOME` no, aunque el comando parezca
   inofensivo. Para temporales usa `$TMPDIR`, nunca `/tmp` a pelo.
+- **Sin `bubblewrap` y `socat` la sesión no arranca**, porque la plantilla lleva
+  `failIfUnavailable`. Correr sin caja y no enterarse es peor que no correr.
 - **Cuatro comandos corren fuera** (`excludedCommands`): `stow` y `make`, que
   escriben por todo `$HOME` cuando instalan dotfiles; `herdr`, que necesita su
-  socket unix; y `gh`, que dentro de la caja pierde el token del llavero y se
+  socket Unix; y `gh`, que dentro de la caja pierde el token del llavero y se
   degrada a anónimo sin decirlo.
 - **La exclusión vale para el comando que lanzas, no para lo que ese comando
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
   arranca sesiones headless se corre por su target de `make`, no llamando al
   script: un `claude -p` anidado dentro de la caja falla con «Not logged in».
+- **Si un comando de la cadena está excluido, sale fuera la llamada entera.**
+  Medido el 14-09 y otra vez el 20-09 contra la 2.1.274: en
+  `gh --version; echo "$TMPDIR"` el `echo` también corre fuera, con `TMPDIR`
+  vacío y 826 procesos del anfitrión a la vista frente a 6 desde dentro. Upstream
+  no lo documenta y cerrar la escotilla no lo tapa, así que cada entrada nueva en
+  `excludedCommands` es otra palanca y la lista se queda en cuatro. Al revés pasa
+  lo mismo: un comando lanzado con `dangerouslyDisableSandbox` tampoco tiene
+  `TMPDIR`, así que `"$TMPDIR/cuerpo.md"` queda en `/cuerpo.md` y muere contra la
+  raíz de solo lectura; ahí va una ruta absoluta al scratchpad de la sesión. Y la
+  exclusión no entra en un bucle ni en un `$( )`: un `gh` llamado así corre
+  dentro y vuelve anónimo, que parece un 401 y no un problema de la caja.
+- **La escotilla se queda abierta a propósito**, con una semana de uso medida
+  detrás (el recuento y las causas están en el `AGENTS.md` del repo). Cerrarla
+  obligaría a excluir más comandos, y una exclusión es peor: arrastra la cadena
+  entera fuera y no deja rastro, mientras que la escotilla va comando a comando
+  y queda en la transcripción.
+- **`allowWrite` concede una caché de datos, nunca un directorio cuyo contenido
+  se ejecuta desde fuera.** Por eso `~/.cache/pre-commit`, `~/.cache/uv` y
+  `~/.local/share/uv` se evaluaron y se descartaron: guardan entornos de hooks,
+  entornos de proyecto e intérpretes que luego corren sin confinar. Lo que
+  necesiten esos comandos sale por la escotilla. Y en Linux la caja monta rutas
+  concretas y descarta en silencio cualquier entrada con comodín.
+- **Un `.mcp.json` o un `settings.json` vacío lo ha dejado el sandbox.** Mientras
+  corre cada comando, la caja pone un fichero de 0 bytes y solo lectura en cada
+  ruta protegida que no existe (`.mcp.json` aquí y en las carpetas superiores,
+  `.claude/settings*.json`, `.bashrc`, `.gitconfig`) y lo quita al acabar. Si la
+  sesión muere de golpe, se queda: «MCP config is not a valid JSON» o permisos
+  que no se guardan. `claude doctor` los lista; bórralos con `rm` fuera de la
+  caja y sin otra sesión abierta en esa carpeta. `/sandbox` no los arregla,
+  porque la lista es fija. Desde dentro de la caja esas rutas se ven como
+  `/dev/null` aunque no haya nada en disco: compruébalo fuera.
 - **`dangerouslyDisableSandbox` solo tras un fallo con evidencia** (`Operation
   not permitted`, socket denegado, ruta fuera de lo permitido), y comando a
   comando. No lo actives preventivamente ni lo arrastres al siguiente.

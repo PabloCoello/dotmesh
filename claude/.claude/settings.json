@@ -12,6 +12,7 @@
   },
   "sandbox": {
     "enabled": true,
+    "failIfUnavailable": true,
     "allowUnsandboxedCommands": true,
     "excludedCommands": [
       "stow *",
