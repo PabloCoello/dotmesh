@@ -243,6 +243,12 @@ The agent system has two layers, identical in concept across the three tools.
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
   merged into the sandbox's read policy — so run the headless harnesses through
   their `make` targets, which are excluded, not by calling the script directly.
+  It costs half an hour every time it is forgotten, because the run dies in
+  73 ms with `error: "authentication_failed"` and reads as an account problem
+  rather than a containment one. One command tells them apart: `ls -lL` on the
+  credential the harness symlinks into the arm's config dir. Inside the box it
+  resolves to a character device (`crw-rw-rw- 1 nobody nogroup 1, 3`), the
+  nested session reads an empty file and concludes there is no session.
   And `sandbox.filesystem.denyRead` is not duplicated in the template on
   purpose: the `permissions.deny` Read rules are merged into it by the runtime.
 
