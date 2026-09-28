@@ -757,9 +757,22 @@ section "sandbox: la allowlist de salida"
 # vista, `TMPDIR` puesto), así que no es que se escapara: sin lista, la caja
 # simplemente no filtra la red.
 
+# Medido el 28-09-2026 con la lista ya puesta, en sesiones headless aisladas
+# (`make` excluido, `--settings` a un fichero aparte, sin tocar esta máquina):
+# con el bloque, `github.com` devuelve 200 y `example.org` muere con
+# `curl: (56) CONNECT tunnel failed, response 403`; sin el bloque, los dos
+# devuelven 200. El par descarta que sea el proxy de la sesión: filtra la lista.
+# El `curl` a secas no dice qué host cayó; el aviso que recibe el agente sí,
+# `deny network-outbound example.org:443 (host is not on the allow list)`, y de
+# ahí sale el alta que se apunta. Y un servidor local sigue en pie: con la lista
+# puesta y `allowLocalBinding` sin tocar, `python3 -m http.server` en 127.0.0.1
+# se levanta y se alcanza desde dentro, 200.
+
 # Las claves de red van anidadas bajo `sandbox.network`. Escritas planas bajo
 # `sandbox` no dan error: quedan en el fichero y no hacen nada, que es el peor
-# de los dos fallos porque parece aplicado.
+# de los dos fallos porque parece aplicado. De las cinco, la plantilla solo pone
+# dos; las otras tres son un canario para el día que alguien las añada, y solo
+# miran el nivel de `.sandbox`, no un contenedor mal escrito.
 for _k in allowedDomains deniedDomains strictAllowlist allowUnixSockets allowLocalBinding; do
   [ "$(jq -r --arg k "$_k" '.sandbox | has($k)' "$_tpl")" = false ] \
     && pass "$_k no está plano bajo sandbox" \
@@ -788,9 +801,14 @@ while IFS= read -r _d; do
   [ -n "$_d" ] || continue
   case "$_d" in
     "*"|"*:"*)
-      # La documentación admite el comodín pelado desde la 2.1.186. Devuelve la
-      # red entera y deja la lista de adorno.
+      # Upstream documenta el comodín pelado. Devuelve la red entera y deja la
+      # lista de adorno.
       fail "allowedDomains abre la red entera: $_d" ;;
+    \*.*)
+      # `*.host` es sintaxis válida, y por eso hace falta la regla: da de alta
+      # todos los subdominios de golpe, incluidos los que nadie ha mirado. La
+      # lista va host a host a propósito.
+      fail "allowedDomains abre un dominio entero por comodín: $_d" ;;
     *://*)
       fail "allowedDomains lleva esquema, y la entrada es un host: $_d" ;;
     */*)
@@ -800,8 +818,8 @@ while IFS= read -r _d; do
       # puntos de la dirección también casan con ella.
       pass "allowedDomains acota una IPv6 entre corchetes: $_d" ;;
     *:*:*)
-      # Sin corchetes, el host y el puerto son ambiguos y el runtime la rechaza
-      # desde la 2.1.229. Entre corchetes ya ha pasado por la rama anterior.
+      # Sin corchetes, el host y el puerto son ambiguos y upstream documenta que
+      # hay que ponerlos. Entre corchetes ya ha pasado por la rama anterior.
       fail "allowedDomains lleva IPv6 sin corchetes: $_d" ;;
     *)
       pass "allowedDomains acota un host concreto: $_d" ;;

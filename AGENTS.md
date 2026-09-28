@@ -250,14 +250,42 @@ The agent system has two layers, identical in concept across the three tools.
   `strictAllowlist: true`. The keys nest under `sandbox.network`; written flat
   under `sandbox` they stay in the file and do nothing, so the harness rejects
   that shape. `false` would be no posture at all here: an unlisted host would
-  prompt, and under `bypassPermissions` that prompt approves itself. At `true` a
-  sandboxed command against an unlisted host is denied outright and the error
-  names the host. That bites `curl`, `npm`, `git`, `uv` and `pip` run directly.
-  It does not reach the four excluded commands, which run outside the box and
-  outside the list, nor in-process tools such as WebFetch, which follow the
-  permission rules instead. A domain does not cover its subdomains, which is why
-  the three GitHub hosts are listed one by one. Anything added later comes from
-  a real denial, recorded with the command that caused it.
+  prompt, and under `bypassPermissions` that prompt approves itself.
+
+  Measured the same day with the list in place, in isolated headless sessions
+  (`make` is excluded, `--settings` pointed at a separate file, this machine
+  untouched): `github.com` returns 200 and `example.org` dies with `curl: (56)
+  CONNECT tunnel failed, response 403`. Without the block both return 200, which
+  is what rules out the session's own proxy — the list is doing the filtering.
+  The `curl` error does not say which host fell; the notice the agent gets does,
+  `deny network-outbound example.org:443 (host is not on the allow list)`, and
+  that is where the recorded entry comes from. A local server is unaffected:
+  with the list on and `allowLocalBinding` untouched, `python3 -m http.server`
+  binds on 127.0.0.1 and is reachable from inside, 200.
+
+  So `true` bites `curl`, `npm`, `git`, `uv` and `pip` run directly. It does not
+  reach the four excluded commands — they run outside the box and therefore
+  outside the list, so `api.github.com` is not what makes `gh` work — nor
+  in-process tools such as WebFetch, which are not sandboxed at all and under
+  `bypassPermissions` are not gated by permissions either. A domain does not
+  cover its subdomains, which is why the GitHub hosts are listed one by one;
+  `objects.githubusercontent.com` is a separate registrable domain, not a
+  `github.com` subdomain, and `raw.githubusercontent.com` is deliberately absent
+  until something needs it. Anything added later comes from a real denial,
+  recorded with the command that caused it — not from the hatch, which is the
+  wrong answer here because it drops filesystem confinement along with the
+  network one, so a host-named failure would cost more than it fixes. The doc
+  reaches a machine through `make stow` but the setting only through
+  `make sync-claude-settings`; run it, or the paragraph above describes a
+  posture the machine does not have.
+
+  What the list still allows is deliberate and worth naming. `registry.npmjs.org`,
+  `codeload.github.com` and `objects.githubusercontent.com` let a confined
+  command pull code into the working directory — install scripts, repo archives,
+  release assets — that later runs unconfined. That is the same shape as the
+  `allowWrite` cases rejected above, reached by a different route, and it is
+  accepted because these are the hosts the repo's own tooling is built on. The
+  containment they buy is over everywhere else, not over these.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is

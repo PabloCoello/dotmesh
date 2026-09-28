@@ -30,12 +30,6 @@ sesión no arranca en vez de correr sin confinar: es deliberado, porque
 `permissions.defaultMode` es `bypassPermissions` y el sandbox es el único freno.
 `make health` los comprueba.
 
-La plantilla confina también la salida de red: `sandbox.network.allowedDomains`
-deja seis dominios (Anthropic, npm y GitHub) y `strictAllowlist` deniega el
-resto sin preguntar. Los comandos de esta página que van a otros sitios, como el
-script de Starship de aquí abajo, los ejecutas tú en tu terminal; desde dentro
-de la caja fallarían nombrando el host.
-
 Starship no está en los repositorios de apt; instálalo con su script oficial:
 
 ```bash
@@ -45,6 +39,15 @@ curl -sS https://starship.rs/install.sh | sh
 VS Code se instala desde su sitio oficial o vía su paquete `.deb`.
 
 ---
+
+En los dos sistemas, la plantilla de Claude Code confina además la salida de
+red: `sandbox.network.allowedDomains` deja seis dominios (Anthropic, npm y
+GitHub) y `strictAllowlist` deniega el resto sin preguntar. Los comandos de esta
+página que van a otros sitios, como el script de Starship de arriba, los
+ejecutas tú en tu terminal y no les afecta; desde dentro de la caja fallarían
+con `curl: (56) CONNECT tunnel failed`. Esta clave no llega con `make stow`:
+entra con `make sync-claude-settings`, y `make health` avisa mientras no lo
+hayas hecho.
 
 OpenCode, Codex y Claude Code se instalan según las instrucciones de cada
 proveedor. Después del primer arranque de cada uno se crean sus directorios de
