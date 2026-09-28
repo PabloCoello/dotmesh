@@ -239,6 +239,26 @@ The agent system has two layers, identical in concept across the three tools.
   paths and silently drops any entry containing a wildcard, so what is there
   has to be literal.
 
+  Network egress is the third surface, and until 2026-09-28 it was not confined
+  at all. Measured that day against v2.1.274, from inside the box: `curl`
+  reached example.org, ipinfo.io, pypi.org, httpbin.org and www.wikipedia.org,
+  all 200, with the command still confined — 5 processes visible and `TMPDIR`
+  set, so it was not escaping. Without `allowedDomains` there is simply nothing
+  to filter against. `sandbox.network.allowedDomains` now carries six hosts
+  (`api.anthropic.com`, `registry.npmjs.org`, `github.com`, `api.github.com`,
+  `codeload.github.com`, `objects.githubusercontent.com`) with
+  `strictAllowlist: true`. The keys nest under `sandbox.network`; written flat
+  under `sandbox` they stay in the file and do nothing, so the harness rejects
+  that shape. `false` would be no posture at all here: an unlisted host would
+  prompt, and under `bypassPermissions` that prompt approves itself. At `true` a
+  sandboxed command against an unlisted host is denied outright and the error
+  names the host. That bites `curl`, `npm`, `git`, `uv` and `pip` run directly.
+  It does not reach the four excluded commands, which run outside the box and
+  outside the list, nor in-process tools such as WebFetch, which follow the
+  permission rules instead. A domain does not cover its subdomains, which is why
+  the three GitHub hosts are listed one by one. Anything added later comes from
+  a real denial, recorded with the command that caused it.
+
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
   merged into the sandbox's read policy — so run the headless harnesses through

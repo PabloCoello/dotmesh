@@ -91,6 +91,17 @@ freno real que queda, así que no lo esquives por comodidad.
   entornos de proyecto e intérpretes que luego corren sin confinar. Lo que
   necesiten esos comandos sale por la escotilla. Y en Linux la caja monta rutas
   concretas y descarta en silencio cualquier entrada con comodín.
+- **Desde dentro de la caja solo se sale a seis dominios**
+  (`sandbox.network.allowedDomains`): `api.anthropic.com`,
+  `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com` y
+  `objects.githubusercontent.com`. Con `strictAllowlist` en `true`, cualquier
+  otro host se deniega sin preguntar y el error lo nombra. Eso corta `curl`,
+  `npm`, `git`, `uv` y `pip` directos; no alcanza a los cuatro excluidos, que
+  corren fuera y por tanto también fuera de la lista, ni a WebFetch, que es
+  herramienta en proceso. Un dominio no cubre sus subdominios, por eso los tres
+  de GitHub van uno a uno. Si algo hace falta de verdad, se apunta con el
+  comando que provocó la denegación y se da de alta en la plantilla; no se
+  resuelve por la escotilla.
 - **Un `.mcp.json` o un `settings.json` vacío lo ha dejado el sandbox.** Mientras
   corre cada comando, la caja pone un fichero de 0 bytes y solo lectura en cada
   ruta protegida que no existe (`.mcp.json` aquí y en las carpetas superiores,
