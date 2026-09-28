@@ -65,6 +65,18 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/offer-terminal-browser.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "*",

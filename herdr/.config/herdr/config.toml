@@ -192,3 +192,6 @@ command = "$HOME/.config/herdr/bin/mark-later.sh"
 key     = "ctrl+alt+m"
 type    = "shell"
 command = "$HOME/.config/herdr/bin/mark-later.sh"
+
+[experimental]
+kitty_graphics = true

@@ -1,4 +1,5 @@
 {
+  "terminal.integrated.enableImages": true,
   "editor.fontFamily": "'JetBrainsMono Nerd Font', 'JetBrains Mono', 'JetBrainsMono Nerd Font Mono', Menlo, Monaco, 'Courier New', monospace",
   "editor.fontLigatures": true,
   "editor.lineHeight": 1.6,
