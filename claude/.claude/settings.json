@@ -20,6 +20,17 @@
       "herdr *",
       "gh *"
     ],
+    "network": {
+      "allowedDomains": [
+        "api.anthropic.com",
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "codeload.github.com",
+        "objects.githubusercontent.com"
+      ],
+      "strictAllowlist": true
+    },
     "filesystem": {
       "allowWrite": [
         "~/.npm"

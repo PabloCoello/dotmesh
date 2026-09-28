@@ -750,6 +750,59 @@ while IFS= read -r _w; do
   esac
 done <<< "$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl")"
 
+section "sandbox: la allowlist de salida"
+# Medido el 28-09-2026 sobre la 2.1.274, dentro de la caja y con la plantilla
+# anterior: `curl` a example.org, ipinfo.io, pypi.org, httpbin.org y
+# www.wikipedia.org devolvía 200. El comando seguía confinado (5 procesos a la
+# vista, `TMPDIR` puesto), así que no es que se escapara: sin lista, la caja
+# simplemente no filtra la red.
+
+# Las claves de red van anidadas bajo `sandbox.network`. Escritas planas bajo
+# `sandbox` no dan error: quedan en el fichero y no hacen nada, que es el peor
+# de los dos fallos porque parece aplicado.
+for _k in allowedDomains deniedDomains strictAllowlist allowUnixSockets allowLocalBinding; do
+  [ "$(jq -r --arg k "$_k" '.sandbox | has($k)' "$_tpl")" = false ] \
+    && pass "$_k no está plano bajo sandbox" \
+    || fail "$_k está plano bajo sandbox: se escribe y no se aplica"
+done
+
+# Los seis aprobados, ni uno más de entrada. Cada alta posterior sale de una
+# denegación real, con el comando que la provocó, no de una suposición.
+_dom_esperado=$(printf '%s\n' api.anthropic.com api.github.com codeload.github.com \
+  github.com objects.githubusercontent.com registry.npmjs.org)
+_dom_real=$(jq -r '.sandbox.network.allowedDomains // [] | .[]' "$_tpl" | sort)
+[ "$_dom_real" = "$_dom_esperado" ] \
+  && pass "allowedDomains son los seis aprobados" \
+  || fail "allowedDomains cambió: $(printf '%s' "$_dom_real" | tr '\n' ' ')"
+
+# Con `defaultMode` en bypassPermissions, `strictAllowlist: false` no confina
+# nada: un dominio fuera de la lista se pregunta, y esa pregunta se aprueba
+# sola. O sea, exactamente el estado medido arriba. La lista solo tiene efecto
+# en `true`.
+[ "$(jq -r '.sandbox.network.strictAllowlist' "$_tpl")" = true ] \
+  && pass "strictAllowlist deniega en vez de preguntarse a sí mismo" \
+  || fail "strictAllowlist en false: la lista queda escrita y sin efecto"
+
+# Y el motivo, escrito como reglas, para la entrada que venga detrás.
+while IFS= read -r _d; do
+  [ -n "$_d" ] || continue
+  case "$_d" in
+    "*"|"*:"*)
+      # La documentación admite el comodín pelado desde la 2.1.186. Devuelve la
+      # red entera y deja la lista de adorno.
+      fail "allowedDomains abre la red entera: $_d" ;;
+    *://*)
+      fail "allowedDomains lleva esquema, y la entrada es un host: $_d" ;;
+    */*)
+      fail "allowedDomains lleva ruta, y la entrada es un host: $_d" ;;
+    *:*:*)
+      # IPv6 sin corchetes es ambiguo y el runtime lo rechaza desde la 2.1.229.
+      fail "allowedDomains lleva IPv6 sin corchetes: $_d" ;;
+    *)
+      pass "allowedDomains acota un host concreto: $_d" ;;
+  esac
+done <<< "$(jq -r '.sandbox.network.allowedDomains // [] | .[]' "$_tpl")"
+
 section "guardarraíl: dónde acaba el cuerpo de un heredoc"
 # La propiedad que importa: quitar el cuerpo no puede tragarse el resto del
 # comando, o cualquier cosa detrás de un heredoc quedaría sin escanear.
