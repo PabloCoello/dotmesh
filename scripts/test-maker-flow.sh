@@ -43,8 +43,14 @@
 #   - Symlink .credentials.json instead of copying it: the OAuth token rotates
 #     and a stale copy 401s partway through a long run.
 #   - Feed the prompt on stdin so the variadic --add-dir does not eat it.
-#   - The isolated config carries no hooks and no settings beyond the persona,
-#     so the machine's own hooks cannot influence either arm.
+#   - The isolated config carries no hooks and no settings.json, so the
+#     machine's own hooks cannot influence either arm. What --settings carries
+#     is the persona, the permission mode and the sandbox block, and the last
+#     one only takes effect because there is nothing to merge it with: on this
+#     machine --settings merges rather than replaces, and the merge keeps the
+#     host's excludedCommands.
+#   - The calibration figures above (3, 3 and 0 delegations; 265 s) were taken
+#     before the sandbox block existed, so they describe unconfined arms.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,6 +91,20 @@ section "Dependencias"
 for bin in claude node git; do
   command -v "$bin" >/dev/null 2>&1 || { echo "ERROR: '$bin' no está en PATH."; exit 1; }
 done
+# Cada brazo lleva failIfUnavailable, así que en Linux bubblewrap y socat son
+# dependencias duras: sin ellos la sesión no arranca, run_arm devuelve 0
+# delegaciones y la rúbrica imprime «la persona no discrimina», que es un
+# veredicto sobre el flujo cuando lo que falta es un paquete. Se comprueba aquí
+# para que el fallo diga lo que es.
+if [ "$(uname -s)" = Linux ]; then
+  for bin in bwrap socat; do
+    command -v "$bin" >/dev/null 2>&1 || {
+      echo "ERROR: '$bin' no está en PATH y cada brazo corre confinado con failIfUnavailable."
+      echo "       sudo apt install bubblewrap socat"
+      exit 1
+    }
+  done
+fi
 echo "  claude: $(command -v claude)"
 echo "  node:   $(node --version)"
 echo "  modelo: $MODEL · timeout por run: ${TIMEOUT}s · runs por brazo: $RUNS"
@@ -146,6 +166,36 @@ const [style, config, withHooks, tpl, mode] = process.argv.slice(1);
 const s = {};
 if (style) s.outputStyle = style;
 if (mode) s.permissions = { defaultMode: mode };
+// Cada brazo lleva su propia caja, y va escrita aquí en vez de heredada.
+// make_config_dir le da un config con agentes, estilos, skills y la credencial,
+// así que el settings.json de la máquina no le llega — y su caja tampoco.
+// Medido el 28-09-2026 con tres brazos y el mismo encargo (escribir PRUEBA en
+// ~/.config/dotmesh-prueba-t6.txt): con los settings de la máquina fusionados,
+// y con este bloque, la escritura muere como «sistema de archivos de solo
+// lectura»; con sandbox.enabled en false el fichero aterriza en el ~/.config
+// real. Un brazo corre con --dangerously-skip-permissions, así que esta es la
+// única frontera que queda.
+//
+// El config aislado no es un detalle: lo que hace que el bloque se aplique
+// entero es que no haya nada con lo que fusionarlo. Medido el mismo día con
+// «gh --version; echo "$TMPDIR"» en una sola llamada encadenada, heredando el
+// config de la máquina sale TMPDIR=[] (fuera de la caja, porque su
+// excludedCommands sobrevive a la fusión y el vacío de aquí no lo sustituye) y
+// con config aislado sale TMPDIR=[/tmp/claude-1000].
+//
+// Más estricto que la máquina a propósito. Un brazo no tiene nada que hacer
+// llamando a stow, make, herdr ni gh, así que excludedCommands va vacío: una
+// entrada ahí arrastra fuera de la caja la llamada encadenada entera.
+// allowUnsandboxedCommands en false para que tampoco pueda abrir la escotilla,
+// que es una decisión meditada y comando a comando de una sesión con una
+// persona delante. failIfUnavailable hace que un anfitrión sin bubblewrap
+// tumbe la ejecución en vez de medir en silencio un brazo sin confinar.
+s.sandbox = {
+  enabled: true,
+  failIfUnavailable: true,
+  allowUnsandboxedCommands: false,
+  excludedCommands: [],
+};
 if (withHooks) {
   // El registro se deriva de la plantilla del repo en vez de escribirse a mano,
   // para que el arnés no se quede atrás cuando cambie dónde va cada hook. Se
