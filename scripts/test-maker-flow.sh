@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Headless control/treatment harness for the maker persona.
-# Usage: bash scripts/test-maker-flow.sh
-# Requires: claude (authenticated), node
+# Usage: make test-maker-flow — not `bash scripts/test-maker-flow.sh`. The target
+#        is excluded from the sandbox; called by hand from a confined session,
+#        the nested arm reads the credential as /dev/null and dies in 73 ms with
+#        "Not logged in". AGENTS.md has the full diagnosis.
+# Requires: claude (authenticated), node, and on Linux bubblewrap and socat,
+#        which the sandbox block below turns into hard dependencies.
 #
 # The only variable between the two arms is the output style. Same task, same
 # model, same subagents, same isolated config. Rubric, observable and not
@@ -104,6 +108,14 @@ if [ "$(uname -s)" = Linux ]; then
       exit 1
     }
   done
+  # Estar en el PATH no basta. Un kernel con los namespaces de usuario sin
+  # privilegios deshabilitados deja bwrap instalado y sin poder crear la caja, y
+  # el síntoma vuelve a ser el que este preflight quiere evitar.
+  bwrap --ro-bind / / --dev /dev true 2>/dev/null || {
+    echo "ERROR: 'bwrap' está en PATH pero no puede crear un namespace de usuario."
+    echo "       Mira 'sysctl kernel.unprivileged_userns_clone' y el perfil de AppArmor."
+    exit 1
+  }
 fi
 echo "  claude: $(command -v claude)"
 echo "  node:   $(node --version)"

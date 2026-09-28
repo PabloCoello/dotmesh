@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Arnés headless de validación del flujo scribe + mesh-review.
-# Uso: bash scripts/test-scribe-flow.sh
-# Requiere: claude (con ANTHROPIC_API_KEY activa), node
+# Uso: make test-scribe-flow — no `bash scripts/test-scribe-flow.sh`. El target
+#      está excluido de la caja; llamado a mano desde una sesión confinada, la
+#      sesión anidada lee la credencial como /dev/null y muere en 73 ms con
+#      «Not logged in». El diagnóstico completo, en AGENTS.md.
+# Requiere: claude (con ANTHROPIC_API_KEY activa), node, y en Linux bubblewrap y
+#      socat, que el bloque sandbox de abajo convierte en dependencias duras.
 # Casos:
 #   control    — 0 hilos pendientes → 0 eventos nuevos
 #   tratamiento — 2 hilos pendientes → ≥1 evento nuevo + respuesta con secciones
+#
+# La sesión corre confinada y con su propio CLAUDE_CONFIG_DIR: sin ese config
+# aislado el bloque sandbox se fusiona con el settings.json de la máquina y no
+# se aplica entero. La medición está junto al código, más abajo.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -49,6 +57,14 @@ if [ "$(uname -s)" = Linux ]; then
       exit 1
     fi
   done
+  # Estar en el PATH no basta. Un kernel con los namespaces de usuario sin
+  # privilegios deshabilitados deja bwrap instalado y sin poder crear la caja, y
+  # el síntoma vuelve a ser el que este preflight quiere evitar.
+  if ! bwrap --ro-bind / / --dev /dev true 2>/dev/null; then
+    echo "ERROR: 'bwrap' está en PATH pero no puede crear un namespace de usuario."
+    echo "       Mira 'sysctl kernel.unprivileged_userns_clone' y el perfil de AppArmor."
+    exit 1
+  fi
 fi
 if [ ! -f "$MESH_REVIEW" ]; then
   echo "ERROR: mesh-review.mjs no encontrado en: $MESH_REVIEW"
