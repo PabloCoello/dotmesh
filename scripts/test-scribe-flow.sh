@@ -303,7 +303,7 @@ fi
 events_before_fix=$(find "$WORK_FIX/.ai/review/doc.md" -maxdepth 1 -name "*.json" | wc -l | tr -d ' ')
 
 # Prompt que guía al agente a usar fix (no emit crudo).
-# Sigue el flujo de SKILL.md §6: editar el doc → git add → mesh-review fix.
+# Sigue el flujo de pass-flow.md §6: editar el doc → git add → mesh-review fix.
 # No menciona el subcomando emit.
 PROMPT_FIX=$(cat <<PROMPT
 Tu tarea: resolver el comentario pendiente del documento en "$WORK_FIX/doc.md".

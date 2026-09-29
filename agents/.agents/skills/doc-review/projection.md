@@ -15,6 +15,8 @@ The event log has two views: the immutable **event log** and the net **projectio
 
 Read all `*.json` files from the event directory that have `"version": 2`. Skip unparseable files silently. If the directory does not exist, return an empty list.
 
+An event that survives parsing can still be discarded: `readEvents` drops anything that fails the predicates listed in `closing-a-pass.md` §11. That is where to look when an event was written and does not show up in the projection.
+
 ### Sort order
 
 Sort events before folding. The ordering has three levels (mirrors `compareEvents`):

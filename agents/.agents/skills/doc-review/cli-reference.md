@@ -16,7 +16,7 @@ This skill uses only standard file and shell operations:
 | Check worktree cleanliness | `git status --porcelain` |
 | Check current branch | `git branch --show-current` |
 | Check default branch | `git symbolic-ref --short refs/remotes/origin/HEAD` |
-| Create work branch | `git checkout -b <name>` (after user confirmation) |
+| Create work branch | `git checkout -b <name>` (directly or after confirmation, per `pass-flow.md` §5) |
 | Commit a single file | `git commit -m "<message>" -- <file>` |
 | Capture short SHA | `git rev-parse --short HEAD` |
 | Read/write event files | file read/write (JSON, 2-space indent, trailing newline) |
