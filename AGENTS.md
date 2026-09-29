@@ -246,13 +246,14 @@ The agent system has two layers, identical in concept across the three tools.
   reached example.org, ipinfo.io, pypi.org, httpbin.org and www.wikipedia.org,
   all 200, with the command still confined — 5 processes visible and `TMPDIR`
   set, so it was not escaping. Without `allowedDomains` there is simply nothing
-  to filter against. `sandbox.network.allowedDomains` now carries six hosts
+  to filter against. `sandbox.network.allowedDomains` now carries seven hosts
   (`api.anthropic.com`, `registry.npmjs.org`, `github.com`, `api.github.com`,
-  `codeload.github.com`, `objects.githubusercontent.com`) with
-  `strictAllowlist: true`. The keys nest under `sandbox.network`; written flat
-  under `sandbox` they stay in the file and do nothing, so the harness rejects
-  that shape. `false` would be no posture at all here: an unlisted host would
-  prompt, and under `bypassPermissions` that prompt approves itself.
+  `codeload.github.com`, `objects.githubusercontent.com`,
+  `gitlab.semantiqa.dev`) with `strictAllowlist: true`. The keys nest under
+  `sandbox.network`; written flat under `sandbox` they stay in the file and do
+  nothing, so the harness rejects that shape. `false` would be no posture at all
+  here: an unlisted host would prompt, and under `bypassPermissions` that prompt
+  approves itself.
 
   Measured the same day with the list in place, in isolated headless sessions
   (`make` is excluded, `--settings` pointed at a separate file, this machine
@@ -273,11 +274,14 @@ The agent system has two layers, identical in concept across the three tools.
   cover its subdomains, which is why the GitHub hosts are listed one by one;
   `objects.githubusercontent.com` is a separate registrable domain, not a
   `github.com` subdomain, and `raw.githubusercontent.com` is deliberately absent
-  until something needs it. Anything added later comes from a real denial,
-  recorded with the command that caused it — not from the hatch, which is the
-  wrong answer here because it drops filesystem confinement along with the
-  network one, so a host-named failure would cost more than it fixes. The doc
-  reaches a machine through `make stow` but the setting only through
+  until something needs it. `gitlab.semantiqa.dev`, the self-hosted GitLab, is
+  the one entry that did not come from a denial: it was added on request on
+  2026-09-29, ahead of the work that needs it, and it is recorded that way
+  rather than dressed up as a measurement. Anything else added later comes from
+  a real denial, recorded with the command that caused it — not from the hatch,
+  which is the wrong answer here because it drops filesystem confinement along
+  with the network one, so a host-named failure would cost more than it fixes.
+  The doc reaches a machine through `make stow` but the setting only through
   `make sync-claude-settings`; run it, or the paragraph above describes a
   posture the machine does not have.
 
@@ -291,13 +295,20 @@ The agent system has two layers, identical in concept across the three tools.
   `<sandbox_violations>` block naming `host:port`. No block means a different
   problem, so do not answer it by adding a domain.
 
-  What the list still allows is deliberate and worth naming. `registry.npmjs.org`,
-  `codeload.github.com` and `objects.githubusercontent.com` let a confined
+  What the list still allows is deliberate and worth naming, in both
+  directions. Inbound, `registry.npmjs.org`, `codeload.github.com`,
+  `objects.githubusercontent.com` and `gitlab.semantiqa.dev` let a confined
   command pull code into the working directory — install scripts, repo archives,
   release assets — that later runs unconfined. That is the same shape as the
-  `allowWrite` cases rejected above, reached by a different route, and it is
-  accepted because these are the hosts the repo's own tooling is built on. The
-  containment they buy is over everywhere else, not over these.
+  `allowWrite` cases rejected above, reached by a different route. Outbound,
+  `github.com`, `api.github.com` and `gitlab.semantiqa.dev` are write
+  destinations: a confined command that reaches a token in the environment —
+  `~/.netrc`, `~/.gitconfig`, an exported variable, none of which the read deny
+  list covers — can `git push` or call the REST API. That is not new with the
+  self-hosted entry; the two GitHub hosts have always had it, and it went
+  unwritten until 2026-09-29. Both are accepted because these are the hosts the
+  repo's own tooling is built on. The containment the list buys is over
+  everywhere else, not over these.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is

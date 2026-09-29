@@ -27,7 +27,8 @@
         "github.com",
         "api.github.com",
         "codeload.github.com",
-        "objects.githubusercontent.com"
+        "objects.githubusercontent.com",
+        "gitlab.semantiqa.dev"
       ],
       "strictAllowlist": true
     },
