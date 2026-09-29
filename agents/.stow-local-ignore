@@ -1,0 +1,17 @@
+# Al declarar este fichero, Stow deja de usar su lista de ignorados por defecto,
+# así que el `^/README.*` que traía de serie hay que restituirlo aquí.
+^/README\.md
+
+# Contenido que meten otras herramientas dentro del paquete y que no es de
+# dotmesh. Cae aquí porque mientras Stow tuvo plegado el directorio de skills,
+# lo que esas herramientas escribían en ~/.agents/skills/ aterrizaba en el repo.
+# Ya existe en $HOME como ficheros reales, así que stow chocaría contra ello.
+^/\.agents/skills/synced$
+^/\.agents/skills/terminal-browser$
+
+# Residuos del sandbox de Bash: ficheros de 0 bytes y solo lectura que la caja
+# planta en cada ruta protegida que no existe y retira al acabar el comando.
+# Sobreviven a una sesión muerta de golpe. Un `.mcp.json` vacío enlazado en
+# $HOME rompe todas las sesiones abiertas por debajo.
+\.claude
+\.mcp\.json
