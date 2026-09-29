@@ -40,6 +40,15 @@ VS Code se instala desde su sitio oficial o vía su paquete `.deb`.
 
 ---
 
+En los dos sistemas, la plantilla de Claude Code confina además la salida de
+red: `sandbox.network.allowedDomains` deja seis dominios (Anthropic, npm y
+GitHub) y `strictAllowlist` deniega el resto sin preguntar. Los comandos de esta
+página que van a otros sitios, como el script de Starship de arriba, los
+ejecutas tú en tu terminal y no les afecta; desde dentro de la caja fallarían
+con `curl: (56) CONNECT tunnel failed`. Esta clave no llega con `make stow`:
+entra con `make sync-claude-settings`, y `make health` avisa mientras no lo
+hayas hecho.
+
 OpenCode, Codex y Claude Code se instalan según las instrucciones de cada
 proveedor. Después del primer arranque de cada uno se crean sus directorios de
 config (`~/.config/opencode/`, `~/.codex/`, `~/.claude/`); a partir de ahí

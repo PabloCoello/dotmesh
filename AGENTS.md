@@ -239,6 +239,64 @@ The agent system has two layers, identical in concept across the three tools.
   paths and silently drops any entry containing a wildcard, so what is there
   has to be literal.
 
+  Network egress is the third surface, and until 2026-09-28 it was not confined
+  at all. Measured that day against v2.1.274, from inside the box: `curl`
+  reached example.org, ipinfo.io, pypi.org, httpbin.org and www.wikipedia.org,
+  all 200, with the command still confined — 5 processes visible and `TMPDIR`
+  set, so it was not escaping. Without `allowedDomains` there is simply nothing
+  to filter against. `sandbox.network.allowedDomains` now carries six hosts
+  (`api.anthropic.com`, `registry.npmjs.org`, `github.com`, `api.github.com`,
+  `codeload.github.com`, `objects.githubusercontent.com`) with
+  `strictAllowlist: true`. The keys nest under `sandbox.network`; written flat
+  under `sandbox` they stay in the file and do nothing, so the harness rejects
+  that shape. `false` would be no posture at all here: an unlisted host would
+  prompt, and under `bypassPermissions` that prompt approves itself.
+
+  Measured the same day with the list in place, in isolated headless sessions
+  (`make` is excluded, `--settings` pointed at a separate file, this machine
+  untouched): `github.com` returns 200 and `example.org` dies with `curl: (56)
+  CONNECT tunnel failed, response 403`. Without the block both return 200, which
+  is what rules out the session's own proxy — the list is doing the filtering.
+  The `curl` error does not say which host fell; the notice the agent gets does,
+  `deny network-outbound example.org:443 (host is not on the allow list)`, and
+  that is where the recorded entry comes from. A local server is unaffected:
+  with the list on and `allowLocalBinding` untouched, `python3 -m http.server`
+  binds on 127.0.0.1 and is reachable from inside, 200.
+
+  So `true` bites `curl`, `npm`, `git`, `uv` and `pip` run directly. It does not
+  reach the four excluded commands — they run outside the box and therefore
+  outside the list, so `api.github.com` is not what makes `gh` work — nor
+  in-process tools such as WebFetch, which are not sandboxed at all and under
+  `bypassPermissions` are not gated by permissions either. A domain does not
+  cover its subdomains, which is why the GitHub hosts are listed one by one;
+  `objects.githubusercontent.com` is a separate registrable domain, not a
+  `github.com` subdomain, and `raw.githubusercontent.com` is deliberately absent
+  until something needs it. Anything added later comes from a real denial,
+  recorded with the command that caused it — not from the hatch, which is the
+  wrong answer here because it drops filesystem confinement along with the
+  network one, so a host-named failure would cost more than it fixes. The doc
+  reaches a machine through `make stow` but the setting only through
+  `make sync-claude-settings`; run it, or the paragraph above describes a
+  posture the machine does not have.
+
+  One failure looks like the list and is not. `git` over SSH fails inside the box
+  with `ssh: Could not resolve hostname github.com: Temporary failure in name
+  resolution` and no violation block — measured on 2026-09-28 with the list and
+  without it, identically. Egress is an HTTP/HTTPS proxy, so port 22 has neither
+  DNS nor a route, and `github.com` sitting on the list changes nothing. That is
+  the measured reason network over SSH goes through the hatch, and it predates
+  the list. The tell is the shape: a denial by the list always carries a
+  `<sandbox_violations>` block naming `host:port`. No block means a different
+  problem, so do not answer it by adding a domain.
+
+  What the list still allows is deliberate and worth naming. `registry.npmjs.org`,
+  `codeload.github.com` and `objects.githubusercontent.com` let a confined
+  command pull code into the working directory — install scripts, repo archives,
+  release assets — that later runs unconfined. That is the same shape as the
+  `allowWrite` cases rejected above, reached by a different route, and it is
+  accepted because these are the hosts the repo's own tooling is built on. The
+  containment they buy is over everywhere else, not over these.
+
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
   merged into the sandbox's read policy — so run the headless harnesses through

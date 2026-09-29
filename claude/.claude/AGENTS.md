@@ -91,6 +91,35 @@ freno real que queda, así que no lo esquives por comodidad.
   entornos de proyecto e intérpretes que luego corren sin confinar. Lo que
   necesiten esos comandos sale por la escotilla. Y en Linux la caja monta rutas
   concretas y descarta en silencio cualquier entrada con comodín.
+- **Desde dentro de la caja solo se sale a seis dominios**
+  (`sandbox.network.allowedDomains`): `api.anthropic.com`,
+  `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com` y
+  `objects.githubusercontent.com`, con `strictAllowlist` en `true`. Medido el
+  28-09-2026 en sesiones headless aisladas: con la lista puesta, `github.com`
+  devuelve 200 y `example.org` cae con `curl: (56) CONNECT tunnel failed,
+  response 403`; sin ella, los dos devuelven 200. El `curl` no dice qué host
+  cayó, pero el aviso que te llega sí (`deny network-outbound example.org:443`),
+  y de ahí sale el alta. Corta `curl`, `npm`, `git`, `uv` y `pip` directos. No
+  alcanza a los cuatro excluidos, que corren fuera y por tanto fuera de la
+  lista: `api.github.com` no es lo que hace funcionar a `gh`. Tampoco a
+  WebFetch, que no va en la caja. Un servidor en localhost sigue funcionando. Un
+  dominio no cubre sus subdominios, por eso los de GitHub van uno a uno. Si algo
+  hace falta de verdad, se apunta con el comando que provocó la denegación y se
+  da de alta en la plantilla. Por la escotilla no: quita también el confinamiento
+  del sistema de ficheros, así que sale más caro de lo que arregla.
+- **Un fallo de red sin aviso de sandbox no es la lista.** `git` por SSH muere
+  dentro de la caja con `ssh: Could not resolve hostname github.com: Temporary
+  failure in name resolution`, igual con lista que sin ella (medido el
+  28-09-2026). La salida va por un proxy HTTP/HTTPS, así que el puerto 22 no
+  tiene ni DNS ni ruta, y que `github.com` esté listado da lo mismo. Por eso la
+  red por SSH sale por la escotilla, y no es cosa de la lista. La señal es el
+  formato: una denegación de la lista siempre trae un bloque
+  `<sandbox_violations>` con `host:puerto`. Si no lo hay, es otro problema y no
+  se arregla dando de alta un dominio.
+- **La plantilla llega por `make sync-claude-settings`, no por `make stow`.** Este
+  fichero sí se stowa, así que puede describir una postura que la máquina todavía
+  no tiene. Si la lista de arriba importa para lo que vas a hacer, compruébalo con
+  `jq '.sandbox.network' ~/.claude/settings.json`.
 - **Un `.mcp.json` o un `settings.json` vacío lo ha dejado el sandbox.** Mientras
   corre cada comando, la caja pone un fichero de 0 bytes y solo lectura en cada
   ruta protegida que no existe (`.mcp.json` aquí y en las carpetas superiores,

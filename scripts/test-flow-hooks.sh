@@ -750,6 +750,82 @@ while IFS= read -r _w; do
   esac
 done <<< "$(jq -r '.sandbox.filesystem.allowWrite // [] | .[]' "$_tpl")"
 
+section "sandbox: la allowlist de salida"
+# Medido el 28-09-2026 sobre la 2.1.274, dentro de la caja y con la plantilla
+# anterior: `curl` a example.org, ipinfo.io, pypi.org, httpbin.org y
+# www.wikipedia.org devolvía 200. El comando seguía confinado (5 procesos a la
+# vista, `TMPDIR` puesto), así que no es que se escapara: sin lista, la caja
+# simplemente no filtra la red.
+
+# Medido el 28-09-2026 con la lista ya puesta, en sesiones headless aisladas
+# (`make` excluido, `--settings` a un fichero aparte, sin tocar esta máquina):
+# con el bloque, `github.com` devuelve 200 y `example.org` muere con
+# `curl: (56) CONNECT tunnel failed, response 403`; sin el bloque, los dos
+# devuelven 200. El par descarta que sea el proxy de la sesión: filtra la lista.
+# El `curl` a secas no dice qué host cayó; el aviso que recibe el agente sí,
+# `deny network-outbound example.org:443 (host is not on the allow list)`, y de
+# ahí sale el alta que se apunta. Y un servidor local sigue en pie: con la lista
+# puesta y `allowLocalBinding` sin tocar, `python3 -m http.server` en 127.0.0.1
+# se levanta y se alcanza desde dentro, 200.
+
+# Las claves de red van anidadas bajo `sandbox.network`. Escritas planas bajo
+# `sandbox` no dan error: quedan en el fichero y no hacen nada, que es el peor
+# de los dos fallos porque parece aplicado. De las cinco, la plantilla solo pone
+# dos; las otras tres son un canario para el día que alguien las añada, y solo
+# miran el nivel de `.sandbox`, no un contenedor mal escrito.
+for _k in allowedDomains deniedDomains strictAllowlist allowUnixSockets allowLocalBinding; do
+  [ "$(jq -r --arg k "$_k" '.sandbox | has($k)' "$_tpl")" = false ] \
+    && pass "$_k no está plano bajo sandbox" \
+    || fail "$_k está plano bajo sandbox: se escribe y no se aplica"
+done
+
+# Los seis aprobados, ni uno más de entrada. Cada alta posterior sale de una
+# denegación real, con el comando que la provocó, no de una suposición.
+_dom_esperado=$(printf '%s\n' api.anthropic.com api.github.com codeload.github.com \
+  github.com objects.githubusercontent.com registry.npmjs.org)
+_dom_real=$(jq -r '.sandbox.network.allowedDomains // [] | .[]' "$_tpl" | sort)
+[ "$_dom_real" = "$_dom_esperado" ] \
+  && pass "allowedDomains son los seis aprobados" \
+  || fail "allowedDomains cambió: $(printf '%s' "$_dom_real" | tr '\n' ' ')"
+
+# Con `defaultMode` en bypassPermissions, `strictAllowlist: false` no confina
+# nada: un dominio fuera de la lista se pregunta, y esa pregunta se aprueba
+# sola. O sea, exactamente el estado medido arriba. La lista solo tiene efecto
+# en `true`.
+[ "$(jq -r '.sandbox.network.strictAllowlist' "$_tpl")" = true ] \
+  && pass "strictAllowlist deniega en vez de preguntarse a sí mismo" \
+  || fail "strictAllowlist en false: la lista queda escrita y sin efecto"
+
+# Y el motivo, escrito como reglas, para la entrada que venga detrás.
+while IFS= read -r _d; do
+  [ -n "$_d" ] || continue
+  case "$_d" in
+    "*"|"*:"*)
+      # Upstream documenta el comodín pelado. Devuelve la red entera y deja la
+      # lista de adorno.
+      fail "allowedDomains abre la red entera: $_d" ;;
+    \*.*)
+      # `*.host` es sintaxis válida, y por eso hace falta la regla: da de alta
+      # todos los subdominios de golpe, incluidos los que nadie ha mirado. La
+      # lista va host a host a propósito.
+      fail "allowedDomains abre un dominio entero por comodín: $_d" ;;
+    *://*)
+      fail "allowedDomains lleva esquema, y la entrada es un host: $_d" ;;
+    */*)
+      fail "allowedDomains lleva ruta, y la entrada es un host: $_d" ;;
+    \[*\]|\[*\]:[0-9]*)
+      # IPv6 escrito como toca. Va antes que la rama de abajo porque los dos
+      # puntos de la dirección también casan con ella.
+      pass "allowedDomains acota una IPv6 entre corchetes: $_d" ;;
+    *:*:*)
+      # Sin corchetes, el host y el puerto son ambiguos y upstream documenta que
+      # hay que ponerlos. Entre corchetes ya ha pasado por la rama anterior.
+      fail "allowedDomains lleva IPv6 sin corchetes: $_d" ;;
+    *)
+      pass "allowedDomains acota un host concreto: $_d" ;;
+  esac
+done <<< "$(jq -r '.sandbox.network.allowedDomains // [] | .[]' "$_tpl")"
+
 section "guardarraíl: dónde acaba el cuerpo de un heredoc"
 # La propiedad que importa: quitar el cuerpo no puede tragarse el resto del
 # comando, o cualquier cosa detrás de un heredoc quedaría sin escanear.
