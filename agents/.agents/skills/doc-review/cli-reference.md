@@ -34,7 +34,7 @@ No VS Code extension API, no agent-specific API, and no network access are requi
 
 ## 13. Write subcommands
 
-The four subcommands below let any editor or agent create and close review threads without the VS Code extension. They all use atomic event writes (tmp+rename) and require the document to be inside a git repository.
+The five subcommands below let any editor or agent create and close review threads without the VS Code extension — the four typed ones plus `emit`, the low-level way out. They all use atomic event writes (tmp+rename) and require the document to be inside a git repository.
 
 **Shared behaviour across `open`, `reply`, `resolve`, `retract`:**
 

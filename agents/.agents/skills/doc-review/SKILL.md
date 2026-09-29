@@ -34,6 +34,6 @@ These apply whichever file you open next. The files below carry the detail.
 | [`projection.md`](projection.md) | §2 | Reading events, sort order, the projection fold and its shape, resolving an anchor against the current text |
 | [`pass-flow.md`](pass-flow.md) | §3–§8 | Running a pass: comment types, preconditions, branch, order of edits, conflicts, iteration detection, routing to subagents |
 | [`closing-a-pass.md`](closing-a-pass.md) | §9–§11 | The 5-part response and per-thread log lines, re-anchoring ownership, the predicates a fix event must satisfy |
-| [`cli-reference.md`](cli-reference.md) | §12–§13 | Running a command: the git and file operations a pass needs plus `mesh-review fix` in the tool table, then `open`, `reply`, `resolve`, `retract` and `emit` with their flags. The `reanchor` subcommand is in `closing-a-pass.md` §10 |
+| [`cli-reference.md`](cli-reference.md) | §12–§13 | Running a command: the git and file operations a pass needs plus `mesh-review fix` in the tool table, then `open`, `reply`, `resolve` and `retract` with their flags, and `emit` with its `key=value` pairs. The `reanchor` subcommand is in `closing-a-pass.md` §10 |
 
 The section numbers are unchanged, so a reference written before the split — `doc-review` §4, §6.5 — still points at the same text; the table says which file holds it.

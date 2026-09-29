@@ -78,7 +78,7 @@ this file at the end of the pass.
 After review is complete:
 
 - [ ] All Critical issues are resolved
-- [ ] All required changes — the unprefixed comments of `review-process.md` step 4 — are resolved or explicitly deferred with justification
+- [ ] All required changes — the unprefixed comments of `review-process.md` step 4 — are resolved before merge. The only deferral is a filed bug with an owner, never a promise to clean it up later
 - [ ] Tests pass
 - [ ] Build succeeds
 - [ ] The verification story is documented (what changed, how it was verified)

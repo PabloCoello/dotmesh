@@ -53,7 +53,7 @@ Siempre que sea posible, sustituir frases abstractas por:
 
 # Familias de reglas
 
-Al revisar, abre el fichero de la familia que corresponda al tipo de problema detectado. Al redactar desde cero, escribe con el criterio rector y pasa después el borrador por el checklist de `revision-y-checklist.md`, que remite a cada familia. Cada fichero desarrolla los patrones con ejemplos y reglas operativas.
+Al revisar, abre el fichero de la familia que corresponda al tipo de problema detectado. Al redactar desde cero, escribe con el criterio rector y pasa después el borrador por las veintiséis preguntas del checklist de `revision-y-checklist.md`; la que falle te dice de qué familia es el problema y qué fichero abrir en esta tabla. Cada fichero desarrolla los patrones con ejemplos y reglas operativas.
 
 | Fichero | Cuándo abrirlo |
 |---|---|
