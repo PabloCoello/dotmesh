@@ -30,9 +30,9 @@ These apply whichever file you open next. The files below carry the detail and t
 
 | File | When to open it |
 |---|---|
-| [`commit-discipline.md`](commit-discipline.md) | Committing or splitting what you have: trunk-based development, commit frequency, atomicity, message format, the AI-attribution ban in full, separated concerns, change size |
+| [`commit-discipline.md`](commit-discipline.md) | Committing or splitting what you have: trunk-based development, commit frequency, atomicity, message format with the list of commit types, the AI-attribution ban in full, separated concerns, change size |
 | [`branches-and-worktrees.md`](branches-and-worktrees.md) | Creating a branch or a second tree: branching strategy, naming scheme with its allowed prefixes, worktrees for parallel work |
-| [`super-git.md`](super-git.md) | The user asked for `/super-git`, "ship this" or an equivalent: the ten steps of the lifecycle, what it authorizes, the stop-and-ask list |
+| [`super-git.md`](super-git.md) | The user asked for `/super-git`, "ship this" or an equivalent, or you hit something the index says to stop at: the ten steps of the lifecycle, what it authorizes, and the stop-and-ask list in full — merge and rebase conflicts included |
 | [`working-with-history.md`](working-with-history.md) | While implementing or reporting: commits as save points, the change summary with its "didn't touch" section, bisect, blame and log for finding a regression |
 | [`pre-commit-hygiene.md`](pre-commit-hygiene.md) | Right before staging: the pre-commit checks, automating them with hooks, which generated files belong in the repository |
 | [`rationalizations-and-checks.md`](rationalizations-and-checks.md) | Closing the work: common rationalizations, red flags, and the per-commit verification list |

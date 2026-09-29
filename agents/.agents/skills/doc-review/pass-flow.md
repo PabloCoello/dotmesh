@@ -32,7 +32,7 @@ Check these before touching any file or running any git command:
 2. **Document must be inside a git repository.** Run `git rev-parse --show-toplevel` from the document's directory. If git fails, stop and inform the user.
 3. **Must not be on the default branch.** Run `git branch --show-current`. Compare with `git symbolic-ref --short refs/remotes/origin/HEAD` (falls back to `git config init.defaultBranch`). If on the default branch, go to §5 before touching any file.
 
-Run all three checks once per session at the start of the pass. In watchful-mode iterations, re-run only check 1 (worktree cleanliness for the document under review) before each commit. Checks 2 and 3 do not change between iterations.
+Run all three checks once per session at the start of the pass. In watchful-mode iterations, re-run only check 1 (worktree cleanliness for the document under review) at the start of each iteration, before editing the document. Checks 2 and 3 do not change between iterations.
 
 **Watchful-mode loop rules (check 1 outcome):**
 - **Document dirty** — skip this iteration without committing and without doubling the loop interval. Pending work exists; resume when the document is clean.

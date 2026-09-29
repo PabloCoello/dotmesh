@@ -4,7 +4,7 @@ Skill de revisión de documentos con mesh-review V2.
 
 Lee los ficheros de evento de `.ai/review/<ruta-doc>/`, proyecta el estado actual de cada hilo y actúa sobre el documento.
 
-Consulta `SKILL.md` para el flujo completo de revisión y `schema.json` para el contrato normativo de los eventos V2.
+Consulta `SKILL.md` para las reglas de la pasada y la tabla que dice qué fichero abrir en cada fase, y `schema.json` para el contrato normativo de los eventos V2.
 
 ---
 

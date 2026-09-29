@@ -78,7 +78,7 @@ this file at the end of the pass.
 After review is complete:
 
 - [ ] All Critical issues are resolved
-- [ ] All Important issues are resolved or explicitly deferred with justification
+- [ ] All required changes — the unprefixed comments of `review-process.md` step 4 — are resolved or explicitly deferred with justification
 - [ ] Tests pass
 - [ ] Build succeeds
 - [ ] The verification story is documented (what changed, how it was verified)

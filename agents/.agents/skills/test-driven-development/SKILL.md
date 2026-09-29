@@ -47,7 +47,7 @@ These apply whichever file you open next. The files below carry the detail and t
 | File | When to open it |
 |---|---|
 | [`cycle.md`](cycle.md) | Writing the first test of a change: RED/GREEN/REFACTOR worked through, the Prove-It pattern for bugs, delegating the reproduction test to a subagent |
-| [`test-pyramid.md`](test-pyramid.md) | Deciding what kind of test a change needs: pyramid proportions, test sizes by resource, the decision guide |
+| [`test-pyramid.md`](test-pyramid.md) | Deciding whether a change needs a test at all and of what kind: the Beyonce Rule, pyramid proportions, test sizes by resource, the decision guide |
 | [`writing-good-tests.md`](writing-good-tests.md) | Writing the tests: state over interactions, DAMP over DRY, real implementations, arrange-act-assert, one concept per test, naming, anti-patterns |
 | [`browser-testing.md`](browser-testing.md) | The change is visible in a browser: DevTools workflow, what to check, and the untrusted-data boundary around anything the page returns |
 | [`red-flags-and-checks.md`](red-flags-and-checks.md) | Closing the work: common rationalizations, red flags, and the verification list |

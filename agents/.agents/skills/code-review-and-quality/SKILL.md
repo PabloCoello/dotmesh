@@ -25,7 +25,7 @@ These apply whichever file you open next. The files below carry the detail and t
 
 1. **No change merges unreviewed**, and the review covers the five axes — correctness, readability, architecture, security, performance — not just whether the tests pass.
 2. **Understand the intent before reading the code, and review the tests first.** They state what the change claims to do.
-3. **Label every comment with its severity.** Unlabelled feedback reads as mandatory, and the author spends time on suggestions you meant as optional.
+3. **Label every comment with its severity:** `**Critical:**` blocks the merge, *no prefix* is a required change, `**Nit:**` is minor, `**Optional:** / **Consider:**` is a suggestion, `**FYI**` needs no action. Unlabelled feedback reads as mandatory, and the author spends time on suggestions you meant as optional.
 4. **Don't rubber-stamp and don't soften.** "LGTM" with no evidence of a review helps no one, and a bug described as a minor concern is dishonest. Quantify the problem, and comment on the code rather than the person.
 5. **A change beyond ~1000 lines gets split, not reviewed in one block**, and a refactor bundled with a feature is two changes.
 6. **List the dead code the change orphaned, and ask before deleting it.** Leaving it in place is not the alternative.

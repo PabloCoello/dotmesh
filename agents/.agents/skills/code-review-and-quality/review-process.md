@@ -92,7 +92,8 @@ This catches issues that a single model might miss — different models have dif
 ```
 Review this code change for correctness, security, and adherence to
 our project conventions. The spec says [X]. The change should [Y].
-Flag any issues as Critical, Important, or Suggestion.
+Flag any issues with the severity labels of step 4: Critical, no prefix
+for a required change, Nit, Optional, FYI.
 ```
 
 ## Review Speed
