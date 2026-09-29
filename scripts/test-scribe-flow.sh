@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Arnés headless de validación del flujo scribe + mesh-review.
-# Uso: bash scripts/test-scribe-flow.sh
-# Requiere: claude (con ANTHROPIC_API_KEY activa), node
+# Uso: make test-scribe-flow — no `bash scripts/test-scribe-flow.sh`. El target
+#      está excluido de la caja; llamado a mano desde una sesión confinada, la
+#      sesión anidada lee la credencial como /dev/null y muere en 73 ms con
+#      «Not logged in». El diagnóstico completo, en AGENTS.md.
+# Requiere: claude (con ANTHROPIC_API_KEY activa), node, y en Linux bubblewrap y
+#      socat, que el bloque sandbox de abajo convierte en dependencias duras.
 # Casos:
 #   control    — 0 hilos pendientes → 0 eventos nuevos
 #   tratamiento — 2 hilos pendientes → ≥1 evento nuevo + respuesta con secciones
+#
+# La sesión corre confinada y con su propio CLAUDE_CONFIG_DIR: sin ese config
+# aislado el bloque sandbox se fusiona con el settings.json de la máquina y no
+# se aplica entero. La medición está junto al código, más abajo.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -38,6 +46,26 @@ if ! command -v node >/dev/null 2>&1; then
   echo "ERROR: 'node' no está en PATH."
   exit 1
 fi
+# La sesión lleva failIfUnavailable, así que en Linux bubblewrap y socat son
+# dependencias duras: sin ellos claude -p no arranca y el arnés lo contaría como
+# un fallo de la persona en vez de como un paquete que falta.
+if [ "$(uname -s)" = Linux ]; then
+  for bin in bwrap socat; do
+    if ! command -v "$bin" >/dev/null 2>&1; then
+      echo "ERROR: '$bin' no está en PATH y la sesión corre confinada con failIfUnavailable."
+      echo "       sudo apt install bubblewrap socat"
+      exit 1
+    fi
+  done
+  # Estar en el PATH no basta. Un kernel con los namespaces de usuario sin
+  # privilegios deshabilitados deja bwrap instalado y sin poder crear la caja, y
+  # el síntoma vuelve a ser el que este preflight quiere evitar.
+  if ! bwrap --ro-bind / / --dev /dev true 2>/dev/null; then
+    echo "ERROR: 'bwrap' está en PATH pero no puede crear un namespace de usuario."
+    echo "       Mira 'sysctl kernel.unprivileged_userns_clone' y el perfil de AppArmor."
+    exit 1
+  fi
+fi
 if [ ! -f "$MESH_REVIEW" ]; then
   echo "ERROR: mesh-review.mjs no encontrado en: $MESH_REVIEW"
   echo "       Ejecuta 'make cli-build' para generarlo."
@@ -60,6 +88,35 @@ cleanup() {
   rm -f "$CLAUDE_STDERR"
 }
 trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Config aislado para las sesiones del arnés: los agentes y estilos del repo,
+# el árbol canónico de skills y la credencial real. Nada más, para que los
+# hooks y los settings de la máquina no alcancen a la medición.
+#
+# No es cosmético: sin él, --settings se FUSIONA con el settings.json de la
+# máquina y el bloque sandbox de run_claude_scribe no llega a aplicarse entero.
+# Medido el 28-09-2026 con la misma sonda en los dos montajes, `gh --version;
+# echo "$TMPDIR"` en una sola llamada encadenada:
+#
+#   heredando el config de la máquina → TMPDIR=[]            (fuera de la caja)
+#   con este config aislado           → TMPDIR=[/tmp/claude-1000]
+#
+# Es decir: el excludedCommands de la máquina sobrevive a la fusión y el vacío
+# que pide --settings no lo sustituye, así que stow, make, herdr y gh seguían
+# sacando fuera de la caja la llamada entera. En el brazo aislado el mismo
+# comando corre dentro, y la sesión informa además de que
+# dangerouslyDisableSandbox está deshabilitado.
+# ---------------------------------------------------------------------------
+REAL_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+SCRIBE_CONFIG=$(mktemp -d)
+CLEANUP_DIRS+=("$SCRIBE_CONFIG")
+cp -rL "$REPO_ROOT/claude/.claude/agents" "$SCRIBE_CONFIG/agents"
+cp -rL "$REPO_ROOT/claude/.claude/output-styles" "$SCRIBE_CONFIG/output-styles"
+ln -s "$REPO_ROOT/agents/.agents/skills" "$SCRIBE_CONFIG/skills"
+if [ -e "$REAL_CONFIG/.credentials.json" ]; then
+  ln -s "$REAL_CONFIG/.credentials.json" "$SCRIBE_CONFIG/.credentials.json"
+fi
 
 # ---------------------------------------------------------------------------
 # Función: prepara un directorio temporal con git + eventos del fixture
@@ -132,12 +189,21 @@ run_claude_scribe() {
   set +e
   # Prompt via stdin para evitar que --add-dir (variádico) lo consuma como directorio
   # NOTA: --dangerously-skip-permissions desactiva los diálogos de permisos de
-  # Claude Code y --add-dir no es un sandbox de SO. El riesgo se acepta porque
-  # el prompt es mínimo y las rutas apuntan al directorio temporal.
-  raw_response=$(cd "$workdir" && echo "$prompt" | timeout 600 claude -p \
+  # Claude Code y --add-dir no es un sandbox de SO. La frontera la pone el
+  # bloque sandbox de abajo, escrito aquí y no heredado, junto con el
+  # CLAUDE_CONFIG_DIR aislado que hace que no haya nada con lo que fusionarlo.
+  #
+  # Más estricto que la máquina a propósito. Una medición no tiene nada que
+  # hacer llamando a stow, make, herdr ni gh, así que excludedCommands va vacío:
+  # una entrada ahí arrastra fuera de la caja la llamada encadenada entera.
+  # allowUnsandboxedCommands en false para que tampoco pueda abrir la escotilla,
+  # que es una decisión meditada y comando a comando de una sesión con una
+  # persona delante. failIfUnavailable hace que un anfitrión sin bubblewrap
+  # tumbe la ejecución en vez de medir en silencio una sesión sin confinar.
+  raw_response=$(cd "$workdir" && echo "$prompt" | CLAUDE_CONFIG_DIR="$SCRIBE_CONFIG" timeout 600 claude -p \
     --output-format json \
     --dangerously-skip-permissions \
-    --settings '{"outputStyle":"scribe"}' \
+    --settings '{"outputStyle":"scribe","sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"excludedCommands":[]}}' \
     --add-dir "$workdir" \
     2>"$CLAUDE_STDERR")
   claude_exit=$?
