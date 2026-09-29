@@ -1,0 +1,5 @@
+# Sincronización de skills de Claude Code: no es contenido de dotmesh y ya
+# existe como ficheros reales en $HOME, así que stow chocaría con ella.
+^/\.agents/skills/synced$
+# Carpetas vacías que el sandbox de Bash deja dentro de los directorios de skill.
+\.claude

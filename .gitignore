@@ -30,6 +30,11 @@ opencode/.config/opencode/auth.json
 agents/.agents/skills/terminal-browser
 codex/.codex/skills/terminal-browser
 
+# Skills que Claude Code sincroniza de la cuenta (pdf, docx, skill-creator…). Caen aquí
+# por el mismo motivo: son de la herramienta, no de dotmesh, y ya existen en $HOME.
+# `agents/.stow-local-ignore` evita además que stow choque contra ellas.
+agents/.agents/skills/synced/
+
 # Red de seguridad: el .env del puente de Collie vive fuera del repo, en el directorio de
 # config del plugin. Nunca debería aparecer aquí, pero si alguien lo copia al paquete
 # mientras depura, `git add .` se lo llevaría: lleva las claves VAPID.
