@@ -261,10 +261,12 @@ The agent system has two layers, identical in concept across the three tools.
   reached example.org, ipinfo.io, pypi.org, httpbin.org and www.wikipedia.org,
   all 200, with the command still confined — 5 processes visible and `TMPDIR`
   set, so it was not escaping. Without `allowedDomains` there is simply nothing
-  to filter against. `sandbox.network.allowedDomains` now carries seven hosts
+  to filter against. `sandbox.network.allowedDomains` now carries eight hosts
   (`api.anthropic.com`, `registry.npmjs.org`, `github.com`, `api.github.com`,
   `codeload.github.com`, `objects.githubusercontent.com`,
-  `gitlab.semantiqa.dev`) with `strictAllowlist: true`. The keys nest under
+  `gitlab.semantiqa.dev`, `plane.derivasoftware.dev`) with
+  `strictAllowlist: true`. Entries carry no port: the other seven have none,
+  egress is an HTTP/HTTPS proxy, and 443 is the only port it reaches. The keys nest under
   `sandbox.network`; written flat under `sandbox` they stay in the file and do
   nothing, so the harness rejects that shape. `false` would be no posture at all
   here: an unlisted host would prompt, and under `bypassPermissions` that prompt
@@ -289,10 +291,12 @@ The agent system has two layers, identical in concept across the three tools.
   cover its subdomains, which is why the GitHub hosts are listed one by one;
   `objects.githubusercontent.com` is a separate registrable domain, not a
   `github.com` subdomain, and `raw.githubusercontent.com` is deliberately absent
-  until something needs it. `gitlab.semantiqa.dev`, the self-hosted GitLab, is
-  the one entry that did not come from a denial: it was added on request on
-  2026-09-29, ahead of the work that needs it, and it is recorded that way
-  rather than dressed up as a measurement. Anything else added later comes from
+  until something needs it. Two entries did not come from a denial:
+  `gitlab.semantiqa.dev`, the self-hosted GitLab, added on request on
+  2026-09-29, and `plane.derivasoftware.dev`, the self-hosted Plane, added on
+  request on 2026-10-02 — both ahead of the work that needs them, and both
+  recorded that way rather than dressed up as a measurement. Anything else
+  added later comes from
   a real denial, recorded with the command that caused it — not from the hatch,
   which is the wrong answer here because it drops filesystem confinement along
   with the network one, so a host-named failure would cost more than it fixes.
@@ -316,7 +320,8 @@ The agent system has two layers, identical in concept across the three tools.
   command pull code into the working directory — install scripts, repo archives,
   release assets — that later runs unconfined. That is the same shape as the
   `allowWrite` cases rejected above, reached by a different route. Outbound,
-  `github.com`, `api.github.com` and `gitlab.semantiqa.dev` are write
+  `github.com`, `api.github.com`, `gitlab.semantiqa.dev` and
+  `plane.derivasoftware.dev` are write
   destinations: a confined command that reaches a token in the environment —
   `~/.netrc`, `~/.gitconfig`, an exported variable, none of which the read deny
   list covers — can `git push` or call the REST API. That is not new with the

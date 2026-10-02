@@ -105,12 +105,15 @@ freno real que queda, así que no lo esquives por comodidad.
   entornos de proyecto e intérpretes que luego corren sin confinar. Lo que
   necesiten esos comandos sale por la escotilla. Y en Linux la caja monta rutas
   concretas y descarta en silencio cualquier entrada con comodín.
-- **Desde dentro de la caja solo se sale a siete dominios**
+- **Desde dentro de la caja solo se sale a ocho dominios**
   (`sandbox.network.allowedDomains`): `api.anthropic.com`,
   `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com`,
-  `objects.githubusercontent.com` y `gitlab.semantiqa.dev`, el GitLab propio,
-  dado de alta a petición de la persona el 29-09-2026. Con `strictAllowlist` en
-  `true`. Medido el 28-09-2026 en sesiones headless aisladas: con la lista
+  `objects.githubusercontent.com`, `gitlab.semantiqa.dev`, el GitLab propio,
+  dado de alta a petición de la persona el 29-09-2026, y
+  `plane.derivasoftware.dev`, el Plane propio, dado de alta igual el
+  02-10-2026. Con `strictAllowlist` en `true`. Las entradas van sin puerto: las
+  siete anteriores tampoco lo llevan, la salida va por un proxy HTTP/HTTPS y
+  443 es el único puerto al que llega. Medido el 28-09-2026 en sesiones headless aisladas: con la lista
   puesta, `github.com` devuelve 200 y `example.org` cae con `curl: (56) CONNECT
   tunnel failed, response 403`; sin ella, los dos devuelven 200. El `curl` no
   dice qué host cayó, pero el aviso que te llega sí (`deny network-outbound
@@ -120,13 +123,13 @@ freno real que queda, así que no lo esquives por comodidad.
   WebFetch, que no va en la caja. Un servidor en localhost sigue funcionando. Un
   dominio no cubre sus subdominios, por eso los de GitHub van uno a uno. Si algo
   hace falta de verdad, se apunta con el comando que provocó la denegación y se
-  da de alta en la plantilla; el GitLab propio es la única entrada que no salió
-  de una denegación, y va registrada así. Por la escotilla no: quita también el
+  da de alta en la plantilla; el GitLab y el Plane propios son las dos entradas
+  que no salieron de una denegación, y van registradas así. Por la escotilla no: quita también el
   confinamiento del sistema de ficheros, así que sale más caro de lo que
   arregla. Y ojo con lo que la lista sigue permitiendo: npm, los archivos de
   GitHub y el GitLab dejan traerse código que luego corre sin confinar, y
-  GitHub y el GitLab son además destinos de escritura si el comando alcanza un
-  token del entorno.
+  GitHub, el GitLab y el Plane son además destinos de escritura si el comando
+  alcanza un token del entorno.
 - **Un fallo de red sin aviso de sandbox no es la lista.** `git` por SSH muere
   dentro de la caja con `ssh: Could not resolve hostname github.com: Temporary
   failure in name resolution`, igual con lista que sin ella (medido el

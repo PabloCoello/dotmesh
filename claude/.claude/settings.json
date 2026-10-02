@@ -28,7 +28,8 @@
         "api.github.com",
         "codeload.github.com",
         "objects.githubusercontent.com",
-        "gitlab.semantiqa.dev"
+        "gitlab.semantiqa.dev",
+        "plane.derivasoftware.dev"
       ],
       "strictAllowlist": true
     },
