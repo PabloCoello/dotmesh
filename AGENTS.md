@@ -203,14 +203,28 @@ The agent system has two layers, identical in concept across the three tools.
   directly, not to what a script it launches runs: a command inside a shell
   script inherits the sandbox.
 
-  **The exclusion is coarser than it looks, and it is the widest hole here.**
-  Measured on 2026-09-14 and again on 2026-09-20 against v2.1.274: when any
-  first-level command of a chained call is excluded, the **whole call** runs
-  outside the sandbox. `gh --version >/dev/null; echo "$TMPDIR"` returns an
-  empty `TMPDIR` and sees 826 host processes, against 6 from inside. Upstream
-  documents none of this, and `allowUnsandboxedCommands: false` does not close
-  it, so every entry added to `excludedCommands` is one more lever — which is
-  why the list stays at four. The mirror image holds too: a command run with
+  **The exclusion reaches only the bare command, and that is new.** Measured on
+  2026-09-14 and again on 2026-09-20 against v2.1.274: when any first-level
+  command of a chained call was excluded, the **whole call** ran outside the
+  sandbox — `gh --version >/dev/null; echo "$TMPDIR"` returned an empty
+  `TMPDIR` and saw 826 host processes, against 6 from inside. Re-measured on
+  2026-10-02 against v2.1.287, that exact line returns `TMPDIR` set and 5
+  processes: the chain now runs **inside**. The hole closed somewhere between
+  those two versions. Upstream documents neither the hole nor its closing, so
+  the list stays at four out of prudence and because nothing new asks for an
+  entry — not, any longer, because one entry would drag a whole chain out.
+
+  The practical cost arrived the same day, and it is the half that bites. An
+  excluded command keeps its exclusion only when Claude runs it **naked**. With
+  a probe Makefile that prints `TMPDIR` and counts `/proc` entries, the target
+  run bare saw 801 host processes and an empty `TMPDIR`; the same target with
+  `> file 2>&1` saw 7 with `TMPDIR` set, and with `| cat` saw 8 — confined,
+  both. Quoting a variable assignment changed nothing. So a redirection or a
+  pipe is enough to confine the call, which is how a bench target redirected to
+  a log file dies with `Read-only file system` against a second repository
+  while the same target without the redirection builds its arm. Run `make`
+  bare and let the harness capture the output. The mirror image holds too: a
+  command run with
   `dangerouslyDisableSandbox` also loses `TMPDIR`, so `"$TMPDIR/body.md"`
   becomes `/body.md` and dies on the read-only root. Use an absolute path to the
   session scratchpad there, never `$TMPDIR`. And the exclusion does not reach
@@ -223,8 +237,9 @@ The agent system has two layers, identical in concept across the three tools.
   keyring is unreachable), `pre-commit`, `uv`, Unix sockets, `systemctl --user`,
   host process inspection, writes to a second repository. Closing it would mean
   excluding eight more commands to keep the work moving, and an exclusion is
-  worse than the hatch: it drags the whole chain out of the sandbox and leaves
-  no trace, while the hatch is per command and shows up in the transcript.
+  worse than the hatch even now that it no longer drags the whole chain out: it
+  holds for every later use of that command and leaves no trace, while the
+  hatch is per command and shows up in the transcript.
 
   `filesystem.allowWrite` is the other way to let a tool through, and it is
   narrower than the hatch — but only for a cache that holds data. The

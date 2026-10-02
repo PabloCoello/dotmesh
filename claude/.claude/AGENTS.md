@@ -69,22 +69,36 @@ freno real que queda, así que no lo esquives por comodidad.
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
   arranca sesiones headless se corre por su target de `make`, no llamando al
   script: un `claude -p` anidado dentro de la caja falla con «Not logged in».
-- **Si un comando de la cadena está excluido, sale fuera la llamada entera.**
-  Medido el 14-09 y otra vez el 20-09 contra la 2.1.274: en
-  `gh --version; echo "$TMPDIR"` el `echo` también corre fuera, con `TMPDIR`
-  vacío y 826 procesos del anfitrión a la vista frente a 6 desde dentro. Upstream
-  no lo documenta y cerrar la escotilla no lo tapa, así que cada entrada nueva en
-  `excludedCommands` es otra palanca y la lista se queda en cuatro. Al revés pasa
-  lo mismo: un comando lanzado con `dangerouslyDisableSandbox` tampoco tiene
-  `TMPDIR`, así que `"$TMPDIR/cuerpo.md"` queda en `/cuerpo.md` y muere contra la
+- **La exclusión solo alcanza al comando desnudo, y eso es nuevo.** Hasta la
+  2.1.274 bastaba con que un comando de la cadena estuviera excluido para que
+  saliera fuera la llamada entera: medido el 14-09 y el 20-09, en
+  `gh --version; echo "$TMPDIR"` el `echo` también corría fuera, con `TMPDIR`
+  vacío y 826 procesos del anfitrión frente a 6 desde dentro. Vuelto a medir el
+  02-10-2026 contra la 2.1.287, esa misma línea da `TMPDIR` puesto y 5
+  procesos: la cadena ahora corre **dentro**. El agujero se cerró entre las dos
+  versiones. Upstream no documenta ni el agujero ni su cierre, así que la lista
+  se queda en cuatro por prudencia y porque nada nuevo pide entrada, ya no
+  porque una entrada arrastre la cadena.
+- **Una redirección o una tubería bastan para meter la llamada en la caja.**
+  Medido el 02-10-2026 con un Makefile sonda que imprime `TMPDIR` y cuenta
+  `/proc`: el target desnudo ve 801 procesos y `TMPDIR` vacío; con
+  `> fichero 2>&1` ve 7 y `TMPDIR` puesto; con `| cat`, 8. Las comillas de una
+  asignación no influyen. Por eso un target del banco redirigido a un log muere
+  con «Read-only file system» contra un segundo repositorio, mientras que el
+  mismo target sin redirección construye su brazo. Lanza `make` desnudo y deja
+  que el arnés capture la salida.
+- **La escotilla también se queda sin `TMPDIR`.** Un comando lanzado con
+  `dangerouslyDisableSandbox` no lo tiene,
+  así que `"$TMPDIR/cuerpo.md"` queda en `/cuerpo.md` y muere contra la
   raíz de solo lectura; ahí va una ruta absoluta al scratchpad de la sesión. Y la
   exclusión no entra en un bucle ni en un `$( )`: un `gh` llamado así corre
   dentro y vuelve anónimo, que parece un 401 y no un problema de la caja.
 - **La escotilla se queda abierta a propósito**, con una semana de uso medida
   detrás (el recuento y las causas están en el `AGENTS.md` del repo). Cerrarla
-  obligaría a excluir más comandos, y una exclusión es peor: arrastra la cadena
-  entera fuera y no deja rastro, mientras que la escotilla va comando a comando
-  y queda en la transcripción.
+  obligaría a excluir más comandos, y una exclusión es peor aunque ya no
+  arrastre la cadena: vale para siempre y para todo uso de ese comando, sin
+  dejar rastro, mientras que la escotilla va comando a comando y queda en la
+  transcripción.
 - **`allowWrite` concede una caché de datos, nunca un directorio cuyo contenido
   se ejecuta desde fuera.** Por eso `~/.cache/pre-commit`, `~/.cache/uv` y
   `~/.local/share/uv` se evaluaron y se descartaron: guardan entornos de hooks,
