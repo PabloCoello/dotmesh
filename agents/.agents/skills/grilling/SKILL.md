@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: Interview the user relentlessly about a plan or design until you reach a shared, documented understanding. Use when the user wants to stress-test a plan or requirements before building, or uses any 'grill' / 'grill me' trigger phrase.
+description: Interview the user relentlessly about a plan or design until you reach a shared, documented understanding. Use when the user wants to stress-test a plan or requirements before building, or uses any 'grill' / 'grill me' trigger phrase. Also records glossary terms and ADRs when the plan sharpens domain terminology or makes hard-to-reverse decisions.
 ---
 
 # Grilling
@@ -22,11 +22,18 @@ When the tree is resolved, restate the agreed plan in full and name the next ste
 
 ## Output
 
-Conversation only — this skill writes no files. For a grilling session that also records a glossary and ADRs as you go, use `grill-with-docs`.
+Conversation only by default — this skill writes no files.
+
+The exception is a plan that introduces or sharpens domain terminology, or makes hard-to-reverse decisions. Then load `domain-modeling` and, as you grill:
+
+- When a term is fuzzy or overloaded, sharpen it and capture it in `CONTEXT.md`.
+- When a decision is hard to reverse, surprising without context, and the result of a real trade-off, offer an ADR via `documentation-and-adrs`.
+
+Don't batch — capture terms and decisions the moment they crystallise, not at the end.
 
 ## Language
 
 Interview in the language the user writes in. When that is Spanish, load `castellano-peninsular`, and `anti-ai-style` for any prose you produce.
 
 ---
-Adapted from `grilling` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). The "hold more than one framing / don't close prematurely" stance is carried over from the former local `debate` agent, now folded into this skill, `idea-refine`, and the `maker` persona for divergent exploration.
+Adapted from `grilling` and `grill-with-docs` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); the second was a separate skill until 2026-10-04, retired with zero invocations. The "hold more than one framing / don't close prematurely" stance is carried over from the former local `debate` agent, now folded into this skill, `idea-refine`, and the `maker` persona for divergent exploration.

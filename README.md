@@ -117,7 +117,7 @@ También se mantienen skills locales adicionales:
 
 - `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
 - `castellano-peninsular`: redacción en español peninsular formal.
-- `grilling`, `grill-me`, `grill-with-docs`: entrevistas convergentes para afinar planes antes de implementar.
+- `grilling`, `grill-me`: entrevistas convergentes para afinar planes antes de implementar; `grilling` registra glosario y ADRs cuando el plan los pide.
 - `domain-modeling`: mantiene la terminología y el glosario del dominio.
 - `handoff`: compacta el estado de una sesión para retomarla en otra.
 - `dotmesh-design`: diseño del sistema visual dotmesh (Paper · Ink · Syntax) empaquetado como skill; solo se invoca con `/dotmesh-design` (lleva `disable-model-invocation`).

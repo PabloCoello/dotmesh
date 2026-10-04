@@ -63,8 +63,7 @@ Adaptadas de [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). Co
 
 | Skill | Cuándo usarla |
 |---|---|
-| `grilling` | Para interrogar un plan o diseño hasta resolver cada rama del árbol de decisiones. |
+| `grilling` | Para interrogar un plan o diseño hasta resolver cada rama del árbol de decisiones. Si el plan fija terminología o toma decisiones difíciles de revertir, actualiza el glosario (`CONTEXT.md`) y propone ADRs sobre la marcha. |
 | `grill-me` | Disparador de cara al usuario para iniciar una sesión de interrogatorio. |
-| `grill-with-docs` | Como `grilling`, pero además construye el glosario (`CONTEXT.md`) y registra ADRs sobre la marcha. |
 | `domain-modeling` | Para fijar la terminología del dominio (lenguaje ubicuo) y mantener `CONTEXT.md`. |
 | `handoff` | Para compactar la sesión en un traspaso entre OpenCode, Claude Code y Codex, o al pausar con trabajo en curso. |
