@@ -15,8 +15,8 @@ Dos capas:
 | Capa | Cómo se aplica | Qué hace |
 |---|---|---|
 | Colores de apps | `gtk.css` enlazado por stow | Recolorea superficies GTK3/GTK4 (libadwaita) a tonos Ink, con teal `#6CB6B0` como acento. |
-| Fondo | PNG enlazado por stow (`scripts/gen-wallpaper.py` lo genera) | Malla dotmesh sobre Ink `#121212` con tres nodos-señal: teal, sage y rose. Determinista y reproducible. |
-| Sistema | `scripts/apply-rice.sh` (dconf) | Base oscura + acento viridian, tipografía (Inter UI · JetBrainsMono Nerd Font), tinte Ink del dock (dash-to-dock) y fija el fondo. Iconos y cursor se quedan en Yaru a propósito. |
+| Fondo | PNG enlazado por stow (`scripts/gen-wallpaper.py` lo genera) | Malla dotmesh sobre Ink `#121212` con tres nodos-señal: teal, sage y rose. Determinista y reproducible. **El rice no lo fija**: queda disponible en `~/.local/share/backgrounds/` y el fondo que tengas puesto sigue en su sitio. |
+| Sistema | `scripts/apply-rice.sh` (dconf) | Base oscura + acento viridian, tipografía (Inter UI · JetBrainsMono Nerd Font), tinte Ink del dock (dash-to-dock). Iconos, cursor y fondo de pantalla se quedan como están a propósito. |
 | Guardián de monitores | `dotmesh-monitor-guard` (servicio systemd de usuario) | Cura el fondo negro que deja mutter en el monitor reencendido (X11 + NVIDIA): escucha `MonitorsChanged` y re-aplica la configuración vigente vía D-Bus. |
 
 - `.config/gtk-3.0/gtk.css` → `~/.config/gtk-3.0/gtk.css`
@@ -66,7 +66,7 @@ stow -D -t ~ gnome                 # quita los symlinks (gtk.css y fondo)
 
 `make gnome-unrice` hace ambas cosas.
 
-Para la capa dconf (acento, tipografía, dock, fondo), restaura tu volcado previo
+Para la capa dconf (acento, tipografía, dock), restaura tu volcado previo
 (haz uno antes con `dconf dump /org/gnome/ > gnome-pre-rice.ini` y luego
 `dconf load /org/gnome/ < gnome-pre-rice.ini`).
 
@@ -77,10 +77,20 @@ python3 scripts/gen-wallpaper.py            # reproduce el PNG versionado
 python3 scripts/gen-wallpaper.py out.png 88 24 24 52 1   # spacing jitter line dot teal
 ```
 
+Ponerlo como fondo es un paso aparte y manual, porque el rice no lo hace:
+
+```bash
+WALL="$HOME/.local/share/backgrounds/dotmesh-mesh-ink.png"
+gsettings set org.gnome.desktop.background picture-options 'zoom'
+gsettings set org.gnome.desktop.background picture-uri      "file://$WALL"
+gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALL"
+```
+
 ## Hecho y pendiente
 
-Hecho: colores de apps, tipografía, tinte del dock y fondo (malla Ink). Iconos y
-cursor se mantienen en Yaru a propósito (ya casan con el acento viridian).
+Hecho: colores de apps, tipografía y tinte del dock. La malla Ink se genera y se
+enlaza, pero ponerla de fondo es manual. Iconos y cursor se mantienen en Yaru a
+propósito (ya casan con el acento viridian).
 Pendiente, si algún día se quiere ir más lejos: recoloreado profundo del Shell
 (pediría un tema a medida) o sets alternativos de iconos/cursor. Ver
 `docs/DESIGN.md`.

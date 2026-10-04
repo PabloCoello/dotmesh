@@ -124,7 +124,7 @@ del prompt. Cualquier ajuste de color empieza aquí.
 | Multiplexor | [`herdr/.config/herdr/config.toml`](../herdr/.config/herdr/config.toml) | cromo de herdr sobre Ink-0: texto en tres escalones de grafito (`#cecece` · `#c6c6c6` · `#9e9e9e`), fila activa en teal apagado (`#20403D`, el único relleno con tono del cromo) y cursor de navegar en grafito (`#525252`), teal reservado al acento y estados de agente como señal, con glifo propio cada uno (`×` rose blocked · `◐` gold working · `✓` sage done · `○` grafito idle) |
 | Prompt | [`starship/.config/starship.toml`](../starship/.config/starship.toml) | paleta `dotmesh`: segmentos grafito + iconos de sintaxis |
 | VCS | [`git/.gitconfig`](../git/.gitconfig) | colores de delta y de Git (sage/rose/gold/blue) |
-| Escritorio | [`gnome/`](../gnome/) | retint GNOME sobre Yaru: superficies Ink en apps (gtk.css), fondo de malla Ink (teal · sage · rose como señales), tipografía y tinte Ink del dock |
+| Escritorio | [`gnome/`](../gnome/) | retint GNOME sobre Yaru: superficies Ink en apps (gtk.css), tipografía y tinte Ink del dock. El PNG de malla Ink (teal · sage · rose como señales) se enlaza, pero el rice no fija el fondo |
 | Esfera | [`../dotmesh-watch`](../../dotmesh-watch) | esfera Connect IQ (Epix Pro): hora-prompt blanca, powerline grafito, sintaxis como señal (peach = Claude) |
 
 El cromo es monocromo en todas: en VS Code los bordes duros desaparecen y los
@@ -156,9 +156,9 @@ Los temas se añaden **junto a los anteriores**, no los reemplazan:
 - **delta/Git**: el cambio de colores es directo; revertir es un `git checkout`
   de `git/.gitconfig`.
 - **Escritorio (GNOME, solo Linux)**: `make gnome-rice` enlaza los `gtk.css` y
-  el fondo, y aplica la capa dconf (acento, tipografía, dock, fondo). Para
-  revertir, `stow -D -t ~ gnome` quita los `gtk.css` y el fondo, y se restaura el
-  volcado dconf previo (detalle en [`gnome/README.md`](../gnome/README.md)). Es
+  el PNG de la malla, y aplica la capa dconf (acento, tipografía, dock); el fondo
+  de pantalla no se toca. Para revertir, `stow -D -t ~ gnome` quita los
+  `gtk.css` y el PNG de la malla, y se restaura el volcado dconf previo (detalle en [`gnome/README.md`](../gnome/README.md)). Es
   un retint sobre Yaru, no un tema a medida; el Shell se queda en Yaru-dark con
   el blur de `blur-my-shell`.
 

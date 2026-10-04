@@ -4,7 +4,7 @@
 #
 # Aplica la capa dconf del rice: base oscura + acento viridian (≈ teal dotmesh),
 # tipografía dotmesh y tinte Ink del dock. La capa de colores de apps (gtk.css)
-# va por stow, no por aquí.
+# va por stow, no por aquí. El fondo de pantalla no se toca a propósito.
 #
 # Idempotente y reversible: solo escribe claves gsettings; para revertir, usa
 # el volcado dconf guardado en ~/.local/share/dotmesh/dconf-pre-rice.ini
@@ -66,16 +66,11 @@ else
     echo "  --  dash-to-dock no instalado; me salto el dock."
 fi
 
-# --- Fondo de pantalla: malla dotmesh sobre Ink (enlazado por stow) ---
-WALL="$HOME/.local/share/backgrounds/dotmesh-mesh-ink.png"
-if [ -f "$WALL" ]; then
-    gsettings set org.gnome.desktop.background picture-options 'zoom'
-    gsettings set org.gnome.desktop.background picture-uri      "file://$WALL"
-    gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALL"
-    say "fondo dotmesh (malla Ink)"
-else
-    echo "  --  fondo no encontrado ($WALL); ¿falta 'stow gnome'?"
-fi
+# --- Fondo de pantalla: no se toca ---
+# El rice no escribe org.gnome.desktop.background. La malla Ink queda enlazada
+# por stow y disponible para quien la quiera (el README dice cómo ponerla a
+# mano), pero el fondo lo elige la persona y una segunda pasada no se lo pisa.
+echo "  --  fondo: lo dejo como esté (la malla Ink queda en ~/.local/share/backgrounds/)"
 
 # --- Guardián de monitores: eco DisplayConfig tras hotplug (X11/NVIDIA) ---
 GUARD="dotmesh-monitor-guard.service"
