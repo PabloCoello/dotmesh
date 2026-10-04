@@ -1,13 +1,10 @@
----
-name: context-engineering
-description: Optimizes agent context. Use when starting a session, switching projects, output quality drifts, requirements conflict, or a task needs carefully selected project context.
----
-
 # Context Engineering
+
+Reference file for `spec-driven-development`. It was a standalone skill until 2026-10-04, retired with zero invocations; the guidance is kept here for the implement phase.
 
 ## Overview
 
-Feed the agent the right context at the right time. Too little context causes guessing. Too much context hides the relevant facts. This skill manages what to load, what to ignore, and when to stop for clarification.
+Feed the agent the right context at the right time. Too little context causes guessing. Too much context hides the relevant facts. This file covers what to load, what to ignore, and when to stop for clarification.
 
 ## When to Use
 

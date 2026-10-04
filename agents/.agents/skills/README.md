@@ -30,7 +30,6 @@ Estas skills forman el conjunto base de ingeniería:
 | `idea-refine` | Para convertir una idea vaga en opciones, criterios y siguiente paso. |
 | `spec-driven-development` | Para definir requisitos antes de cambios no triviales. |
 | `planning-and-task-breakdown` | Para partir una spec o tarea grande en unidades verificables. |
-| `context-engineering` | Para preparar contexto al iniciar sesión, cambiar de proyecto o detectar deriva. |
 | `source-driven-development` | Para decisiones que dependen de documentación o versiones actuales. |
 | `api-and-interface-design` | Para contratos, CLIs, APIs, módulos, formatos y límites entre componentes. |
 | `incremental-implementation` | Para implementar en slices pequeñas y verificables. |

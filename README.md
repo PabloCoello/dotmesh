@@ -99,7 +99,6 @@ El core pack diario incluye estas skills de ingeniería:
 - `idea-refine`
 - `spec-driven-development`
 - `planning-and-task-breakdown`
-- `context-engineering`
 - `source-driven-development`
 - `api-and-interface-design`
 - `incremental-implementation`
