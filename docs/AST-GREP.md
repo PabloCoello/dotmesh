@@ -1,11 +1,8 @@
----
-name: structured-search
-description: Use for structural code search with ast-grep when plain text search returns too much noise or when matching syntax shape matters.
----
+# Búsqueda estructural con ast-grep
 
-# Búsqueda estructural
+Fue la skill `structured-search` hasta el 04-10-2026, cuando se retiró con cero invocaciones; el contenido se conserva aquí como referencia.
 
-Usa esta skill cuando necesites encontrar código por forma sintáctica, no por texto literal. `ast-grep` es opcional en dotmesh: si no está instalado, usa `grep`/`rg` o las herramientas de búsqueda del agente.
+Consulta este documento cuando necesites encontrar código por forma sintáctica, no por texto literal. `ast-grep` es opcional en dotmesh: si no está instalado, usa `grep`/`rg` o las herramientas de búsqueda del agente.
 
 En OpenCode, el uso normal de `ast-grep` queda reservado a `maker` y `build`. Los agentes `review` y `security` mantienen `bash` restringido y no reciben un permiso especial de `ast-grep`, para evitar escritura indirecta mediante redirecciones o encadenado de comandos.
 
