@@ -33,6 +33,8 @@ SPECIFY ──→ PLAN ──→ TASKS ──→ IMPLEMENT
 
 ### Phase 1: Specify
 
+Before writing, gather context in the order `context-engineering.md` (in this skill's directory) sets out, and surface conflicting instructions instead of picking one.
+
 Start with a high-level vision. Ask the human clarifying questions until requirements are concrete.
 
 **Surface assumptions immediately.** Before writing any spec content, list what you're assuming:
@@ -160,7 +162,7 @@ Break the plan into discrete, implementable tasks:
 
 ### Phase 4: Implement
 
-Execute tasks one at a time following `incremental-implementation` and `test-driven-development` skills. Use `context-engineering` to load the right spec sections and source files at each step rather than flooding the agent with the entire spec.
+Execute tasks one at a time following `incremental-implementation` and `test-driven-development` skills. Load the right spec sections and source files at each step rather than flooding the agent with the entire spec; `context-engineering.md` in this skill's directory has the procedure.
 
 ## Keeping the Spec Alive
 

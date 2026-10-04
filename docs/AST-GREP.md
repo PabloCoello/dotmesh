@@ -1,15 +1,10 @@
----
-name: structured-search
-description: Use for structural code search with ast-grep when plain text search returns too much noise or when matching syntax shape matters.
----
+# Búsqueda estructural con ast-grep
 
-# Búsqueda estructural
+Fue la skill `structured-search` hasta el 04-10-2026, cuando se retiró con cero invocaciones (mirador `skill_obs.py` sobre `~/.claude/projects`, 826 transcripts); el contenido se conserva aquí como referencia.
 
-Usa esta skill cuando necesites encontrar código por forma sintáctica, no por texto literal. `ast-grep` es opcional en dotmesh: si no está instalado, usa `grep`/`rg` o las herramientas de búsqueda del agente.
+Consulta este documento cuando necesites encontrar código por forma sintáctica, no por texto literal. `ast-grep` es opcional en dotmesh: si no está instalado, usa `grep`/`rg` o las herramientas de búsqueda del agente.
 
-En OpenCode, el uso normal de `ast-grep` queda reservado a `maker` y `build`. Los agentes `review` y `security` mantienen `bash` restringido y no reciben un permiso especial de `ast-grep`, para evitar escritura indirecta mediante redirecciones o encadenado de comandos.
-
-Las reglas de `maker` y `build` son guardarraíles para invocaciones reconocibles de `ast-grep`, no un sandbox. Esos agentes ya tienen shell y escritura; cualquier comando que contenga `ast-grep` pide confirmación. No uses el alias `sg`: queda en `ask` y puede ser ambiguo en Linux.
+Los permisos de OpenCode para `ast-grep` (quién puede usarlo y qué pide confirmación) los fija `opencode/.config/opencode/README.md`; este documento no los repite.
 
 ## Comandos seguros
 

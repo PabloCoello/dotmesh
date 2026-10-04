@@ -30,7 +30,6 @@ Estas skills forman el conjunto base de ingeniería:
 | `idea-refine` | Para convertir una idea vaga en opciones, criterios y siguiente paso. |
 | `spec-driven-development` | Para definir requisitos antes de cambios no triviales. |
 | `planning-and-task-breakdown` | Para partir una spec o tarea grande en unidades verificables. |
-| `context-engineering` | Para preparar contexto al iniciar sesión, cambiar de proyecto o detectar deriva. |
 | `source-driven-development` | Para decisiones que dependen de documentación o versiones actuales. |
 | `api-and-interface-design` | Para contratos, CLIs, APIs, módulos, formatos y límites entre componentes. |
 | `incremental-implementation` | Para implementar en slices pequeñas y verificables. |
@@ -55,7 +54,6 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 | `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |
 | `flow-artifacts` | Para las fases en las que la persona tiene que leer mucho o decidir varias cosas a la vez (interrogar un plan con tres o más preguntas cerradas e independientes, revisar una spec larga, informar de resultados medidos, seguir una tanda larga): publica una página de artifact en claude.ai con la paleta dotmesh, que abre con un resumen y pliega el detalle. La persona la afina con comentarios anclados que envía a Claude y contesta lo cerrado con un clic. Se decide en cada fase. Solo Claude Code, porque necesita la herramienta Artifact; se carga junto a `artifact-design`. |
 | `herdr` | Para controlar herdr desde dentro de un pane: workspaces, tabs, splits, lectura de panes vecinos y esperas (`herdr wait`). Solo actúa dentro de herdr (`HERDR_ENV=1`). Snapshot vendorizado de [ogulcancelik/herdr](https://github.com/ogulcancelik/herdr) (commit `6cbdba434fd1`, 2026-05-19); se actualiza a mano desde el upstream, no con `npx skills add`. |
-| `structured-search` | Para búsqueda estructural con `ast-grep` cuando la forma sintáctica importa más que el texto. `ast-grep` es opcional. |
 
 ## Interrogatorio, dominio y traspaso
 
@@ -63,8 +61,7 @@ Adaptadas de [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). Co
 
 | Skill | Cuándo usarla |
 |---|---|
-| `grilling` | Para interrogar un plan o diseño hasta resolver cada rama del árbol de decisiones. |
+| `grilling` | Para interrogar un plan o diseño hasta resolver cada rama del árbol de decisiones. Si el plan fija terminología o toma decisiones difíciles de revertir, actualiza el glosario (`CONTEXT.md`) y propone ADR sobre la marcha. |
 | `grill-me` | Disparador de cara al usuario para iniciar una sesión de interrogatorio. |
-| `grill-with-docs` | Como `grilling`, pero además construye el glosario (`CONTEXT.md`) y registra ADRs sobre la marcha. |
 | `domain-modeling` | Para fijar la terminología del dominio (lenguaje ubicuo) y mantener `CONTEXT.md`. |
 | `handoff` | Para compactar la sesión en un traspaso entre OpenCode, Claude Code y Codex, o al pausar con trabajo en curso. |

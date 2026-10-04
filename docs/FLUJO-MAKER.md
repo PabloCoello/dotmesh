@@ -16,7 +16,7 @@ indicada.
 flowchart TD
     idea(["Idea"]) --> forma{"¿Tiene forma?"}
     forma -->|vaga| refine["idea-refine"]
-    forma -->|lista para converger| grill["grilling / grill-me<br>grill-with-docs si toca glosario o ADR"]
+    forma -->|lista para converger| grill["grilling / grill-me<br>con glosario y ADR si los pide"]
     refine --> umbral
     grill --> umbral
     umbral{"¿Alcance?"} -->|"trivial: un fichero, una función"| inline["Edición inline<br>sin plan, sin build, sin gates"]
