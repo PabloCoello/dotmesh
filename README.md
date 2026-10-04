@@ -116,7 +116,7 @@ También se mantienen skills locales adicionales:
 
 - `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
 - `castellano-peninsular`: redacción en español peninsular formal.
-- `grilling`, `grill-me`: entrevistas convergentes para afinar planes antes de implementar; `grilling` registra glosario y ADRs cuando el plan los pide.
+- `grilling`, `grill-me`: entrevistas convergentes para afinar planes antes de implementar; `grilling` registra glosario y ADR cuando el plan los pide.
 - `domain-modeling`: mantiene la terminología y el glosario del dominio.
 - `handoff`: compacta el estado de una sesión para retomarla en otra.
 - `dotmesh-design`: diseño del sistema visual dotmesh (Paper · Ink · Syntax) empaquetado como skill; solo se invoca con `/dotmesh-design` (lleva `disable-model-invocation`).
@@ -296,6 +296,7 @@ make clean          # vacía ~/dotfiles-backup
 | Un comando OpenCode | `opencode/.config/opencode/commands/<nombre>.md` | `make restow` |
 | Un agente Claude Code | `claude/.claude/agents/<nombre>.md` | `make restow` |
 | Un comando Claude Code | `claude/.claude/commands/<nombre>.md` | `make restow` |
+| Retirar una skill | Borra `agents/.agents/skills/<nombre>/` | `make restow`; si no, quedan enlaces colgados en `~/.agents/skills/` |
 | Un alias zsh | Edita `shell/.config/shell/aliases.zsh` | `exec zsh` |
 
 ## Ver también
@@ -304,6 +305,7 @@ make clean          # vacía ~/dotfiles-backup
 - [docs/INSTALL.md](docs/INSTALL.md) — guía de instalación detallada.
 - [docs/SECRETS.md](docs/SECRETS.md) — tokens y cómo cargarlos.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problemas comunes.
+- [docs/AST-GREP.md](docs/AST-GREP.md) — búsqueda estructural con `ast-grep` (opcional).
 - [docs/adr/README.md](docs/adr/README.md) — decisiones de configuración, lo descartado y qué lo reabriría.
 - [docs/RESERVAS-AUDITORIA.md](docs/RESERVAS-AUDITORIA.md) — afirmaciones de la auditoría externa que no se sostienen tal como están escritas.
 - [opencode/.config/opencode/README.md](opencode/.config/opencode/README.md) — flujo de los agentes y comandos.

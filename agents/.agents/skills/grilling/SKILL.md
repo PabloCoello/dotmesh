@@ -22,7 +22,7 @@ When the tree is resolved, restate the agreed plan in full and name the next ste
 
 ## Output
 
-Conversation only by default — this skill writes no files.
+Conversation only — by default this skill writes no files.
 
 The exception is a plan that introduces or sharpens domain terminology, or makes hard-to-reverse decisions. Then load `domain-modeling` and, as you grill:
 
@@ -36,4 +36,4 @@ Don't batch — capture terms and decisions the moment they crystallise, not at 
 Interview in the language the user writes in. When that is Spanish, load `castellano-peninsular`, and `anti-ai-style` for any prose you produce.
 
 ---
-Adapted from `grilling` and `grill-with-docs` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); the second was a separate skill until 2026-10-04, retired with zero invocations. The "hold more than one framing / don't close prematurely" stance is carried over from the former local `debate` agent, now folded into this skill, `idea-refine`, and the `maker` persona for divergent exploration.
+Adapted from `grilling` and `grill-with-docs` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); the second was a separate skill until 2026-10-04, retired with zero invocations (counted with mirador's `skill_obs.py` over `~/.claude/projects`, 826 transcripts). The "hold more than one framing / don't close prematurely" stance is carried over from the former local `debate` agent, now folded into this skill, `idea-refine`, and the `maker` persona for divergent exploration.

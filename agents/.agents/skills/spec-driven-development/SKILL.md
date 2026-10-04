@@ -33,6 +33,8 @@ SPECIFY ──→ PLAN ──→ TASKS ──→ IMPLEMENT
 
 ### Phase 1: Specify
 
+Before writing, gather context in the order `context-engineering.md` (in this skill's directory) sets out, and surface conflicting instructions instead of picking one.
+
 Start with a high-level vision. Ask the human clarifying questions until requirements are concrete.
 
 **Surface assumptions immediately.** Before writing any spec content, list what you're assuming:

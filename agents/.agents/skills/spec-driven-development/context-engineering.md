@@ -1,18 +1,15 @@
 # Context Engineering
 
-Reference file for `spec-driven-development`. It was a standalone skill until 2026-10-04, retired with zero invocations; the guidance is kept here for the implement phase.
+Reference file for `spec-driven-development`. It was a standalone skill until 2026-10-04, retired with zero invocations (counted with mirador's `skill_obs.py` over `~/.claude/projects`, 826 transcripts). The guidance is kept here for phases 1 and 4.
 
 ## Overview
 
 Feed the agent the right context at the right time. Too little context causes guessing. Too much context hides the relevant facts. This file covers what to load, what to ignore, and when to stop for clarification.
 
-## When to Use
+## When to Read It
 
-- Starting a new work session.
-- Switching repositories, tools, domains, or tasks.
-- The agent is inventing APIs, commands, files, or conventions.
-- Instructions conflict across user request, repo docs, tool output, or external sources.
-- A task needs more than a single obvious file.
+- Phase 1, before writing the spec: build the context stack and resolve conflicting instructions.
+- Phase 4, when the agent starts inventing APIs, commands, files or conventions, or the task moves to another repository, tool or domain.
 
 ## Process
 
