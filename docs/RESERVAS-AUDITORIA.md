@@ -8,6 +8,9 @@ Las decisiones que motivó la auditoría están en [`adr/`](adr/README.md).
 Las líneas citadas son las de la auditoría y las del informe del estudio maker
 contra vanilla, `.ai/tasks/2026-09-10-estudio-maker-vs-vanilla/informe.md`.
 
+De R-5 en adelante se apunta también lo contrario: afirmaciones nuestras que la
+medición posterior no sostiene.
+
 ## R-1. El brazo vanilla no falta: no llegó a correr
 
 La auditoría dice que al examen del flujo le falta un brazo vanilla comparable
@@ -82,3 +85,38 @@ contrario: en los secretos sembrados, la clase donde A3 tiene un subagente
 de 6 (informe, líneas 207 y 212-215). Son seis observaciones por celda y no hay
 contraste. El informe pide revisarlo antes de dar por buena la cobertura del
 gate (línea 315).
+
+## R-5. El umbral de +2 pp por skill no es medible con este instrumento
+
+R-1 daba el hueco del brazo vanilla por cubierto con el banco. Lo cubre, pero no
+cubre lo que venía detrás: la tarea T16 del plan pedía un delta por skill y la
+aplicación literal de un umbral —retirada por debajo de +2 pp, sin tocar por
+encima de +10 pp—. Ese umbral no se puede aplicar, por dos motivos medidos que
+son independientes.
+
+El primero es que la bandera no hace lo que el criterio da por hecho. El propio
+`claude plugin eval --help` de la versión 2.1.274 describe `--ablation
+with-without` como «Run a no-plugin baseline arm and report the score delta»: un
+delta, el plugin entero puesto contra el plugin entero quitado. No hay ablación
+por skill. De paso cambia lo que se puntúa, porque bajo ese modo los graders
+marcados `with-only` —entre ellos los de `tool_used: Skill`— dejan de contar en
+la nota y pasan a ser un indicador de que el plugin se disparó.
+
+El segundo es que el ruido del banco es mayor que la banda de decisión. Las dos
+tandas del 29-09-2026 corrieron contra el mismo commit de dotmesh, con los
+mismos casos y la misma configuración: entre brazos idénticos, sobre los diez
+casos que ambas completaron, la puntuación fue de 71,17 a 74,39 (3,22 pp) y el
+logro, de 68,06 a 70,00 (1,94 pp). La banda que T16 quería resolver es de 2 pp.
+Dicho de otro modo, el instrumento no distingue una skill que aporta +2 pp de
+otra que no aporta nada, y tampoco lo distinguiría de sí mismo.
+
+Medirlo de verdad exige un brazo por skill, no una bandera. Una tanda de doce
+casos por tres tiradas costó 49,17 USD de agente más 0,75 del juez. Veintiocho
+skills más el brazo de referencia son veintinueve tandas, del orden de 1.450
+USD, y con el ruido de arriba ni siquiera bastarían: para separar 2 pp habría
+que repetir cada brazo varias veces y multiplicar esa cifra.
+
+Queda en pie el criterio que no necesita delta: el de invocación cero. Las tres
+skills de ideación —`grilling`, `grill-me` y `grill-with-docs`— suman siete
+invocaciones en 756 sesiones, y T17 se decide con ese recuento y no con el
+umbral.

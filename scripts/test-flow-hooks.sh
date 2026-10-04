@@ -779,13 +779,15 @@ for _k in allowedDomains deniedDomains strictAllowlist allowUnixSockets allowLoc
     || fail "$_k está plano bajo sandbox: se escribe y no se aplica"
 done
 
-# Los seis aprobados, ni uno más de entrada. Cada alta posterior sale de una
-# denegación real, con el comando que la provocó, no de una suposición.
+# Los siete aprobados, ni uno más de entrada. Seis son los hosts de los que vive
+# el tooling del repo; `gitlab.semantiqa.dev` se dio de alta a petición de la
+# persona el 29-09-2026, y así está registrado en el `AGENTS.md`. Cada alta
+# posterior sale de una denegación real, con el comando que la provocó.
 _dom_esperado=$(printf '%s\n' api.anthropic.com api.github.com codeload.github.com \
-  github.com objects.githubusercontent.com registry.npmjs.org)
+  github.com gitlab.semantiqa.dev objects.githubusercontent.com registry.npmjs.org)
 _dom_real=$(jq -r '.sandbox.network.allowedDomains // [] | .[]' "$_tpl" | sort)
 [ "$_dom_real" = "$_dom_esperado" ] \
-  && pass "allowedDomains son los seis aprobados" \
+  && pass "allowedDomains son los siete aprobados" \
   || fail "allowedDomains cambió: $(printf '%s' "$_dom_real" | tr '\n' ' ')"
 
 # Con `defaultMode` en bypassPermissions, `strictAllowlist: false` no confina

@@ -69,44 +69,67 @@ freno real que queda, así que no lo esquives por comodidad.
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
   arranca sesiones headless se corre por su target de `make`, no llamando al
   script: un `claude -p` anidado dentro de la caja falla con «Not logged in».
-- **Si un comando de la cadena está excluido, sale fuera la llamada entera.**
-  Medido el 14-09 y otra vez el 20-09 contra la 2.1.274: en
-  `gh --version; echo "$TMPDIR"` el `echo` también corre fuera, con `TMPDIR`
-  vacío y 826 procesos del anfitrión a la vista frente a 6 desde dentro. Upstream
-  no lo documenta y cerrar la escotilla no lo tapa, así que cada entrada nueva en
-  `excludedCommands` es otra palanca y la lista se queda en cuatro. Al revés pasa
-  lo mismo: un comando lanzado con `dangerouslyDisableSandbox` tampoco tiene
-  `TMPDIR`, así que `"$TMPDIR/cuerpo.md"` queda en `/cuerpo.md` y muere contra la
+- **La exclusión solo alcanza al comando desnudo, y eso es nuevo.** Hasta la
+  2.1.274 bastaba con que un comando de la cadena estuviera excluido para que
+  saliera fuera la llamada entera: medido el 14-09 y el 20-09, en
+  `gh --version; echo "$TMPDIR"` el `echo` también corría fuera, con `TMPDIR`
+  vacío y 826 procesos del anfitrión frente a 6 desde dentro. Vuelto a medir el
+  02-10-2026 contra la 2.1.287, esa misma línea da `TMPDIR` puesto y 5
+  procesos: la cadena ahora corre **dentro**. El agujero se cerró entre las dos
+  versiones. Upstream no documenta ni el agujero ni su cierre, así que la lista
+  se queda en cuatro por prudencia y porque nada nuevo pide entrada, ya no
+  porque una entrada arrastre la cadena.
+- **Una redirección o una tubería bastan para meter la llamada en la caja.**
+  Medido el 02-10-2026 con un Makefile sonda que imprime `TMPDIR` y cuenta
+  `/proc`: el target desnudo ve 801 procesos y `TMPDIR` vacío; con
+  `> fichero 2>&1` ve 7 y `TMPDIR` puesto; con `| cat`, 8. Las comillas de una
+  asignación no influyen. Por eso un target del banco redirigido a un log muere
+  con «Read-only file system» contra un segundo repositorio, mientras que el
+  mismo target sin redirección construye su brazo. Lanza `make` desnudo y deja
+  que el arnés capture la salida.
+- **La escotilla también se queda sin `TMPDIR`.** Un comando lanzado con
+  `dangerouslyDisableSandbox` no lo tiene,
+  así que `"$TMPDIR/cuerpo.md"` queda en `/cuerpo.md` y muere contra la
   raíz de solo lectura; ahí va una ruta absoluta al scratchpad de la sesión. Y la
   exclusión no entra en un bucle ni en un `$( )`: un `gh` llamado así corre
   dentro y vuelve anónimo, que parece un 401 y no un problema de la caja.
 - **La escotilla se queda abierta a propósito**, con una semana de uso medida
   detrás (el recuento y las causas están en el `AGENTS.md` del repo). Cerrarla
-  obligaría a excluir más comandos, y una exclusión es peor: arrastra la cadena
-  entera fuera y no deja rastro, mientras que la escotilla va comando a comando
-  y queda en la transcripción.
+  obligaría a excluir más comandos, y una exclusión es peor aunque ya no
+  arrastre la cadena: vale para siempre y para todo uso de ese comando, sin
+  dejar rastro, mientras que la escotilla va comando a comando y queda en la
+  transcripción.
 - **`allowWrite` concede una caché de datos, nunca un directorio cuyo contenido
   se ejecuta desde fuera.** Por eso `~/.cache/pre-commit`, `~/.cache/uv` y
   `~/.local/share/uv` se evaluaron y se descartaron: guardan entornos de hooks,
   entornos de proyecto e intérpretes que luego corren sin confinar. Lo que
   necesiten esos comandos sale por la escotilla. Y en Linux la caja monta rutas
   concretas y descarta en silencio cualquier entrada con comodín.
-- **Desde dentro de la caja solo se sale a seis dominios**
+- **Desde dentro de la caja solo se sale a ocho dominios**
   (`sandbox.network.allowedDomains`): `api.anthropic.com`,
-  `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com` y
-  `objects.githubusercontent.com`, con `strictAllowlist` en `true`. Medido el
-  28-09-2026 en sesiones headless aisladas: con la lista puesta, `github.com`
-  devuelve 200 y `example.org` cae con `curl: (56) CONNECT tunnel failed,
-  response 403`; sin ella, los dos devuelven 200. El `curl` no dice qué host
-  cayó, pero el aviso que te llega sí (`deny network-outbound example.org:443`),
-  y de ahí sale el alta. Corta `curl`, `npm`, `git`, `uv` y `pip` directos. No
+  `registry.npmjs.org`, `github.com`, `api.github.com`, `codeload.github.com`,
+  `objects.githubusercontent.com`, `gitlab.semantiqa.dev`, el GitLab propio,
+  dado de alta a petición de la persona el 29-09-2026, y
+  `plane.derivasoftware.dev`, el Plane propio, dado de alta igual el
+  02-10-2026. Con `strictAllowlist` en `true`. Las entradas van sin puerto: las
+  siete anteriores tampoco lo llevan, la salida va por un proxy HTTP/HTTPS y
+  443 es el único puerto al que llega. Medido el 28-09-2026 en sesiones headless aisladas: con la lista
+  puesta, `github.com` devuelve 200 y `example.org` cae con `curl: (56) CONNECT
+  tunnel failed, response 403`; sin ella, los dos devuelven 200. El `curl` no
+  dice qué host cayó, pero el aviso que te llega sí (`deny network-outbound
+  example.org:443`). Corta `curl`, `npm`, `git`, `uv` y `pip` directos. No
   alcanza a los cuatro excluidos, que corren fuera y por tanto fuera de la
   lista: `api.github.com` no es lo que hace funcionar a `gh`. Tampoco a
   WebFetch, que no va en la caja. Un servidor en localhost sigue funcionando. Un
   dominio no cubre sus subdominios, por eso los de GitHub van uno a uno. Si algo
   hace falta de verdad, se apunta con el comando que provocó la denegación y se
-  da de alta en la plantilla. Por la escotilla no: quita también el confinamiento
-  del sistema de ficheros, así que sale más caro de lo que arregla.
+  da de alta en la plantilla; el GitLab y el Plane propios son las dos entradas
+  que no salieron de una denegación, y van registradas así. Por la escotilla no: quita también el
+  confinamiento del sistema de ficheros, así que sale más caro de lo que
+  arregla. Y ojo con lo que la lista sigue permitiendo: npm, los archivos de
+  GitHub y el GitLab dejan traerse código que luego corre sin confinar, y
+  GitHub, el GitLab y el Plane son además destinos de escritura si el comando
+  alcanza un token del entorno.
 - **Un fallo de red sin aviso de sandbox no es la lista.** `git` por SSH muere
   dentro de la caja con `ssh: Could not resolve hostname github.com: Temporary
   failure in name resolution`, igual con lista que sin ella (medido el

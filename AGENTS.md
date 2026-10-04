@@ -203,14 +203,28 @@ The agent system has two layers, identical in concept across the three tools.
   directly, not to what a script it launches runs: a command inside a shell
   script inherits the sandbox.
 
-  **The exclusion is coarser than it looks, and it is the widest hole here.**
-  Measured on 2026-09-14 and again on 2026-09-20 against v2.1.274: when any
-  first-level command of a chained call is excluded, the **whole call** runs
-  outside the sandbox. `gh --version >/dev/null; echo "$TMPDIR"` returns an
-  empty `TMPDIR` and sees 826 host processes, against 6 from inside. Upstream
-  documents none of this, and `allowUnsandboxedCommands: false` does not close
-  it, so every entry added to `excludedCommands` is one more lever — which is
-  why the list stays at four. The mirror image holds too: a command run with
+  **The exclusion reaches only the bare command, and that is new.** Measured on
+  2026-09-14 and again on 2026-09-20 against v2.1.274: when any first-level
+  command of a chained call was excluded, the **whole call** ran outside the
+  sandbox — `gh --version >/dev/null; echo "$TMPDIR"` returned an empty
+  `TMPDIR` and saw 826 host processes, against 6 from inside. Re-measured on
+  2026-10-02 against v2.1.287, that exact line returns `TMPDIR` set and 5
+  processes: the chain now runs **inside**. The hole closed somewhere between
+  those two versions. Upstream documents neither the hole nor its closing, so
+  the list stays at four out of prudence and because nothing new asks for an
+  entry — not, any longer, because one entry would drag a whole chain out.
+
+  The practical cost arrived the same day, and it is the half that bites. An
+  excluded command keeps its exclusion only when Claude runs it **naked**. With
+  a probe Makefile that prints `TMPDIR` and counts `/proc` entries, the target
+  run bare saw 801 host processes and an empty `TMPDIR`; the same target with
+  `> file 2>&1` saw 7 with `TMPDIR` set, and with `| cat` saw 8 — confined,
+  both. Quoting a variable assignment changed nothing. So a redirection or a
+  pipe is enough to confine the call, which is how a bench target redirected to
+  a log file dies with `Read-only file system` against a second repository
+  while the same target without the redirection builds its arm. Run `make`
+  bare and let the harness capture the output. The mirror image holds too: a
+  command run with
   `dangerouslyDisableSandbox` also loses `TMPDIR`, so `"$TMPDIR/body.md"`
   becomes `/body.md` and dies on the read-only root. Use an absolute path to the
   session scratchpad there, never `$TMPDIR`. And the exclusion does not reach
@@ -223,8 +237,9 @@ The agent system has two layers, identical in concept across the three tools.
   keyring is unreachable), `pre-commit`, `uv`, Unix sockets, `systemctl --user`,
   host process inspection, writes to a second repository. Closing it would mean
   excluding eight more commands to keep the work moving, and an exclusion is
-  worse than the hatch: it drags the whole chain out of the sandbox and leaves
-  no trace, while the hatch is per command and shows up in the transcript.
+  worse than the hatch even now that it no longer drags the whole chain out: it
+  holds for every later use of that command and leaves no trace, while the
+  hatch is per command and shows up in the transcript.
 
   `filesystem.allowWrite` is the other way to let a tool through, and it is
   narrower than the hatch — but only for a cache that holds data. The
@@ -246,13 +261,16 @@ The agent system has two layers, identical in concept across the three tools.
   reached example.org, ipinfo.io, pypi.org, httpbin.org and www.wikipedia.org,
   all 200, with the command still confined — 5 processes visible and `TMPDIR`
   set, so it was not escaping. Without `allowedDomains` there is simply nothing
-  to filter against. `sandbox.network.allowedDomains` now carries six hosts
+  to filter against. `sandbox.network.allowedDomains` now carries eight hosts
   (`api.anthropic.com`, `registry.npmjs.org`, `github.com`, `api.github.com`,
-  `codeload.github.com`, `objects.githubusercontent.com`) with
-  `strictAllowlist: true`. The keys nest under `sandbox.network`; written flat
-  under `sandbox` they stay in the file and do nothing, so the harness rejects
-  that shape. `false` would be no posture at all here: an unlisted host would
-  prompt, and under `bypassPermissions` that prompt approves itself.
+  `codeload.github.com`, `objects.githubusercontent.com`,
+  `gitlab.semantiqa.dev`, `plane.derivasoftware.dev`) with
+  `strictAllowlist: true`. Entries carry no port: the other seven have none,
+  egress is an HTTP/HTTPS proxy, and 443 is the only port it reaches. The keys nest under
+  `sandbox.network`; written flat under `sandbox` they stay in the file and do
+  nothing, so the harness rejects that shape. `false` would be no posture at all
+  here: an unlisted host would prompt, and under `bypassPermissions` that prompt
+  approves itself.
 
   Measured the same day with the list in place, in isolated headless sessions
   (`make` is excluded, `--settings` pointed at a separate file, this machine
@@ -273,11 +291,16 @@ The agent system has two layers, identical in concept across the three tools.
   cover its subdomains, which is why the GitHub hosts are listed one by one;
   `objects.githubusercontent.com` is a separate registrable domain, not a
   `github.com` subdomain, and `raw.githubusercontent.com` is deliberately absent
-  until something needs it. Anything added later comes from a real denial,
-  recorded with the command that caused it — not from the hatch, which is the
-  wrong answer here because it drops filesystem confinement along with the
-  network one, so a host-named failure would cost more than it fixes. The doc
-  reaches a machine through `make stow` but the setting only through
+  until something needs it. Two entries did not come from a denial:
+  `gitlab.semantiqa.dev`, the self-hosted GitLab, added on request on
+  2026-09-29, and `plane.derivasoftware.dev`, the self-hosted Plane, added on
+  request on 2026-10-02 — both ahead of the work that needs them, and both
+  recorded that way rather than dressed up as a measurement. Anything else
+  added later comes from
+  a real denial, recorded with the command that caused it — not from the hatch,
+  which is the wrong answer here because it drops filesystem confinement along
+  with the network one, so a host-named failure would cost more than it fixes.
+  The doc reaches a machine through `make stow` but the setting only through
   `make sync-claude-settings`; run it, or the paragraph above describes a
   posture the machine does not have.
 
@@ -291,13 +314,21 @@ The agent system has two layers, identical in concept across the three tools.
   `<sandbox_violations>` block naming `host:port`. No block means a different
   problem, so do not answer it by adding a domain.
 
-  What the list still allows is deliberate and worth naming. `registry.npmjs.org`,
-  `codeload.github.com` and `objects.githubusercontent.com` let a confined
+  What the list still allows is deliberate and worth naming, in both
+  directions. Inbound, `registry.npmjs.org`, `codeload.github.com`,
+  `objects.githubusercontent.com` and `gitlab.semantiqa.dev` let a confined
   command pull code into the working directory — install scripts, repo archives,
   release assets — that later runs unconfined. That is the same shape as the
-  `allowWrite` cases rejected above, reached by a different route, and it is
-  accepted because these are the hosts the repo's own tooling is built on. The
-  containment they buy is over everywhere else, not over these.
+  `allowWrite` cases rejected above, reached by a different route. Outbound,
+  `github.com`, `api.github.com`, `gitlab.semantiqa.dev` and
+  `plane.derivasoftware.dev` are write
+  destinations: a confined command that reaches a token in the environment —
+  `~/.netrc`, `~/.gitconfig`, an exported variable, none of which the read deny
+  list covers — can `git push` or call the REST API. That is not new with the
+  self-hosted entry; the two GitHub hosts have always had it, and it went
+  unwritten until 2026-09-29. Both are accepted because these are the hosts the
+  repo's own tooling is built on. The containment the list buys is over
+  everywhere else, not over these.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
