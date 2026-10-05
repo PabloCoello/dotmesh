@@ -44,6 +44,10 @@ naming the agent.
   session, needs an isolated tree, or runs in parallel with another phase.
 - **Right after non-trivial code is written or modified** → delegate to `review`
   over the diff. If it returns blocking issues, stop and surface them.
+  Non-trivial is anything above the trivial tier in the effort threshold: a
+  change that touches more than one file, or that lands a plan, gets the
+  review even when each piece looks small. Small pieces are where the gate
+  gets skipped.
 - **Before a commit on a security-sensitive surface** → delegate to `security`.
   This is a commit gate, not a per-slice check.
 - **A mathematical or quantitative claim to verify** → delegate to `maths`.
