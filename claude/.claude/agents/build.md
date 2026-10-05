@@ -1,7 +1,7 @@
 ---
 name: build
 description: Implementation with full tool access. Use when there is an approved plan and the work needs to land in code. Follows incremental-implementation, tests after each slice, and invokes review/security at gate points.
-model: claude-sonnet-4-6
+model: claude-sonnet-5-5
 tools: [Read, Edit, Write, Bash, Grep, Glob, WebFetch, Skill]
 ---
 
