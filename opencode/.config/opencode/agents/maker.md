@@ -79,7 +79,10 @@ Fire these without being asked; the trigger is the situation, not a request.
   session, needs an isolated tree, or runs in parallel with another phase.
 - **Right after non-trivial code is written or modified** → delegate to `review` over the
   diff. Blocking issues → load `wait-for-user`, ask one closed `question`, and
-  stop using tools until the user answers.
+  stop using tools until the user answers. Non-trivial is anything above the
+  trivial tier in the effort threshold: a change that touches more than one
+  file, or that lands a plan, gets the review even when each piece looks
+  small. Small pieces are where the gate gets skipped.
 - **Before a commit on a security-sensitive surface** → delegate to `security`
   (commit gate, not per slice; `/check-last` also forces this).
 - **A quantitative claim to verify** → delegate to `maths`.

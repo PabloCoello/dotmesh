@@ -112,7 +112,7 @@ otra que no aporta nada, y tampoco lo distinguiría de sí mismo.
 
 Medirlo de verdad exige un brazo por skill, no una bandera. Una tanda de doce
 casos por tres tiradas costó 49,17 USD de agente más 0,75 del juez. Veintiocho
-skills más el brazo de referencia son veintinueve tandas, del orden de 1.450
+skills (las que había en la fecha de esta reserva) más el brazo de referencia son veintinueve tandas, del orden de 1.450
 USD, y con el ruido de arriba ni siquiera bastarían: para separar 2 pp habría
 que repetir cada brazo varias veces y multiplicar esa cifra.
 
