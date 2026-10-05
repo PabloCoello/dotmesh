@@ -184,6 +184,15 @@ The agent system has two layers, identical in concept across the three tools.
   summary was buried under an `Ok.` or a bare `.` that the orchestrator received
   in its place. So an orchestrator that wants the state of the repository after a
   phase reads it with `git log` and `git status`, and never through a hook.
+
+  The template registers nine hooks in total. Besides the four above, three
+  are documented with what they serve: `block-dangerous-git` (parity table),
+  `offer-terminal-browser` (the `terminal-browser/` package) and
+  `remind-herdr-skill` (skills section). The last two sit outside the flow:
+  `herdr-agent-state.sh` (`SessionStart`) reports agent state to herdr's
+  sidebar (see `docs/INSTALL.md`), and `handoff-signal.sh` (`PreToolUse` on
+  `Skill`) injects the recent handoff documents, as data, when a BAIT
+  day-close or day-open skill is invoked. Neither blocks.
 - **The Bash sandbox** — `sandbox.enabled` is on in the template, so every Bash
   command Claude runs is confined by the OS: writable are the working directory,
   the session temp directory, and `~/.npm`; everything else under `$HOME` is

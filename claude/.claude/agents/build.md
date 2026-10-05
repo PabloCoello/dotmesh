@@ -1,6 +1,6 @@
 ---
 name: build
-description: Implementation with full tool access. Use when there is an approved plan and the work needs to land in code. Follows incremental-implementation, tests after each slice, and invokes review/security at gate points.
+description: Implementation with full tool access except subagent delegation. Use when there is an approved plan and the work needs to land in code. Follows incremental-implementation, tests after each slice, self-checks with the review and security skills, and returns a gate-ready summary; the orchestrator runs the review/security subagents.
 model: claude-sonnet-5-5
 tools: [Read, Edit, Write, Bash, Grep, Glob, WebFetch, Skill]
 ---
