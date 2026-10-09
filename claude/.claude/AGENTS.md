@@ -152,11 +152,33 @@ freno real que queda, así que no lo esquives por comodidad.
   caja y sin otra sesión abierta en esa carpeta. `/sandbox` no los arregla,
   porque la lista es fija. Desde dentro de la caja esas rutas se ven como
   `/dev/null` aunque no haya nada en disco: compruébalo fuera.
-- **`dangerouslyDisableSandbox` solo tras un fallo con evidencia** (`Operation
-  not permitted`, socket denegado, ruta fuera de lo permitido), y comando a
-  comando. No lo actives preventivamente ni lo arrastres al siguiente.
-- Si algo se sale de la caja de forma recurrente, se apunta y se decide si entra
-  en la configuración. No se resuelve abriendo la escotilla cada vez.
+- **Tres casos salen a la primera.** Son los que siempre acaban fuera y no
+  ejecutan código de terceros, así que se lanzan con `dangerouslyDisableSandbox`
+  desde el primer intento, sin probar antes dentro:
+  - `git fetch`, `pull`, `push` y `clone` contra un remoto SSH (`git@…`):
+    dentro no hay ni DNS ni ruta al puerto 22;
+  - una llamada que solo contiene `gh`, sin tubería ni redirección: ya está en
+    `excludedCommands`, así que lanzarla fuera no abre nada nuevo, y evita que
+    un `--body` de varias líneas la meta en la caja, donde falla con un error de
+    certificado (medido el 09-10-2026). Si necesitas procesar la salida, hazlo
+    en una llamada aparte;
+  - un `git checkout`, `switch`, `rebase`, `merge` o `pull` en el checkout de
+    dotmesh cuando el cambio toca `claude/.claude/`: la caja ve esas rutas a
+    través de `~/.claude/`, protegido contra escritura, y git se queda a medias
+    con el árbol en un estado intermedio (medido el 09-10-2026). Vale mientras
+    dotmesh no tenga hooks de git: si se añaden, este caso los ejecutaría sin
+    confinar y deja de estar en la lista.
+
+  Probarlos dentro no protege nada y cuesta una llamada, tokens y, en el
+  tercero, un árbol roto. Esta lista es lo que ha salido de apuntar los casos
+  recurrentes; un caso nuevo entra aquí solo con su medición, no por comodidad.
+- **Todo lo demás, `dangerouslyDisableSandbox` solo tras un fallo con
+  evidencia** (`Operation not permitted`, socket denegado, ruta fuera de lo
+  permitido), y comando a comando. No lo actives preventivamente ni lo
+  arrastres al siguiente. Eso incluye `pre-commit`, `uv`, los sockets y
+  cualquier escritura en `~/.claude/` fuera del caso de arriba: lo que la caja
+  protege es el código que no escribes tú (`npm install`, tests, hooks, scripts
+  descargados) y los ajustes que la sostienen, y su primer intento va dentro.
 
 ## Recuperación de errores de herramientas
 
