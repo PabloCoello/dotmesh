@@ -250,6 +250,28 @@ The agent system has two layers, identical in concept across the three tools.
   holds for every later use of that command and leaves no trace, while the
   hatch is per command and shows up in the transcript.
 
+  Three cases go out on the first try, because they always end up outside and
+  run no third-party code; the global instruction file
+  (`claude/.claude/AGENTS.md`) is where the agent reads them. Git network
+  against an SSH remote (no DNS or route to port 22 inside). A call that
+  contains only `gh`, with no pipe or redirect, since the hatch covers the
+  whole call: `gh` is already in `excludedCommands`, so that opens nothing new;
+  measured on 2026-10-09, a bare `gh pr create` with a multi-line `--body` ran
+  inside and failed with `x509: OSStatus -26276`, a certificate error rather
+  than the anonymous 401 described above. And a `git checkout`, `switch`,
+  `rebase`, `merge` or `pull` in this checkout whose change touches
+  `claude/.claude/`: the sandbox sees those paths through `~/.claude/`, which it
+  write-protects, and on 2026-10-09 a `git rebase` inside the box wrote half of
+  `origin/main`, stopped at `claude/.claude/agents/*.md` and left the tree in
+  an intermediate state. That case holds only while this repo has no git
+  hooks (no `.pre-commit-config.yaml`, `hooksPath` or post-checkout/post-merge
+  hook); adding one would run it unconfined, and the case leaves the list. Trying those inside first protects nothing and costs a
+  call, tokens and, in the third case, a broken tree. Everything else, including
+  `pre-commit`, `uv`, sockets and any other write under `~/.claude/`, still
+  tries inside first and leaves only on evidence: third-party code and the
+  settings that hold the sandbox up keep their confined first attempt. A new
+  case joins the list only with its measurement.
+
   `filesystem.allowWrite` is the other way to let a tool through, and it is
   narrower than the hatch — but only for a cache that holds data. The
   pre-commit and uv caches were measured as the largest single cause (~110 of
