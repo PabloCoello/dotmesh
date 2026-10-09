@@ -2,11 +2,11 @@ model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 
-# "untrusted": solo auto-aprueba comandos de solo lectura conocidos como seguros;
-# el resto (rm -rf, git clean -f, etc.) requiere aprobación explícita del usuario.
-# Valores válidos: "untrusted" | "on-request" | "never"
-# Fuente: codex-rs/protocol/src/protocol.rs (AskForApproval)
-approval_policy = "untrusted"
+# "on-request": el modelo trabaja dentro del sandbox y pide aprobación cuando
+# necesita salir de él (red, escribir fuera del workspace, etc.).
+# Valores válidos (codex-cli 0.159): "on-request" | "never". "untrusted" ya no existe.
+# Fuente: codex --help (--ask-for-approval)
+approval_policy = "on-request"
 
 # "workspace-write": el agente puede escribir en el workspace pero no fuera de él.
 # Valores válidos: "read-only" | "workspace-write" | "danger-full-access"
