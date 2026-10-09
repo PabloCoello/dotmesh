@@ -83,7 +83,8 @@ fi
 # with a heredoc that mentions AGENTS.md writes code, and matching the command
 # text would call it prose — the exact defect this branch exists to remove.
 es_prosa() {
-  case "${1,,}" in
+  # tr, not ${1,,}: macOS ships bash 3.2, where case conversion is a syntax error.
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
     *.md | *.markdown | *.mdx | *.txt | *.rst | *.adoc | *.asciidoc | *.qmd | *.html | *.htm)
       return 0 ;;
   esac

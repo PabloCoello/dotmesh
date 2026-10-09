@@ -380,9 +380,11 @@ run_sync "$dst" && rc=0 || rc=$?
 copia=$(compgen -G "$SYNC_HOME/dotfiles-backup/*/claude-settings.json" || true)
 if [ -n "$copia" ]; then
   pass "la fusión deja copia previa"
-  [ "$(stat -c '%a' "$copia")" = 600 ] \
+  # GNU stat takes -c, BSD stat (macOS) takes -f.
+  modo=$(stat -c '%a' "$copia" 2>/dev/null || stat -f '%Lp' "$copia")
+  [ "$modo" = 600 ] \
     && pass "la copia previa no es legible por otros" \
-    || fail "la copia previa tiene permisos $(stat -c '%a' "$copia")"
+    || fail "la copia previa tiene permisos $modo"
 else
   fail "la fusión no dejó copia en $SYNC_HOME/dotfiles-backup"
 fi
