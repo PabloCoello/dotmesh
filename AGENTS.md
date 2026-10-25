@@ -46,7 +46,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `vscode/` | `~/Library/Application Support/Code/User/` (macOS, via Stow) · `~/.config/Code/User/` (Linux, via `make vscode-install`) | VS Code settings, keybindings (`keybindings.json` cmd+ on macOS · `keybindings.linux.json` ctrl+ on Linux), extensions list, custom themes (active: **dotmesh**), and the **mesh-review** extension (`review-extension/`, installed via `make review-install`, not stowed): line-anchored review comments on any document, stored in `.ai/review/` sidecars that the `doc-review` skill consumes |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/` |
+| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/`, `mods/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `nvim/` | `~/.config/nvim/` | Neovim configuration (lazy.nvim plugins, lua_ls + marksman + bashls via Mason, opencode.nvim), the **dotmesh** colorscheme (`colors/dotmesh.lua` + `lua/dotmesh/palette.lua`, palette from `docs/DESIGN.md`) and the **mesh-review** client (`lua/mesh_review/`): review threads over the same `.ai/review/` sidecars as the VS Code extension, with per-type inline highlight, sign and shortcuts. Installed via `make stow`; Neovim itself plus the tree-sitter CLI (parser builds for nvim-treesitter `main`) via `make nvim-install` (pinned binaries, no sudo). |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer). The mesh PNG is linked but the rice never sets the wallpaper. See `docs/DESIGN.md` |
@@ -182,8 +182,43 @@ The agent system has two layers, identical in concept across the three tools.
   of eight ended the turn. Measured across the whole transcript corpus on
   2026-09-13: 68 subagents finished with about eight extra turns, and the real
   summary was buried under an `Ok.` or a bare `.` that the orchestrator received
-  in its place. So an orchestrator that wants the state of the repository after a
-  phase reads it with `git log` and `git status`, and never through a hook.
+  in its place. So no hook hands the orchestrator the state of the repository
+  after a phase.
+
+  The `cierre-fase` mod does (`claude/.claude/mods/cierre-fase/`). A mod is not a
+  hook: it runs as middleware inside Claude Code and can rewrite what reaches the
+  model. When an `Agent` call returns, foreground or as a background
+  `<task-notification>`, it adds to the report a `<repo-state>` block it measured
+  itself: commits on `HEAD` since launch, branch, and uncommitted files. It
+  rewrites the message on `session.append`, because rewriting the tool's `text`
+  does not reach the model. The block carries a random nonce per process, so a
+  subagent cannot forge or suppress it without reading the orchestrator's
+  transcript; `<` and `&` are escaped and lines capped, so git output cannot
+  close the block, and the block says its subjects and file names are data, not
+  instructions. It skips worktree-isolated agents, whose commits land in another
+  tree. It runs git with `core.fsmonitor=false` and `--no-optional-locks`,
+  because the mod runs outside the Bash sandbox and a repo's own `.git/config`
+  could otherwise name a command for it to run. Measured on 2.1.303 with Haiku
+  subagents: the orchestrator named the real state 0/4 times without the mod and
+  4/4 with it, a forged block in the report included.
+
+  The directory reaches `$HOME` with `make stow`, and `claude-session.zsh` adds
+  the mods it names to `CLAUDE_CODE_PLUGIN_DIRS`. `.zshrc` sources that file; on
+  a bash-only machine a local `~/.bashrc` line does it. So the mod loads in every
+  session started from such a shell, headless harnesses included, but not from
+  launchers that never source it (cron, systemd). The loader names each mod
+  rather than loading whatever the directory holds, because a mod runs outside
+  the sandbox. It hands over the checkout's path, resolved through the stowed
+  `register.js` with `readlink -f`, not `~/.claude/mods/`: Stow links each file
+  back into the repo, and Claude Code refuses a module that resolves outside its
+  plugin directory (`Path escapes plugin directory` in the debug log). That is
+  how the first interactive test came back without the block while every
+  `claude -p` run, given the repo path directly, had it. On macOS before 12.3
+  there is no `readlink -f`, and the mod silently stays unloaded. The sandbox
+  does not stop a confined command from writing under `claude/.claude/` in this
+  checkout, which is the risk `hooks/` already carries. And a bench arm launched from a shell that sourced the file carries
+  the mod too; unset the variable when an arm must run without it. Without the
+  block, an orchestrator reads the state with `git log` and `git status`.
 
   The template registers nine hooks in total. Besides the four above, three
   are documented with what they serve: `block-dangerous-git` (parity table),

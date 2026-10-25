@@ -381,3 +381,25 @@ function claude-session-cleanup() {
         rm -f "$lockfile" && \
         echo "🧹 Sesión ${id} eliminada"
 }
+
+# ═══════════════════════════════════════════════
+# ➤ CLAUDE CODE — MODS
+# ═══════════════════════════════════════════════
+# The mods listed here, stowed under ~/.claude/mods, load in every session started
+# from this shell, as `--plugin-dir` would load them. A mod runs outside the Bash
+# sandbox, so it is named here rather than picked up from whatever the directory
+# holds. Appends, so a value set elsewhere is kept. Stow links each file back into
+# the checkout, and Claude Code refuses a module that resolves outside the plugin
+# directory, so the path handed over is the checkout's, not the stowed one.
+function __claude_mod_dirs() {
+    local mod real
+    for mod in "$HOME/.claude/mods/cierre-fase"; do
+        real=$(readlink -f "$mod/hooks/register.js" 2>/dev/null) || continue
+        [ -f "$real" ] || continue
+        mod=${real%/hooks/register.js}
+        case ":${CLAUDE_CODE_PLUGIN_DIRS:-}:" in *":$mod:"*) continue ;; esac
+        export CLAUDE_CODE_PLUGIN_DIRS="${CLAUDE_CODE_PLUGIN_DIRS:+${CLAUDE_CODE_PLUGIN_DIRS}:}$mod"
+    done
+}
+__claude_mod_dirs
+unset -f __claude_mod_dirs
