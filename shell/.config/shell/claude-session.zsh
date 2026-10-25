@@ -381,3 +381,21 @@ function claude-session-cleanup() {
         rm -f "$lockfile" && \
         echo "🧹 Sesión ${id} eliminada"
 }
+
+# ═══════════════════════════════════════════════
+# ➤ CLAUDE CODE — MODS
+# ═══════════════════════════════════════════════
+# Each mod stowed under ~/.claude/mods loads in every session, headless included,
+# as `--plugin-dir` would load it. Appends, so a value set elsewhere is kept.
+function __claude_mod_dirs() {
+    [ -n "${ZSH_VERSION:-}" ] && setopt local_options null_glob
+    local mod
+    for mod in "$HOME"/.claude/mods/*/; do
+        [ -d "$mod" ] || continue
+        mod=${mod%/}
+        case ":${CLAUDE_CODE_PLUGIN_DIRS:-}:" in *":$mod:"*) continue ;; esac
+        export CLAUDE_CODE_PLUGIN_DIRS="${CLAUDE_CODE_PLUGIN_DIRS:+${CLAUDE_CODE_PLUGIN_DIRS}:}$mod"
+    done
+}
+__claude_mod_dirs
+unset -f __claude_mod_dirs
