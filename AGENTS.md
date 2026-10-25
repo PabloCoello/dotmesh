@@ -220,9 +220,10 @@ The agent system has two layers, identical in concept across the three tools.
   the mod too; unset the variable when an arm must run without it. Without the
   block, an orchestrator reads the state with `git log` and `git status`.
 
-  The template registers nine hooks in total. Besides the four above, three
+  The template registers ten hooks in total. Besides the four above, four
   are documented with what they serve: `block-dangerous-git` (parity table),
-  `offer-terminal-browser` (the `terminal-browser/` package) and
+  `offer-terminal-browser` (the `terminal-browser/` package),
+  `explain-sandbox-failure` (the sandbox paragraph below) and
   `remind-herdr-skill` (skills section). The last two sit outside the flow:
   `herdr-agent-state.sh` (`SessionStart`) reports agent state to herdr's
   sidebar (see `docs/INSTALL.md`), and `handoff-signal.sh` (`PreToolUse` on
@@ -395,6 +396,24 @@ The agent system has two layers, identical in concept across the three tools.
   unwritten until 2026-09-29. Both are accepted because these are the hosts the
   repo's own tooling is built on. The containment the list buys is over
   everywhere else, not over these.
+
+  The sandbox failures this section describes share a shape: the cause is
+  written here, but the agent meets only the error and reads it as something
+  else. So a
+  `PostToolUseFailure` hook on Bash (`explain-sandbox-failure.sh`) recognises
+  the measured signatures — a nested `claude` with `Not logged in` or
+  `authentication_failed`, `ssh: Could not resolve hostname`, a read-only
+  error after a redirected or piped `make` (or any other write outside the
+  allowed paths), and `x509`/401 from a `gh` that ran inside the box — and
+  hands the agent the cause and the right exit at that moment. It matches the
+  English and the Spanish locale, emits fixed text only (nothing from the
+  command or its stderr reaches the context), and never blocks or reruns. It
+  stays silent when the command already ran with `dangerouslyDisableSandbox`,
+  where the same error has a real cause, and it never suggests the hatch on a
+  signature that a third-party command could print to steer it out of the box:
+  the SSH advice needs `git` or `ssh` in the command, and the generic
+  read-only advice points at the writable paths instead.
+  `scripts/test-flow-hooks.sh` covers each signature and the silent cases.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not
   logged in", because our own `Read(~/.claude/.credentials.json)` deny rule is
