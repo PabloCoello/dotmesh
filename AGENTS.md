@@ -208,9 +208,15 @@ The agent system has two layers, identical in concept across the three tools.
   session started from such a shell, headless harnesses included, but not from
   launchers that never source it (cron, systemd). The loader names each mod
   rather than loading whatever the directory holds, because a mod runs outside
-  the sandbox. The sandbox does not stop a confined command from writing under
-  `claude/.claude/` in this checkout, which is the risk `hooks/` already
-  carries. And a bench arm launched from a shell that sourced the file carries
+  the sandbox. It hands over the checkout's path, resolved through the stowed
+  `register.js` with `readlink -f`, not `~/.claude/mods/`: Stow links each file
+  back into the repo, and Claude Code refuses a module that resolves outside its
+  plugin directory (`Path escapes plugin directory` in the debug log). That is
+  how the first interactive test came back without the block while every
+  `claude -p` run, given the repo path directly, had it. On macOS before 12.3
+  there is no `readlink -f`, and the mod silently stays unloaded. The sandbox
+  does not stop a confined command from writing under `claude/.claude/` in this
+  checkout, which is the risk `hooks/` already carries. And a bench arm launched from a shell that sourced the file carries
   the mod too; unset the variable when an arm must run without it. Without the
   block, an orchestrator reads the state with `git log` and `git status`.
 

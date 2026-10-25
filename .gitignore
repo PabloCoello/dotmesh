@@ -39,3 +39,6 @@ agents/.agents/skills/synced/
 # config del plugin. Nunca debería aparecer aquí, pero si alguien lo copia al paquete
 # mientras depura, `git add .` se lo llevaría: lleva las claves VAPID.
 collie/.config/herdr/plugins/config/herdr.collie/.env
+
+# Lo escribe Claude Code junto a un mod que carga, apuntando a los tipos que genera.
+claude/.claude/mods/*/tsconfig.json
