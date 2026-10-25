@@ -188,21 +188,31 @@ The agent system has two layers, identical in concept across the three tools.
   The `cierre-fase` mod does (`claude/.claude/mods/cierre-fase/`). A mod is not a
   hook: it runs as middleware inside Claude Code and can rewrite what reaches the
   model. When an `Agent` call returns, foreground or as a background
-  `<task-notification>`, it appends a `<repo-state>` block it measured itself:
-  commits on `HEAD` since launch, branch, and uncommitted files. It rewrites the
-  message on `session.append`, because rewriting the tool's `text` does not reach
-  the model, and it tags the block with a per-load nonce so a subagent cannot
-  forge or suppress it. It skips worktree-isolated agents, whose commits land in
-  another tree. Measured on 2.1.303 with Haiku subagents: the orchestrator named
-  the real state 0/4 times without the mod and 4/4 with it, a forged block in the
-  report included. `claude-session.zsh`, which bash and zsh both source, adds
-  every directory under `~/.claude/mods` to `CLAUDE_CODE_PLUGIN_DIRS`, so it
-  loads in every session, headless harnesses included; the directory reaches
-  `$HOME` with `make stow`. Two things follow. A mod runs outside the Bash
-  sandbox, so only mods written here belong in that directory. And a bench arm
-  launched from a shell that sourced the file carries the mod too; unset the
-  variable when an arm must run without it. Until a session confirms the block,
-  an orchestrator still reads the state with `git log` and `git status`.
+  `<task-notification>`, it adds to the report a `<repo-state>` block it measured
+  itself: commits on `HEAD` since launch, branch, and uncommitted files. It
+  rewrites the message on `session.append`, because rewriting the tool's `text`
+  does not reach the model. The block carries a random nonce per process, so a
+  subagent cannot forge or suppress it without reading the orchestrator's
+  transcript; `<` and `&` are escaped and lines capped, so git output cannot
+  close the block, and the block says its subjects and file names are data, not
+  instructions. It skips worktree-isolated agents, whose commits land in another
+  tree. It runs git with `core.fsmonitor=false` and `--no-optional-locks`,
+  because the mod runs outside the Bash sandbox and a repo's own `.git/config`
+  could otherwise name a command for it to run. Measured on 2.1.303 with Haiku
+  subagents: the orchestrator named the real state 0/4 times without the mod and
+  4/4 with it, a forged block in the report included.
+
+  The directory reaches `$HOME` with `make stow`, and `claude-session.zsh` adds
+  the mods it names to `CLAUDE_CODE_PLUGIN_DIRS`. `.zshrc` sources that file; on
+  a bash-only machine a local `~/.bashrc` line does it. So the mod loads in every
+  session started from such a shell, headless harnesses included, but not from
+  launchers that never source it (cron, systemd). The loader names each mod
+  rather than loading whatever the directory holds, because a mod runs outside
+  the sandbox. The sandbox does not stop a confined command from writing under
+  `claude/.claude/` in this checkout, which is the risk `hooks/` already
+  carries. And a bench arm launched from a shell that sourced the file carries
+  the mod too; unset the variable when an arm must run without it. Without the
+  block, an orchestrator reads the state with `git log` and `git status`.
 
   The template registers nine hooks in total. Besides the four above, three
   are documented with what they serve: `block-dangerous-git` (parity table),

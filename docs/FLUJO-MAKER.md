@@ -106,8 +106,9 @@ que no es un hook: corre dentro de Claude Code y reescribe el mensaje que llega
 al modelo. Cuando un subagente termina, en primer o en segundo plano, añade a su
 informe un bloque `<repo-state>` con lo que el propio mod midió: los commits en
 `HEAD` desde el lanzamiento, la rama y los ficheros sin commitear. Lo carga
-`claude-session.zsh` en toda sesión a través de `CLAUDE_CODE_PLUGIN_DIRS`; el
-detalle y la medición están en `AGENTS.md`. Si el bloque no aparece, el estado
+`claude-session.zsh` a través de `CLAUDE_CODE_PLUGIN_DIRS` en las sesiones que
+se abren desde un shell que haya leído ese fichero; el detalle y la medición
+están en `AGENTS.md`. Si el bloque no aparece, el estado
 se lee con `git log` y `git status`.
 
 En OpenCode el equivalente son los permisos por frontmatter de cada agente; en
