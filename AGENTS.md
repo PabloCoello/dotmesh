@@ -397,8 +397,9 @@ The agent system has two layers, identical in concept across the three tools.
   repo's own tooling is built on. The containment the list buys is over
   everywhere else, not over these.
 
-  The failures below share a shape: the cause is written here, but the agent
-  meets only the error and reads it as something else. So a
+  The sandbox failures this section describes share a shape: the cause is
+  written here, but the agent meets only the error and reads it as something
+  else. So a
   `PostToolUseFailure` hook on Bash (`explain-sandbox-failure.sh`) recognises
   the measured signatures — a nested `claude` with `Not logged in` or
   `authentication_failed`, `ssh: Could not resolve hostname`, a read-only
@@ -406,7 +407,12 @@ The agent system has two layers, identical in concept across the three tools.
   allowed paths), and `x509`/401 from a `gh` that ran inside the box — and
   hands the agent the cause and the right exit at that moment. It matches the
   English and the Spanish locale, emits fixed text only (nothing from the
-  command or its stderr reaches the context), and never blocks or reruns.
+  command or its stderr reaches the context), and never blocks or reruns. It
+  stays silent when the command already ran with `dangerouslyDisableSandbox`,
+  where the same error has a real cause, and it never suggests the hatch on a
+  signature that a third-party command could print to steer it out of the box:
+  the SSH advice needs `git` or `ssh` in the command, and the generic
+  read-only advice points at the writable paths instead.
   `scripts/test-flow-hooks.sh` covers each signature and the silent cases.
 
   Two known breaks, measured on 2026-09-13. A nested `claude -p` fails with "Not

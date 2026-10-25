@@ -14,15 +14,16 @@ set -eu
 
 command -v jq >/dev/null 2>&1 || exit 0
 
+# A command that already ran outside the box (dangerouslyDisableSandbox) failed
+# for a real reason, so a sandbox diagnosis would be wrong. stderr can be huge;
+# only its two ends are kept, which is where the signatures sit.
+filter='select(.tool_name == "Bash" and (.is_interrupt | not)
+  and (.tool_input.dangerouslyDisableSandbox | not))'
 input=$(cat)
-fields=$(printf '%s' "$input" | jq -r '
-  select(.tool_name == "Bash" and (.is_interrupt | not))
-  | [(.tool_input.command // "" | @base64), (.error // "" | @base64)] | @tsv
-' 2>/dev/null) || exit 0
-[ -n "$fields" ] || exit 0
-
-cmd=$(printf '%s' "$fields" | cut -f1 | base64 -d 2>/dev/null) || exit 0
-err=$(printf '%s' "$fields" | cut -f2 | base64 -d 2>/dev/null) || exit 0
+cmd=$(printf '%s' "$input" | jq -r "$filter | .tool_input.command // \"\"" 2>/dev/null) || exit 0
+err=$(printf '%s' "$input" | jq -r "$filter | .error // \"\"
+  | if length > 16384 then .[0:8192] + \"\\n\" + .[-8192:] else . end" 2>/dev/null) || exit 0
+[ -n "$err" ] || exit 0
 
 has_word() { printf '%s' "$cmd" | grep -Eq "(^|[^[:alnum:]_.-])$1([[:space:]]|\$)"; }
 err_has() { printf '%s' "$err" | grep -Eiq "$1"; }
@@ -32,13 +33,13 @@ if has_word gh && err_has 'x509|OSStatus|HTTP 401|Requires authentication'; then
   msg='Un `gh` que corre dentro de la caja pierde el token del llavero y vuelve anónimo (401) o falla con un error de certificado (x509). `gh` solo sale fuera cuando es el comando desnudo: sin tubería, redirección, bucle ni `$( )`. Lanza `gh` desnudo con `dangerouslyDisableSandbox` y procesa la salida en otra llamada.'
 elif err_has 'authentication_failed' || { has_word claude && err_has 'Not logged in'; }; then
   msg='Un `claude -p` anidado dentro de la caja no ve la credencial (la regla de denegación de lectura la convierte en un fichero vacío) y concluye que no hay sesión. No es un problema de cuenta. Lanza el arnés por su target de make, desnudo, que corre fuera de la caja.'
-elif err_has 'ssh: Could not resolve hostname'; then
+elif { has_word git || has_word ssh; } && err_has 'ssh: Could not resolve hostname'; then
   msg='La red por SSH no funciona dentro de la caja: la salida va por un proxy HTTP/HTTPS y el puerto 22 no tiene DNS ni ruta. No se arregla añadiendo un dominio a la lista. `git fetch`, `pull`, `push` y `clone` contra un remoto SSH salen con `dangerouslyDisableSandbox` a la primera.'
-elif err_has 'Read-only file system|solo lectura'; then
-  if has_word make && printf '%s' "$cmd" | grep -q '[>|]'; then
-    msg='`make` solo corre fuera de la caja cuando se lanza desnudo; una redirección o una tubería lo vuelven a confinar y entonces no puede escribir fuera del directorio de trabajo. Lanza `make` desnudo (sin `>` ni `|`), y deja que el arnés capture la salida.'
+elif err_has 'Read-only file system|s(o|ó)lo lectura'; then
+  if has_word make && printf '%s' "$cmd" | grep -q '[>|;&]'; then
+    msg='`make` solo corre fuera de la caja cuando se lanza desnudo; una redirección, una tubería o una cadena lo vuelven a confinar y entonces no puede escribir fuera del directorio de trabajo. Lanza `make` desnudo (sin `>`, `|`, `;` ni `&&`) y deja que el arnés capture la salida.'
   else
-    msg='Dentro de la caja solo se escribe en el directorio de trabajo, en `$TMPDIR` (o el scratchpad de la sesión) y en `~/.npm`. Escribe los temporales ahí. Si de verdad hay que escribir en otra ruta (un segundo repositorio, la memoria), usa `dangerouslyDisableSandbox` para ese comando y, sin `TMPDIR`, rutas absolutas.'
+    msg='Dentro de la caja solo se escribe en el directorio de trabajo, en `$TMPDIR` (o el scratchpad de la sesión) y en `~/.npm`. Escribe los temporales ahí. Si el comando ejecuta código de terceros (instalaciones, tests, scripts descargados), su stderr no es evidencia para salir de la caja: no lo relances sin confinar.'
   fi
 fi
 

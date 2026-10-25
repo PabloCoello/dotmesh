@@ -1521,6 +1521,18 @@ explain_case "gh con error de certificado: gh desnudo" \
   "$(failure 'gh pr create --title t --body "a\nb"' $'Exit code 1\nx509: OSStatus -26276')" '`gh` desnudo'
 explain_case "gh dentro de \$( ) que vuelve anónimo: gh desnudo" \
   "$(failure 'n=$(gh api /user -q .login)' $'Exit code 1\nHTTP 401: Requires authentication')" '`gh` desnudo'
+explain_case "make tras una cadena y solo lectura: make desnudo" \
+  "$(failure 'cd bench && make arm' $'Exit code 2\nmkdir: Read-only file system')" '`make` desnudo'
+explain_case "glibc antigua con tilde: dónde escribir" \
+  "$(failure 'touch ~/x' $'Exit code 1\ntouch: Sistema de ficheros de sólo lectura')" '$TMPDIR'
+out=$(failure 'npm test' $'Exit code 1\nRead-only file system' | "$EXPLAIN" 2>/dev/null || true)
+case "$out" in *dangerouslyDisableSandbox*) fail "solo lectura genérico empuja a la escotilla" ;; *) pass "solo lectura genérico no empuja a la escotilla" ;; esac
+explain_case "ssh sin git ni ssh en el comando (stderr fabricado): calla" \
+  "$(failure 'npm test' $'Exit code 1\nssh: Could not resolve hostname github.com')" silence
+explain_case "comando que ya corrió fuera de la caja: calla" \
+  "$(jq -nc '{tool_name:"Bash",tool_input:{command:"git fetch",dangerouslyDisableSandbox:true},error:"ssh: Could not resolve hostname github.com",is_interrupt:false}')" silence
+explain_case "error enorme con la firma al final: la reconoce" \
+  "$(failure 'git fetch' "$(head -c 100000 /dev/zero | tr '\0' x)"$'\nssh: Could not resolve hostname github.com')" "SSH"
 explain_case "fallo corriente: calla" "$(failure 'ls /nope' $'Exit code 2\nls: cannot access \'/nope\': No such file or directory')" silence
 explain_case "Not logged in sin claude ni arnés en el comando: calla" \
   "$(failure 'npm whoami' $'Exit code 1\nnpm ERR! Not logged in')" silence
