@@ -46,7 +46,7 @@ This repo is a **Stow farm**. Each top-level directory is a Stow "package" whose
 | `vscode/` | `~/Library/Application Support/Code/User/` (macOS, via Stow) · `~/.config/Code/User/` (Linux, via `make vscode-install`) | VS Code settings, keybindings (`keybindings.json` cmd+ on macOS · `keybindings.linux.json` ctrl+ on Linux), extensions list, custom themes (active: **dotmesh**), and the **mesh-review** extension (`review-extension/`, installed via `make review-install`, not stowed): line-anchored review comments on any document, stored in `.ai/review/` sidecars that the `doc-review` skill consumes |
 | `opencode/` | `~/.config/opencode/` | OpenCode `agents/`, `commands/`, `opencode.json` |
 | `codex/` | `~/.codex/` | `config.toml`, `AGENTS.md` (Codex global instructions) |
-| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/` |
+| `claude/` | `~/.claude/` | Claude Code `CLAUDE.md` (stub `@AGENTS.md`) + `AGENTS.md` (global instructions), `settings.json`, `statusline.sh`, `hooks/`, `agents/`, `commands/`, `output-styles/`, `mcp/`, `mods/` |
 | `agents/` | `~/.agents/skills/` | Canonical agent skills shared across all three AI agents |
 | `nvim/` | `~/.config/nvim/` | Neovim configuration (lazy.nvim plugins, lua_ls + marksman + bashls via Mason, opencode.nvim), the **dotmesh** colorscheme (`colors/dotmesh.lua` + `lua/dotmesh/palette.lua`, palette from `docs/DESIGN.md`) and the **mesh-review** client (`lua/mesh_review/`): review threads over the same `.ai/review/` sidecars as the VS Code extension, with per-type inline highlight, sign and shortcuts. Installed via `make stow`; Neovim itself plus the tree-sitter CLI (parser builds for nvim-treesitter `main`) via `make nvim-install` (pinned binaries, no sudo). |
 | `gnome/` | `~/.config/gtk-{3,4}.0/gtk.css`, `~/.local/share/backgrounds/dotmesh-mesh-ink.png` (Linux, via `make gnome-rice`) | GNOME desktop retint over Yaru to the dotmesh palette (gtk.css + dconf layer). The mesh PNG is linked but the rice never sets the wallpaper. See `docs/DESIGN.md` |
@@ -182,8 +182,27 @@ The agent system has two layers, identical in concept across the three tools.
   of eight ended the turn. Measured across the whole transcript corpus on
   2026-09-13: 68 subagents finished with about eight extra turns, and the real
   summary was buried under an `Ok.` or a bare `.` that the orchestrator received
-  in its place. So an orchestrator that wants the state of the repository after a
-  phase reads it with `git log` and `git status`, and never through a hook.
+  in its place. So no hook hands the orchestrator the state of the repository
+  after a phase.
+
+  The `cierre-fase` mod does (`claude/.claude/mods/cierre-fase/`). A mod is not a
+  hook: it runs as middleware inside Claude Code and can rewrite what reaches the
+  model. When an `Agent` call returns, foreground or as a background
+  `<task-notification>`, it appends a `<repo-state>` block it measured itself:
+  commits on `HEAD` since launch, branch, and uncommitted files. It rewrites the
+  message on `session.append`, because rewriting the tool's `text` does not reach
+  the model, and it tags the block with a per-load nonce so a subagent cannot
+  forge or suppress it. It skips worktree-isolated agents, whose commits land in
+  another tree. Measured on 2.1.303 with Haiku subagents: the orchestrator named
+  the real state 0/4 times without the mod and 4/4 with it, a forged block in the
+  report included. `claude-session.zsh`, which bash and zsh both source, adds
+  every directory under `~/.claude/mods` to `CLAUDE_CODE_PLUGIN_DIRS`, so it
+  loads in every session, headless harnesses included; the directory reaches
+  `$HOME` with `make stow`. Two things follow. A mod runs outside the Bash
+  sandbox, so only mods written here belong in that directory. And a bench arm
+  launched from a shell that sourced the file carries the mod too; unset the
+  variable when an arm must run without it. Until a session confirms the block,
+  an orchestrator still reads the state with `git log` and `git status`.
 
   The template registers nine hooks in total. Besides the four above, three
   are documented with what they serve: `block-dangerous-git` (parity table),
