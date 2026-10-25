@@ -385,14 +385,14 @@ function claude-session-cleanup() {
 # ═══════════════════════════════════════════════
 # ➤ CLAUDE CODE — MODS
 # ═══════════════════════════════════════════════
-# Each mod stowed under ~/.claude/mods loads in every session, headless included,
-# as `--plugin-dir` would load it. Appends, so a value set elsewhere is kept.
+# The mods listed here, stowed under ~/.claude/mods, load in every session started
+# from this shell, as `--plugin-dir` would load them. A mod runs outside the Bash
+# sandbox, so it is named here rather than picked up from whatever the directory
+# holds. Appends, so a value set elsewhere is kept.
 function __claude_mod_dirs() {
-    [ -n "${ZSH_VERSION:-}" ] && setopt local_options null_glob
     local mod
-    for mod in "$HOME"/.claude/mods/*/; do
+    for mod in "$HOME/.claude/mods/cierre-fase"; do
         [ -d "$mod" ] || continue
-        mod=${mod%/}
         case ":${CLAUDE_CODE_PLUGIN_DIRS:-}:" in *":$mod:"*) continue ;; esac
         export CLAUDE_CODE_PLUGIN_DIRS="${CLAUDE_CODE_PLUGIN_DIRS:+${CLAUDE_CODE_PLUGIN_DIRS}:}$mod"
     done
