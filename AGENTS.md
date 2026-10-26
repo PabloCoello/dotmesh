@@ -227,11 +227,18 @@ The agent system has two layers, identical in concept across the three tools.
   line. Only the terminal changes; the stored message and what the model reads
   stay as written. It skips fenced blocks and inline code, leaves money alone
   with pandoc's rule (no space inside the `$` pair, no digit after the closing
-  one), escapes leftover `*` and `_` so markdown does not turn them into
-  emphasis, and holds a display block that spans flushes until it closes,
-  releasing it raw if the message ends first. Matrices, stacked fractions and
-  limits above or below are out of scope, and an unknown command stays as
-  written. It runs no commands. Tests: `node --test scripts/test-mod-formulas.mjs`.
+  one) and shell variables by refusing a closing `$` followed by a letter
+  (`$HOME/$USER`), and escapes leftover `*` and `_` so markdown does not turn
+  them into emphasis. A display block that spans flushes is held until it
+  closes, but only when the opener stands alone or is followed by LaTeX, and
+  it is released raw on a code fence, after twenty lines, or when the message
+  ends first. A span with a command the converter does not know (`\hat`, or
+  the `\d` of a regex) is left exactly as written rather than half converted.
+  Matrices, stacked fractions and limits above or below are out of scope. The
+  hook runs in the UI process, so it is bounded: lines over 10,000 characters
+  pass through, nesting stops at 100 levels, a closer missing from a line is
+  searched once, and at most 32 messages keep state. It runs no commands.
+  Tests: `node --test scripts/test-mod-formulas.mjs`.
 
   The template registers ten hooks in total. Besides the four above, four
   are documented with what they serve: `block-dangerous-git` (parity table),

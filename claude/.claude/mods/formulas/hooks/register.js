@@ -4,6 +4,11 @@
 
 // Display math gets its own indented line; NBSP so markdown neither trims it nor reads a code block
 const DISPLAY_INDENT = ' '.repeat(4)
+// Bounds that keep one hostile line or block from stalling the UI thread
+const MAX_LINE = 10000
+const MAX_DEPTH = 100
+const MAX_HELD = 20
+const MAX_STREAMS = 32
 
 const SYMBOLS = {
   // Greek
@@ -60,15 +65,34 @@ function mapOf(from, to) {
   return Object.fromEntries(a.map((c, i) => [c, b[i]]))
 }
 
+const NAME = /[A-Za-z]+/y
+function commandName(s, at) {
+  NAME.lastIndex = at
+  const m = NAME.exec(s)
+  return m ? m[0] : s[at] ?? ''
+}
+
+// Per-conversion flags: an unknown command or runaway nesting leaves the span raw
+let ctx = { unknown: false, depth: 0 }
+const TOO_DEEP = new Error('nesting too deep')
+
 // Recursive descent over the LaTeX source; returns [text, index after the stop]
 function parse(s, i, stop) {
+  if (++ctx.depth > MAX_DEPTH) throw TOO_DEEP
+  try {
+    return parseBody(s, i, stop)
+  } finally {
+    ctx.depth--
+  }
+}
+
+function parseBody(s, i, stop) {
   let out = ''
   while (i < s.length) {
     const c = s[i]
     if (c === stop) return [out, i + 1]
     if (c === '\\') {
-      const m = /^[A-Za-z]+/.exec(s.slice(i + 1))
-      const name = m ? m[0] : s[i + 1] ?? ''
+      const name = commandName(s, i + 1)
       i += 1 + name.length
       let piece
       ;[piece, i] = command(s, i, name)
@@ -113,10 +137,14 @@ function command(s, i, name) {
     return [`${wrap(num)}/${wrap(den)}`, k]
   }
   if (name === 'sqrt') {
+    let index = ''
+    if (s[i] === '[') [index, i] = parse(s, i + 1, ']')
     const [arg, , j] = argument(s, i)
-    return ['√' + wrap(arg), j]
+    const mark = index ? script(index, true, SUP, '') : ''
+    return [mark + '√' + wrap(arg), j]
   }
   // Unknown: keep the source so nothing is silently lost
+  ctx.unknown = true
   if (s[i] === '{') {
     const [inner, j] = parse(s, i + 1, '}')
     return [`\\${name}{${inner}}`, j]
@@ -132,8 +160,7 @@ function argument(s, i) {
     return [inner, true, j]
   }
   if (s[i] === '\\') {
-    const m = /^[A-Za-z]+/.exec(s.slice(i + 1))
-    const name = m ? m[0] : s[i + 1] ?? ''
+    const name = commandName(s, i + 1)
     const [piece, j] = command(s, i + 1 + name.length, name)
     return [piece, false, j]
   }
@@ -164,24 +191,50 @@ export function latexToUnicode(src) {
   return parse(src, 0, null)[0].replace(/[ \t]{2,}/g, ' ').trim()
 }
 
+// Null when the span holds something we cannot render faithfully
+function convert(src) {
+  ctx = { unknown: false, depth: 0 }
+  try {
+    const text = latexToUnicode(src)
+    return ctx.unknown ? null : text
+  } catch (err) {
+    if (err === TOO_DEEP) return null
+    throw err
+  }
+}
+
 // Rendered math must not be reread as markdown emphasis
 function escapeMarkdown(text) {
   return text.replace(/[*_]/g, '\\$&')
 }
 
-function inlineMath(src) {
-  return escapeMarkdown(latexToUnicode(src))
+// Converted span, or the source with its delimiters when it cannot be rendered
+function inlineMath(src, open, close) {
+  const text = convert(src)
+  return text === null ? open + src + close : escapeMarkdown(text)
 }
+
+const TICKS = /`+/y
 
 // Inline pass over one line outside fences: skips code spans, converts \(..\), \[..\], $$..$$ and $..$
 function convertLine(line) {
+  if (line.length > MAX_LINE) return line
+  // A closer already missing from the rest of the line stays missing: no rescans
+  const missing = new Set()
+  const find = (token, from) => {
+    if (missing.has(token)) return -1
+    const at = line.indexOf(token, from)
+    if (at === -1) missing.add(token)
+    return at
+  }
   let out = ''
   let i = 0
   while (i < line.length) {
     const c = line[i]
     if (c === '`') {
-      const run = /^`+/.exec(line.slice(i))[0]
-      const end = line.indexOf(run, i + run.length)
+      TICKS.lastIndex = i
+      const run = TICKS.exec(line)[0]
+      const end = find(run, i + run.length)
       if (end === -1) {
         out += run
         i += run.length
@@ -193,31 +246,33 @@ function convertLine(line) {
       out += '\\$'
       i += 2
     } else if (c === '\\' && (line[i + 1] === '(' || line[i + 1] === '[')) {
+      const open = line.slice(i, i + 2)
       const close = line[i + 1] === '(' ? '\\)' : '\\]'
-      const end = line.indexOf(close, i + 2)
+      const end = find(close, i + 2)
       if (end === -1) {
-        out += line.slice(i, i + 2)
+        out += open
         i += 2
       } else {
-        out += inlineMath(line.slice(i + 2, end))
+        out += inlineMath(line.slice(i + 2, end), open, close)
         i = end + 2
       }
     } else if (c === '$' && line[i + 1] === '$') {
-      const end = line.indexOf('$$', i + 2)
+      const end = find('$$', i + 2)
       if (end === -1) {
         out += '$$'
         i += 2
       } else {
-        out += inlineMath(line.slice(i + 2, end))
+        out += inlineMath(line.slice(i + 2, end), '$$', '$$')
         i = end + 2
       }
     } else if (c === '$') {
-      // Pandoc's rule keeps money out: no space inside the delimiters, no digit after the closing one
-      const end = line.indexOf('$', i + 1)
+      // Pandoc's rule keeps money out: no space inside the delimiters, no digit after the closing one.
+      // A letter after the closing one marks shell variables ($HOME/$USER), not math.
+      const end = find('$', i + 1)
       const ok = end > i + 1 && !/\s/.test(line[i + 1]) && !/\s/.test(line[end - 1]) &&
-        !/\d/.test(line[end + 1] ?? '')
+        !/[\p{L}\d_{]/u.test(line[end + 1] ?? '')
       if (ok) {
-        out += inlineMath(line.slice(i + 1, end))
+        out += inlineMath(line.slice(i + 1, end), '$', '$')
         i = end + 1
       } else {
         out += '$'
@@ -231,8 +286,11 @@ function convertLine(line) {
   return out
 }
 
+// Null when the block cannot be rendered faithfully; the caller shows the source instead
 function renderDisplay(src) {
-  return latexToUnicode(src.replace(/\n/g, ' ').replace(/&/g, ''))
+  const text = convert(src.replace(/\n/g, ' ').replace(/(?<!\\)&/g, ''))
+  if (text === null) return null
+  return text
     .split('\n')
     .map((l) => DISPLAY_INDENT + escapeMarkdown(l.trim()))
     .join('\n')
@@ -240,9 +298,11 @@ function renderDisplay(src) {
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
 
-// Text after the closing delimiter stays on the same line
+// Text after the closing delimiter stays on the same line; null leaves the block raw
 function closeDisplay(body, rest) {
-  return renderDisplay(body) + (rest.trim() ? ' ' + convertLine(rest.trim()) : '')
+  const shown = renderDisplay(body)
+  if (shown === null) return null
+  return shown + (rest.trim() ? ' ' + convertLine(rest.trim()) : '')
 }
 
 // Per-message state: open code fence and display math held until it closes
@@ -256,7 +316,13 @@ export function createStream() {
       if (m && m[1][0] === fence[0] && m[1].length >= fence.length && !text.slice(m[0].length).trim()) fence = null
       return text + nl
     }
+    const m = FENCE.exec(text)
     if (display) {
+      // A fence or a runaway block means this was never display math: show what was held
+      if (m || display.raw.length >= MAX_HELD) {
+        const held = release()
+        return held + line(text, nl)
+      }
       display.raw.push(text + nl)
       const at = text.indexOf(display.close)
       if (at === -1) {
@@ -265,23 +331,34 @@ export function createStream() {
       }
       display.body.push(text.slice(0, at))
       const shown = closeDisplay(display.body.join('\n'), text.slice(at + display.close.length))
-      display = null
-      return shown + nl
+      const raw = release()
+      return shown === null ? raw : shown + nl
     }
-    const m = FENCE.exec(text)
     if (m) {
       fence = m[1]
       return text + nl
     }
     const lead = text.trimStart()
     const opener = lead.startsWith('$$') ? '$$' : lead.startsWith('\\[') ? '\\[' : null
-    if (!opener) return convertLine(text) + nl
+    if (!opener || text.length > MAX_LINE) return convertLine(text) + nl
     const close = opener === '$$' ? '$$' : '\\]'
     const after = lead.slice(2)
     const at = after.indexOf(close)
-    if (at !== -1) return closeDisplay(after.slice(0, at), after.slice(at + 2)) + nl
+    if (at !== -1) {
+      const shown = closeDisplay(after.slice(0, at), after.slice(at + 2))
+      return (shown === null ? text : shown) + nl
+    }
+    // Hold only a bare opener or one followed by LaTeX; prose like "$$ es el PID" goes through
+    const tail = after.trim()
+    if (tail && !tail.startsWith('\\')) return convertLine(text) + nl
     display = { close, raw: [text + nl], body: [after] }
     return ''
+  }
+
+  function release() {
+    const raw = display ? display.raw.join('') : ''
+    display = null
+    return raw
   }
 
   return {
@@ -293,12 +370,10 @@ export function createStream() {
         if (last && p === '') return
         out += line(p, last ? '' : '\n')
       })
-      if (final && display) {
-        out += display.raw.join('')
-        display = null
-      }
+      if (final) out += release()
       return out
     },
+    release,
   }
 }
 
@@ -312,13 +387,20 @@ export function register(on) {
     const r = await next(e)
     try {
       let stream = streams.get(e.message_id)
-      if (!stream) streams.set(e.message_id, (stream = createStream()))
+      if (!stream) {
+        // A message aborted before its final flush never deletes its entry: drop the oldest
+        if (streams.size >= MAX_STREAMS) streams.delete(streams.keys().next().value)
+        streams.set(e.message_id, (stream = createStream()))
+      }
       const shown = stream.push(r?.displayContent ?? e.delta, e.final)
       if (e.final) streams.delete(e.message_id)
       return { ...r, displayContent: shown }
     } catch (err) {
       $.ui.log('formulas: ' + err)
-      return r
+      // Start over clean and give back whatever display math was held
+      const held = streams.get(e.message_id)?.release() ?? ''
+      streams.delete(e.message_id)
+      return { ...r, displayContent: held + (r?.displayContent ?? e.delta) }
     }
   })
 }

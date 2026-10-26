@@ -87,3 +87,40 @@ test('stream: plain flush passes through untouched', () => {
 test('display \\[...\\] in the middle of a line is converted inline', () => {
   assert.equal(convertText('y \\[ \\forall x \\in \\mathbb{R} \\] fin'), 'y ∀x ∈ ℝ fin')
 })
+test('shell variables are not math', () => {
+  assert.equal(convertText('copia $HOME/$USER y PATH=$HOME/bin:$PATH'), 'copia $HOME/$USER y PATH=$HOME/bin:$PATH')
+})
+test('a span with an unknown command is left raw', () => {
+  assert.equal(convertText('la regex \\(\\d+\\) casa'), 'la regex \\(\\d+\\) casa')
+  assert.equal(convertText('$\\hat{x}$'), '$\\hat{x}$')
+})
+test('prose starting with $$ does not hold the message', () => {
+  const s = createStream()
+  assert.equal(s.push('$$ es el PID del shell\n', false), '$$ es el PID del shell\n')
+})
+test('a display block that runs too long is released raw', () => {
+  const s = createStream()
+  let out = s.push('$$\n', false)
+  for (let k = 0; k < 40; k++) out += s.push(`linea ${k}\n`, false)
+  assert.ok(out.startsWith('$$\nlinea 0\n'))
+})
+test('a fence inside an open display block releases it raw', () => {
+  const s = createStream()
+  assert.equal(s.push('$$\nx^2\n```\n$y^2$\n', false), '$$\nx^2\n```\n$y^2$\n')
+})
+test('nth root and escaped ampersand', () => {
+  assert.equal(latexToUnicode('\\sqrt[3]{x}'), '³√x')
+  assert.equal(convertText('$$a \\& b$$'), ' '.repeat(4) + 'a & b')
+})
+test('a long line of unmatched openers stays fast and unchanged', () => {
+  for (const unit of ['\\(', '\\[', '$$', '`']) {
+    const line = unit.repeat(50000)
+    const t = performance.now()
+    assert.equal(convertText(line), line)
+    assert.ok(performance.now() - t < 500, `${unit} took too long`)
+  }
+})
+test('deep nesting is left raw instead of throwing', () => {
+  const src = '$' + '{'.repeat(5000) + 'x' + '}'.repeat(5000) + '$'
+  assert.equal(convertText(src), src)
+})
