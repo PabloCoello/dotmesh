@@ -16,7 +16,9 @@
 # was owed anyway.
 #
 # What it names depends on the target, not on the language of the conversation:
-# a prose file gets the writing pair, anything else gets the code gates. Before
+# a prose file gets the writing pair, a frontend component or string file gets
+# the code gate plus castellano-peninsular for its visible text, and anything
+# else gets the code gates. Before
 # 2026-09-12 every first write got all three lines, and it showed: of the 251
 # sessions that had loaded anti-ai-style, 77 never wrote a prose file.
 #
@@ -91,6 +93,19 @@ es_prosa() {
   return 1
 }
 
+# Componentes de frontend y ficheros de cadenas: siguen siendo código, pero
+# suelen llevar el texto que el usuario lee en pantalla, que es redacción.
+# Una clase propia en lugar de añadir la línea al aviso de código, porque el
+# marcador es por clase: si la primera escritura de código de la sesión era un
+# .py, el aviso de un .tsx posterior se habría perdido. El HTML ya es prosa.
+es_interfaz() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    *.tsx | *.jsx | *.vue | *.svelte | *.astro | */locales/*.json | */i18n/*.json)
+      return 0 ;;
+  esac
+  return 1
+}
+
 clase="codigo"
 if [ "$tool" = "Bash" ]; then
   # $scan already has the quoted substrings and the /dev/… redirections dropped.
@@ -100,13 +115,17 @@ if [ "$tool" = "Bash" ]; then
   destinos=$(printf '%s' "$scan" | sed -E 's/>{1,2}[[:space:]]*/\n/g' | sed -E 's/[[:space:];|&)<].*$//' | tail -n +2)
   [ -z "$destinos" ] && destinos=${scan##* }
   while IFS= read -r destino; do
-    if [ -n "$destino" ] && es_prosa "$destino"; then clase="prosa"; break; fi
+    [ -n "$destino" ] || continue
+    if es_prosa "$destino"; then clase="prosa"; break; fi
+    es_interfaz "$destino" && clase="interfaz"
   done <<EOF
 $destinos
 EOF
 else
   ruta=$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')
-  es_prosa "$ruta" && clase="prosa"
+  if es_prosa "$ruta"; then clase="prosa"
+  elif es_interfaz "$ruta"; then clase="interfaz"
+  fi
 fi
 
 # Dedupe once per agent, not once per session. Subagents inherit the parent's
@@ -135,6 +154,16 @@ skill que posee esta fase con la herramienta Skill ANTES de escribir, no de
 memoria:
 - prosa que se entrega -> anti-ai-style, en el idioma que sea
 - si el documento va en español -> además castellano-peninsular
+Haber leído el fichero no sustituye a cargar la skill.
+EOF
+elif [ "$clase" = "interfaz" ]; then
+  read -r -d '' msg <<'EOF' || true
+Recordatorio dotmesh (uno por agente y tipo de fichero): vas a escribir un fichero de
+interfaz. Carga la skill que posee esta fase con la herramienta Skill ANTES de
+escribir, no de memoria:
+- antes de escribir código -> la puerta YAGNI de code-simplification
+- si lleva texto visible en español (botones, etiquetas, errores, cadenas
+  i18n) -> además castellano-peninsular, que remite a su interfaz.md
 Haber leído el fichero no sustituye a cargar la skill.
 EOF
 else
