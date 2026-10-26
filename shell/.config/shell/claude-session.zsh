@@ -393,7 +393,7 @@ function claude-session-cleanup() {
 # directory, so the path handed over is the checkout's, not the stowed one.
 function __claude_mod_dirs() {
     local mod real
-    for mod in "$HOME/.claude/mods/cierre-fase"; do
+    for mod in "$HOME/.claude/mods/cierre-fase" "$HOME/.claude/mods/formulas"; do
         real=$(readlink -f "$mod/hooks/register.js" 2>/dev/null) || continue
         [ -f "$real" ] || continue
         mod=${real%/hooks/register.js}
