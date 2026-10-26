@@ -246,6 +246,31 @@ msg=$(run_skills Bash 'cat > dos.sh' "" "$td")
 nombra "$msg" code-simplification && pass "por Bash, prosa y código no comparten marcador" \
   || fail "por Bash, el marcador de prosa silenció el aviso de código"
 
+# Interfaz: un componente de frontend es código, pero su texto visible es
+# redacción. Clase propia para que un .py anterior no se trague el aviso.
+td=$(mktemp -d -p "$TMP" tmpdir.XXXXXX)
+run_skills Write /tmp/app/main.py "" "$td" >/dev/null
+msg=$(run_skills Write /tmp/app/Boton.tsx "" "$td")
+nombra "$msg" castellano-peninsular && pass "un .tsx tras un .py nombra castellano-peninsular" \
+  || fail "el aviso de código anterior silenció el de interfaz"
+nombra "$msg" code-simplification && pass "un .tsx conserva la puerta YAGNI" \
+  || fail "un .tsx perdió la puerta YAGNI"
+msg=$(run_skills Write /tmp/app/Lista.vue "" "$td")
+[ -z "$msg" ] && pass "el segundo fichero de interfaz del mismo agente calla" \
+  || fail "avisó dos veces por interfaz al mismo agente"
+msg=$(run_skills Write /tmp/app/src/locales/es.json)
+nombra "$msg" castellano-peninsular && pass "un fichero de cadenas en locales/ es interfaz" \
+  || fail "un fichero de cadenas en locales/ no se clasificó como interfaz"
+msg=$(run_skills Write /tmp/app/package.json)
+nombra "$msg" castellano-peninsular && fail "un .json cualquiera recibió el aviso de interfaz" \
+  || pass "un .json fuera de locales/ sigue siendo código"
+msg=$(run_skills Bash 'cat > src/Cabecera.jsx')
+nombra "$msg" castellano-peninsular && pass "una redirección a .jsx se clasifica como interfaz" \
+  || fail "una redirección a .jsx no recibió el aviso de interfaz"
+msg=$(run_skills Bash 'cat > notas.md; cat > Boton.tsx')
+nombra "$msg" anti-ai-style && pass "si un destino es prosa, manda la prosa" \
+  || fail "un destino de interfaz tapó al de prosa"
+
 section "recordatorio de skills: nunca rompe la herramienta que lo dispara"
 # La cabecera del hook promete que nunca bloquea. Con dos ramas nuevas y
 # set -euo pipefail, eso hay que comprobarlo y no suponerlo.
@@ -258,7 +283,7 @@ skills_rc() {
   printf '%s' "$input" | TMPDIR="$td" bash "$SKILLS" >/dev/null 2>&1 || rc=$?
   printf '%s' "$rc"
 }
-for caso in "Write:/tmp/informe.md" "Write:/tmp/deploy.sh" "Bash:cat > notas.md" "Bash:ls -la" "Write:"; do
+for caso in "Write:/tmp/informe.md" "Write:/tmp/deploy.sh" "Write:/tmp/Boton.tsx" "Bash:cat > notas.md" "Bash:ls -la" "Write:"; do
   t=${caso%%:*}; a=${caso#*:}
   [ "$(skills_rc "$t" "$a")" -eq 0 ] && pass "sale con 0: $t ${a:-(sin ruta)}" \
     || fail "salió con estado distinto de cero: $t ${a:-(sin ruta)}"

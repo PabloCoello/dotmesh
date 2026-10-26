@@ -219,7 +219,8 @@ freno real que queda, así que no lo esquives por comodidad.
 - Prosa de cara al usuario en **español peninsular** (READMEs, documentos, fichas).
   Mantén el idioma existente al editar.
 - Las skills `castellano-peninsular` y `anti-ai-style` se cargan al redactar
-  prosa de documento, no al responder en el chat.
+  documentos, informes, texto visible de una interfaz o diapositivas, no al
+  responder en el chat.
 
 ## Skills compartidas
 

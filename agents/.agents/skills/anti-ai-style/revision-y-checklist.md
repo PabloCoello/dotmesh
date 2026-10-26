@@ -1,7 +1,7 @@
 # Revisión y checklist
 
 Abre este fichero cuando vayas a revisar un texto completo ya redactado.
-Contiene las reglas generales de reescritura, el checklist de 26 puntos y la
+Contiene las reglas generales de reescritura, el checklist de 27 puntos y la
 regla final de calidad.
 
 ---
@@ -68,6 +68,7 @@ Antes de dar un texto por bueno, comprobar:
 - ¿El tono cae en halago automático o complacencia innecesaria?
 - ¿Hay expresiones largas que pueden simplificarse?
 - ¿Se acumulan demasiados marcadores de duda en una misma frase?
+- ¿Hay frases cortas en fila que deberían enlazarse con un conector, o sentencias tajantes sin el porqué?
 - ¿La conclusión dice algo concreto o solo suena bien?
 - ¿Cada frase aporta información verificable, útil o necesaria?
 

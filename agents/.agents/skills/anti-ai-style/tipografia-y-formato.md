@@ -33,6 +33,9 @@ Sustituir siempre la raya por el signo que corresponda:
 ### Regla operativa
 No usar la raya larga (—). Reescribir el inciso con comas o paréntesis, la aclaración con dos puntos y el corte de ritmo con un punto.
 
+### Nota
+La raya es correcta en español según la RAE, que la usa en incisos y diálogos. Esta regla es una preferencia de estilo para los textos que redactas, no una corrección: no la apliques a citas literales ni la presentes como error en textos ajenos. Y al sustituirla por punto, no encadenes frases cortas (ver regla 26).
+
 ---
 
 ## 14. Uso excesivo de negritas
@@ -84,6 +87,9 @@ Convertir esas estructuras en prosa natural o en listas reales si corresponde.
 
 ### Regla operativa
 No usar pseudoencabezados dentro de una frase si la idea puede escribirse directamente.
+
+### Excepción
+En diapositivas, fichas de datos y texto de interfaz, la forma "Etiqueta: valor" y la viñeta sin verbo son el formato correcto ("Coste por respuesta: 4,20 €", "Estado: enviado"). La regla rige la prosa de documentos e informes. Ver `castellano-peninsular/presentaciones.md` e `interfaz.md`.
 
 ---
 
@@ -149,18 +155,18 @@ Uso inconsistente de comillas tipográficas curvas o estilizadas, especialmente 
 - comillas tipográficas en nombres de archivos, rutas, variables o cadenas literales
 
 ### Hacer en su lugar
-Usar comillas rectas cuando el contexto sea técnico o documental, y mantener consistencia en todo el texto.
+Usar comillas rectas en lo técnico (código, rutas, nombres de fichero, valores literales, instrucciones operativas en markdown) y, en la prosa en español de un documento o informe, las angulares de la norma española: « » en primer nivel, " " dentro de ellas, ' ' en tercer nivel. En inglés, las comillas del inglés. Un solo criterio por documento.
 
 ### Ejemplo
 **Antes:**  
-dijo “el proyecto”
+el cliente pidió “un informe más breve” y el campo “fecha_fin” llega vacío
 
 **Después:**  
-dijo "el proyecto"
+el cliente pidió «un informe más breve» y el campo `fecha_fin` llega vacío
 
 ### Regla operativa
 Mantener consistencia tipográfica.  
-En documentación técnica, markdown, código e instrucciones operativas, preferir comillas rectas.
+En código, rutas, literales y documentación operativa, comillas rectas o formato de código. En la prosa española de documentos e informes, comillas angulares. Nunca curvas inglesas “ ” en texto español.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: castellano-peninsular
-description: Spanish writing rules for peninsular formal Spanish. Load when drafting or editing Spanish prose that lands in a deliverable (README, doc, report, ficha). Chat replies to the user do not load it. Covers RAE orthography, peninsular lexicon, accents on capitals, and avoidance of voseo.
+description: Spanish writing rules for peninsular formal Spanish. Load when drafting or editing Spanish text that lands in a deliverable: README, doc, report, informe, ficha, visible UI text in a frontend (JSX/TSX, Vue, Svelte, HTML, i18n string files) or a slide deck (.pptx, slides artifact). Chat replies to the user do not load it. Covers RAE orthography, peninsular lexicon, accents on capitals, avoidance of voseo, syntactic calques, number and date format, UI microcopy and slide text.
 ---
 
 # Castellano peninsular
@@ -8,6 +8,15 @@ description: Spanish writing rules for peninsular formal Spanish. Load when draf
 ## Regla general
 Toda la redacción en español usa la variante peninsular formal.
 La ortografía sigue la norma actual de la RAE, incluidas las tildes en mayúsculas.
+
+## Ficheros por formato
+Este fichero rige cualquier texto en español. Según lo que estés escribiendo, abre además el que corresponda:
+
+| Fichero | Cuándo abrirlo |
+|---|---|
+| [`calcos-y-numeros.md`](calcos-y-numeros.md) | Siempre que el texto tenga más de un párrafo o lleve cifras, fechas, porcentajes o importes: calcos sintácticos del inglés y formato español de números y fechas |
+| [`interfaz.md`](interfaz.md) | Texto visible de una interfaz: botones, menús, etiquetas de formulario, mensajes de error, estados vacíos, ficheros de traducción |
+| [`presentaciones.md`](presentaciones.md) | Diapositivas: titulares, viñetas y notas del orador |
 
 ## Léxico
 - "ordenador", no "computadora".
@@ -18,6 +27,7 @@ La ortografía sigue la norma actual de la RAE, incluidas las tildes en mayúscu
 - "vosotros" cuando aplique, no "ustedes" como segunda persona plural informal.
 - "zumo" en contexto general; "jugo" solo para acepciones específicas.
 - "patata", no "papa".
+- "costes", no "costos"; "centrarse en", no "enfocarse en"; "conducir", no "manejar".
 
 ## Tratamiento
 - Por defecto, segunda persona del singular ("tú").
@@ -42,15 +52,20 @@ La ortografía sigue la norma actual de la RAE, incluidas las tildes en mayúscu
 - "Realizar" cuando vale "hacer".
 - "Permite + infinitivo" cuando vale el verbo directo: "permite ejecutar" → "ejecuta".
 - "Soportar" como traducción de "support" en sentido técnico → usar "admitir" o "ser compatible con".
-- "Aplicar" sin determinante en castellano: "aplicar los cambios", no "aplicar cambios".
 - "Asumir" como traducción de "assume" → en castellano significa "hacerse cargo"; usar "suponer" o "dar por hecho".
 - "Eventualmente" en sentido temporal de "finalmente" → en castellano significa "ocasionalmente".
+- "Aplicar a un puesto" o "aplicar a una beca" → "solicitar", "optar a", "presentarse a".
+
+Los calcos sintácticos (pasiva perifrástica, gerundio de posterioridad, "a nivel de", "es por eso que") están en `calcos-y-numeros.md`.
 
 ## Estilo técnico
 - Inicia frases con verbos cuando sea posible: "Lee el archivo X", no "Hay que leer el archivo X".
-- Imperativo en instrucciones, no infinitivo: "Ejecuta", no "Ejecutar" (salvo en títulos cortos).
+- Imperativo en instrucciones dentro de un documento, no infinitivo: "Ejecuta", no "Ejecutar" (salvo en títulos cortos). En botones y menús de una interfaz rige lo contrario; ver `interfaz.md`.
 - Listas con punto final solo si los elementos son frases completas.
 - Usa "que" antes de subordinada en lugar de gerundio: "el script que procesa los datos", no "el script procesando los datos".
+
+## Comillas
+En la prosa de un documento o informe, comillas angulares « » en primer nivel, inglesas " " dentro de ellas y simples ' ' en tercer nivel. En código, rutas, nombres de fichero, valores literales y bloques de markdown técnico, comillas rectas o acentos graves de código. Dentro de un mismo documento, el mismo criterio de principio a fin.
 
 ## Comprobación final
 Antes de cerrar un texto, verifica:
@@ -59,3 +74,5 @@ Antes de cerrar un texto, verifica:
 - Anglicismos tratados de forma consistente en todo el texto.
 - Tratamiento "tú" o "usted" coherente en todo el documento.
 - Sin traducciones literales del inglés que sonarían artificiales en castellano.
+- Números, fechas y porcentajes en formato español.
+- Si es interfaz o presentación, las comprobaciones del fichero correspondiente.

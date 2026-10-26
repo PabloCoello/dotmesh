@@ -138,7 +138,7 @@ Enforcement rules:
 
 - **Match effort to scope.** Trivial single-file, single-function edits skip the flow. The flow is mandatory for anything touching multiple files or introducing behaviour. For a multi-file change with **three or more distinct steps**, write at least a short `.ai/tasks/<slug>/plan.md` before coding and then implement it inline; reserve subagent orchestration for work that does not fit one session, needs an isolated tree or toolset, or has phases that can run in parallel.
 - **Specificity wins.** When two skills overlap, the more specific phase owns the rule; the conventions in this file override any skill.
-- **Spanish prose in deliverables** (READMEs, docs, fichas) loads `castellano-peninsular` and `anti-ai-style`. Chat replies load neither: they are working conversation, not final output. When the user asks for an explanation in chat, give it in business terms — what it does, why it matters, what changes — with technical detail as support, not as the lead.
+- **Spanish text in deliverables** (READMEs, docs, reports, fichas, visible UI text in a frontend, slide decks) loads `castellano-peninsular` and `anti-ai-style`; the first routes UI text and slides to their own files, where some prose rules do not apply. Chat replies load neither: they are working conversation, not final output. When the user asks for an explanation in chat, give it in business terms — what it does, why it matters, what changes — with technical detail as support, not as the lead.
 
 ## Long implementations and context
 

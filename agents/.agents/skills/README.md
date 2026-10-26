@@ -50,7 +50,7 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 | Skill | Cuándo usarla |
 |---|---|
 | `anti-ai-style` | Para revisar o redactar textos evitando estilo genérico de IA. |
-| `castellano-peninsular` | Para textos en español peninsular formal. |
+| `castellano-peninsular` | Para textos en español peninsular formal: documentos, informes, texto de interfaz y diapositivas, con un fichero propio para calcos y números, interfaz y presentaciones. |
 | `doc-review` | Para leer los comentarios anclados por línea que deja mesh-review en `.ai/review/` (esquema en `doc-review/schema.json`), actuar sobre el documento por tipo y prioridad, y cerrar la revisión marcando cada comentario como resuelto. Va emparejada con la extensión mesh-review de VS Code y el cliente de Neovim. |
 | `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |
 | `flow-artifacts` | Para las fases en las que la persona tiene que leer mucho o decidir varias cosas a la vez (interrogar un plan con tres o más preguntas cerradas e independientes, revisar una spec larga, informar de resultados medidos, seguir una tanda larga): publica una página de artifact en claude.ai con la paleta dotmesh, que abre con un resumen y pliega el detalle. La persona la afina con comentarios anclados que envía a Claude y contesta lo cerrado con un clic. Se decide en cada fase. Solo Claude Code, porque necesita la herramienta Artifact; se carga junto a `artifact-design`. |
