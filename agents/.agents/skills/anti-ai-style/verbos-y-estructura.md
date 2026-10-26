@@ -152,3 +152,41 @@ Usar un único marcador de incertidumbre cuando realmente haga falta.
 ### Regla operativa
 Usar solo el grado de cautela necesario.  
 No apilar marcadores de duda en una misma frase.
+
+---
+
+## 26. Ritmo entrecortado y tono tajante
+
+### Problema
+Al podar el relleno es fácil irse al extremo contrario: frases cortas en fila,
+cada una con una afirmación rotunda y ningún conector entre ellas. El texto
+resultante suena a telegrama o a traducción literal del inglés, y obliga al
+lector a reconstruir solo cómo se relacionan las ideas.
+
+### Evitar
+- tres o más frases seguidas de menos de diez palabras sin que el contenido lo pida
+- afirmaciones encadenadas que dependen unas de otras sin decir cómo ("El modelo falla. Los datos son escasos. Hace falta otra fuente.")
+- sentencias sin matiz donde la evidencia es parcial
+- cortar con punto lo que es una causa, una consecuencia o un contraste
+
+### Hacer en su lugar
+- unir las ideas relacionadas con el conector que expresa su relación: porque, así que, aunque, de modo que, mientras que, en cambio
+- variar la longitud: una frase larga que explica, una corta que remata cuando hace falta
+- matizar una sola vez cuando la evidencia es parcial (regla 23), sin apilar dudas
+- explicar el porqué en lugar de dar solo el veredicto
+
+### Ejemplo
+**Antes:**  
+"El modelo falla en Galicia. Los datos son escasos. Hace falta otra fuente. La encuesta regional es la opción."
+
+**Después:**  
+"El modelo falla en Galicia porque apenas hay datos de la región, así que proponemos completarlos con la encuesta regional, que es la única fuente con muestra suficiente."
+
+### Regla operativa
+Si al leer en voz alta el texto suena a lista de sentencias, busca qué relación
+hay entre ellas y escríbela con un conector. La frase corta se reserva para
+cuando aporta énfasis real, no como forma por defecto.
+
+### Dónde no aplica
+En titulares y viñetas de diapositivas ni en texto de interfaz, que son breves a
+propósito (ver `castellano-peninsular/presentaciones.md` e `interfaz.md`).

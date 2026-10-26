@@ -1,6 +1,6 @@
 ---
 name: anti-ai-style
-description: Writing rules for prose that does not read as AI-generated. Covers inflated importance, promotional wording, vague attribution, forced rules of three, em dash and bold abuse, chatbot fingerprints. Load before drafting or editing prose that lands in a deliverable (README, doc, report, ficha). Chat replies to the user do not load it. Pair with castellano-peninsular for Spanish.
+description: Writing rules for prose that does not read as AI-generated. Covers inflated importance, promotional wording, vague attribution, forced rules of three, em dash and bold abuse, chatbot fingerprints. Load before drafting or editing prose that lands in a deliverable (README, doc, report, informe, ficha) and before writing visible UI text or slide decks, where some rules apply differently. Chat replies to the user do not load it. Pair with castellano-peninsular for Spanish.
 ---
 
 # Instrucciones de estilo anti-IA
@@ -53,17 +53,17 @@ Siempre que sea posible, sustituir frases abstractas por:
 
 # Familias de reglas
 
-Al revisar, abre el fichero de la familia que corresponda al tipo de problema detectado. Al redactar desde cero, escribe con el criterio rector y pasa después el borrador por las veintiséis preguntas del checklist de `revision-y-checklist.md`; la que falle te dice de qué familia es el problema y qué fichero abrir en esta tabla. Cada fichero desarrolla los patrones con ejemplos y reglas operativas.
+Al revisar, abre el fichero de la familia que corresponda al tipo de problema detectado. Al redactar desde cero, escribe con el criterio rector y pasa después el borrador por las veintisiete preguntas del checklist de `revision-y-checklist.md`; la que falle te dice de qué familia es el problema y qué fichero abrir en esta tabla. Cada fichero desarrolla los patrones con ejemplos y reglas operativas.
 
 | Fichero | Cuándo abrirlo |
 |---|---|
 | [`inflacion-y-promocion.md`](inflacion-y-promocion.md) | Exageración de importancia, lenguaje publicitario, clichés de resiliencia, rangos retóricos, conclusiones vacías |
 | [`atribucion-y-fuentes.md`](atribucion-y-fuentes.md) | Name-dropping sin contenido, sujetos difusos, disclaimers vagos |
-| [`verbos-y-estructura.md`](verbos-y-estructura.md) | Gerundios pseudoanalíticos, perífrasis que evitan verbos simples, paralelismos negativos, frases de relleno, cautela verbal apilada |
+| [`verbos-y-estructura.md`](verbos-y-estructura.md) | Gerundios pseudoanalíticos, perífrasis que evitan verbos simples, paralelismos negativos, frases de relleno, cautela verbal apilada, ritmo entrecortado y tono tajante |
 | [`retorica-y-enumeracion.md`](retorica-y-enumeracion.md) | Vocabulario típico de IA, regla de tres forzada, rotación de sinónimos |
 | [`tipografia-y-formato.md`](tipografia-y-formato.md) | Raya larga, negritas decorativas, pseudoencabezados, mayúsculas anglosajonas, emojis, comillas, punto medio |
 | [`tono-y-chatbot.md`](tono-y-chatbot.md) | Huellas de chatbot, tono complaciente o adulador |
-| [`revision-y-checklist.md`](revision-y-checklist.md) | Revisión de un texto completo: reglas generales, checklist de 26 puntos, regla final de calidad |
+| [`revision-y-checklist.md`](revision-y-checklist.md) | Revisión de un texto completo: reglas generales, checklist de 27 puntos, regla final de calidad |
 
 ---
 
