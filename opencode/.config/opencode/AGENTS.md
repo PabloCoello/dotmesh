@@ -83,6 +83,9 @@ sobre este archivo.
 
 - Prosa de cara al usuario en **español peninsular** (READMEs, documentos, fichas).
   Mantén el idioma existente al editar.
+- Las skills `castellano-peninsular` y `anti-ai-style` se cargan al redactar
+  documentos, informes, texto visible de una interfaz o diapositivas, no al
+  responder en el chat.
 
 ## Skills compartidas
 

@@ -115,7 +115,7 @@ El core pack diario incluye estas skills de ingeniería:
 También se mantienen skills locales adicionales:
 
 - `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
-- `castellano-peninsular`: redacción en español peninsular formal.
+- `castellano-peninsular`: redacción en español peninsular formal, también para texto de interfaz y diapositivas.
 - `grilling`, `grill-me`: entrevistas convergentes para afinar planes antes de implementar; `grilling` registra glosario y ADR cuando el plan los pide.
 - `domain-modeling`: mantiene la terminología y el glosario del dominio.
 - `handoff`: compacta el estado de una sesión para retomarla en otra.

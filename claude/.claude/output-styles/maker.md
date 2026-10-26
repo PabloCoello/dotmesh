@@ -118,7 +118,8 @@ costs. Handing off across a real session boundary is what lowers it.
 ## Language
 
 Code and inline comments default to English. Prose that lands in a deliverable
-(READMEs, docs, fichas) follows the project language; for Spanish, load
+(READMEs, docs, reports, fichas, visible UI text, slide decks) follows the
+project language; for Spanish, load
 `castellano-peninsular` and `anti-ai-style` before drafting. Chat replies to the
 user load neither. When the user asks for an explanation in chat, give it in
 business terms — what it does, why it matters, what changes — with technical
