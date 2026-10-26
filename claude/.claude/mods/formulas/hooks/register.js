@@ -114,6 +114,15 @@ function parseBody(s, i, stop) {
 }
 
 function command(s, i, name) {
+  if (++ctx.depth > MAX_DEPTH) throw TOO_DEEP
+  try {
+    return commandBody(s, i, name)
+  } finally {
+    ctx.depth--
+  }
+}
+
+function commandBody(s, i, name) {
   if (name in SYMBOLS) {
     if (PREFIX.has(name)) while (s[i] === ' ') i++
     return [SYMBOLS[name], i]
@@ -188,12 +197,12 @@ function wrap(text) {
 }
 
 export function latexToUnicode(src) {
+  ctx = { unknown: false, depth: 0 }
   return parse(src, 0, null)[0].replace(/[ \t]{2,}/g, ' ').trim()
 }
 
 // Null when the span holds something we cannot render faithfully
 function convert(src) {
-  ctx = { unknown: false, depth: 0 }
   try {
     const text = latexToUnicode(src)
     return ctx.unknown ? null : text
@@ -288,7 +297,7 @@ function convertLine(line) {
 
 // Null when the block cannot be rendered faithfully; the caller shows the source instead
 function renderDisplay(src) {
-  const text = convert(src.replace(/\n/g, ' ').replace(/(?<!\\)&/g, ''))
+  const text = convert(src.replace(/\n/g, ' ').replace(/\\[\s\S]|&/g, (m) => (m === '&' ? '' : m)))
   if (text === null) return null
   return text
     .split('\n')
@@ -319,12 +328,12 @@ export function createStream() {
     const m = FENCE.exec(text)
     if (display) {
       // A fence or a runaway block means this was never display math: show what was held
-      if (m || display.raw.length >= MAX_HELD) {
-        const held = release()
-        return held + line(text, nl)
+      if (m) return release() + line(text, nl)
+      const at = text.indexOf(display.close)
+      if (at === -1 && (display.raw.length >= MAX_HELD || text.length > MAX_LINE)) {
+        return release() + convertLine(text) + nl
       }
       display.raw.push(text + nl)
-      const at = text.indexOf(display.close)
       if (at === -1) {
         display.body.push(text)
         return ''
@@ -363,17 +372,23 @@ export function createStream() {
 
   return {
     push(delta, final) {
-      let out = ''
-      const parts = delta.split('\n')
-      parts.forEach((p, k) => {
-        const last = k === parts.length - 1
-        if (last && p === '') return
-        out += line(p, last ? '' : '\n')
-      })
-      if (final) out += release()
-      return out
+      const before = display ? display.raw.join('') : ''
+      try {
+        let out = ''
+        const parts = delta.split('\n')
+        parts.forEach((p, k) => {
+          const last = k === parts.length - 1
+          if (last && p === '') return
+          out += line(p, last ? '' : '\n')
+        })
+        if (final) out += release()
+        return out
+      } catch (err) {
+        // Show what was held before this flush and the flush itself, unconverted
+        display = null
+        throw Object.assign(err, { shown: before + delta })
+      }
     },
-    release,
   }
 }
 
@@ -397,10 +412,8 @@ export function register(on) {
       return { ...r, displayContent: shown }
     } catch (err) {
       $.ui.log('formulas: ' + err)
-      // Start over clean and give back whatever display math was held
-      const held = streams.get(e.message_id)?.release() ?? ''
-      streams.delete(e.message_id)
-      return { ...r, displayContent: held + (r?.displayContent ?? e.delta) }
+      if (e.final) streams.delete(e.message_id)
+      return err.shown === undefined ? r : { ...r, displayContent: err.shown }
     }
   })
 }

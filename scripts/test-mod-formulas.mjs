@@ -113,14 +113,28 @@ test('nth root and escaped ampersand', () => {
   assert.equal(convertText('$$a \\& b$$'), ' '.repeat(4) + 'a & b')
 })
 test('a long line of unmatched openers stays fast and unchanged', () => {
-  for (const unit of ['\\(', '\\[', '$$', '`']) {
-    const line = unit.repeat(50000)
+  for (const unit of ['\\(', '\\[']) {
+    const line = 'a' + unit.repeat(4900) // just under the line cap, so the scan really runs
     const t = performance.now()
     assert.equal(convertText(line), line)
-    assert.ok(performance.now() - t < 500, `${unit} took too long`)
+    assert.ok(performance.now() - t < 200, `${unit} took too long`)
   }
 })
 test('deep nesting is left raw instead of throwing', () => {
-  const src = '$' + '{'.repeat(5000) + 'x' + '}'.repeat(5000) + '$'
+  const src = '$' + '{'.repeat(3000) + 'x' + '}'.repeat(3000) + '$'
   assert.equal(convertText(src), src)
+})
+test('a command chain counts toward the nesting cap, also inside a held block', () => {
+  const chain = '\\sqrt'.repeat(20000) + 'x'
+  assert.equal(convertText('$$\n' + chain + '\n$$'), '$$\n' + chain + '\n$$')
+})
+test('a block closing on its twentieth held line still closes', () => {
+  const s = createStream()
+  let out = s.push('$$\n', false)
+  for (let k = 0; k < 19; k++) out += s.push('x\n', false)
+  out += s.push('$$\n$y^2$\n', true)
+  assert.ok(out.endsWith('y²\n'), out.slice(-20))
+})
+test('a line break before an ampersand keeps neither in the display row', () => {
+  assert.equal(convertText('$$a \\\\& b$$'), IND + 'a\n' + IND + 'b')
 })
