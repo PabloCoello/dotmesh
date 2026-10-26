@@ -173,7 +173,7 @@ function inlineMath(src) {
   return escapeMarkdown(latexToUnicode(src))
 }
 
-// Inline pass over one line outside fences: skips code spans, converts \(..\), $$..$$ and $..$
+// Inline pass over one line outside fences: skips code spans, converts \(..\), \[..\], $$..$$ and $..$
 function convertLine(line) {
   let out = ''
   let i = 0
@@ -192,10 +192,11 @@ function convertLine(line) {
     } else if (c === '\\' && line[i + 1] === '$') {
       out += '\\$'
       i += 2
-    } else if (c === '\\' && line[i + 1] === '(') {
-      const end = line.indexOf('\\)', i + 2)
+    } else if (c === '\\' && (line[i + 1] === '(' || line[i + 1] === '[')) {
+      const close = line[i + 1] === '(' ? '\\)' : '\\]'
+      const end = line.indexOf(close, i + 2)
       if (end === -1) {
-        out += '\\('
+        out += line.slice(i, i + 2)
         i += 2
       } else {
         out += inlineMath(line.slice(i + 2, end))

@@ -84,3 +84,6 @@ test('stream: plain flush passes through untouched', () => {
   const s = createStream()
   assert.equal(s.push('sin fórmulas\n', false), 'sin fórmulas\n')
 })
+test('display \\[...\\] in the middle of a line is converted inline', () => {
+  assert.equal(convertText('y \\[ \\forall x \\in \\mathbb{R} \\] fin'), 'y ∀x ∈ ℝ fin')
+})
