@@ -220,6 +220,19 @@ The agent system has two layers, identical in concept across the three tools.
   the mod too; unset the variable when an arm must run without it. Without the
   block, an orchestrator reads the state with `git log` and `git status`.
 
+  The loader names a second mod, `formulas` (`claude/.claude/mods/formulas/`),
+  which sits outside the flow. On `classic.MessageDisplay` it shows the LaTeX in
+  an assistant message as Unicode: `$x^2$` reads x², `\(\alpha \leq \beta\)`
+  reads α ≤ β, and `$$…$$` or `\[…\]` on lines of their own get an indented
+  line. Only the terminal changes; the stored message and what the model reads
+  stay as written. It skips fenced blocks and inline code, leaves money alone
+  with pandoc's rule (no space inside the `$` pair, no digit after the closing
+  one), escapes leftover `*` and `_` so markdown does not turn them into
+  emphasis, and holds a display block that spans flushes until it closes,
+  releasing it raw if the message ends first. Matrices, stacked fractions and
+  limits above or below are out of scope, and an unknown command stays as
+  written. It runs no commands. Tests: `node --test scripts/test-mod-formulas.mjs`.
+
   The template registers ten hooks in total. Besides the four above, four
   are documented with what they serve: `block-dangerous-git` (parity table),
   `offer-terminal-browser` (the `terminal-browser/` package),
