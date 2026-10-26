@@ -330,7 +330,7 @@ export function createStream() {
       // A fence or a runaway block means this was never display math: show what was held
       if (m) return release() + line(text, nl)
       const at = text.indexOf(display.close)
-      if (at === -1 && (display.raw.length >= MAX_HELD || text.length > MAX_LINE)) {
+      if (text.length > MAX_LINE || (at === -1 && display.raw.length >= MAX_HELD)) {
         return release() + convertLine(text) + nl
       }
       display.raw.push(text + nl)

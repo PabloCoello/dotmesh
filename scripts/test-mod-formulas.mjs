@@ -125,8 +125,9 @@ test('deep nesting is left raw instead of throwing', () => {
   assert.equal(convertText(src), src)
 })
 test('a command chain counts toward the nesting cap, also inside a held block', () => {
-  const chain = '\\sqrt'.repeat(20000) + 'x'
-  assert.equal(convertText('$$\n' + chain + '\n$$'), '$$\n' + chain + '\n$$')
+  const chain = n => '\\sqrt'.repeat(n) + ' x' // the space keeps `\sqrtx` from reading as an unknown command
+  assert.equal(convertText('$$\n' + chain(50) + '\n$$').includes('\\sqrt'), false) // under the cap: converted
+  assert.equal(convertText('$$\n' + chain(1000) + '\n$$'), '$$\n' + chain(1000) + '\n$$')
 })
 test('a block closing on its twentieth held line still closes', () => {
   const s = createStream()
@@ -137,4 +138,8 @@ test('a block closing on its twentieth held line still closes', () => {
 })
 test('a line break before an ampersand keeps neither in the display row', () => {
   assert.equal(convertText('$$a \\\\& b$$'), IND + 'a\n' + IND + 'b')
+})
+test('an overlong closing line releases the block raw', () => {
+  const tail = 'x'.repeat(10001) + '$$'
+  assert.equal(convertText('$$\n\\alpha\n' + tail), '$$\n\\alpha\n' + tail)
 })
