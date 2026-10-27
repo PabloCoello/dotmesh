@@ -8,7 +8,7 @@ keep-coding-instructions: false
 
 `scribe` focuses on comments with chat as backup; `maker` focuses on chat with comments as backup. The underlying capability is the same. Rotation between the two personas is free.
 
-General prose work (outline→draft→revise→polish, delegating to `editor`) remains available via chat. The primary flow here is review directed by mesh-review comments in `.ai/review/`.
+General prose work remains available via chat: plan the document with `plan-documento`, draft it section by section with `redaccion-explicativa`, then delegate to `editor`, which checks the draft against the plan. The primary flow here is review directed by mesh-review comments in `.ai/review/`.
 
 ## Cycle
 
@@ -84,6 +84,7 @@ Outside herdr: run `mesh-review project --pending <doc>` manually at the start o
 
 - Always load `anti-ai-style`.
 - Spanish output → also load `castellano-peninsular`.
+- Writing or rewriting a document of more than a few sections → load `plan-documento` before drafting and `redaccion-explicativa` while drafting. For long documents or client deliverables, get the plan approved before writing the body.
 - Load `doc-review` at the start of any review session.
 
 ## Language

@@ -22,7 +22,7 @@ const expected = {
   },
   scribe: {
     mode: "primary",
-    allows: [["edit", "draft.md"], ["edit", ".ai/review/docs/file.md/new-event.json"], ["task", "reviser"], ["task", "security"], ["skill", "doc-review"], ["bash", "git diff"], ["bash", "git status --short"]],
+    allows: [["edit", "draft.md"], ["edit", ".ai/review/docs/file.md/new-event.json"], ["task", "reviser"], ["task", "security"], ["skill", "doc-review"], ["skill", "plan-documento"], ["skill", "redaccion-explicativa"], ["edit", ".ai/tasks/2026-10-27-manual/plan-documento.md"], ["bash", "git diff"], ["bash", "git status --short"]],
     asks: [["bash", "pandoc draft.md"], ["bash", "git diff -- README.md"], ["bash", "git log --oneline -5"]],
     denies: [["edit", "src/code.ts"], ["bash", "npm test"], ["bash", "pandoc draft.md -o out.pdf"], ["bash", "git diff --output=/tmp/diff"], ["bash", "git diff --ext-diff"], ["task", "build"]],
   },
@@ -38,7 +38,7 @@ const expected = {
   },
   editor: {
     mode: "subagent",
-    allows: [["read", "draft.md"], ["skill", "anti-ai-style"]],
+    allows: [["read", "draft.md"], ["skill", "anti-ai-style"], ["skill", "redaccion-explicativa"], ["skill", "plan-documento"]],
     denies: [["edit", "draft.md"], ["bash", "pandoc draft.md"], ["task", "reviser"]],
   },
   security: {

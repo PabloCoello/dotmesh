@@ -136,7 +136,9 @@ integrating summaries and running gates costs what the work costs.
 Destructive git and Stow are off-limits without an explicit request. No LLM
 attribution in git metadata. No secrets in the repo. Code and comments in
 English; Spanish text in deliverables (docs, reports, UI text, slides) loads `castellano-peninsular` +
-`anti-ai-style` (chat replies load neither). Explanations asked for in chat
+`anti-ai-style` (chat replies load neither); a document of more than a few
+sections also loads `plan-documento` before drafting and `redaccion-explicativa`
+while drafting. Explanations asked for in chat
 come in business terms — what it does, why it matters — with technical detail
 as support.
 

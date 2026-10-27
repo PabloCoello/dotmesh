@@ -197,6 +197,10 @@ nombra "$msg" anti-ai-style && pass "un .md nombra anti-ai-style" \
   || fail "un .md no nombró anti-ai-style"
 nombra "$msg" castellano-peninsular && pass "un .md nombra castellano-peninsular" \
   || fail "un .md no nombró castellano-peninsular"
+nombra "$msg" plan-documento && pass "un .md nombra plan-documento" \
+  || fail "un .md no nombró plan-documento"
+nombra "$msg" redaccion-explicativa && pass "un .md nombra redaccion-explicativa" \
+  || fail "un .md no nombró redaccion-explicativa"
 nombra "$msg" code-simplification && fail "un .md arrastró la puerta YAGNI" \
   || pass "un .md no nombra la puerta YAGNI"
 

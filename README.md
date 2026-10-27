@@ -116,6 +116,8 @@ También se mantienen skills locales adicionales:
 
 - `anti-ai-style`: revisión y redacción con estilo sobrio, sin patrones típicos de IA.
 - `castellano-peninsular`: redacción en español peninsular formal, también para texto de interfaz y diapositivas.
+- `plan-documento`: plan de un documento largo antes de redactarlo, con su estructura, el orden en que se presentan los conceptos y una ficha por apartado.
+- `redaccion-explicativa`: redacción que lleva al lector a lo largo del texto en lugar de comprimir el significado.
 - `grilling`, `grill-me`: entrevistas convergentes para afinar planes antes de implementar; `grilling` registra glosario y ADR cuando el plan los pide.
 - `domain-modeling`: mantiene la terminología y el glosario del dominio.
 - `handoff`: compacta el estado de una sesión para retomarla en otra.
