@@ -78,9 +78,19 @@ decide:
 Los conceptos difíciles se presentan en dos tiempos: primero la intuición, en
 el apartado donde hace falta por primera vez, y después el detalle, en un
 apartado propio o cuando el lector ya tiene con qué entenderlo. Como
-referencia, ningún apartado debería introducir más de tres conceptos nuevos;
-si el mapa obliga a ello, el apartado es demasiado grande o el orden no es el
-adecuado.
+referencia, ningún apartado debería *explicar* o *desarrollar* más de tres
+conceptos nuevos; si el mapa obliga a ello, el apartado es demasiado grande o
+el orden no es el adecuado. Tres casos no cuentan para ese límite:
+
+- **Las menciones que anuncian.** Una lista de ideas que el documento explicará
+  más adelante («a lo largo del manual aparecen el estimando, el multiverso o
+  el placebo») es una mención, siempre que el texto diga que se explicarán.
+- **El contenido literal.** Una salida de programa o un fragmento de código
+  puede nombrar conceptos que aún no se han presentado; el texto avisa de que
+  no hace falta entenderlos todavía y dice dónde se explican.
+- **Los conceptos compuestos.** Una estructura con varias piezas que solo se
+  entienden juntas (por ejemplo, las fases de un proceso mostradas en un
+  diagrama) cuenta como un concepto, aunque cada pieza se nombre.
 
 ### 4. Escribir la ficha de cada apartado
 
@@ -127,8 +137,11 @@ Antes de darlo por cerrado, comprueba:
 
 ### 7. Aprobación
 
-En documentos largos (más de cinco apartados o unas 3000 palabras) o
-entregables para clientes, el plan se presenta a la persona antes de redactar.
+El plan se presenta a la persona antes de redactar cuando se cumple cualquiera
+de estas condiciones: el documento tendrá más de cinco apartados, superará unas
+3000 palabras o es un entregable para un cliente. Si la persona ha pedido
+expresamente hacer el plan y la redacción de una vez, se respeta su encargo:
+el plan se escribe igual y se le menciona al entregar.
 En Claude Code, cuando el plan sea extenso, publícalo como página con
 `flow-artifacts` para que pueda comentarlo; si no, muéstralo en el chat. Espera
 su respuesta (`wait-for-user`) y no empieces a redactar hasta tener el visto

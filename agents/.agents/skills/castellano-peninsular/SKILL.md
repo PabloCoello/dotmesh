@@ -52,7 +52,8 @@ Un documento, un informe o un manual se escriben en registro escrito formal, no 
 
 ## Anglicismos
 - Términos técnicos consolidados se mantienen en inglés sin cursiva: commit, build, deploy, framework, log, dashboard.
-- "Comando" (admitido por la RAE y habitual), no "orden" como traducción forzada de "command".
+- "Comando" (admitido por la RAE y habitual), no "orden" como traducción forzada de "command". Si el proyecto fija otro término en su glosario (`CONTEXT.md` o equivalente), manda el glosario.
+- Los términos propios de una herramienta o de su glosario se respetan aunque sean anglicismos no asentados ("gate", "preregistro"): se explican la primera vez, pero no se traducen.
 - No los traduzcas forzadamente: "hacer un commit", no "realizar una confirmación".
 - Términos no consolidados, tradúcelos o explícalos: "boundary" → "frontera"; "fixture" → "datos de prueba".
 - Mantén consistencia: si decides cursiva para anglicismos, aplícala a todos en el mismo documento.

@@ -101,7 +101,7 @@ formato español.
 - Horas en formato de 24 horas con dos puntos: 17:30.
 
 ### Cifras en prosa
-- Del uno al nueve, en letra cuando no acompañan a una unidad ("tres entrevistas"); a partir de diez, en cifra.
+- Del uno al nueve, en letra cuando no acompañan a una unidad ("tres entrevistas"); a partir de diez, preferiblemente en cifra. Las cantidades redondas o aproximadas que se dicen en pocas palabras pueden ir en letra ("treinta años", "un centenar de casos"), que la RAE admite en prosa. Lo que importa es la coherencia dentro del documento.
 - Una frase no empieza por cifra: "Doce participantes abandonaron", no "12 participantes abandonaron".
 - Intervalos con preposiciones: "entre 2020 y 2024", "de 10 a 15 minutos". El guion solo en tablas: 2020-2024.
 

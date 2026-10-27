@@ -112,6 +112,27 @@ deducible, tropieza en cada hueco.
   decisiones» que «es el sitio donde la decisión queda escrita». Concreto
   significa preciso, no coloquial.
 
+### Desarrollar sin inventar
+
+Desarrollar una idea consiste en explicar mejor lo que dice la fuente, no en
+añadirle hechos. Las explicaciones, los enlaces y los ejemplos salen del
+material disponible o de conocimiento general del campo que el lector
+reconocería como cierto. Si para explicar algo hace falta un dato que la
+fuente no da (una cifra, una causa, el motivo de una decisión), no lo deduzcas
+ni lo supongas: pregúntalo o deja la frase marcada como pendiente. Una
+explicación inventada es peor que un hueco, porque el lector no puede
+distinguirla.
+
+### Contenido literal
+
+Las salidas de programas, el código, las citas y los fragmentos de ficheros se
+reproducen sin cambiar una coma de su contenido. Ponerlos en un bloque de
+código o marcar una ruta como código no cuenta como cambio. Ese contenido puede
+nombrar conceptos que todavía no se han explicado; en ese caso, la frase que lo
+presenta lo dice («no hace falta entender todavía cada línea; el capítulo 6
+explica los universos») y el texto se centra en lo que el lector sí necesita
+ver en él.
+
 ## Entre apartados
 
 - **Al abrir un apartado**, conecta con lo que el lector ya sabe y di qué va a
@@ -146,6 +167,7 @@ Relee cada apartado como el lector del plan y responde:
 - ¿Las ideas difíciles tienen un ejemplo?
 - ¿Sé cómo llegué a este apartado y adónde me lleva el siguiente?
 - Si el apartado es largo, ¿termina recordándome lo esencial?
+- ¿Hay alguna afirmación que no salga de la fuente ni del conocimiento general del campo?
 
 Si la respuesta a alguna pregunta apunta a un hueco, añade lo que falta aunque
 el texto crezca.

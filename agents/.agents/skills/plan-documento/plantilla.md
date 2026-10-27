@@ -80,8 +80,8 @@ las decisiones de un análisis de datos y comprueba su coherencia.
   rasgos y qué no va a encontrar aquí.
 - Conceptos nuevos: traza (explicar), fase del análisis (mencionar).
 - Conceptos retomados: ninguno.
-- Ejemplo: ninguno todavía; el caso de los indultos se presenta en el
-  apartado 3.
+- Ejemplo: ninguno todavía; el caso de los indultos se presenta más adelante,
+  en el apartado «El caso».
 - Enlace de entrada: es el primero. Abre con la situación del lector (un
   análisis cuyas conclusiones alguien va a discutir), no con la herramienta.
 - Enlace de salida: anuncia que el apartado siguiente dice para quién está
