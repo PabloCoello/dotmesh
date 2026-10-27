@@ -221,6 +221,10 @@ freno real que queda, así que no lo esquives por comodidad.
 - Las skills `castellano-peninsular` y `anti-ai-style` se cargan al redactar
   documentos, informes, texto visible de una interfaz o diapositivas, no al
   responder en el chat.
+- Un documento de más de unos pocos apartados (manual, informe, propuesta, README
+  largo) se planifica antes con `plan-documento` y se redacta con
+  `redaccion-explicativa`. Si es largo o va a un cliente, el plan se aprueba
+  antes de redactar.
 
 ## Skills compartidas
 

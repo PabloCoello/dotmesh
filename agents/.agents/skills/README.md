@@ -50,6 +50,8 @@ Estas skills se mantienen como parte del setup personal, aunque no forman parte 
 | Skill | Cuándo usarla |
 |---|---|
 | `anti-ai-style` | Para revisar o redactar textos evitando estilo genérico de IA. |
+| `plan-documento` | Para planificar un documento largo antes de redactarlo: lector, arco, mapa de conceptos y una ficha por apartado, en una plantilla que luego se rellena. |
+| `redaccion-explicativa` | Para redactar textos que lleven al lector en lugar de comprimir el significado: orden explicativo, ideas difíciles desarrolladas, enlaces explícitos, transiciones y resúmenes. |
 | `castellano-peninsular` | Para textos en español peninsular formal: documentos, informes, texto de interfaz y diapositivas, con un fichero propio para calcos y números, interfaz y presentaciones. |
 | `doc-review` | Para leer los comentarios anclados por línea que deja mesh-review en `.ai/review/` (esquema en `doc-review/schema.json`), actuar sobre el documento por tipo y prioridad, y cerrar la revisión marcando cada comentario como resuelto. Va emparejada con la extensión mesh-review de VS Code y el cliente de Neovim. |
 | `dotmesh-design` | Para generar interfaces y assets con el sistema de diseño dotmesh (Paper · Ink · Syntax). Solo a petición: se invoca con `/dotmesh-design` y no se auto-aplica (`disable-model-invocation`). `docs/DESIGN.md` sigue siendo la fuente de verdad. |

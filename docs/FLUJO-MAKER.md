@@ -73,6 +73,7 @@ Entran en cualquier punto del camino, no en una fase concreta.
 | Decisión humana pendiente | `wait-for-user`: una pregunta cerrada o la línea `WAIT_FOR_USER:` y parar | todos; los subagentes devuelven la señal al orquestador |
 | Código que funciona pero pesa más de lo necesario | `code-simplification` | quien implemente |
 | Texto en castellano de un entregable (documento, informe, interfaz, diapositivas) | `castellano-peninsular` y `anti-ai-style` (el chat no las carga) | quien redacte |
+| Documento de más de unos pocos apartados | `plan-documento` antes de redactar (aprobado por la persona si es largo o va a un cliente) y `redaccion-explicativa` al redactar; el `editor` lo contrasta con el plan | quien redacte |
 | Cambio de agente o pausa con trabajo en vuelo | `handoff` a `.ai/tasks/<slug>/handoff.md` | sesión principal |
 | Presupuesto de contexto | statusline: oro a ~90k cierra la fase, rosa a ~160k traspasa con `handoff`; delegar no lo baja | quien implemente |
 

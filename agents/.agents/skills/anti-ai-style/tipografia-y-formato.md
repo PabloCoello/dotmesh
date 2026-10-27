@@ -18,20 +18,23 @@ La raya larga (—), también llamada guion largo, aparece de forma masiva en te
 - frases con uno o varios incisos entre rayas
 
 ### Hacer en su lugar
-Sustituir siempre la raya por el signo que corresponda:
+Sustituir la raya por lo que exprese mejor la relación:
 - inciso → comas o paréntesis,
-- aclaración o enumeración → dos puntos,
-- contraste o corte de ritmo → punto y seguido.
+- aclaración → paréntesis, o una frase propia que la desarrolle,
+- causa, consecuencia o contraste → el conector que lo diga (porque, así que, pero, aunque, en cambio),
+- enumeración, cita o ejemplo anunciado → dos puntos.
+
+Los dos puntos no son el sustituto por defecto. Pegan dos frases sin decir qué relación hay entre ellas, y un texto que cambia cada raya por dos puntos sigue sonando a traducción.
 
 ### Ejemplo
 **Antes:**  
 “el problema afectó a las instituciones —no a las personas— y aun así continúa —a pesar de las advertencias repetidas—”
 
 **Después:**  
-“el problema afectó a las instituciones, no a las personas. Sigue existiendo a pesar de las advertencias repetidas”
+“el problema afectó a las instituciones, no a las personas, y sigue existiendo a pesar de las advertencias repetidas”
 
 ### Regla operativa
-No usar la raya larga (—). Reescribir el inciso con comas o paréntesis, la aclaración con dos puntos y el corte de ritmo con un punto.
+No usar la raya larga (—). Reescribir el inciso con comas o paréntesis y la relación entre ideas con el conector que la exprese; dos puntos solo para anunciar una enumeración, una cita o un ejemplo.
 
 ### Nota
 La raya es correcta en español según la RAE, que la usa en incisos y diálogos. Esta regla es una preferencia de estilo para los textos que redactas, no una corrección: no la apliques a citas literales ni la presentes como error en textos ajenos. Y al sustituirla por punto, no encadenes frases cortas (ver regla 26).

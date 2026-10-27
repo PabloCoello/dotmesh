@@ -93,6 +93,9 @@ Afirmar el punto directamente.
 ### Regla operativa
 Si una construcción negativa puede sustituirse por una afirmación directa sin pérdida de significado, reescribirla.
 
+### Excepción
+Cuando la frase corrige una idea equivocada que el lector probablemente trae («la diferencia entre un error y un aviso no depende de lo grave que parezca, sino de si bloquea»), la negación es el contenido y se mantiene. La regla persigue el contraste que solo añade dramatismo, no el que deshace un malentendido.
+
 ---
 
 ## 22. Frases de relleno
@@ -124,6 +127,9 @@ Usar formas simples:
 
 ### Regla operativa
 Ante dos opciones equivalentes, elegir siempre la más corta y natural.
+
+### Lo que no es relleno
+Una frase que sitúa al lector («una vez definida la pregunta, el siguiente paso es…»), un conector que dice cómo se relacionan dos ideas, un ejemplo o un resumen al cerrar un apartado largo no son relleno aunque alarguen el texto: son el andamiaje que permite seguirlo. La regla rige las fórmulas que no aportan nada, no la información de contexto. Ver `redaccion-explicativa`.
 
 ---
 

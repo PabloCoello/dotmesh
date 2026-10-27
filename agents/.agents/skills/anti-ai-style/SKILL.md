@@ -1,6 +1,6 @@
 ---
 name: anti-ai-style
-description: Writing rules for prose that does not read as AI-generated. Covers inflated importance, promotional wording, vague attribution, forced rules of three, em dash and bold abuse, chatbot fingerprints. Load before drafting or editing prose that lands in a deliverable (README, doc, report, informe, ficha) and before writing visible UI text or slide decks, where some rules apply differently. Chat replies to the user do not load it. Pair with castellano-peninsular for Spanish.
+description: Writing rules for prose that does not read as AI-generated. Covers inflated importance, promotional wording, vague attribution, forced rules of three, em dash and bold abuse, chatbot fingerprints. It says what to cut; redaccion-explicativa says what a text must carry, and wins when they pull apart. Load before drafting or editing prose that lands in a deliverable (README, doc, report, informe, ficha) and before writing visible UI text or slide decks, where some rules apply differently. Chat replies to the user do not load it. Pair with castellano-peninsular for Spanish.
 ---
 
 # Instrucciones de estilo anti-IA
@@ -22,19 +22,23 @@ El agente debe priorizar siempre:
 
 Antes que cualquier regla concreta, este es el criterio del que todo lo demás se deriva.
 
-Escribe como alguien que domina el tema y se lo explica a un colega que respeta y que conoce el contexto. Ese lector no necesita que le vendan nada, no espera revelaciones ni suspense, y detecta enseguida cuándo una frase está ahí para impresionar en vez de para informar.
+Escribe como lo haría un buen manual, informe o documento técnico en el idioma del texto: con el registro escrito de ese género, no con el tono de una conversación. Su lector es inteligente y no necesita que le vendan nada, no espera revelaciones ni suspense, y detecta enseguida cuándo una frase está ahí para impresionar en vez de para informar. Pero no estuvo en la conversación ni conoce el material, así que necesita el contexto, los enlaces entre ideas y los ejemplos que el autor da por sabidos.
 
 El enemigo común de casi todos los patrones que se listan en los ficheros de familia es el mismo: texto que finge importancia, tensión o descubrimiento en lugar de decir algo. El "no es X, es Y", la "verdad incómoda que nadie dice", la frase corta de efecto, la pregunta retórica de transición: todos simulan una carga que el contenido no tiene. Si entiendes esto, no necesitas memorizar la lista; reconoces el impulso y lo cortas.
 
 Tres preguntas resuelven la mayoría de los casos, incluidos los que ninguna regla de esos ficheros anticipa:
 
-1. ¿Esta frase informa o solo suena bien? Si solo suena bien, sobra.
+1. ¿Esta frase informa o solo suena bien? Si solo suena bien, sobra. Dar contexto, enlazar dos ideas, poner un ejemplo o recordar lo ya explicado también es informar.
 2. ¿Estoy afirmando lo que sé, o construyendo un efecto alrededor de ello? Afirma directamente.
-3. ¿Podría decir esto mismo un experto hablando con otro, sin teatro? Si no, reescríbelo hasta que sí.
+3. ¿Lo escribiría así un buen documento técnico, sin teatro? Si no, reescríbelo hasta que sí.
 
 Los ficheros de familia no son una lista negra que haya que agotar. Son ejemplos del mismo problema, útiles porque son verificables y porque enseñan a qué se parece el patrón. Pero el objetivo no es esquivar estas palabras concretas, sino aplicar el criterio de arriba a cualquier variante, esté listada o no.
 
 ---
+
+# Qué hace esta skill y qué no
+
+Esta skill dice qué quitar. Qué tiene que tener un texto para que el lector lo siga (contexto antes del detalle, transiciones, ejemplos, resúmenes) lo dice `redaccion-explicativa`, y el orden del documento, `plan-documento`. Cuando las dos tiren en sentidos opuestos, no recortes el andamiaje que lleva al lector: el relleno es lo que no le ayuda, no lo que alarga el texto.
 
 # Principio general
 
@@ -53,7 +57,7 @@ Siempre que sea posible, sustituir frases abstractas por:
 
 # Familias de reglas
 
-Al revisar, abre el fichero de la familia que corresponda al tipo de problema detectado. Al redactar desde cero, escribe con el criterio rector y pasa después el borrador por las veintisiete preguntas del checklist de `revision-y-checklist.md`; la que falle te dice de qué familia es el problema y qué fichero abrir en esta tabla. Cada fichero desarrolla los patrones con ejemplos y reglas operativas.
+Al revisar, abre el fichero de la familia que corresponda al tipo de problema detectado. Al redactar desde cero, escribe con el criterio rector y pasa después el borrador por las veintiocho preguntas del checklist de `revision-y-checklist.md`; la que falle te dice de qué familia es el problema y qué fichero abrir en esta tabla. Cada fichero desarrolla los patrones con ejemplos y reglas operativas.
 
 | Fichero | Cuándo abrirlo |
 |---|---|
@@ -63,7 +67,7 @@ Al revisar, abre el fichero de la familia que corresponda al tipo de problema de
 | [`retorica-y-enumeracion.md`](retorica-y-enumeracion.md) | Vocabulario típico de IA, regla de tres forzada, rotación de sinónimos |
 | [`tipografia-y-formato.md`](tipografia-y-formato.md) | Raya larga, negritas decorativas, pseudoencabezados, mayúsculas anglosajonas, emojis, comillas, punto medio |
 | [`tono-y-chatbot.md`](tono-y-chatbot.md) | Huellas de chatbot, tono complaciente o adulador |
-| [`revision-y-checklist.md`](revision-y-checklist.md) | Revisión de un texto completo: reglas generales, checklist de 27 puntos, regla final de calidad |
+| [`revision-y-checklist.md`](revision-y-checklist.md) | Revisión de un texto completo: reglas generales, checklist de 28 puntos, regla final de calidad |
 
 ---
 

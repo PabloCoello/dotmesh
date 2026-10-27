@@ -154,6 +154,8 @@ skill que posee esta fase con la herramienta Skill ANTES de escribir, no de
 memoria:
 - prosa que se entrega -> anti-ai-style, en el idioma que sea
 - si el documento va en español -> además castellano-peninsular
+- documento de más de unos pocos apartados -> antes plan-documento y, al
+  redactar, redaccion-explicativa
 Haber leído el fichero no sustituye a cargar la skill.
 EOF
 elif [ "$clase" = "interfaz" ]; then

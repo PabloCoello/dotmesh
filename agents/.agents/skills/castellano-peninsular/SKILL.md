@@ -18,6 +18,15 @@ Este fichero rige cualquier texto en español. Según lo que estés escribiendo,
 | [`interfaz.md`](interfaz.md) | Texto visible de una interfaz: botones, menús, etiquetas de formulario, mensajes de error, estados vacíos, ficheros de traducción |
 | [`presentaciones.md`](presentaciones.md) | Diapositivas: titulares, viñetas y notas del orador |
 
+## Registro
+Un documento, un informe o un manual se escriben en registro escrito formal, no con el tono de quien lo explica en voz alta. El inglés técnico admite un tono conversacional que, trasladado al castellano, suena a traducción.
+
+- Término preciso antes que imagen coloquial: "respaldar" o "sostener" una conclusión, no que "aguante"; "registra las decisiones", no "es el sitio donde quedan escritas"; "se verifica de forma automática", no "una máquina lo comprueba".
+- Sujeto explícito al empezar párrafo o cuando cambia el referente. Un sujeto omitido se entiende como el de la frase anterior: tras una frase sobre una herramienta, "No es una referencia de comandos" habla de la herramienta, no del manual. Es el rastro de un "It's not…" traducido sin reponer el sujeto.
+- Frases completas: "qué se decidió y por qué se tomó esa decisión", no "qué se decidió y por qué" ("and why").
+- Conectores para decir cómo se relacionan las ideas (por eso, ya que, de modo que, en cambio); los dos puntos, para anunciar una enumeración, una cita o un ejemplo.
+- Las convenciones del tipo de documento (a quién va dirigido, requisitos, alcance) van en su apartado, no metidas como una frase suelta en un párrafo. Ver `plan-documento`.
+
 ## Léxico
 - "ordenador", no "computadora".
 - "móvil", no "celular".
@@ -43,6 +52,8 @@ Este fichero rige cualquier texto en español. Según lo que estés escribiendo,
 
 ## Anglicismos
 - Términos técnicos consolidados se mantienen en inglés sin cursiva: commit, build, deploy, framework, log, dashboard.
+- "Comando" (admitido por la RAE y habitual), no "orden" como traducción forzada de "command". Si el proyecto fija otro término en su glosario (`CONTEXT.md` o equivalente), manda el glosario.
+- Los términos propios de una herramienta o de su glosario se respetan aunque sean anglicismos no asentados ("gate", "preregistro"): se explican la primera vez, pero no se traducen.
 - No los traduzcas forzadamente: "hacer un commit", no "realizar una confirmación".
 - Términos no consolidados, tradúcelos o explícalos: "boundary" → "frontera"; "fixture" → "datos de prueba".
 - Mantén consistencia: si decides cursiva para anglicismos, aplícala a todos en el mismo documento.
@@ -74,5 +85,6 @@ Antes de cerrar un texto, verifica:
 - Anglicismos tratados de forma consistente en todo el texto.
 - Tratamiento "tú" o "usted" coherente en todo el documento.
 - Sin traducciones literales del inglés que sonarían artificiales en castellano.
+- Registro escrito: términos precisos, sujetos explícitos y frases completas.
 - Números, fechas y porcentajes en formato español.
 - Si es interfaz o presentación, las comprobaciones del fichero correspondiente.
