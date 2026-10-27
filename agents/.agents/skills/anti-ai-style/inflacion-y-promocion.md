@@ -156,3 +156,6 @@ Toda conclusión debe dejar una idea concreta:
 - una implicación,
 - una limitación real,
 - o un siguiente paso definido.
+
+### Excepción
+Un resumen que recapitula contenido concreto ya explicado, al cerrar un apartado largo o un documento, no es una conclusión genérica: repite lo esencial para que el lector lo fije. Lo que la regla prohíbe es el cierre que no dice nada, no el que repite algo útil.

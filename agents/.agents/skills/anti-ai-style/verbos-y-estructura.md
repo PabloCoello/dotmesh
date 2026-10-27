@@ -125,6 +125,9 @@ Usar formas simples:
 ### Regla operativa
 Ante dos opciones equivalentes, elegir siempre la más corta y natural.
 
+### Lo que no es relleno
+Una frase que sitúa al lector («una vez definida la pregunta, el siguiente paso es…»), un conector que dice cómo se relacionan dos ideas, un ejemplo o un resumen al cerrar un apartado largo no son relleno aunque alarguen el texto: son el andamiaje que permite seguirlo. La regla rige las fórmulas que no aportan nada, no la información de contexto. Ver `redaccion-explicativa`.
+
 ---
 
 ## 23. Exceso de cautela verbal

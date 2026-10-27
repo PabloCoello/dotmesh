@@ -1,7 +1,7 @@
 # Revisión y checklist
 
 Abre este fichero cuando vayas a revisar un texto completo ya redactado.
-Contiene las reglas generales de reescritura, el checklist de 27 puntos y la
+Contiene las reglas generales de reescritura, el checklist de 28 puntos y la
 regla final de calidad.
 
 ---
@@ -27,10 +27,10 @@ No usar prestigio o notoriedad como muleta narrativa.
 No escribir que algo “refleja”, “simboliza” o “pone de relieve” sin explicar el mecanismo o la evidencia.
 
 ## 5. Eliminar relleno retórico
-Si una frase puede borrarse sin pérdida de información, probablemente es relleno.
+Si una frase puede borrarse sin que el lector pierda información, contexto ni el hilo del texto, probablemente es relleno. Las transiciones, los ejemplos y los resúmenes de lo ya explicado no lo son.
 
-## 6. Priorizar la palabra más simple
-Si dos expresiones significan lo mismo, elegir la más corta, clara y natural.
+## 6. Priorizar la palabra más precisa
+Si dos expresiones significan lo mismo, elegir la más clara y natural en el registro del documento. Simple no significa coloquial: en un texto técnico, el término exacto es más claro que una imagen («se verifica de forma automática» mejor que «una máquina lo comprueba»).
 
 ## 7. Repetir cuando repetir sea más claro
 No sustituir una palabra correcta por sinónimos imprecisos solo para evitar repetición.
@@ -71,6 +71,7 @@ Antes de dar un texto por bueno, comprobar:
 - ¿Hay frases cortas en fila que deberían enlazarse con un conector, o sentencias tajantes sin el porqué?
 - ¿La conclusión dice algo concreto o solo suena bien?
 - ¿Cada frase aporta información verificable, útil o necesaria?
+- ¿Al recortar se ha perdido algún enlace, contexto, ejemplo o resumen que el lector necesitaba para seguir el texto?
 
 Si la respuesta es sí en cualquiera de estos puntos, reescribir.
 
@@ -89,7 +90,7 @@ El criterio de calidad no es que el texto “suene bien”, sino que:
 
 En caso de duda, preferir siempre:
 
-- la palabra más simple,
-- la estructura más directa,
+- la palabra más precisa,
+- la estructura que el lector siga sin esfuerzo,
 - la atribución más concreta,
 - y la conclusión más específica.
