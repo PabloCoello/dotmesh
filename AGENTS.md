@@ -240,6 +240,21 @@ The agent system has two layers, identical in concept across the three tools.
   searched once, and at most 32 messages keep state. It runs no commands.
   Tests: `node --test scripts/test-mod-formulas.mjs`.
 
+  Neither mod runs in a session signed in to a Team organization. Measured on
+  2026-11-02 against v2.1.316 with `claude -p --debug-file`: Claude Code seats
+  its bundled `cc-plugin-sec-default` in the outermost tier (`seated outermost:
+  the organization is team`), and that plugin hooks `session.append` and
+  `classic.*`, then passes both on past the user tier
+  (`cierre-fase: session.append bypassed by cc-plugin-sec-default (tier user)`,
+  the same line for `formulas` on `classic.MessageDisplay`). Both mods still
+  load; they just never receive the event, and each prints one notice per
+  session saying so. Nothing in this repo can change the order, since a user
+  plugin cannot sit above a builtin seated in `prepend`. So on a Team account
+  `cierre-fase` adds no `<repo-state>` block, the 4/4 above does not hold, and
+  the orchestrator reads the state with `git log` and `git status`;
+  `formulas` leaves LaTeX raw. Whether a plugin the organization's admin lists
+  as managed escapes the bypass is untested.
+
   The template registers ten hooks in total. Besides the four above, four
   are documented with what they serve: `block-dangerous-git` (parity table),
   `offer-terminal-browser` (the `terminal-browser/` package),
