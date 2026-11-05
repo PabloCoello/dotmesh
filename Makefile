@@ -3,7 +3,7 @@
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
-PACKAGES := shell git starship ghostty herdr opencode codex claude agents nvim
+PACKAGES := shell git starship ghostty herdr herdr-app opencode codex claude agents nvim
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
