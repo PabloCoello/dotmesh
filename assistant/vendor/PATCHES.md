@@ -86,14 +86,8 @@ Riesgos que el parche no quita, aceptados:
   otra como lista. Con `merge: ask`, que es lo que se siembra, eso no integra nada; con `auto` o
   `checks`, `finalize` pide la integración al agente de esa tarea, que es un `claude`
   confinado.
-- Las noticias llegan al coordinador con `hc send`, que las teclea y pulsa Enter. Si el
-  coordinador es una shell, zsh las ejecuta como comandos, y el resumen de `ready` lo escribe
-  el worker: un `;` dentro bastaría para encadenar una orden sin confinar (medido el
-  05-11-2026 con una shell marcada a mano; el `<` inicial dio error de sintaxis). Por eso el
-  lanzador `assistant` ya no hace `exec`: espera a `claude` y quita la etiqueta
-  `herdr.role=coordinator` al salir, también con INT, TERM o HUP. Queda un `kill -9` del
-  lanzador, que deja la etiqueta puesta; `hc label <t> herdr.role=` la quita a mano. Nunca
-  marques una shell como coordinadora.
+- Un `kill -9` del lanzador `assistant` deja la etiqueta `herdr.role=coordinator` en una shell.
+  `news-guard.patch` impide que le llegue texto; `hc label <t> herdr.role=` la quita a mano.
 - `in_shell()` arranca `claude` desde el shell interactivo del usuario, así que sus alias y
   funciones se aplican después de `vet_argv`. Son ficheros del usuario que un comando
   confinado no puede escribir.
@@ -102,7 +96,39 @@ Riesgos que el parche no quita, aceptados:
 
 Prueba: `assistant/tests/test_lockdown.py`, que falla sin el parche.
 
-Las dos pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
+## `news-guard.patch`
+
+`hc send` teclea su texto y pulsa Enter. herdr-task lo usa para las noticias al coordinador,
+los mensajes a un agente y el empujón de `tick` tras un fallo del proveedor. Si en esa
+terminal ya no corre `claude`, quien lo recibe es una shell: el coordinador cuando `claude`
+ha salido, o el worker, que arranca como `zsh -lic "claude …"; exec zsh -i`. La shell lo
+ejecuta como comando, y el texto lleva palabras del worker (el resumen de `ready`, su línea de
+estado) o de GitHub. Medido el 05-11-2026: una noticia llegó a una shell coordinadora y zsh la
+trató como orden; el `<` inicial dio error de sintaxis, pero un `;` en el resumen habría
+encadenado otra.
+
+El parche añade `claude_in_front()` (`agents.py`), que pide `hc get` y acepta solo si la
+terminal está viva y el `argv[0]` de su primer plano es `claude` (hc nombra a un `claude`
+nativo por su versión, `2.1.318`, así que el nombre no sirve). `news_send`, `send_or_hold`,
+`held_pass` y el empujón de `tick` lo comprueban antes de cada `hc send`; si falla, el texto no
+sale. Las noticias, los avisos retenidos y los de GitHub se reintentan en la siguiente pasada
+y caducan (6 h los retenidos); `tell` falla con un mensaje que lo dice, y el aviso de una
+ronda de revisión añadida se pierde. Quedan
+fuera `revive.py`, que teclea a propósito una línea de shell en una shell para relanzar al
+agente (con argv del almacén y de las etiquetas, que ningún verbo del worker escribe), y
+`machines.py`, sin configurar: el lado receptor de `tell` entre máquinas teclearía sin la
+comprobación, y por eso el instalador siembra `machines` en `off`.
+
+Queda una ventana entre `hc get` y el pegado de `hc send` (hasta unos segundos, porque `hc send`
+espera un silencio de tecleo): si `claude` sale justo entonces, el texto cae en la shell. Los
+textos que puede escribir un worker van al coordinador, cuyo `claude` el worker no puede cerrar.
+Cerrarla del todo pide que ni el worker ni el lanzador dejen una shell detrás (`exit` en lugar de
+`exec zsh -i`), un cambio de diseño pendiente.
+
+Prueba: `assistant/tests/test_news_guard.py`, que además recorre el paquete y falla si aparece
+un `hc send` sin la comprobación.
+
+Las pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
 
 ## Actualizar el pin
 

@@ -1,0 +1,100 @@
+diff --git a/herdr_task/agents.py b/herdr_task/agents.py
+index d71314e..e9621c9 100644
+--- a/herdr_task/agents.py
++++ b/herdr_task/agents.py
+@@ -10,6 +10,16 @@ from .base import hc_json, HOME, now, RANK, SHELLS
+ 
+ # ---- live agents ----------------------------------------------------------------------------
+ 
++# dotmesh news-guard.patch: `hc send` types its text and presses Enter. Into a shell (a coordinator
++# whose claude exited, a worker's `exec zsh -i` after claude) it would run as a command, and news
++# carries a worker's words. So text goes only where claude is in front. hc names a native claude
++# by its version, so this reads the foreground's argv[0].
++def claude_in_front(address):
++    k = hc_json("get", address) or {}
++    argv = (k.get("foreground") or {}).get("argv") or []
++    return k.get("state") == "live" and bool(argv) and os.path.basename(str(argv[0])) == "claude"
++
++
+ def live_agents(key):
+     """The task's live terminals, with labels (hc ls leaves labels out unless filtering by them).
+     Agents start inside the person's shell, which stays when the agent exits: agent_running()."""
+diff --git a/herdr_task/commands.py b/herdr_task/commands.py
+index 51b8425..25a9c1e 100644
+--- a/herdr_task/commands.py
++++ b/herdr_task/commands.py
+@@ -864,7 +864,8 @@ def tell(s, t, msg, args):
+         # While the person writes to it, the message waits for them (news.py's held_pass).
+         from .news import send_or_hold
+         if not send_or_hold(live[-1]["address"], msg):
+-            raise Fail(f"hc send to {live[-1]['address']} failed")
++            # dotmesh news-guard.patch: also refused when claude is not in front
++            raise Fail(f"Couldn't type into {live[-1]['address']}: hc send failed or its claude has exited (a shell is in front).")
+         return live[-1]["address"], False
+     space = bare(args.space) if getattr(args, "space", None) else (t.get("space") or default_space())
+     a, _ = start_again(s, t, space, getattr(args, "agent", None), getattr(args, "argv", None), message=msg)
+diff --git a/herdr_task/news.py b/herdr_task/news.py
+index 19cede8..f40bd3c 100644
+--- a/herdr_task/news.py
++++ b/herdr_task/news.py
+@@ -12,7 +12,7 @@ from contextlib import contextmanager
+ from .base import guard, hc_json, now, run, STORE
+ from .settings import bare
+ from .agents import (
+-    agent_log, agent_running, detail, from_person, live_agents, log_tail, said, starting, status_word,
++    agent_log, agent_running, claude_in_front, detail, from_person, live_agents, log_tail, said, starting, status_word,
+     STATUSES,
+ )
+ from .sessions import session_of
+@@ -246,6 +246,8 @@ def news_send(address, text, check=True):
+     typing()): tried again next time. check=False: typing() was just asked."""
+     if check and typing(address):
+         return False
++    if not claude_in_front(address):  # dotmesh news-guard.patch
++        return False
+     env = {k: v for k, v in os.environ.items() if k != "HC_TERMINAL_ID"}
+     guard(["hc"])
+     r = subprocess.run(["hc", "send", address, text], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+@@ -415,7 +417,8 @@ def send_or_hold(address, text, how="send"):
+         return "held"
+     if how == "news":
+         return "sent" if news_send(address, text, check=False) else None
+-    return "sent" if run(["hc", "send", address, text]).returncode == 0 else None
++    ok = claude_in_front(address) and run(["hc", "send", address, text]).returncode == 0  # dotmesh news-guard.patch
++    return "sent" if ok else None
+ 
+ 
+ def held_pass(report):
+@@ -437,7 +440,8 @@ def held_pass(report):
+                 if not batch:
+                     continue
+                 text = "\n\n".join(x["text"] for x in batch)
+-                ok = news_send(addr, text, check=False) if how == "news" else run(["hc", "send", addr, text]).returncode == 0
++                ok = news_send(addr, text, check=False) if how == "news" else \
++                    claude_in_front(addr) and run(["hc", "send", addr, text]).returncode == 0  # dotmesh news-guard.patch
+                 if ok:
+                     items[:] = [x for x in items if x not in batch]
+                     report.setdefault("held", []).append({"to": addr, "messages": len(batch)})
+diff --git a/herdr_task/tick.py b/herdr_task/tick.py
+index b29e81d..297e5b6 100644
+--- a/herdr_task/tick.py
++++ b/herdr_task/tick.py
+@@ -10,7 +10,7 @@ import time
+ 
+ from .base import Fail, guard, hc_json, now, PR_EVERY, run, SHELLS, STORE
+ from .settings import machine_name, worker_argv
+-from .agents import agent_log, agent_running, busy_again, detail, held_ask, live_agents, status_word, task_status
++from .agents import agent_log, agent_running, busy_again, claude_in_front, detail, held_ask, live_agents, status_word, task_status
+ from .provider import NUDGE, provider_cut, provider_error, PROVIDER_WAITS
+ from .sessions import find_lost_logs, refresh_sessions, session_of
+ from .github import finish, merged_here, pr_pending, pr_problem, pr_view, watch_main
+@@ -308,7 +308,8 @@ def retry_one(row, k, log, report):
+                "at": now(), **({"due": now() + wait * 60000} if wait else {"over": True})}
+         report["retries"].append({"address": addr, "reason": row["reason"], "tries": row["tries"], "over": bool(row.get("over"))})
+     # Not into words the person is writing to it (HERD-71): the next round tries again.
+-    if row.get("due") and row["due"] <= now() and status_word(k) != "working" and not typing(addr, k):
++    # dotmesh news-guard.patch: claude_in_front
++    if row.get("due") and row["due"] <= now() and status_word(k) != "working" and not typing(addr, k) and claude_in_front(addr):
+         r = run(["hc", "send", addr, NUDGE.format(row["reason"].lower())])
+         if r.returncode == 0:
+             row = {**row, "nudged": now()}

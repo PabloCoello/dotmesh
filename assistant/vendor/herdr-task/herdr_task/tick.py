@@ -10,7 +10,7 @@ import time
 
 from .base import Fail, guard, hc_json, now, PR_EVERY, run, SHELLS, STORE
 from .settings import machine_name, worker_argv
-from .agents import agent_log, agent_running, busy_again, detail, held_ask, live_agents, status_word, task_status
+from .agents import agent_log, agent_running, busy_again, claude_in_front, detail, held_ask, live_agents, status_word, task_status
 from .provider import NUDGE, provider_cut, provider_error, PROVIDER_WAITS
 from .sessions import find_lost_logs, refresh_sessions, session_of
 from .github import finish, merged_here, pr_pending, pr_problem, pr_view, watch_main
@@ -308,7 +308,8 @@ def retry_one(row, k, log, report):
                "at": now(), **({"due": now() + wait * 60000} if wait else {"over": True})}
         report["retries"].append({"address": addr, "reason": row["reason"], "tries": row["tries"], "over": bool(row.get("over"))})
     # Not into words the person is writing to it (HERD-71): the next round tries again.
-    if row.get("due") and row["due"] <= now() and status_word(k) != "working" and not typing(addr, k):
+    # dotmesh news-guard.patch: claude_in_front
+    if row.get("due") and row["due"] <= now() and status_word(k) != "working" and not typing(addr, k) and claude_in_front(addr):
         r = run(["hc", "send", addr, NUDGE.format(row["reason"].lower())])
         if r.returncode == 0:
             row = {**row, "nudged": now()}

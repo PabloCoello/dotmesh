@@ -864,7 +864,8 @@ def tell(s, t, msg, args):
         # While the person writes to it, the message waits for them (news.py's held_pass).
         from .news import send_or_hold
         if not send_or_hold(live[-1]["address"], msg):
-            raise Fail(f"hc send to {live[-1]['address']} failed")
+            # dotmesh news-guard.patch: also refused when claude is not in front
+            raise Fail(f"Couldn't type into {live[-1]['address']}: hc send failed or its claude has exited (a shell is in front).")
         return live[-1]["address"], False
     space = bare(args.space) if getattr(args, "space", None) else (t.get("space") or default_space())
     a, _ = start_again(s, t, space, getattr(args, "agent", None), getattr(args, "argv", None), message=msg)

@@ -10,6 +10,16 @@ from .base import hc_json, HOME, now, RANK, SHELLS
 
 # ---- live agents ----------------------------------------------------------------------------
 
+# dotmesh news-guard.patch: `hc send` types its text and presses Enter. Into a shell (a coordinator
+# whose claude exited, a worker's `exec zsh -i` after claude) it would run as a command, and news
+# carries a worker's words. So text goes only where claude is in front. hc names a native claude
+# by its version, so this reads the foreground's argv[0].
+def claude_in_front(address):
+    k = hc_json("get", address) or {}
+    argv = (k.get("foreground") or {}).get("argv") or []
+    return k.get("state") == "live" and bool(argv) and os.path.basename(str(argv[0])) == "claude"
+
+
 def live_agents(key):
     """The task's live terminals, with labels (hc ls leaves labels out unless filtering by them).
     Agents start inside the person's shell, which stays when the agent exits: agent_running()."""

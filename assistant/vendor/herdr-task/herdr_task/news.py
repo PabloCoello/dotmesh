@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from .base import guard, hc_json, now, run, STORE
 from .settings import bare
 from .agents import (
-    agent_log, agent_running, detail, from_person, live_agents, log_tail, said, starting, status_word,
+    agent_log, agent_running, claude_in_front, detail, from_person, live_agents, log_tail, said, starting, status_word,
     STATUSES,
 )
 from .sessions import session_of
@@ -246,6 +246,8 @@ def news_send(address, text, check=True):
     typing()): tried again next time. check=False: typing() was just asked."""
     if check and typing(address):
         return False
+    if not claude_in_front(address):  # dotmesh news-guard.patch
+        return False
     env = {k: v for k, v in os.environ.items() if k != "HC_TERMINAL_ID"}
     guard(["hc"])
     r = subprocess.run(["hc", "send", address, text], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
@@ -415,7 +417,8 @@ def send_or_hold(address, text, how="send"):
         return "held"
     if how == "news":
         return "sent" if news_send(address, text, check=False) else None
-    return "sent" if run(["hc", "send", address, text]).returncode == 0 else None
+    ok = claude_in_front(address) and run(["hc", "send", address, text]).returncode == 0  # dotmesh news-guard.patch
+    return "sent" if ok else None
 
 
 def held_pass(report):
@@ -437,7 +440,8 @@ def held_pass(report):
                 if not batch:
                     continue
                 text = "\n\n".join(x["text"] for x in batch)
-                ok = news_send(addr, text, check=False) if how == "news" else run(["hc", "send", addr, text]).returncode == 0
+                ok = news_send(addr, text, check=False) if how == "news" else \
+                    claude_in_front(addr) and run(["hc", "send", addr, text]).returncode == 0  # dotmesh news-guard.patch
                 if ok:
                     items[:] = [x for x in items if x not in batch]
                     report.setdefault("held", []).append({"to": addr, "messages": len(batch)})
