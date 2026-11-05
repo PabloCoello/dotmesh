@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 
 from .base import hc_json, HOME, now, RANK, SHELLS
 
@@ -14,10 +15,41 @@ from .base import hc_json, HOME, now, RANK, SHELLS
 # whose claude exited, a worker's `exec zsh -i` after claude) it would run as a command, and news
 # carries a worker's words. So text goes only where claude is in front. hc names a native claude
 # by its version, so this reads the foreground's argv[0].
+# The Assistant's launcher (assistant/bin/assistant) waits for its claude instead of exec'ing it,
+# so the coordinator's foreground is `/bin/sh <launcher>` for the launcher's whole life, before its
+# claude starts and after it exits too. So that form counts only with an absolute path that resolves
+# to this checkout's launcher and a `claude` child of the foreground process still running.
+SH = ("/bin/sh", "/usr/bin/sh")
+LAUNCHER = os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", "bin", "assistant"))
+
+
 def claude_in_front(address):
     k = hc_json("get", address) or {}
-    argv = (k.get("foreground") or {}).get("argv") or []
-    return k.get("state") == "live" and bool(argv) and os.path.basename(str(argv[0])) == "claude"
+    argv = [str(a) for a in (k.get("foreground") or {}).get("argv") or []]
+    if k.get("state") != "live" or not argv:
+        return False
+    if os.path.basename(argv[0]) == "claude":
+        return True
+    if len(argv) < 2 or argv[0] not in SH or not os.path.isabs(argv[1]) or os.path.realpath(argv[1]) != LAUNCHER:
+        return False
+    return claude_child((k.get("foreground") or {}).get("pid"))
+
+
+def claude_child(pid):
+    """A direct child of `pid` whose argv[0] is claude, from `ps`; any doubt reads as no."""
+    try:
+        pid = int(pid)
+        r = subprocess.run(["ps", "-A", "-o", "ppid=,args="], stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, universal_newlines=True, timeout=5)
+    except (TypeError, ValueError, OSError, subprocess.SubprocessError):
+        return False
+    if r.returncode != 0:
+        return False
+    for line in r.stdout.splitlines():
+        f = line.split()
+        if len(f) >= 2 and f[0] == str(pid) and os.path.basename(f[1]) == "claude":
+            return True
+    return False
 
 
 def live_agents(key):

@@ -22,14 +22,55 @@ CLAUDE = {"state": "live", "foreground": {"name": "2.1.318", "argv": ["claude", 
           "labels": {"herdr.agent": "claude"}}
 SHELL = {"state": "live", "foreground": {"name": "zsh", "argv": ["-zsh"]}, "labels": {"herdr.agent": "claude"}}
 FAKE = {"state": "live", "foreground": {"name": "x", "argv": ["/tmp/evil/claude-not"]}}
+# The launcher waits for claude (no exec): measured 05-11-2026, a coordinator's foreground is
+# ["/bin/sh", "~/.local/bin/assistant"], and news sat undelivered until this case was accepted.
+LAUNCHED = {"state": "live", "foreground": {"name": "bash", "pid": 4242, "argv": ["/bin/sh", agents.LAUNCHER]}}
+OTHER_SH = {"state": "live", "foreground": {"name": "bash", "argv": ["/bin/sh", "/tmp/assistant"]}}
 
 
 class Guard(unittest.TestCase):
     def test_claude_in_front(self):
         for k, want in ((CLAUDE, True), (SHELL, False), (FAKE, False), ({}, False),
-                        (dict(CLAUDE, state="exited"), False)):
-            with mock.patch.object(agents, "hc_json", lambda *a, k=k: k):
+                        (dict(CLAUDE, state="exited"), False), (LAUNCHED, True), (OTHER_SH, False),
+                        (dict(LAUNCHED, state="exited"), False)):
+            with mock.patch.object(agents, "hc_json", lambda *a, k=k: k), \
+                    mock.patch.object(agents, "claude_child", lambda pid: pid == 4242):
                 self.assertIs(agents.claude_in_front("t1"), want, k)
+
+    def test_the_launcher_counts_only_with_its_claude_running(self):
+        """Before claude starts and after it exits the launcher is still in front (security gate)."""
+        for argv, child, want in (([ "/bin/sh", agents.LAUNCHER], True, True),
+                                  (["/bin/sh", agents.LAUNCHER], False, False),
+                                  (["/tmp/x/sh", agents.LAUNCHER], True, False),
+                                  (["sh", agents.LAUNCHER], True, False),
+                                  (["/bin/sh", os.path.relpath(agents.LAUNCHER)], True, False)):
+            k = {"state": "live", "foreground": {"pid": 7, "argv": argv}}
+            with mock.patch.object(agents, "hc_json", lambda *a, k=k: k), \
+                    mock.patch.object(agents, "claude_child", lambda pid, c=child: c):
+                self.assertIs(agents.claude_in_front("t1"), want, argv)
+
+    def test_claude_child_reads_ps(self):
+        out = "  1 /sbin/launchd\n 7 /Users/x/.local/bin/claude --settings {}\n 8 claude\n"
+        r = mock.Mock(returncode=0, stdout=out)
+        with mock.patch.object(agents.subprocess, "run", lambda *a, **kw: r):
+            self.assertTrue(agents.claude_child(7))
+            self.assertTrue(agents.claude_child("8"))
+            self.assertFalse(agents.claude_child(1))
+            self.assertFalse(agents.claude_child(None))
+        with mock.patch.object(agents.subprocess, "run", side_effect=OSError):
+            self.assertFalse(agents.claude_child(7))
+
+    def test_the_launcher_through_its_link_counts(self):
+        """As measured: the foreground names ~/.local/bin/assistant, a link into the checkout."""
+        import tempfile
+        self.assertEqual(agents.LAUNCHER, os.path.realpath(os.path.join(os.path.dirname(HERE), "bin", "assistant")))
+        with tempfile.TemporaryDirectory() as d:
+            link = os.path.join(d, "assistant")
+            os.symlink(agents.LAUNCHER, link)
+            k = {"state": "live", "foreground": {"pid": 7, "argv": ["/bin/sh", link]}}
+            with mock.patch.object(agents, "hc_json", lambda *a: k), \
+                    mock.patch.object(agents, "claude_child", lambda pid: True):
+                self.assertTrue(agents.claude_in_front("t1"))
 
     def sends(self, k, call):
         sent = []

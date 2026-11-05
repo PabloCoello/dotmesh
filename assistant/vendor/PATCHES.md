@@ -119,7 +119,14 @@ encadenado otra.
 
 El parche añade `claude_in_front()` (`agents.py`), que pide `hc get` y acepta solo si la
 terminal está viva y el `argv[0]` de su primer plano es `claude` (hc nombra a un `claude`
-nativo por su versión, `2.1.318`, así que el nombre no sirve). `news_send`, `send_or_hold`,
+nativo por su versión, `2.1.318`, así que el nombre no sirve). También acepta el lanzador
+`assistant/bin/assistant`, que espera a su `claude` en lugar de hacer `exec` para quitar la
+etiqueta al salir. Como el lanzador sigue en primer plano antes de que arranque `claude` y
+después de que salga, esa forma cuenta solo si se cumplen tres condiciones: el intérprete es
+`/bin/sh` o `/usr/bin/sh`, la ruta es absoluta y su ruta real es la del lanzador de este
+checkout, y el proceso en primer plano tiene un hijo directo `claude` vivo según `ps`.
+Medido el 05-11-2026 en M10: el primer plano del coordinador era
+`["/bin/sh", "~/.local/bin/assistant"]` y las noticias se quedaban en el buzón sin entregar. `news_send`, `send_or_hold`,
 `held_pass` y el empujón de `tick` lo comprueban antes de cada `hc send`; si falla, el texto no
 sale. Las noticias, los avisos retenidos y los de GitHub se reintentan en la siguiente pasada
 y caducan (6 h los retenidos); `tell` falla con un mensaje que lo dice, y el aviso de una
@@ -129,8 +136,9 @@ agente (con argv del almacén y de las etiquetas, que ningún verbo del worker e
 `machines.py`, sin configurar: el lado receptor de `tell` entre máquinas teclearía sin la
 comprobación, y por eso el instalador siembra `machines` en `off`.
 
-Queda una ventana entre `hc get` y el pegado de `hc send` (hasta unos segundos, porque `hc send`
-espera un silencio de tecleo): si `claude` sale justo entonces, el texto cae en la shell. Los
+Queda una ventana entre `hc get` y el pegado de `hc send` (hasta unos segundos, porque
+`hc send` espera un silencio de tecleo): si `claude` sale justo entonces, el texto cae en la
+shell, o en el lanzador mientras quita la etiqueta. Los
 textos que puede escribir un worker van al coordinador, cuyo `claude` el worker no puede cerrar.
 Cerrarla del todo pide que ni el worker ni el lanzador dejen una shell detrás (`exit` en lugar de
 `exec zsh -i`), un cambio de diseño pendiente.
