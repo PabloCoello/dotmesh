@@ -22,6 +22,9 @@ def gh(*args, cwd=None):
 def github(s):
     """The repo on GitHub ("owner/name") when it has a GitHub remote and gh works there; asked
     again after an hour. None: tasks merge locally."""
+    # dotmesh local-only.patch: never GitHub. No push, no force-with-lease, no gh. Every pull
+    # request path (pr_open, pr_adopt, the merge through gh, ghnews) hangs off a repo here.
+    return None
     if s.loc["kind"] != "repo" or not shutil.which(GH):
         return None
     g = s.data.get("github") or {}
