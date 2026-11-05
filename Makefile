@@ -270,6 +270,12 @@ collie-install:
 terminal-browser-install:
 	@bash "$(abspath terminal-browser/scripts/install.sh)"
 
+# Enlaza los atajos de la app gráfica de herdr. Fuera de PACKAGES: la app regenera su
+# keys.json al instante y Stow abortaría contra él (ver herdr-app/README.md). Solo macOS.
+.PHONY: herdr-app-install
+herdr-app-install:
+	@bash "$(abspath herdr-app/scripts/install.sh)"
+
 .PHONY: nvim-install
 nvim-install:
 	@bash "$(abspath nvim/scripts/install-nvim.sh)"
