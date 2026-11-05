@@ -5,6 +5,7 @@ import io
 import json
 import os
 import pwd
+import stat
 import subprocess
 import time
 import zipfile
@@ -167,9 +168,30 @@ PROMPT_MAX = 256 * 1024
 def read_prompt_file(path, folder):
     base = os.path.realpath(folder) + os.sep + os.path.join(".ai", "tasks") + os.sep
     real = os.path.realpath(os.path.expanduser(path))
-    if not real.startswith(base) or not os.path.isfile(real):
+    if not real.startswith(base):
         raise Fail(f"--prompt-file reads a brief under {base} only.")
-    if os.path.getsize(real) > PROMPT_MAX:
+    # Read from the descriptor that was checked: no symlink at the end, a plain file with one name
+    # (a hard link to ~/.aws/credentials would pass the path check), and still the same file as
+    # the path names after opening.
+    try:
+        fd = os.open(real, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        raise Fail(f"--prompt-file: can't open {path}.")
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+        os.close(fd)
+        raise Fail(f"--prompt-file: {path} isn't a plain file with a single name.")
+    with os.fdopen(fd, "rb") as f:
+        try:
+            same = os.path.samestat(st, os.stat(real)) and os.path.realpath(real) == real
+        except OSError:
+            same = False
+        if not same:
+            raise Fail(f"--prompt-file: {path} changed while it was read.")
+        data = f.read(PROMPT_MAX + 1)
+    if len(data) > PROMPT_MAX:
         raise Fail(f"--prompt-file: {path} is over {PROMPT_MAX // 1024} KiB.")
-    with open(real) as f:
-        return f.read()
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Fail(f"--prompt-file: {path} isn't UTF-8 text.")

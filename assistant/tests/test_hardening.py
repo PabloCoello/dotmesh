@@ -97,6 +97,15 @@ def record(**kw):
 class Records(unittest.TestCase):
     def test_a_record_this_tick_writes_is_read(self):
         self.assertIsNotNone(revive.read_record(record()))
+        # A worker as launch.py starts it: model, effort, permission mode and its own --settings.
+        import herdr_task.launch as launch
+        with mock.patch.object(launch, "own_path", lambda: "/u/.local/bin/herdr-task"):
+            mine = launch.worker_settings("/u/.local/bin/herdr-task", launch.own_rules("/u/.local/bin/herdr-task"))
+            argv = ["claude", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits",
+                    "--settings", json.dumps({"fastMode": False, **mine})]
+            self.assertIsNotNone(revive.read_record(record(argv=argv)))
+            mine["sandbox"]["excludedCommands"].append("sh *")
+            self.assertIsNone(revive.read_record(record(argv=["claude", "--settings", json.dumps(mine)])))
         self.assertIsNotNone(revive.read_record(record(session=None, log=None, cwd=None)))
 
     def test_a_forged_record_reads_as_none(self):
@@ -106,7 +115,12 @@ class Records(unittest.TestCase):
                    {"argv": ["claude", "--permission-mode=bypassPermissions"]},
                    {"argv": "claude"}, {"argv": ["claude", 1]}, {"session": "x; rm -rf ~"},
                    {"log": "/etc/passwd"}, {"log": os.path.join(revive.HOME, ".claude", "projects", "..", "x.jsonl")},
-                   {"cwd": "relative"}):
+                   {"cwd": "relative"},
+                   {"argv": ["claude", "--mcp-config", '{"mcpServers":{}}']},
+                   {"argv": ["claude", "--settings", '{"hooks":{}}']},
+                   {"argv": ["claude", "--settings", '{"sandbox":{"enabled":false}}']},
+                   {"argv": ["claude", "--plugin-dir", "/x"]}, {"argv": ["claude", "--add-dir", "/"]},
+                   {"argv": ["claude", "--model"]}, {"argv": ["claude", "--settings", "not json"]}):
             self.assertIsNone(revive.read_record(record(**kw)), kw)
 
 
@@ -132,7 +146,12 @@ class PromptFile(unittest.TestCase):
         big = os.path.join(self.repo, ".ai", "tasks", "x", "big.md")
         with open(big, "w") as f:
             f.write("x" * (256 * 1024 + 1))
-        for path in (secret, link, big, os.path.join(self.repo, ".ai", "tasks", "x"),
+        hard = os.path.join(self.repo, ".ai", "tasks", "x", "hard.md")
+        os.link(secret, hard)
+        latin = os.path.join(self.repo, ".ai", "tasks", "x", "latin.md")
+        with open(latin, "wb") as f:
+            f.write(b"\xff\xfe")
+        for path in (secret, link, big, hard, latin, os.path.join(self.repo, ".ai", "tasks", "x"),
                      os.path.join(self.repo, ".ai", "tasks", "..", "..", "..", "secret"), "/etc/hosts"):
             self.assertRaises(Fail, read_prompt_file, path, self.repo)
 
@@ -144,27 +163,103 @@ class PromptFile(unittest.TestCase):
                     self.assertNotIn("open(args.prompt_file", f.read(), name)
 
 
+def sh(cwd, *cmd):
+    import subprocess
+    subprocess.run(cmd, cwd=cwd, check=True, capture_output=True)
+
+
 class ConfigPaths(unittest.TestCase):
-    def paths(self, out, ok=True):
-        s = mock.Mock(loc={"folder": "/repo"})
-        with mock.patch.object(commands, "git", lambda *a: (ok, out, "")):
-            return commands.config_paths(s, {"base": "request/x", "branch": "task-4"})
+    """On a real repository: what a task branch adds over its base."""
+
+    def setUp(self):
+        self.d = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.d))
+        g = ("git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false")
+        self.git = lambda *a: sh(self.d, *g, *a)
+        self.git("init", "-q", "-b", "main")
+        self.git("commit", "-q", "--allow-empty", "-m", "base")
+        self.git("checkout", "-q", "-b", "task-4")
+
+    def add(self, path, link=None):
+        full = os.path.join(self.d, path)
+        os.makedirs(os.path.dirname(full) or self.d, exist_ok=True)
+        if link:
+            os.symlink(link, full)
+        else:
+            with open(full, "w") as f:
+                f.write("x")
+
+    def paths(self):
+        self.git("add", "-f", "-A")  # -f: a global gitignore may hide .vscode
+        self.git("commit", "-q", "-m", "work")
+        return commands.config_paths(mock.Mock(loc={"folder": self.d}), {"base": "main", "branch": "task-4"})
+
+    def test_ordinary_changes_pass(self):
+        self.add("hola.sh")
+        self.add("docs/claude.md")
+        self.assertEqual(self.paths(), [])
 
     def test_config_that_runs_code_is_named(self):
-        out = "\n".join(["hola.sh", ".claude/settings.json", "sub/.mcp.json", ".husky/pre-commit",
-                         ".pre-commit-config.yaml", "docs/claude.md", ".vscode/tasks.json", "a/.envrc"])
-        self.assertEqual(self.paths(out), [".claude/settings.json", "sub/.mcp.json", ".husky/pre-commit",
-                                           ".pre-commit-config.yaml", ".vscode/tasks.json", "a/.envrc"])
+        for p in (".claude/settings.json", "sub/.mcp.json", ".husky/pre-commit", ".pre-commit-config.yaml",
+                  ".vscode/tasks.json", "a/.envrc", ".Codex/config.toml", "opencode.jsonc", "ñ/.mcp.json",
+                  ".cursor/mcp.json", "hola.sh"):
+            self.add(p)
+        got = self.paths()
+        self.assertNotIn("hola.sh", got)
+        self.assertEqual(len(got), 10, got)
 
-    def test_ordinary_changes_pass_and_a_failed_diff_does_not(self):
-        self.assertEqual(self.paths("hola.sh\ntest_hola.sh"), [])
-        self.assertTrue(self.paths("", ok=False))
+    def test_a_symlink_counts_wherever_it_points(self):
+        self.add("payload/settings.json")
+        self.add(".claude", link="payload")
+        self.add("innocent", link="/etc")
+        self.assertEqual(sorted(self.paths()), [".claude", "innocent"])
 
-    def test_accept_checks_before_it_merges(self):
+    def test_a_failed_diff_refuses(self):
+        self.assertTrue(commands.config_paths(mock.Mock(loc={"folder": self.d}), {"base": "nope", "branch": "task-4"}))
+
+    def test_accept_checks_the_commit_it_merges(self):
         import inspect
         src = inspect.getsource(commands.cmd_accept)
-        self.assertLess(src.index("config_paths(s, t)"), src.index('t["accepted_at"] = now()'))
-        self.assertIn('getattr(args, "config_ok", False)', src)
+        self.assertLess(src.index("config_paths(s, t, tip)"), src.index('t["accepted_at"] = now()'))
+        self.assertIn("ff_merge(s, t, tip)", src)
+        self.assertIn("confirm_config(s, t, touched)", src)
+        self.assertIn("config_paths(s, t)", inspect.getsource(commands.finalize))
+
+    def test_only_a_terminal_confirms(self):
+        t = {"id": 4}
+        s = FakeStore()
+        with mock.patch.object(commands.sys.stdin, "isatty", lambda: False):
+            self.assertRaises(Fail, commands.confirm_config, s, t, [".claude/x"])
+        with mock.patch.object(commands.sys.stdin, "isatty", lambda: True), \
+                mock.patch("builtins.input", lambda *a: "MP-5"), mock.patch("sys.stderr"):
+            self.assertRaises(Fail, commands.confirm_config, s, t, [".claude/x"])
+        with mock.patch.object(commands.sys.stdin, "isatty", lambda: True), \
+                mock.patch("builtins.input", lambda *a: "MP-4"), mock.patch("sys.stderr"):
+            commands.confirm_config(s, t, [".claude/x"])
+
+
+class SayText(unittest.TestCase):
+    def test_say_types_plain_lines_only(self):
+        self.assertIsNone(commands.say_problem("use the blue one"))
+        for bad in ("!rm -rf ~", " /clear", "#remember x", "a\nb", "a\rb", "\x1b[A", "", "x" * 2001):
+            self.assertIsNotNone(commands.say_problem(bad), repr(bad))
+
+    def test_keys_recheck_before_every_key_and_wait_for_the_person(self):
+        fronts = iter([True, False])
+        ran = []
+        with mock.patch.object(commands, "open_store", store), mock.patch.object(commands, "view", lambda s, t: {}), \
+                mock.patch.object(commands, "workers", lambda s, t: [{"address": "t9"}]), \
+                mock.patch.object(news, "typing", lambda a: False), \
+                mock.patch.object(commands, "claude_in_front", lambda a: next(fronts)), \
+                mock.patch.object(commands, "run", lambda c: ran.append(c) or mock.Mock(returncode=0)):
+            self.assertRaises(Fail, commands.cmd_keys, args(keys=["down", "enter"]))
+        self.assertEqual(ran, [["hc", "keys", "t9", "down"]])
+        with mock.patch.object(commands, "open_store", store), \
+                mock.patch.object(commands, "workers", lambda s, t: [{"address": "t9"}]), \
+                mock.patch.object(news, "typing", lambda a: True), \
+                mock.patch.object(commands, "run", lambda c: ran.append(c)):
+            self.assertRaises(Fail, commands.cmd_keys, args(keys=["enter"]))
+        self.assertEqual(len(ran), 1)
 
 
 if __name__ == "__main__":

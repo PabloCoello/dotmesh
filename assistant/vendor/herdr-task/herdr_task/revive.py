@@ -134,18 +134,46 @@ def read_record(k):
 
 # dotmesh hardening.patch: a record is typed into a shell outside the sandbox, so one that this
 # tick could not have written (another program, a forged `hc label`) reads as no record at all.
-# Only claude starts here (lockdown.patch), on a session id and a log under ~/.claude/projects.
+# Only claude starts here (lockdown.patch), with the flags herdr-task itself gives an agent: a
+# model, an effort, a permission mode short of bypassPermissions, and --settings that are fastMode
+# alone or fastMode plus exactly the worker's own (launch.worker_settings). Then a session id and
+# a log under ~/.claude/projects.
 SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-LOOSE = {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"}
+SANE_FLAGS = {"--model", "--effort", "--permission-mode", "--settings"}
+
+
+def sane_settings(value):
+    try:
+        cfg = json.loads(value)
+    except ValueError:
+        return False
+    if not isinstance(cfg, dict) or not isinstance(cfg.pop("fastMode", False), bool):
+        return False
+    if not cfg:
+        return True
+    from .launch import own_path, own_rules, worker_settings
+    path = own_path()
+    return cfg == worker_settings(path, own_rules(path))
+
+
+def sane_argv(argv):
+    if not isinstance(argv, list) or argv[:1] != ["claude"] or not all(isinstance(a, str) for a in argv):
+        return False
+    pairs = argv[1:]
+    if len(pairs) % 2:
+        return False
+    for flag, value in zip(pairs[::2], pairs[1::2]):
+        if flag not in SANE_FLAGS or value.startswith("-"):
+            return False
+        if flag == "--permission-mode" and value == "bypassPermissions":
+            return False
+        if flag == "--settings" and not sane_settings(value):
+            return False
+    return True
 
 
 def sane_record(rec):
-    argv = rec.get("argv")
-    if rec.get("kind") != "claude" or not isinstance(argv, list) or argv[:1] != ["claude"]:
-        return False
-    if not all(isinstance(a, str) for a in argv) or LOOSE & set(argv) or "--permission-mode=bypassPermissions" in argv:
-        return False
-    if any(a == "--permission-mode" and argv[i + 1:i + 2] == ["bypassPermissions"] for i, a in enumerate(argv)):
+    if rec.get("kind") != "claude" or not sane_argv(rec.get("argv")):
         return False
     session, log, cwd = rec.get("session"), rec.get("log"), rec.get("cwd")
     if session is not None and not (isinstance(session, str) and SESSION_ID.match(session)):
@@ -299,7 +327,8 @@ def revive_pass(report):
             new = record_of(k)
             if new:
                 running.add(new["session"])
-                if {x: v for x, v in (rec or {}).items() if x not in ("how", "sent")} != new:
+                # dotmesh hardening.patch: one that couldn't be read back isn't written (nor each tick).
+                if sane_record(new) and {x: v for x, v in (rec or {}).items() if x not in ("how", "sent")} != new:
                     write_record(k, new)
         elif restarted(k):
             back.append((k, rec))

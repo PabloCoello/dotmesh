@@ -630,6 +630,12 @@ def finalize(s, t):
                 err = merge_now(s, t)
                 return msg + (f" Merging it waits: {err}" if err else " Merged; done.")
             return msg + " It merges by itself once its checks pass."
+        # dotmesh hardening.patch: config that runs code waits for the person's accept.
+        touched = config_paths(s, t)
+        if touched:
+            # Not `attention`: accept refuses a task that needs it, and accepting is the way out.
+            t.pop("auto_merge", None)
+            return msg + " It changes files that run code when opened, so the person accepts it."
         try:
             sent, started = tell(s, t, local_merge_msg(s, t), None)
             t["merge_requested"] = now()
@@ -887,7 +893,25 @@ def task_worker(s, t):
     return live[-1]["address"]
 
 
+SAY_MAX = 2000
+
+
+def say_problem(text):
+    """Why `say` won't type this, or None: one plain line, not a claude command (`!` runs a shell
+    command, `/` a slash command, `#` writes memory), no control characters."""
+    if not text.strip() or len(text) > SAY_MAX:
+        return f"say takes one line of 1 to {SAY_MAX} characters."
+    if any(ord(c) < 32 or ord(c) == 127 for c in text):
+        return "say takes one line, without control characters."
+    if text.lstrip()[0] in "!/#":
+        return "say doesn't start with !, / or # (claude would take it as a command)."
+    return None
+
+
 def cmd_say(args):
+    problem = say_problem(args.text)
+    if problem:
+        raise Fail(problem)
     with open_store(args) as s:
         t = s.find(args.id)
         addr = task_worker(s, t)
@@ -906,9 +930,13 @@ def cmd_keys(args):
     with open_store(args) as s:
         t = s.find(args.id)
         addr = task_worker(s, t)
-        if not claude_in_front(addr):
-            raise Fail(f"Couldn't press keys in {addr}: its claude has exited (a shell is in front).")
+        from .news import typing
+        if typing(addr):
+            raise Fail(f"The person is typing in {addr}; try again once they stop.")
         for k in args.keys:
+            # Checked before every key: what is in front can change between two of them.
+            if not claude_in_front(addr):
+                raise Fail(f"Couldn't press keys in {addr}: its claude has exited (a shell is in front).")
             if run(["hc", "keys", addr, k]).returncode != 0:
                 raise Fail(f"hc keys {k} failed in {addr}.")
         v = view(s, t)
@@ -1001,13 +1029,16 @@ def in_base(s, t):
     return bool(tip) and (tip == t.get("start") or git(s.loc["folder"], "merge-base", "--is-ancestor", tip, t.get("base") or "main")[0])
 
 
-def ff_merge(s, t):
+def ff_merge(s, t, tip=None):
     """Lands a task's branch in its base branch here when that is a fast-forward (the base is
     checked out in the main folder and the branch already holds it: exactly the tested work, no
     new combination). Returns whether it did; git refuses to touch uncommitted files."""
     main, br, base = s.loc["folder"], t.get("branch"), t.get("base") or "main"
     if not (br and git(main, "merge-base", "--is-ancestor", base, br)[0]):
         return False
+    # dotmesh hardening.patch: the commit accept checked, or nothing (the branch moved since).
+    if tip and git(main, "rev-parse", "--verify", f"{br}^{{commit}}")[1] != tip:
+        raise Fail(f"{br} moved after it was checked; accept it again.")
     # dotmesh request-worktree.patch: the merge lands where the base is checked out, the main
     # folder or an open request's worktree. Anywhere else `fetch .` refuses, as upstream did.
     where = checked_out_at(main, base, merge_targets(s))
@@ -1015,7 +1046,7 @@ def ff_merge(s, t):
         if os.path.realpath(where) != os.path.realpath(main) and \
                 git(where, "status", "--porcelain", "--untracked-files=no")[1]:
             raise Fail(f"{where} has uncommitted changes on {base}. Commit or stash them there, then accept again.")
-        return git(where, "merge", "--ff-only", br)[0]
+        return git(where, "merge", "--ff-only", tip or br)[0]
     # A base checked out nowhere (a task's own --base): its branch moves forward to the task's
     # (git refuses unless it's a fast-forward, or when another worktree has it checked out).
     return git(main, "fetch", ".", f"{br}:{base}")[0]
@@ -1023,17 +1054,41 @@ def ff_merge(s, t):
 
 # dotmesh hardening.patch: the person trusts ~/.herdr/worktrees once, so a hook, an MCP server or a
 # settings file a worker commits would run, outside the sandbox, the next time a session or a
-# commit opens in the request's worktree. accept names them and waits for --config-ok.
-CONFIG_DIRS = {".claude", ".codex", ".opencode", ".husky", ".githooks", ".vscode", ".devcontainer"}
-CONFIG_FILES = {".mcp.json", ".pre-commit-config.yaml", "lefthook.yml", "lefthook.yaml", ".lefthook.yml", ".envrc", "opencode.json"}
+# commit opens in the request's worktree. accept names them and waits for the person, at a
+# terminal of their own (confirm_config). Names compare in lower case (macOS folders don't care),
+# at any depth and as any component, and every symlink or submodule counts, wherever it points.
+CONFIG_DIRS = {".claude", ".codex", ".opencode", ".cursor", ".husky", ".githooks", ".vscode", ".devcontainer"}
+CONFIG_FILES = {".mcp.json", ".pre-commit-config.yaml", "lefthook.yml", "lefthook.yaml", ".lefthook.yml",
+                "lefthook-local.yml", ".envrc", "opencode.json", "opencode.jsonc", ".mise.toml", "mise.toml",
+                ".yarnrc.yml", ".npmrc"}
+LINK_MODES = {"120000", "160000"}
 
 
-def config_paths(s, t):
-    base, br = t.get("base") or "main", t.get("branch")
-    ok, out, _ = git(s.loc["folder"], "diff", "--name-only", "--no-renames", f"{base}...{br}") if br else (False, "", "")
+def config_paths(s, t, tip=None):
+    """The paths the task's commits change that run code when opened, or a reason they couldn't be listed."""
+    base, br = t.get("base") or "main", tip or t.get("branch")
+    ok, out, _ = git(s.loc["folder"], "-c", "core.quotePath=false", "diff", "-z", "--raw", "--no-renames",
+                     "--no-abbrev", f"{base}...{br}") if br else (False, "", "")
     if not ok:
         return ["(its changes couldn't be listed)"]
-    return [p for p in out.split("\n") if p and (CONFIG_DIRS & set(p.split("/")[:-1]) or p.split("/")[-1] in CONFIG_FILES)]
+    found, parts = [], out.split("\0")
+    for meta, path in zip(parts[::2], parts[1::2]):
+        modes = set(meta.lstrip(":").split()[:2])
+        names = [n.lower() for n in path.split("/")]
+        if modes & LINK_MODES or CONFIG_DIRS & set(names) or names[-1] in CONFIG_FILES:
+            found.append(path)
+    return found
+
+
+def confirm_config(s, t, touched):
+    """The person's yes, typed at a terminal: an agent's Bash has none, so it can't give it."""
+    if not sys.stdin.isatty():
+        raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens there: "
+                   f"{', '.join(touched[:10])}. The person reviews them and accepts it at a terminal of "
+                   f"their own: herdr-task accept {s.ref(t)} --config-ok")
+    print(f"{s.ref(t)} changes files that run code when opened:", *touched, sep="\n  ", file=sys.stderr)
+    if input(f"Type {s.ref(t)} to merge them: ").strip() != s.ref(t):
+        raise Fail("Not confirmed; nothing merged.")
 
 
 def cmd_accept(args):
@@ -1066,11 +1121,17 @@ def cmd_accept(args):
         if t["state"] != "ready":
             raise Fail(f"{s.ref(t)} isn't ready ({t['state']}); only a Ready task can be accepted.")
         wt = t.get("worktree") if t.get("mode") == "worktree" else None
-        if wt and not getattr(args, "config_ok", False):
-            touched = config_paths(s, t)
+        tip = None
+        if wt and not t.get("pr"):
+            # The exact commit checked is the one merged: a commit added after the check isn't.
+            ok, tip, _ = git(s.loc["folder"], "rev-parse", "--verify", f"{t.get('branch')}^{{commit}}")
+            touched = config_paths(s, t, tip) if ok else ["(its branch couldn't be read)"]
             if touched:
-                raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens in that folder: "
-                           f"{', '.join(touched[:10])}. Review them; accept with --config-ok once the person has.")
+                if not getattr(args, "config_ok", False):
+                    raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens there: "
+                               f"{', '.join(touched[:10])}. The person reviews them and accepts it at a terminal "
+                               f"of their own: herdr-task accept {s.ref(t)} --config-ok")
+                confirm_config(s, t, touched)
         t.pop("attention", None)
         t["accepted_at"] = now()
         s.dirty = True
@@ -1087,7 +1148,7 @@ def cmd_accept(args):
             # Its own work already in the base branch, or none of its own: nothing to merge.
             t["merged"] = merged_here(s, t)
             finish(s, t, even_if_busy=True)
-        elif ff_merge(s, t):
+        elif ff_merge(s, t, tip):
             how = "merged"
             t["merged"] = True
             finish(s, t, even_if_busy=True)

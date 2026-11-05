@@ -44,7 +44,9 @@ común. Para ello, abre `claude` en `~/.herdr/worktrees`, acepta el diálogo y s
 confianza vale para todas las subcarpetas. Como contrapartida, Claude tampoco preguntará antes de
 cargar los hooks, servidores MCP o ajustes que un worker haya commiteado allí. Por eso
 `accept` se para si la tarea cambia ficheros de ese tipo (`.claude/`, `.mcp.json`, hooks de
-git…) y te los enseña; solo se integran cuando tú das el visto bueno.
+git, enlaces simbólicos…) y el Assistant te los enseña. Para integrarla, ejecutas tú
+`herdr-task accept <tarea> --config-ok` en un terminal tuyo y tecleas la referencia de la
+tarea. El Assistant no puede dar ese paso, porque su Bash no tiene terminal.
 
 `make health` comprueba la instalación con `scripts/install.sh --status`. Avisa si falta `hc`,
 algún enlace, la persona, los ajustes o la confianza en `~/.herdr/worktrees`, y también si hay
@@ -138,7 +140,9 @@ máquina. Las reglas de denegación se aplican aunque el comando esté excluido 
 
 Para contestar a un worker, el Assistant usa `herdr-task say` (texto) y `herdr-task keys`
 (teclas de una lista cerrada, para un menú). Los dos escriben solo al worker de la tarea que
-se nombra, y solo mientras su `claude` está en primer plano. `--prompt-file` solo lee un
+se nombra, y solo mientras su `claude` está en primer plano. `say` rechaza el texto de varias
+líneas o que empieza por `!`, `/` o `#`, que `claude` trataría como un comando, y `keys` no
+teclea mientras escribes en ese terminal. `--prompt-file` solo lee un
 brief de `.ai/tasks/` de la carpeta, y la reanudación tras un reinicio descarta cualquier
 registro que no haya podido escribir herdr-task.
 

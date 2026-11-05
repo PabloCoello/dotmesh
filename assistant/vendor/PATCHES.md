@@ -72,8 +72,9 @@ arranca: `shepherdr.json` se siembra con `reviewer: {agent: claude}`.
 
 Riesgos que el parche no quita, aceptados:
 
-- La sesión del Assistant excluye `hc` y `herdr-task` enteros, y `hc` (`send`, `keys`,
-  `file write`, `update --from`) ejecuta o escribe fuera de la caja. Esa sesión no escribe
+- La sesión del Assistant excluye de la caja `hc` y `herdr-task`, verbo a verbo desde
+  `hardening.patch`, y varios verbos de `hc` (`send`, `keys`, `file write`, `update --from`)
+  ejecutan o escriben fuera de ella. Esa sesión no escribe
   código y la dirige el usuario. Su lanzador niega con `permissions.deny` los verbos de `hc`
   que ejecutan o escriben (`run`, `exec`, `file`, `put`, `update`, `machine`, `server`…),
   cualquier llamada a `hc` o `herdr-task` que empiece por una opción (`hc --json run`) y los
@@ -272,24 +273,46 @@ el lanzador y el output style `assistant` cambian en el mismo commit.
 - **Registros de reanudación.** `revive.py` teclea en una shell recuperada lo que dice la
   etiqueta `herdr.resume` del terminal. Con `hc label` al alcance del Assistant, una etiqueta
   falsificada llevaba cualquier comando a esa shell. Además de denegar `hc label`,
-  `read_record` descarta los registros que el tick no pudo escribir: argv que no empiece por
-  `claude` a secas, flags que se salten los permisos, una sesión que no sea un UUID, un log
-  fuera de `~/.claude/projects` o una carpeta relativa.
+  `read_record` descarta los registros que el tick no pudo escribir. El argv tiene que empezar
+  por `claude` a secas y llevar solo los flags que herdr-task da a un agente: `--model`,
+  `--effort`, `--permission-mode` (salvo `bypassPermissions`) y un `--settings` que sea
+  `fastMode` solo, o `fastMode` más exactamente los ajustes propios del worker
+  (`launch.worker_settings`). Además, la sesión tiene que ser un UUID, el log tiene que estar
+  bajo `~/.claude/projects` y la carpeta, ser absoluta. Un registro que no pasa no se escribe
+  en la etiqueta. Queda sin comprobar que la carpeta sea la del terminal.
 - **`--prompt-file`.** herdr-task corre fuera de la caja, así que `--prompt-file` podía leer
   cualquier fichero (`~/.ssh`, un `.env`) y llevarlo al brief de un worker. Ahora solo lee un
-  fichero normal bajo `<carpeta>/.ai/tasks/`, con la ruta ya resuelta y como mucho 256 KiB,
-  en `add`, `edit` y las automatizaciones.
+  fichero bajo `<carpeta>/.ai/tasks/`, en `add`, `edit` y las automatizaciones. Lo abre sin
+  seguir un enlace al final y comprueba sobre el descriptor abierto que es un fichero normal,
+  con un solo nombre (un enlace duro a `~/.aws/credentials` pasaría la comprobación de ruta),
+  que sigue siendo el que nombra la ruta, que no pasa de 256 KiB y que es UTF-8.
 - **Configuración que ejecuta código.** La persona confía una vez en `~/.herdr/worktrees`,
   así que unos hooks, un servidor MCP o unos ajustes que un worker commitee correrían fuera
   de la caja al abrir una sesión o un commit en el worktree del encargo. Antes de integrar,
-  `accept` lista lo que la tarea cambia en `.claude/`, `.codex/`, `.opencode/`, `.husky/`,
-  `.githooks/`, `.vscode/` y `.devcontainer/`, y en `.mcp.json`, `.pre-commit-config.yaml`,
-  `lefthook.yml`, `.envrc` y `opencode.json`. Si hay algo, se niega hasta recibir
-  `--config-ok`. El Assistant solo lo pasa cuando la persona ha visto la lista y ha dicho
-  que sí. Se comprueban los commits de la rama, no lo que quede sin confirmar en el
-  worktree de la tarea, porque eso no se integra.
+  `accept` lista lo que los commits de la tarea cambian en `.claude/`, `.codex/`,
+  `.opencode/`, `.cursor/`, `.husky/`, `.githooks/`, `.vscode/` y `.devcontainer/`, en
+  ficheros como `.mcp.json`, `.pre-commit-config.yaml`, `lefthook.yml`, `.envrc`,
+  `opencode.json(c)`, `mise.toml` o `.yarnrc.yml`, y cualquier enlace simbólico o submódulo,
+  apunte adonde apunte. Compara en minúsculas, a cualquier profundidad y en cualquier
+  componente de la ruta, y lee el diff con `-z`, sin renombrados. Si hay algo, se niega.
+  Con `--config-ok` pide además que se teclee la referencia de la tarea en un terminal: el
+  Bash de un agente no tiene, así que solo la persona puede darlo, desde un terminal suyo.
+  Integra exactamente el commit comprobado; si la rama se ha movido desde entonces, se
+  niega. `finalize`, la integración automática al decir `ready`, tampoco integra una tarea
+  así: espera al `accept` de la persona.
 
-Queda abierto: el sandbox no impide que un comando confinado con este checkout como carpeta
+Quedan abiertos:
+
+- Cuando la integración no es un avance rápido, `accept` pide al worker que integre él, y
+  ese worker puede añadir commits después de la comprobación. Con la base en un encargo,
+  esa vía falla de todos modos (ver `auto-request.patch`).
+- Los hooks que un worker commitee en su propio worktree corren cuando un revisor o una
+  reanudación abren `claude` allí. Eso depende del sandbox del propio worker, que protege
+  `.claude/settings.json` pero conserva la escotilla.
+- `say` filtra la forma del texto (una línea que no empieza por `!`, `/` ni `#`, sin
+  caracteres de control), no su contenido, y `keys enter` puede aprobar un diálogo de
+  permisos del worker. Ahí manda la persona del Assistant.
+- El sandbox no impide que un comando confinado con este checkout como carpeta
 de trabajo escriba en `assistant/`, código que luego corre fuera. `make health` avisa de los
 cambios sin confirmar en `vendor/`, `bin/` y `templates/`, pero solo cuando se ejecuta.
 
