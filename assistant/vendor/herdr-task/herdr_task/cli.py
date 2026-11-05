@@ -134,8 +134,27 @@ def remote(machine, argv):
 
 # ---- cli ------------------------------------------------------------------------------------
 
+# dotmesh lockdown.patch: an inline `GIT_DIR=... herdr-task ...` or `PATH=./bin:$PATH herdr-task ...`
+# would steer the git and hc it runs outside the sandbox. A fixed PATH and no GIT_* variables.
+SAFE_PATH = ":".join([os.path.join(os.path.expanduser("~"), ".local", "bin"), "/opt/homebrew/bin",
+                      "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+
+
+def scrub_env():
+    for k in list(os.environ):
+        if k.startswith("GIT_") or k == "HERDR_TASK_GH":
+            del os.environ[k]
+    os.environ["PATH"] = SAFE_PATH
+
+
 def main():
+    scrub_env()
     argv = sys.argv[1:]
+    # dotmesh lockdown.patch: `herdr-task -- <verb>` would run a verb a worker's per-verb sandbox
+    # exclusion and deny rules don't name.
+    if argv[:1] == ["--"]:
+        print("herdr-task: a leading -- isn't accepted here (dotmesh lockdown).", file=sys.stderr)
+        return 2
     if argv[:1] == ["--on"] and len(argv) > 1:
         return remote(argv[1], argv[2:])
     if argv[:1] == ["--version"]:

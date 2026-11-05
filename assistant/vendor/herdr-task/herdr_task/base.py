@@ -13,13 +13,15 @@ import zipfile
 VERSION = "1"
 HOME = os.path.expanduser("~")
 # HERDR_TASK_STORE: another task list (a test's own), as HERDR_TASK_SETTINGS for settings.
-STORE = os.environ.get("HERDR_TASK_STORE") or os.path.join(HOME, ".herdr", "tasks")
+# dotmesh lockdown.patch: no test hooks from the environment. herdr-task runs outside the
+# sandbox, and an inline `HERDR_TASK_STORE=... herdr-task ...` would hand it a forged store.
+STORE = os.path.join(HOME, ".herdr", "tasks")
 WORKTREES = os.path.join(HOME, ".herdr", "worktrees")
 LEGACY = os.path.join(HOME, ".config", "herdr-app", "data", "tasks")
 SHELLS = {"bash", "zsh", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "pwsh", "powershell", "elvish"}
 RANK = {"blocked": 4, "done": 3, "working": 2, "idle": 1}
 MAX_RUNNING = 10
-GH = os.environ.get("HERDR_TASK_GH") or "gh"
+GH = "gh"  # dotmesh lockdown.patch: no env hook (and local-only.patch never runs it)
 # How often tick asks GitHub about a pull request (ms).
 PR_EVERY = 60000
 
@@ -48,7 +50,7 @@ def sync_held():
 # Window is in Everywhere's "off" (~/.herdr/shepherdr.json, or HERDR_TASK_SETTINGS), and its
 # background work here stops (autopilot, browsers, the sync to other machines).
 def addon_off(name):
-    path = os.environ.get("HERDR_TASK_SETTINGS") or os.path.join(HOME, ".herdr", "shepherdr.json")
+    path = os.path.join(HOME, ".herdr", "shepherdr.json")  # dotmesh lockdown.patch
     try:
         with open(path) as f:
             off = (json.load(f).get("everywhere") or {}).get("off")
@@ -109,8 +111,14 @@ def run(args, cwd=None, check=False):
     return r
 
 
+# dotmesh lockdown.patch: herdr-task runs git outside the sandbox in a worktree its worker
+# controls, so git runs no program the repo's config names (fsmonitor, hooks, external diff, pager).
+GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.external=",
+            "-c", "core.pager=cat"]
+
+
 def git(cwd, *args):
-    r = run(["git", "-C", cwd, *args])
+    r = run(["git", *GIT_SAFE, "-C", cwd, *args])
     return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
 
 

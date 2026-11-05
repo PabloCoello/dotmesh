@@ -16,7 +16,7 @@ import sys
 import time
 
 from .base import ENTRY, Fail, git, hc_json, now, run, WORKTREES
-from .settings import agent_key, ASSISTANT_TEMPLATES, bare, notes, notes_part, review_limits, settings_block
+from .settings import agent_key, ASSISTANT_TEMPLATES, bare, notes, notes_part, review_limits, settings_block, vet_argv
 from .templates import instructions
 from .agents import detail, LINE_MAX, live_agents, SUMMARY_MAX
 from .github import finish, remote_of
@@ -44,7 +44,9 @@ def own_path():
     """This herdr-task as agents write it: the one on PATH when that is this file, else this file."""
     me = ENTRY
     found = shutil.which("herdr-task")
-    return found if found and os.path.realpath(found) == me else me
+    # dotmesh lockdown.patch: the bare name when it is this one, so the worker's sandbox
+    # exclusion and deny rules (worker_settings) match what it writes.
+    return "herdr-task" if found and os.path.realpath(found) == os.path.realpath(me) else me
 
 
 def own_rules(path):
@@ -62,6 +64,21 @@ def own_rules(path):
     return rules
 
 
+# dotmesh lockdown.patch: a worker's session excludes from its Bash sandbox only its own
+# herdr-task verbs (OWN), one entry each, so any other form (`herdr-task -- start`,
+# `herdr-task tell-assistant`) stays in the sandbox, where herdr-core's socket is unreachable.
+# Every other verb is also denied, as a second line.
+WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "scheduler", "autopilot",
+               "fix", "merge", "accept", "done", "reopen", "rm", "unarchive", "backup", "restore-spaces",
+               "review-more", "config", "review", "progress", "complete", "machines", "home",
+               "assistants", "tell-assistant", "_allow", "_session-note", "_track", "--on", "--")
+
+
+def worker_settings(path, rules):
+    return {"permissions": {"allow": rules, "deny": [f"Bash({path} {v}:*)" for v in WORKER_DENY]},
+            "sandbox": {"excludedCommands": [f"{path} {v} *" for v in OWN]}}
+
+
 def own_argv(argv):
     """An agent's argv with its own herdr-task commands allowed (Claude Code and Codex)."""
     path, out = own_path(), list(argv)
@@ -69,23 +86,23 @@ def own_argv(argv):
     if k == "claude":
         rules = own_rules(path)
         if not rules:
-            return out
+            # dotmesh: no rules means no sandbox exclusion either; refuse rather than start blind.
+            raise Fail(f"{path!r} can't be written in a permission rule (dotmesh lockdown).")
+        # Upstream merged its allow rules into any --settings (JSON or a file). Here the worker's
+        # --settings is always ours, keeping only fastMode from what was there: an argv saved
+        # before this patch (revive.task_record) may carry anything.
+        mine = worker_settings(path, rules)
         if "--settings" in out[:-1]:
             i = out.index("--settings")
             try:
                 cur = json.loads(out[i + 1])
             except ValueError:
-                try:
-                    with open(os.path.expanduser(out[i + 1])) as f:
-                        cur = json.load(f)
-                except (OSError, ValueError):
-                    cur = None
-            if isinstance(cur, dict):
-                perms = dict(cur.get("permissions") or {})
-                perms["allow"] = list(perms.get("allow") or []) + rules
-                out[i + 1] = json.dumps({**cur, "permissions": perms})
-                return out
-        return out[:1] + ["--settings", json.dumps({"permissions": {"allow": rules}})] + out[1:]
+                cur = None
+            if isinstance(cur, dict) and "fastMode" in cur:
+                mine = {"fastMode": cur["fastMode"], **mine}
+            out[i + 1] = json.dumps(mine)
+            return out
+        return out[:1] + ["--settings", json.dumps(mine)] + out[1:]
     if k == "codex":
         hook = f"{shlex.quote(sys.executable)} {shlex.quote(ENTRY)} _allow --command {shlex.quote(path)}"
         # Codex runs a new hook only once trusted. This one hook's trust comes with it, for this
@@ -135,9 +152,7 @@ def cmd_allow(args):
         data = json.loads(sys.stdin.read(1 << 20) or "{}")
     except ValueError:
         return
-    if os.environ.get("HERDR_TASK_HOOK_LOG"):
-        with open(os.environ["HERDR_TASK_HOOK_LOG"], "a") as f:
-            f.write(json.dumps(data) + "\n")
+    # dotmesh lockdown.patch: upstream's hook log (an env var naming any file to append to) is gone.
     cmd = (data.get("tool_input") or {}).get("command") if isinstance(data.get("tool_input"), dict) else None
     if isinstance(cmd, list):
         # ["bash", "-lc", "<command>"] as some tools pass it.
@@ -304,7 +319,8 @@ def retag_tabs(s):
 
 def closing_line(s, task, parent=None, argv=None):
     """How the worker finishes: every task, worktree or in the folder, says ready with a summary.
-    It names this herdr-task by its full path: only that form runs without asking (own_argv)."""
+    It names this herdr-task as own_path() gives it (dotmesh: the bare name when it's on PATH),
+    the form the worker's sandbox exclusion and permission rules match (own_argv)."""
     done = "finished and committed" if task.get("mode") == "worktree" else "finished"
     ht = own_path()
     text = (f"When the work is {done}, run `{ht} ready {s.ref(task)} --folder {shlex.quote(s.loc['folder'])} "
@@ -321,8 +337,10 @@ def closing_line(s, task, parent=None, argv=None):
              f"always give `--left`, from your very first status on, and update it at every step; a rough guess beats none.")
     text += (f" Only for what truly can't wait, `{ht} alert \"<what, a few words>\" --body \"<why>\"` reaches the person at once "
              f"(a toast and a sound); a question waits in your chat instead.")
-    text += (f" Your herdr-task command is {ht}: write that full path each time (never the bare name), as one plain command; "
-             f"then its {', '.join(OWN)} commands run without asking.")
+    # dotmesh lockdown.patch: written exactly so, bare (no pipe, redirect or $( )), it runs outside
+    # the worker's sandbox, where herdr-core's socket is.
+    text += (f" Your herdr-task command is `{ht}`: write it exactly so each time, as one plain command with no pipe, "
+             f"redirect or `$( )`; then its {', '.join(OWN)} commands work.")
     text += browser_line()
     if secret_path():
         text += (" Secrets (keys, tokens, passwords) are used by name, never seen: `herdr-secret ask NAME --why \"…\"` "
@@ -425,12 +443,17 @@ def launch(s, task, argv, space, message=None, parent=None, resume=None, role=No
     herdr.space, which Herdr gives a pane), herdr.agent, herdr.coordinator (its coordinator's tab,
     which keeps it under a restarted coordinator) and herdr.role=reviewer for a reviewer, kept
     apart from the task's agents. Returns its record."""
+    # dotmesh lockdown.patch: nothing but a confined claude reaches hc run.
+    vet_argv(argv)
+    if resume:
+        vet_argv(resume)
     key = s.key(task)
     cmd = list(resume or argv)
     if not role:
         cmd = own_argv(cmd)
     if message:
-        cmd = cmd + [message]
+        # dotmesh lockdown.patch: a message is never read as a flag.
+        cmd = cmd + (["--", message] if message.startswith("-") else [message])
     labels = ["--label", f"herdr.task={key}", "--label", f"herdr.task.space={bare(space)}",
               "--label", f"herdr.agent={agent_key(argv)}"]
     ctab = coordinator_tab(parent)

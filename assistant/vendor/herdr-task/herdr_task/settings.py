@@ -15,10 +15,10 @@ AGENTS = {"claude": ["claude"], "codex": ["codex", "--no-daemon"]}
 
 # ---- the person's settings ------------------------------------------------------------------
 
-SETTINGS = os.environ.get("HERDR_TASK_SETTINGS") or os.path.join(HOME, ".herdr", "shepherdr.json")
+SETTINGS = os.path.join(HOME, ".herdr", "shepherdr.json")  # dotmesh lockdown.patch: no env hook
 # The role instructions are herdr-core templates (`hc templates` lists them): assistant.md (the
 # coordinator's), worker.md and reviewer.md. Workers and reviewers used ~/.herdr/instructions.
-TEMPLATES = os.environ.get("HERDR_TASK_TEMPLATES") or os.path.join(HOME, ".config", "herdr-core", "templates")
+TEMPLATES = os.path.join(HOME, ".config", "herdr-core", "templates")  # dotmesh lockdown.patch: no env hook
 OLD_INSTRUCTIONS = os.path.join(HOME, ".herdr", "instructions")
 ASSISTANT_TEMPLATES = ("assistant", "coordinator")  # "coordinator": Assistants started before the rename
 DEFAULTS = {"tasks": {"merge": "ask", "review_rounds": 0, "must_fix": "major", "max_running": MAX_RUNNING, "worktrees": True,
@@ -431,14 +431,44 @@ def merge_policy(s, t):
     p = (t.get("set") or {}).get("merge") or settings_for(s, t.get("space"))["tasks"].get("merge")
     return p if p in MERGE_WORDS else "ask"
 
+
+# dotmesh lockdown.patch: the herdr-core daemon starts every agent outside the Bash sandbox, so
+# the argv is the boundary. Only `claude`, with flags that cannot loosen its own sandbox or
+# permissions: no --argv, no other agent, no bypass, no --settings beyond fastMode.
+VET_VALUE = {"--model", "--effort", "--settings", "--permission-mode", "--resume"}
+VET_SETTINGS = {"fastMode"}
+
+
+def vet_argv(argv):
+    """argv when it is a confined `claude`; Fail otherwise (lockdown.patch)."""
+    argv = [str(x) for x in argv or []]
+    if argv[:1] != ["claude"]:
+        raise Fail("Only claude starts here (dotmesh lockdown).")
+    i = 1
+    while i < len(argv):
+        flag = argv[i]
+        if flag not in VET_VALUE or i + 1 >= len(argv) or argv[i + 1].startswith("-"):
+            raise Fail(f"{flag} isn't allowed for an agent here (dotmesh lockdown).")
+        value = argv[i + 1]
+        if flag == "--permission-mode" and value == "bypassPermissions":
+            raise Fail("bypassPermissions isn't allowed for an agent here (dotmesh lockdown).")
+        if flag == "--settings":
+            try:
+                cfg = json.loads(value)
+            except ValueError:
+                cfg = None
+            if not isinstance(cfg, dict) or not set(cfg) <= VET_SETTINGS:
+                raise Fail("--settings may only set fastMode here (dotmesh lockdown).")
+        i += 2
+    return argv
+
+
 def agent_argv(key, argv_json=None):
     if argv_json:
-        argv = json.loads(argv_json)
-        if not isinstance(argv, list) or not argv:
-            raise Fail("--argv must be a JSON list")
-        argv = [str(x) for x in argv]
-    else:
-        argv = list(AGENTS.get(key, [key]))
+        raise Fail("--argv isn't allowed here (dotmesh lockdown): pick the agent with --agent claude.")
+    if key not in (None, "claude"):
+        raise Fail(f"Only claude starts here, not {key} (dotmesh lockdown).")
+    argv = vet_argv(AGENTS["claude"])
     # Codex runs its commands outside hc without --no-daemon.
     if agent_key(argv) == "codex" and "--no-daemon" not in argv:
         argv.append("--no-daemon")

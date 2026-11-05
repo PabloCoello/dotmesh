@@ -48,7 +48,7 @@ from .automations import EVENTS, events_in, HOW, next_run, parse_every, parse_on
 # computer sleeps. `list` asks every machine the window lists.
 
 STATE = os.path.join(STORE, ".autopilot.json")
-HEARTBEATS = os.environ.get("HERDR_AUTOPILOT_HOME") or os.path.join(HOME, ".config", "herdr-core", "autopilot")
+HEARTBEATS = os.path.join(HOME, ".config", "herdr-core", "autopilot")  # dotmesh lockdown.patch: no env hook
 DEFAULT_EVERY = "every 60 minutes"
 REMOTE_WAIT = 30                 # seconds another machine has to answer
 PENDING_MAX_MS = 6 * 3600000     # a wake that found no Assistant this long: missed

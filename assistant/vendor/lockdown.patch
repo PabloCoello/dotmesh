@@ -1,0 +1,295 @@
+diff --git a/herdr_task/autopilot.py b/herdr_task/autopilot.py
+index 77c34fb..6aa0433 100644
+--- a/herdr_task/autopilot.py
++++ b/herdr_task/autopilot.py
+@@ -48,7 +48,7 @@ from .automations import EVENTS, events_in, HOW, next_run, parse_every, parse_on
+ # computer sleeps. `list` asks every machine the window lists.
+ 
+ STATE = os.path.join(STORE, ".autopilot.json")
+-HEARTBEATS = os.environ.get("HERDR_AUTOPILOT_HOME") or os.path.join(HOME, ".config", "herdr-core", "autopilot")
++HEARTBEATS = os.path.join(HOME, ".config", "herdr-core", "autopilot")  # dotmesh lockdown.patch: no env hook
+ DEFAULT_EVERY = "every 60 minutes"
+ REMOTE_WAIT = 30                 # seconds another machine has to answer
+ PENDING_MAX_MS = 6 * 3600000     # a wake that found no Assistant this long: missed
+diff --git a/herdr_task/base.py b/herdr_task/base.py
+index b2460c1..1aeb416 100644
+--- a/herdr_task/base.py
++++ b/herdr_task/base.py
+@@ -13,13 +13,15 @@ import zipfile
+ VERSION = "1"
+ HOME = os.path.expanduser("~")
+ # HERDR_TASK_STORE: another task list (a test's own), as HERDR_TASK_SETTINGS for settings.
+-STORE = os.environ.get("HERDR_TASK_STORE") or os.path.join(HOME, ".herdr", "tasks")
++# dotmesh lockdown.patch: no test hooks from the environment. herdr-task runs outside the
++# sandbox, and an inline `HERDR_TASK_STORE=... herdr-task ...` would hand it a forged store.
++STORE = os.path.join(HOME, ".herdr", "tasks")
+ WORKTREES = os.path.join(HOME, ".herdr", "worktrees")
+ LEGACY = os.path.join(HOME, ".config", "herdr-app", "data", "tasks")
+ SHELLS = {"bash", "zsh", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "pwsh", "powershell", "elvish"}
+ RANK = {"blocked": 4, "done": 3, "working": 2, "idle": 1}
+ MAX_RUNNING = 10
+-GH = os.environ.get("HERDR_TASK_GH") or "gh"
++GH = "gh"  # dotmesh lockdown.patch: no env hook (and local-only.patch never runs it)
+ # How often tick asks GitHub about a pull request (ms).
+ PR_EVERY = 60000
+ 
+@@ -48,7 +50,7 @@ def sync_held():
+ # Window is in Everywhere's "off" (~/.herdr/shepherdr.json, or HERDR_TASK_SETTINGS), and its
+ # background work here stops (autopilot, browsers, the sync to other machines).
+ def addon_off(name):
+-    path = os.environ.get("HERDR_TASK_SETTINGS") or os.path.join(HOME, ".herdr", "shepherdr.json")
++    path = os.path.join(HOME, ".herdr", "shepherdr.json")  # dotmesh lockdown.patch
+     try:
+         with open(path) as f:
+             off = (json.load(f).get("everywhere") or {}).get("off")
+@@ -109,8 +111,14 @@ def run(args, cwd=None, check=False):
+     return r
+ 
+ 
++# dotmesh lockdown.patch: herdr-task runs git outside the sandbox in a worktree its worker
++# controls, so git runs no program the repo's config names (fsmonitor, hooks, external diff, pager).
++GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "diff.external=",
++            "-c", "core.pager=cat"]
++
++
+ def git(cwd, *args):
+-    r = run(["git", "-C", cwd, *args])
++    r = run(["git", *GIT_SAFE, "-C", cwd, *args])
+     return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
+ 
+ 
+diff --git a/herdr_task/cli.py b/herdr_task/cli.py
+index d829a6c..ed1b0a0 100644
+--- a/herdr_task/cli.py
++++ b/herdr_task/cli.py
+@@ -134,8 +134,27 @@ def remote(machine, argv):
+ 
+ # ---- cli ------------------------------------------------------------------------------------
+ 
++# dotmesh lockdown.patch: an inline `GIT_DIR=... herdr-task ...` or `PATH=./bin:$PATH herdr-task ...`
++# would steer the git and hc it runs outside the sandbox. A fixed PATH and no GIT_* variables.
++SAFE_PATH = ":".join([os.path.join(os.path.expanduser("~"), ".local", "bin"), "/opt/homebrew/bin",
++                      "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
++
++
++def scrub_env():
++    for k in list(os.environ):
++        if k.startswith("GIT_") or k == "HERDR_TASK_GH":
++            del os.environ[k]
++    os.environ["PATH"] = SAFE_PATH
++
++
+ def main():
++    scrub_env()
+     argv = sys.argv[1:]
++    # dotmesh lockdown.patch: `herdr-task -- <verb>` would run a verb a worker's per-verb sandbox
++    # exclusion and deny rules don't name.
++    if argv[:1] == ["--"]:
++        print("herdr-task: a leading -- isn't accepted here (dotmesh lockdown).", file=sys.stderr)
++        return 2
+     if argv[:1] == ["--on"] and len(argv) > 1:
+         return remote(argv[1], argv[2:])
+     if argv[:1] == ["--version"]:
+diff --git a/herdr_task/launch.py b/herdr_task/launch.py
+index 7b592bc..71571da 100644
+--- a/herdr_task/launch.py
++++ b/herdr_task/launch.py
+@@ -16,7 +16,7 @@ import sys
+ import time
+ 
+ from .base import ENTRY, Fail, git, hc_json, now, run, WORKTREES
+-from .settings import agent_key, ASSISTANT_TEMPLATES, bare, notes, notes_part, review_limits, settings_block
++from .settings import agent_key, ASSISTANT_TEMPLATES, bare, notes, notes_part, review_limits, settings_block, vet_argv
+ from .templates import instructions
+ from .agents import detail, LINE_MAX, live_agents, SUMMARY_MAX
+ from .github import finish, remote_of
+@@ -44,7 +44,9 @@ def own_path():
+     """This herdr-task as agents write it: the one on PATH when that is this file, else this file."""
+     me = ENTRY
+     found = shutil.which("herdr-task")
+-    return found if found and os.path.realpath(found) == me else me
++    # dotmesh lockdown.patch: the bare name when it is this one, so the worker's sandbox
++    # exclusion and deny rules (worker_settings) match what it writes.
++    return "herdr-task" if found and os.path.realpath(found) == os.path.realpath(me) else me
+ 
+ 
+ def own_rules(path):
+@@ -62,6 +64,21 @@ def own_rules(path):
+     return rules
+ 
+ 
++# dotmesh lockdown.patch: a worker's session excludes from its Bash sandbox only its own
++# herdr-task verbs (OWN), one entry each, so any other form (`herdr-task -- start`,
++# `herdr-task tell-assistant`) stays in the sandbox, where herdr-core's socket is unreachable.
++# Every other verb is also denied, as a second line.
++WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "scheduler", "autopilot",
++               "fix", "merge", "accept", "done", "reopen", "rm", "unarchive", "backup", "restore-spaces",
++               "review-more", "config", "review", "progress", "complete", "machines", "home",
++               "assistants", "tell-assistant", "_allow", "_session-note", "_track", "--on", "--")
++
++
++def worker_settings(path, rules):
++    return {"permissions": {"allow": rules, "deny": [f"Bash({path} {v}:*)" for v in WORKER_DENY]},
++            "sandbox": {"excludedCommands": [f"{path} {v} *" for v in OWN]}}
++
++
+ def own_argv(argv):
+     """An agent's argv with its own herdr-task commands allowed (Claude Code and Codex)."""
+     path, out = own_path(), list(argv)
+@@ -69,23 +86,23 @@ def own_argv(argv):
+     if k == "claude":
+         rules = own_rules(path)
+         if not rules:
+-            return out
++            # dotmesh: no rules means no sandbox exclusion either; refuse rather than start blind.
++            raise Fail(f"{path!r} can't be written in a permission rule (dotmesh lockdown).")
++        # Upstream merged its allow rules into any --settings (JSON or a file). Here the worker's
++        # --settings is always ours, keeping only fastMode from what was there: an argv saved
++        # before this patch (revive.task_record) may carry anything.
++        mine = worker_settings(path, rules)
+         if "--settings" in out[:-1]:
+             i = out.index("--settings")
+             try:
+                 cur = json.loads(out[i + 1])
+             except ValueError:
+-                try:
+-                    with open(os.path.expanduser(out[i + 1])) as f:
+-                        cur = json.load(f)
+-                except (OSError, ValueError):
+-                    cur = None
+-            if isinstance(cur, dict):
+-                perms = dict(cur.get("permissions") or {})
+-                perms["allow"] = list(perms.get("allow") or []) + rules
+-                out[i + 1] = json.dumps({**cur, "permissions": perms})
+-                return out
+-        return out[:1] + ["--settings", json.dumps({"permissions": {"allow": rules}})] + out[1:]
++                cur = None
++            if isinstance(cur, dict) and "fastMode" in cur:
++                mine = {"fastMode": cur["fastMode"], **mine}
++            out[i + 1] = json.dumps(mine)
++            return out
++        return out[:1] + ["--settings", json.dumps(mine)] + out[1:]
+     if k == "codex":
+         hook = f"{shlex.quote(sys.executable)} {shlex.quote(ENTRY)} _allow --command {shlex.quote(path)}"
+         # Codex runs a new hook only once trusted. This one hook's trust comes with it, for this
+@@ -135,9 +152,7 @@ def cmd_allow(args):
+         data = json.loads(sys.stdin.read(1 << 20) or "{}")
+     except ValueError:
+         return
+-    if os.environ.get("HERDR_TASK_HOOK_LOG"):
+-        with open(os.environ["HERDR_TASK_HOOK_LOG"], "a") as f:
+-            f.write(json.dumps(data) + "\n")
++    # dotmesh lockdown.patch: upstream's hook log (an env var naming any file to append to) is gone.
+     cmd = (data.get("tool_input") or {}).get("command") if isinstance(data.get("tool_input"), dict) else None
+     if isinstance(cmd, list):
+         # ["bash", "-lc", "<command>"] as some tools pass it.
+@@ -304,7 +319,8 @@ def retag_tabs(s):
+ 
+ def closing_line(s, task, parent=None, argv=None):
+     """How the worker finishes: every task, worktree or in the folder, says ready with a summary.
+-    It names this herdr-task by its full path: only that form runs without asking (own_argv)."""
++    It names this herdr-task as own_path() gives it (dotmesh: the bare name when it's on PATH),
++    the form the worker's sandbox exclusion and permission rules match (own_argv)."""
+     done = "finished and committed" if task.get("mode") == "worktree" else "finished"
+     ht = own_path()
+     text = (f"When the work is {done}, run `{ht} ready {s.ref(task)} --folder {shlex.quote(s.loc['folder'])} "
+@@ -321,8 +337,10 @@ def closing_line(s, task, parent=None, argv=None):
+              f"always give `--left`, from your very first status on, and update it at every step; a rough guess beats none.")
+     text += (f" Only for what truly can't wait, `{ht} alert \"<what, a few words>\" --body \"<why>\"` reaches the person at once "
+              f"(a toast and a sound); a question waits in your chat instead.")
+-    text += (f" Your herdr-task command is {ht}: write that full path each time (never the bare name), as one plain command; "
+-             f"then its {', '.join(OWN)} commands run without asking.")
++    # dotmesh lockdown.patch: written exactly so, bare (no pipe, redirect or $( )), it runs outside
++    # the worker's sandbox, where herdr-core's socket is.
++    text += (f" Your herdr-task command is `{ht}`: write it exactly so each time, as one plain command with no pipe, "
++             f"redirect or `$( )`; then its {', '.join(OWN)} commands work.")
+     text += browser_line()
+     if secret_path():
+         text += (" Secrets (keys, tokens, passwords) are used by name, never seen: `herdr-secret ask NAME --why \"…\"` "
+@@ -425,12 +443,17 @@ def launch(s, task, argv, space, message=None, parent=None, resume=None, role=No
+     herdr.space, which Herdr gives a pane), herdr.agent, herdr.coordinator (its coordinator's tab,
+     which keeps it under a restarted coordinator) and herdr.role=reviewer for a reviewer, kept
+     apart from the task's agents. Returns its record."""
++    # dotmesh lockdown.patch: nothing but a confined claude reaches hc run.
++    vet_argv(argv)
++    if resume:
++        vet_argv(resume)
+     key = s.key(task)
+     cmd = list(resume or argv)
+     if not role:
+         cmd = own_argv(cmd)
+     if message:
+-        cmd = cmd + [message]
++        # dotmesh lockdown.patch: a message is never read as a flag.
++        cmd = cmd + (["--", message] if message.startswith("-") else [message])
+     labels = ["--label", f"herdr.task={key}", "--label", f"herdr.task.space={bare(space)}",
+               "--label", f"herdr.agent={agent_key(argv)}"]
+     ctab = coordinator_tab(parent)
+diff --git a/herdr_task/settings.py b/herdr_task/settings.py
+index db2017f..16227ba 100644
+--- a/herdr_task/settings.py
++++ b/herdr_task/settings.py
+@@ -15,10 +15,10 @@ AGENTS = {"claude": ["claude"], "codex": ["codex", "--no-daemon"]}
+ 
+ # ---- the person's settings ------------------------------------------------------------------
+ 
+-SETTINGS = os.environ.get("HERDR_TASK_SETTINGS") or os.path.join(HOME, ".herdr", "shepherdr.json")
++SETTINGS = os.path.join(HOME, ".herdr", "shepherdr.json")  # dotmesh lockdown.patch: no env hook
+ # The role instructions are herdr-core templates (`hc templates` lists them): assistant.md (the
+ # coordinator's), worker.md and reviewer.md. Workers and reviewers used ~/.herdr/instructions.
+-TEMPLATES = os.environ.get("HERDR_TASK_TEMPLATES") or os.path.join(HOME, ".config", "herdr-core", "templates")
++TEMPLATES = os.path.join(HOME, ".config", "herdr-core", "templates")  # dotmesh lockdown.patch: no env hook
+ OLD_INSTRUCTIONS = os.path.join(HOME, ".herdr", "instructions")
+ ASSISTANT_TEMPLATES = ("assistant", "coordinator")  # "coordinator": Assistants started before the rename
+ DEFAULTS = {"tasks": {"merge": "ask", "review_rounds": 0, "must_fix": "major", "max_running": MAX_RUNNING, "worktrees": True,
+@@ -431,14 +431,44 @@ def merge_policy(s, t):
+     p = (t.get("set") or {}).get("merge") or settings_for(s, t.get("space"))["tasks"].get("merge")
+     return p if p in MERGE_WORDS else "ask"
+ 
++
++# dotmesh lockdown.patch: the herdr-core daemon starts every agent outside the Bash sandbox, so
++# the argv is the boundary. Only `claude`, with flags that cannot loosen its own sandbox or
++# permissions: no --argv, no other agent, no bypass, no --settings beyond fastMode.
++VET_VALUE = {"--model", "--effort", "--settings", "--permission-mode", "--resume"}
++VET_SETTINGS = {"fastMode"}
++
++
++def vet_argv(argv):
++    """argv when it is a confined `claude`; Fail otherwise (lockdown.patch)."""
++    argv = [str(x) for x in argv or []]
++    if argv[:1] != ["claude"]:
++        raise Fail("Only claude starts here (dotmesh lockdown).")
++    i = 1
++    while i < len(argv):
++        flag = argv[i]
++        if flag not in VET_VALUE or i + 1 >= len(argv) or argv[i + 1].startswith("-"):
++            raise Fail(f"{flag} isn't allowed for an agent here (dotmesh lockdown).")
++        value = argv[i + 1]
++        if flag == "--permission-mode" and value == "bypassPermissions":
++            raise Fail("bypassPermissions isn't allowed for an agent here (dotmesh lockdown).")
++        if flag == "--settings":
++            try:
++                cfg = json.loads(value)
++            except ValueError:
++                cfg = None
++            if not isinstance(cfg, dict) or not set(cfg) <= VET_SETTINGS:
++                raise Fail("--settings may only set fastMode here (dotmesh lockdown).")
++        i += 2
++    return argv
++
++
+ def agent_argv(key, argv_json=None):
+     if argv_json:
+-        argv = json.loads(argv_json)
+-        if not isinstance(argv, list) or not argv:
+-            raise Fail("--argv must be a JSON list")
+-        argv = [str(x) for x in argv]
+-    else:
+-        argv = list(AGENTS.get(key, [key]))
++        raise Fail("--argv isn't allowed here (dotmesh lockdown): pick the agent with --agent claude.")
++    if key not in (None, "claude"):
++        raise Fail(f"Only claude starts here, not {key} (dotmesh lockdown).")
++    argv = vet_argv(AGENTS["claude"])
+     # Codex runs its commands outside hc without --no-daemon.
+     if agent_key(argv) == "codex" and "--no-daemon" not in argv:
+         argv.append("--no-daemon")
