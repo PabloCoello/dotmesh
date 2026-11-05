@@ -11,6 +11,7 @@ import sys
 import time
 
 from .base import Fail, git, guard, now, run, STORE, VERSION
+from .request import checked_out_at, merge_targets
 from .settings import (
     agent_argv, agent_key, bare, merge_policy, review_limits, set_opts, settings_block, settings_for, space_base,
     task_settings, worker_argv, worktrees_on,
@@ -963,12 +964,17 @@ def ff_merge(s, t):
     checked out in the main folder and the branch already holds it: exactly the tested work, no
     new combination). Returns whether it did; git refuses to touch uncommitted files."""
     main, br, base = s.loc["folder"], t.get("branch"), t.get("base") or "main"
-    ok, cur, _ = git(main, "symbolic-ref", "--short", "HEAD")
     if not (br and git(main, "merge-base", "--is-ancestor", base, br)[0]):
         return False
-    if ok and cur == base:
-        return git(main, "merge", "--ff-only", br)[0]
-    # A base not checked out here (a task's own --base): its branch moves forward to the task's
+    # dotmesh request-worktree.patch: the merge lands where the base is checked out, the main
+    # folder or an open request's worktree. Anywhere else `fetch .` refuses, as upstream did.
+    where = checked_out_at(main, base, merge_targets(s))
+    if where:
+        if os.path.realpath(where) != os.path.realpath(main) and \
+                git(where, "status", "--porcelain", "--untracked-files=no")[1]:
+            raise Fail(f"{where} has uncommitted changes on {base}. Commit or stash them there, then accept again.")
+        return git(where, "merge", "--ff-only", br)[0]
+    # A base checked out nowhere (a task's own --base): its branch moves forward to the task's
     # (git refuses unless it's a fast-forward, or when another worktree has it checked out).
     return git(main, "fetch", ".", f"{br}:{base}")[0]
 

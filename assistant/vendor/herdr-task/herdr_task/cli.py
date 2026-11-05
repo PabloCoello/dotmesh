@@ -22,6 +22,7 @@ from .automations import auto_list, cmd_auto, cmd_scheduler, cmd_track, EVENTS, 
 from .machines import cmd_assistants, cmd_machines, cmd_sync_auto, cmd_tell
 from .autopilot import cmd_autopilot, cmd_complete, cmd_progress
 from .home import cmd_home
+from .request import cmd_request
 from .assistant_settings import cmd_session_note
 
 
@@ -289,6 +290,20 @@ def main():
     cmd("backup", cmd_backup, "save a backup of every connected machine's spaces and the sidebar now (the scheduler does every 10 minutes)", id=False)
     c = cmd("restore-spaces", cmd_restore_spaces, "dry run: what a backup would recreate (no backup: list them)", id=False)
     c.add_argument("backup", nargs="?", help="a backup's name or folder, or latest")
+    # dotmesh request-worktree.patch: requests, a branch and worktree several tasks merge into.
+    rq = sub.add_parser("request", help="requests: a branch with its own worktree that tasks join with --base request/<slug>").add_subparsers(dest="request")
+    for name, help in (("open", "make its branch and worktree"), ("list", "this folder's requests"),
+                       ("close", "mark it closed")):
+        c = rq.add_parser(name, help=help)
+        if name != "list":
+            c.add_argument("slug", help="lowercase letters, digits and -")
+        c.add_argument("--folder", help="the task folder (default: here)")
+        c.add_argument("--json", action="store_true")
+        c.set_defaults(fn=cmd_request)
+        if name == "open":
+            c.add_argument("--from", dest="from_", help="the branch it starts from (default: the remote's default branch, else the current one)")
+        if name == "close":
+            c.add_argument("--remove", action="store_true", help="also remove its worktree and branch, once nothing would be lost")
     au = sub.add_parser("auto", help="automations: a saved task that a time or an event adds again").add_subparsers(dest="auto")
 
     def auto_cmd(name, help, id=True, fields=False):

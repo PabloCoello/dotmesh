@@ -128,6 +128,51 @@ Cerrarla del todo pide que ni el worker ni el lanzador dejen una shell detrás (
 Prueba: `assistant/tests/test_news_guard.py`, que además recorre el paquete y falla si aparece
 un `hc send` sin la comprobación.
 
+## `request-worktree.patch`
+
+Un encargo es una rama con worktree propio en la que se juntan varias tareas, de modo que su
+trabajo se integra lejos de la carpeta principal, que queda como estaba. Upstream integra con
+`git merge --ff-only` solo si la base está desplegada en la carpeta principal; si no, con
+`git fetch . <rama>:<base>`, que git rechaza cuando otro worktree tiene esa base desplegada. Es
+justo el caso de un encargo, así que `accept` acababa pidiendo la integración al agente.
+
+El parche añade `request.py` con tres verbos:
+
+- `herdr-task request open <slug> [--from <rama>]` crea la rama `request/<slug>` y su worktree
+  en `~/.herdr/worktrees/<repo>/request-<slug>`. Parte de la rama por defecto del remoto si
+  existe en local; si no, de la rama desplegada. El nombre admite minúsculas, dígitos y guiones,
+  hasta 40 caracteres.
+- `herdr-task request list` muestra los encargos de la carpeta, que se guardan en el almacén
+  bajo `requests`.
+- `herdr-task request close <slug>` marca el encargo como cerrado sin borrar nada. Una tarea
+  puede seguir usando su rama como base. Con `--remove` retira además el worktree y la rama, y
+  entonces el nombre se puede volver a abrir. Se niega si alguna tarea sin terminar usa esa base,
+  si el worktree tiene cambios, ficheros sin seguimiento o ficheros ignorados (`git worktree
+  remove` borra los ignorados sin preguntar, y ahí suele estar un `.env`), o si la rama tiene
+  commits que no están ni en la rama de partida ni en una rama remota. Las ramas remotas cuentan
+  tal como quedaron en el último `fetch`: una que ya no exista en el remoto sigue valiendo. La rama
+  se borra con `git update-ref -d` contra el commit comprobado, así que un commit que llegue entre
+  la comprobación y el borrado la conserva. La sesión del Assistant no puede escribir en
+  `~/.herdr/worktrees`, y por eso el borrado pasa por herdr-task.
+
+Las tareas se suman con `herdr-task add --base request/<slug>`. `ff_merge` (`commands.py`)
+busca con `git worktree list` dónde está desplegada la base, pero solo integra allí si es la
+carpeta principal o el worktree de un encargo abierto. Nunca integra en el worktree de otra tarea
+ni en uno del usuario: en ese caso queda el `git fetch .` de upstream, que git rechaza, y la
+integración pasa al agente como antes. Si el worktree del encargo tiene cambios sin confirmar,
+`accept` falla con un mensaje que nombra la carpeta, y la tarea sigue en Ready. En la carpeta
+principal se conserva el comportamiento de upstream: git se niega solo si la integración toca
+esos ficheros. Si la integración no es un avance rápido, la tarea también pasa a su agente, que
+no puede integrar en una base desplegada en otro worktree; ese caso termina en una pregunta al
+usuario.
+
+`accept` integra la punta de la rama en el momento de aceptar, no el commit revisado, igual que
+upstream: un worker puede añadir commits entre `ready` y la aceptación.
+
+`request` entra en `WORKER_DENY`: un worker no abre ni cierra encargos.
+
+Prueba: `assistant/tests/test_requests.py`.
+
 Las pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
 
 ## Actualizar el pin
