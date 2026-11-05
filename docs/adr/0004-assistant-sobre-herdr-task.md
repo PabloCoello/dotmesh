@@ -99,6 +99,28 @@ Se instala con `make assistant-install`, fuera de `PACKAGES` y de `make install`
   `herdr-task`, fuera de la caja, y se salta el reparto de dotmesh (push a petición con
   `/super-git`). Se sustituye por rama local aceptada por el usuario.
 
+## Enmienda del 05-11-2026: la exclusión es por sesión
+
+El punto 3 de la decisión (`hc` y `herdr-task` en `excludedCommands` de la plantilla) se
+sustituye. El gate de `security` de la primera rebanada mostró que cualquier sesión que hable
+con herdr-core puede lanzar procesos sin confinar, porque eso es lo que hace el daemon:
+`herdr-task start --argv '["sh","-c",…]'`, `add --agent`, `auto --every`, y en `hc`, además de
+`run` y `exec`, `file write`, `update --from`, `send` y `keys`. Las reglas `permissions.deny`
+por prefijo se esquivan con opciones globales (`hc --json run`). Y `excludedCommands` en la
+plantilla abre esa vía en todas las sesiones de la máquina, no solo en la del Assistant.
+
+Decisión nueva, tomada con el usuario:
+
+- La plantilla global se queda con cuatro comandos excluidos.
+- El lanzador del Assistant añade `hc *` y `herdr-task *` con `--settings` solo a su sesión.
+- Los workers reciben, por el `--settings` que ya les inyecta `launch.py`, solo
+  `herdr-task *`, con `permissions.deny` sobre los verbos que lanzan procesos (`start`, `add`,
+  `switch`, `resume`, `auto`, `edit`, `tick`, `scheduler`, `autopilot`).
+- Un parche más rechaza `--argv` y cualquier `--agent` distinto de `claude`.
+
+Queda un riesgo aceptado: la sesión del Assistant puede lanzar procesos sin confinar. Es una
+sesión que no escribe código y que el usuario dirige.
+
 ## Consecuencias
 
 - Código de terceros corre sin confinar. `herdr-task` y `hc` están en `excludedCommands`,
