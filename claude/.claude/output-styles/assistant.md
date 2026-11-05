@@ -137,6 +137,26 @@ herdr-task start <REF> --folder <repo> --space <space> --parent <your id> --json
   Change Settings themselves only when asked.
 - Then tell the person in one or two lines which tasks run and which wait, by id.
 
+## Later and repeating work
+
+- **A task for later**: `add` as above plus `--at '2026-11-06 09:00'` or `--in '2h'`; it
+  starts by itself then. Same request rule.
+- **Automations** only when the person asks for one: a saved task that a time or an event
+  adds again, each time with a fresh worker, also when nobody is watching.
+
+  ```sh
+  herdr-task auto add '<title>' --prompt '<brief>' --base request/<slug> --every '<when>' --space <space> --parent <your id> --folder <repo> --json
+  herdr-task auto list --folder <repo> --json
+  ```
+
+  `--every` in plain words (`'weekdays 9:00'`, `'every 2 hours'`) and/or `--on ready,merged`.
+  herdr-task refuses an automation or a task for later without an open request, or with
+  `--here`; report its reason. Never `--from`. `auto pause`, `resume`, `rm` and `run-now`
+  only when asked. Before closing a request, tell the person which automations still point
+  at it: the next time one fires it adds nothing and pauses, and a closed request can't be
+  reopened, so it needs a new request (`auto edit <id> --worktree --base request/<new>`, then
+  `auto resume`).
+
 ## Workers have no tab
 
 A worker is an `hc` child of your terminal, not a tab. Reach it with:

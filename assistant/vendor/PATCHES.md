@@ -198,6 +198,48 @@ abrieron dos encargos, `saludo` y `despedida`, con tres tareas: MP2-3 esperaba a
 MP2-1, y al aceptarla avanzó también `request/saludo`. Los worktrees de las tareas
 desaparecieron. La carpeta principal acabó en `main` y en el mismo commit, sin cambios.
 
+## `auto-request.patch`
+
+Dos tipos de trabajo arrancan solos, sin que nadie mire en ese momento. Una automatización
+(`auto`) guarda una tarea y la vuelve a añadir cuando llega una hora o un evento, con un worker
+nuevo cada vez. Una tarea programada (`add`, `start` o `edit` con `--at`/`--in`) arranca a su
+hora. En upstream ninguna de las dos necesita `--base`: sin él, la tarea parte de la rama
+desplegada en la carpeta principal y, al aceptarla, se integra allí. Con `--here`, el worker
+trabaja directamente en la carpeta principal. Las dos cosas contradicen la regla de los
+encargos, y el Assistant no interviene cuando el trabajo arranca.
+
+El parche añade `unattended_problem` (`request.py`). En un repositorio, exige que el trabajo vaya
+en worktree y que su base sea `request/<slug>` de un encargo abierto (`open_request`). Fuera de
+git no exige nada, porque allí no hay rama que integrar. Se comprueba en cinco puntos:
+
+- `auto add` y `auto edit`, que admiten ahora `--base`, rechazan una automatización sin encargo
+  abierto o con `--here`. Una edición rechazada no guarda nada.
+- `fire` lo vuelve a comprobar al dispararse. Si el encargo se ha cerrado entretanto, o la
+  automatización se guardó antes del parche, no crea ninguna tarea: guarda el motivo en
+  `last_error` y pausa la automatización. Una tarea creada sin su encargo podría arrancarse
+  después a mano contra la carpeta principal, y una automatización diaria las acumularía. Si
+  todo está en orden, `fire` fija la base de la tarea él mismo, sin pasar por la rama base del
+  espacio.
+- `schedule` (`commands.py`) rechaza programar una tarea así.
+- `due_pass` (`tick.py`) lo comprueba otra vez cuando llega la hora, por si la tarea se editó
+  después de programarla (`edit --base ""`, `--here`): la devuelve a To do con el motivo en
+  `attention` y no la pone en cola.
+- La cola (`not_started`, en `tick.py`) repite la comprobación antes de arrancar el trabajo que
+  llegó solo, sea por su hora o por una automatización (`unattended`), porque pudo editarse
+  mientras esperaba a sus tareas `--after` o a tener hueco. Una tarea que puso en cola el
+  Assistant a mano sigue como en upstream.
+
+Un encargo cerrado no se puede volver a abrir con el mismo nombre mientras siga en el almacén,
+así que una automatización que apuntaba a él necesita otro encargo (`auto edit --base`) y
+`auto resume`. La vista de la automatización muestra su `base`.
+
+Queda fuera la integración automática en un encargo: con la integración «por su cuenta» y sin
+pull request, `local_merge_msg` pide al worker `git fetch . <rama>:request/<slug>`, que git
+rechaza porque el encargo está desplegado en su worktree. No escribe en la carpeta principal;
+la tarea espera a la persona.
+
+Prueba: `assistant/tests/test_auto_request.py`.
+
 Las pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
 
 ## Actualizar el pin

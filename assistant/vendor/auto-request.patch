@@ -1,0 +1,216 @@
+diff --git a/herdr_task/automations.py b/herdr_task/automations.py
+index dbec2e2..39c4d79 100644
+--- a/herdr_task/automations.py
++++ b/herdr_task/automations.py
+@@ -23,6 +23,7 @@ from .archive import archive_pass
+ from .output import say
+ from .scheduler import ensure_scheduler, script_hash
+ from .commands import begin
++from .request import unattended_problem
+ from .news import news_pass
+ from .tick import end_done_pass, lost_logs_pass, memory_guard, retry_pass, tick_store
+ from .backups import backup_pass
+@@ -205,7 +206,7 @@ def find_auto(s, ref):
+ 
+ 
+ def auto_view(s, a):
+-    v = {k: a.get(k) for k in ("id", "title", "prompt", "mode", "agent", "on", "match", "space", "paused",
++    v = {k: a.get(k) for k in ("id", "title", "prompt", "mode", "base", "agent", "on", "match", "space", "paused",
+                                 "next_run", "last_run", "last_task", "last_error", "runs", "created")}
+     # machine: None here; herdr-task --on <machine> names it (cli.remote), so a list across machines says whose it is
+     v.update(ref=auto_ref(s, a), **{"from": from_text(a["from"]) if a.get("from") else None}, folder=s.loc["folder"], machine=None, prefix=s.prefix, every=(a.get("every") or {}).get("text"),
+@@ -252,6 +253,11 @@ def set_auto_fields(s, a, args, adding=False):
+         if args.worktree and s.loc["kind"] != "repo":
+             raise Fail("Worktrees need a git repo.")
+         a["mode"] = "here" if args.here else "worktree"
++    if getattr(args, "base", None) is not None:
++        a["base"] = args.base.strip()
++    problem = unattended_problem(s, a.get("mode") or ("worktree" if worktrees_on(s) else "here"), a.get("base"))
++    if problem:
++        raise Fail(problem)
+     if args.space:
+         a["space"] = bare(args.space)
+     if args.parent:
+@@ -307,7 +313,8 @@ def cmd_auto(args):
+                 msg = f"{auto_ref(s, a)} removed."
+             elif sub == "run-now":
+                 t = fire(s, a, "run now")
+-                msg = f"{auto_ref(s, a)} added {s.ref(t)}" + (f", but: {a['last_error']['message']}" if a.get("last_error") else ".")
++                msg = (f"{auto_ref(s, a)} added {s.ref(t)}" if t else f"{auto_ref(s, a)} added nothing and is paused") + \
++                    (f", but: {a['last_error']['message']}" if a.get("last_error") else ".")
+             elif sub == "show":
+                 msg = auto_line(auto_view(s, a))
+ 
+@@ -351,6 +358,14 @@ def fire(s, a, why, brief=None):
+     """Adds the automation's task again and starts it (or queues it, as start would). Returns the
+     task. A start that fails is the automation's last error, and the task needs the person.
+     brief: what set it off (event_brief), added under its prompt."""
++    problem = unattended_problem(s, a.get("mode") or ("worktree" if worktrees_on(s) else "here"), a.get("base"))
++    if problem:
++        # No task at all: one left in To do without its request could be started by hand into the
++        # main folder, and a daily automation would pile them up. It pauses until someone edits it.
++        a["paused"], a["last_error"] = True, {"at": now(), "message": problem, "kind": "request"}
++        a["runs"] = (a.get("runs") or [])[-9:] + [{"at": now(), "why": why, "error": problem}]
++        s.dirty = True
++        return None
+     prompt = a.get("prompt") or ""
+     if brief:
+         prompt = f"{prompt.rstrip()}\n\n{brief}" if prompt.strip() else brief
+@@ -363,13 +378,15 @@ def fire(s, a, why, brief=None):
+     if a.get("from") and why.split(":")[0] in EVENTS:
+         run_rec["from"] = from_text(a["from"])
+     try:
++        if s.loc["kind"] == "repo":
++            t["base"], t["base_set"] = a["base"], True
+         if not space:
+             raise Fail("It has no space to start in.")
+         argv = worker_argv(s, t, space)
+         parent = a.get("parent")
+         reason = queue_reason(s, t)
+         if reason:
+-            t["state"], t["queued_at"] = "queued", now()
++            t["state"], t["queued_at"], t["unattended"] = "queued", now(), True
+             t["queue"] = {"argv": argv, "space": space, "parent": parent}
+             run_rec["queued"] = reason
+         else:
+@@ -593,7 +610,9 @@ def automations_pass(s, seen, report, feeds=None):
+             continue
+         for why, brief in whys:
+             t = fire(s, a, why, brief)
+-            report["fired"].append({"folder": s.loc["folder"], "automation": auto_ref(s, a), "task": s.ref(t), "why": why})
++            report["fired"].append({"folder": s.loc["folder"], "automation": auto_ref(s, a), "task": s.ref(t) if t else None, "why": why})
++            if not t:
++                break
+ 
+ 
+ SEEN = os.path.join(STORE, ".seen.json")
+diff --git a/herdr_task/cli.py b/herdr_task/cli.py
+index 7200c58..c43180e 100644
+--- a/herdr_task/cli.py
++++ b/herdr_task/cli.py
+@@ -322,6 +322,7 @@ def main():
+             c.add_argument("--from", dest="from_", help="hear another folder's task events instead of this one's: "
+                            "vm-b:~/dev/app (another machine linked to this one) or a folder here (\"\" clears)")
+             c.add_argument("--agent")
++            c.add_argument("--base", help="the open request its tasks go into: request/<slug> (required in a repo)")
+             c.add_argument("--space", help="the space its tasks start in (default: yours)")
+             c.add_argument("--parent", help="its tasks' agents' parent (default: you)")
+             g = c.add_mutually_exclusive_group()
+diff --git a/herdr_task/commands.py b/herdr_task/commands.py
+index c9240ff..989d241 100644
+--- a/herdr_task/commands.py
++++ b/herdr_task/commands.py
+@@ -11,7 +11,7 @@ import sys
+ import time
+ 
+ from .base import Fail, git, guard, now, run, STORE, VERSION
+-from .request import checked_out_at, merge_targets
++from .request import checked_out_at, merge_targets, unattended_problem
+ from .settings import (
+     agent_argv, agent_key, bare, merge_policy, review_limits, set_opts, settings_block, settings_for, space_base,
+     task_settings, worker_argv, worktrees_on,
+@@ -134,6 +134,9 @@ def scheduled_at(args):
+ def schedule(s, t, at, plan=None):
+     if t["state"] not in ("todo", "scheduled", "queued"):
+         raise Fail(f"{s.ref(t)} has already started ({STATUSES.get(t['state'], t['state'])}); only a task not started yet can be scheduled.")
++    problem = unattended_problem(s, t.get("mode"), t.get("base"))
++    if problem:
++        raise Fail(problem)
+     t["state"], t["scheduled_for"] = "scheduled", at
+     if plan is not None:
+         t["queue"] = plan
+diff --git a/herdr_task/request.py b/herdr_task/request.py
+index 9d6939a..6ee1858 100644
+--- a/herdr_task/request.py
++++ b/herdr_task/request.py
+@@ -55,6 +55,32 @@ def published(main, tip, into):
+     return bool(git(main, "for-each-ref", "--contains", tip, "--format=%(refname)", "refs/remotes")[1])
+ 
+ 
++def open_request(s, base):
++    """The base of work that starts with nobody watching (an automation, a scheduled task) in a
++    repo: an open request's branch, or Fail. So that work never falls back to the main folder's
++    branch (auto-request.patch)."""
++    base = (base or "").strip()
++    slug = base[len("request/"):] if base.startswith("request/") else None
++    r = (s.data.get("requests") or {}).get(slug) if slug else None
++    if not r or r.get("state") != "open":
++        raise Fail(f"Work that starts by itself goes into an open request: --base request/<slug> "
++                   f"(herdr-task request list). {base or 'No --base'} isn't one.")
++    return base
++
++
++def unattended_problem(s, mode, base):
++    """Why work with this mode and base can't start by itself here, or None."""
++    if s.loc["kind"] != "repo":
++        return None
++    if mode != "worktree":
++        return "It would work in the folder itself (--here); work that starts by itself goes into a request."
++    try:
++        open_request(s, base)
++    except Fail as e:
++        return str(e)
++    return None
++
++
+ def cmd_request(args):
+     verb = args.request
+     with open_store(args, write=verb != "list") as s:
+diff --git a/herdr_task/tick.py b/herdr_task/tick.py
+index 297e5b6..abbb215 100644
+--- a/herdr_task/tick.py
++++ b/herdr_task/tick.py
+@@ -26,6 +26,7 @@ from .takeover import cant_go_on, takeover
+ from .ghnews import main_pass, pr_deliver, pr_news
+ from .scheduler import SCHEDULER
+ from .revive import revive_pass
++from .request import unattended_problem
+ 
+ 
+ def at_work(s, t):
+@@ -90,12 +91,35 @@ def due_pass(s, report):
+     when there's room), each once."""
+     for t in s.data["tasks"]:
+         if t["state"] == "scheduled" and (t.get("scheduled_for") or 0) <= now():
+-            t["state"], t["queued_at"] = "queued", t.get("scheduled_for") or now()
++            # Changed after it was scheduled (edit --base "", --here): it waits for the person.
++            problem = unattended_problem(s, t.get("mode"), t.get("base"))
++            if problem:
++                t["state"], t["attention"] = "todo", f"Not started at its time: {problem}"
++                for k in ("scheduled_for", "queue"):
++                    t.pop(k, None)
++                s.dirty = True
++                report.setdefault("not_started", []).append(s.ref(t))
++                continue
++            t["state"], t["queued_at"], t["unattended"] = "queued", t.get("scheduled_for") or now(), True
+             t.pop("scheduled_for", None)
+             s.dirty = True
+             report.setdefault("due", []).append(s.ref(t))
+ 
+ 
++def not_started(s, t, report):
++    """Work that came due by itself (a schedule, an automation) is checked again before it starts:
++    it may have been edited while it waited in the queue. True: sent back to To do."""
++    problem = t.get("unattended") and unattended_problem(s, t.get("mode"), t.get("base"))
++    if not problem:
++        return False
++    t["state"], t["attention"] = "todo", f"Not started: {problem}"
++    for k in ("queue", "queued_at", "unattended"):
++        t.pop(k, None)
++    s.dirty = True
++    report.setdefault("not_started", []).append(s.ref(t))
++    return True
++
++
+ def tick_store(s, report):
+     """One folder's turn: Ready tasks back at work are Working again, merged tasks become done,
+     auto-merges go when they can, and queued tasks start while there's room."""
+@@ -135,6 +159,8 @@ def tick_store(s, report):
+             s.dirty = True
+         if held:
+             continue
++        if not_started(s, t, report):
++            continue
+         q = t.get("queue") or {}
+         try:
+             sp = q.get("space") or t.get("space") or default_space()

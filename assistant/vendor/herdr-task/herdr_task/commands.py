@@ -11,7 +11,7 @@ import sys
 import time
 
 from .base import Fail, git, guard, now, run, STORE, VERSION
-from .request import checked_out_at, merge_targets
+from .request import checked_out_at, merge_targets, unattended_problem
 from .settings import (
     agent_argv, agent_key, bare, merge_policy, review_limits, set_opts, settings_block, settings_for, space_base,
     task_settings, worker_argv, worktrees_on,
@@ -134,6 +134,9 @@ def scheduled_at(args):
 def schedule(s, t, at, plan=None):
     if t["state"] not in ("todo", "scheduled", "queued"):
         raise Fail(f"{s.ref(t)} has already started ({STATUSES.get(t['state'], t['state'])}); only a task not started yet can be scheduled.")
+    problem = unattended_problem(s, t.get("mode"), t.get("base"))
+    if problem:
+        raise Fail(problem)
     t["state"], t["scheduled_for"] = "scheduled", at
     if plan is not None:
         t["queue"] = plan

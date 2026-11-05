@@ -55,6 +55,32 @@ def published(main, tip, into):
     return bool(git(main, "for-each-ref", "--contains", tip, "--format=%(refname)", "refs/remotes")[1])
 
 
+def open_request(s, base):
+    """The base of work that starts with nobody watching (an automation, a scheduled task) in a
+    repo: an open request's branch, or Fail. So that work never falls back to the main folder's
+    branch (auto-request.patch)."""
+    base = (base or "").strip()
+    slug = base[len("request/"):] if base.startswith("request/") else None
+    r = (s.data.get("requests") or {}).get(slug) if slug else None
+    if not r or r.get("state") != "open":
+        raise Fail(f"Work that starts by itself goes into an open request: --base request/<slug> "
+                   f"(herdr-task request list). {base or 'No --base'} isn't one.")
+    return base
+
+
+def unattended_problem(s, mode, base):
+    """Why work with this mode and base can't start by itself here, or None."""
+    if s.loc["kind"] != "repo":
+        return None
+    if mode != "worktree":
+        return "It would work in the folder itself (--here); work that starts by itself goes into a request."
+    try:
+        open_request(s, base)
+    except Fail as e:
+        return str(e)
+    return None
+
+
 def cmd_request(args):
     verb = args.request
     with open_store(args, write=verb != "list") as s:

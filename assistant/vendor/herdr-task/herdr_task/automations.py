@@ -23,6 +23,7 @@ from .archive import archive_pass
 from .output import say
 from .scheduler import ensure_scheduler, script_hash
 from .commands import begin
+from .request import unattended_problem
 from .news import news_pass
 from .tick import end_done_pass, lost_logs_pass, memory_guard, retry_pass, tick_store
 from .backups import backup_pass
@@ -205,7 +206,7 @@ def find_auto(s, ref):
 
 
 def auto_view(s, a):
-    v = {k: a.get(k) for k in ("id", "title", "prompt", "mode", "agent", "on", "match", "space", "paused",
+    v = {k: a.get(k) for k in ("id", "title", "prompt", "mode", "base", "agent", "on", "match", "space", "paused",
                                 "next_run", "last_run", "last_task", "last_error", "runs", "created")}
     # machine: None here; herdr-task --on <machine> names it (cli.remote), so a list across machines says whose it is
     v.update(ref=auto_ref(s, a), **{"from": from_text(a["from"]) if a.get("from") else None}, folder=s.loc["folder"], machine=None, prefix=s.prefix, every=(a.get("every") or {}).get("text"),
@@ -252,6 +253,11 @@ def set_auto_fields(s, a, args, adding=False):
         if args.worktree and s.loc["kind"] != "repo":
             raise Fail("Worktrees need a git repo.")
         a["mode"] = "here" if args.here else "worktree"
+    if getattr(args, "base", None) is not None:
+        a["base"] = args.base.strip()
+    problem = unattended_problem(s, a.get("mode") or ("worktree" if worktrees_on(s) else "here"), a.get("base"))
+    if problem:
+        raise Fail(problem)
     if args.space:
         a["space"] = bare(args.space)
     if args.parent:
@@ -307,7 +313,8 @@ def cmd_auto(args):
                 msg = f"{auto_ref(s, a)} removed."
             elif sub == "run-now":
                 t = fire(s, a, "run now")
-                msg = f"{auto_ref(s, a)} added {s.ref(t)}" + (f", but: {a['last_error']['message']}" if a.get("last_error") else ".")
+                msg = (f"{auto_ref(s, a)} added {s.ref(t)}" if t else f"{auto_ref(s, a)} added nothing and is paused") + \
+                    (f", but: {a['last_error']['message']}" if a.get("last_error") else ".")
             elif sub == "show":
                 msg = auto_line(auto_view(s, a))
 
@@ -351,6 +358,14 @@ def fire(s, a, why, brief=None):
     """Adds the automation's task again and starts it (or queues it, as start would). Returns the
     task. A start that fails is the automation's last error, and the task needs the person.
     brief: what set it off (event_brief), added under its prompt."""
+    problem = unattended_problem(s, a.get("mode") or ("worktree" if worktrees_on(s) else "here"), a.get("base"))
+    if problem:
+        # No task at all: one left in To do without its request could be started by hand into the
+        # main folder, and a daily automation would pile them up. It pauses until someone edits it.
+        a["paused"], a["last_error"] = True, {"at": now(), "message": problem, "kind": "request"}
+        a["runs"] = (a.get("runs") or [])[-9:] + [{"at": now(), "why": why, "error": problem}]
+        s.dirty = True
+        return None
     prompt = a.get("prompt") or ""
     if brief:
         prompt = f"{prompt.rstrip()}\n\n{brief}" if prompt.strip() else brief
@@ -363,13 +378,15 @@ def fire(s, a, why, brief=None):
     if a.get("from") and why.split(":")[0] in EVENTS:
         run_rec["from"] = from_text(a["from"])
     try:
+        if s.loc["kind"] == "repo":
+            t["base"], t["base_set"] = a["base"], True
         if not space:
             raise Fail("It has no space to start in.")
         argv = worker_argv(s, t, space)
         parent = a.get("parent")
         reason = queue_reason(s, t)
         if reason:
-            t["state"], t["queued_at"] = "queued", now()
+            t["state"], t["queued_at"], t["unattended"] = "queued", now(), True
             t["queue"] = {"argv": argv, "space": space, "parent": parent}
             run_rec["queued"] = reason
         else:
@@ -593,7 +610,9 @@ def automations_pass(s, seen, report, feeds=None):
             continue
         for why, brief in whys:
             t = fire(s, a, why, brief)
-            report["fired"].append({"folder": s.loc["folder"], "automation": auto_ref(s, a), "task": s.ref(t), "why": why})
+            report["fired"].append({"folder": s.loc["folder"], "automation": auto_ref(s, a), "task": s.ref(t) if t else None, "why": why})
+            if not t:
+                break
 
 
 SEEN = os.path.join(STORE, ".seen.json")

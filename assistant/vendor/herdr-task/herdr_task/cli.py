@@ -322,6 +322,7 @@ def main():
             c.add_argument("--from", dest="from_", help="hear another folder's task events instead of this one's: "
                            "vm-b:~/dev/app (another machine linked to this one) or a folder here (\"\" clears)")
             c.add_argument("--agent")
+            c.add_argument("--base", help="the open request its tasks go into: request/<slug> (required in a repo)")
             c.add_argument("--space", help="the space its tasks start in (default: yours)")
             c.add_argument("--parent", help="its tasks' agents' parent (default: you)")
             g = c.add_mutually_exclusive_group()

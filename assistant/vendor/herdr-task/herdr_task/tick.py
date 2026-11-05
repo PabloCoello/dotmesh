@@ -26,6 +26,7 @@ from .takeover import cant_go_on, takeover
 from .ghnews import main_pass, pr_deliver, pr_news
 from .scheduler import SCHEDULER
 from .revive import revive_pass
+from .request import unattended_problem
 
 
 def at_work(s, t):
@@ -90,10 +91,33 @@ def due_pass(s, report):
     when there's room), each once."""
     for t in s.data["tasks"]:
         if t["state"] == "scheduled" and (t.get("scheduled_for") or 0) <= now():
-            t["state"], t["queued_at"] = "queued", t.get("scheduled_for") or now()
+            # Changed after it was scheduled (edit --base "", --here): it waits for the person.
+            problem = unattended_problem(s, t.get("mode"), t.get("base"))
+            if problem:
+                t["state"], t["attention"] = "todo", f"Not started at its time: {problem}"
+                for k in ("scheduled_for", "queue"):
+                    t.pop(k, None)
+                s.dirty = True
+                report.setdefault("not_started", []).append(s.ref(t))
+                continue
+            t["state"], t["queued_at"], t["unattended"] = "queued", t.get("scheduled_for") or now(), True
             t.pop("scheduled_for", None)
             s.dirty = True
             report.setdefault("due", []).append(s.ref(t))
+
+
+def not_started(s, t, report):
+    """Work that came due by itself (a schedule, an automation) is checked again before it starts:
+    it may have been edited while it waited in the queue. True: sent back to To do."""
+    problem = t.get("unattended") and unattended_problem(s, t.get("mode"), t.get("base"))
+    if not problem:
+        return False
+    t["state"], t["attention"] = "todo", f"Not started: {problem}"
+    for k in ("queue", "queued_at", "unattended"):
+        t.pop(k, None)
+    s.dirty = True
+    report.setdefault("not_started", []).append(s.ref(t))
+    return True
 
 
 def tick_store(s, report):
@@ -134,6 +158,8 @@ def tick_store(s, report):
                 t.pop("held")
             s.dirty = True
         if held:
+            continue
+        if not_started(s, t, report):
             continue
         q = t.get("queue") or {}
         try:
