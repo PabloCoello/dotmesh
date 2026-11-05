@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from .base import Fail, git, guard, now, run, STORE, VERSION
+from .base import Fail, git, guard, now, read_prompt_file, run, STORE, VERSION
 from .request import checked_out_at, merge_targets, unattended_problem
 from .settings import (
     agent_argv, agent_key, bare, merge_policy, review_limits, set_opts, settings_block, settings_for, space_base,
@@ -92,8 +92,7 @@ def cmd_list(args):
 def cmd_add(args):
     prompt = args.prompt or ""
     if args.prompt_file:
-        with open(args.prompt_file) as f:
-            prompt = f.read()
+        prompt = read_prompt_file(args.prompt_file, locate(args.folder)["folder"])
     at = scheduled_at(args)  # refused before anything is added
     with open_store(args) as s:
         repo = s.loc["kind"] == "repo"
@@ -719,8 +718,7 @@ def cmd_edit(args):
         if args.prompt is not None:
             t["prompt"] = args.prompt
         if args.prompt_file:
-            with open(args.prompt_file) as f:
-                t["prompt"] = f.read()
+            t["prompt"] = read_prompt_file(args.prompt_file, s.loc["folder"])
         pick = [t.get(k) for k in ("agent", "model", "effort")]
         set_opts(t, args)
         if [t.get(k) for k in ("agent", "model", "effort")] != pick:

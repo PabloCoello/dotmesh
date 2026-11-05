@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 
-from .base import ENTRY, Fail, guard, hc_json, now, STORE
+from .base import ENTRY, Fail, guard, hc_json, now, read_prompt_file, STORE
 from .when import parse_at
 from .settings import bare, settings_for, worker_argv, worktrees_on
 from .agents import agent_running, live_agents, starting, status_of, task_status
@@ -227,8 +227,7 @@ def set_auto_fields(s, a, args, adding=False):
     if args.prompt is not None:
         a["prompt"] = args.prompt
     if args.prompt_file:
-        with open(args.prompt_file) as f:
-            a["prompt"] = f.read()
+        a["prompt"] = read_prompt_file(args.prompt_file, s.loc["folder"])
     if args.every is not None:
         a["every"] = parse_every(args.every) if args.every.strip() and args.every.strip().lower() not in ("off", "none", "never") else None
         a["next_run"] = next_run(a["every"], now())

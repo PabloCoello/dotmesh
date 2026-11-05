@@ -5,6 +5,7 @@
 - A resume record (label herdr.resume) is typed into a shell outside the sandbox, so revive.py
   reads one it could not have written as no record: only claude, a real session id, a log under
   ~/.claude/projects, no flag that skips permissions.
+- --prompt-file reads a brief from the task folder's .ai/tasks/ only (herdr-task runs unconfined).
 
 Run: python3 -m unittest discover -s assistant/tests
 """
@@ -13,6 +14,7 @@ import contextlib
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -22,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), "vendor", "herdr-task"))
 import herdr_task.commands as commands  # noqa: E402
 import herdr_task.news as news  # noqa: E402
 import herdr_task.revive as revive  # noqa: E402
-from herdr_task.base import Fail  # noqa: E402
+from herdr_task.base import Fail, read_prompt_file  # noqa: E402
 
 
 class FakeStore:
@@ -105,6 +107,40 @@ class Records(unittest.TestCase):
                    {"log": "/etc/passwd"}, {"log": os.path.join(revive.HOME, ".claude", "projects", "..", "x.jsonl")},
                    {"cwd": "relative"}):
             self.assertIsNone(revive.read_record(record(**kw)), kw)
+
+
+class PromptFile(unittest.TestCase):
+    def setUp(self):
+        self.d = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.d))
+        os.makedirs(os.path.join(self.d, "repo", ".ai", "tasks", "x"))
+        self.repo = os.path.join(self.d, "repo")
+        self.brief = os.path.join(self.repo, ".ai", "tasks", "x", "brief.md")
+        with open(self.brief, "w") as f:
+            f.write("do it")
+        with open(os.path.join(self.d, "secret"), "w") as f:
+            f.write("key")
+
+    def test_a_brief_under_ai_tasks_is_read(self):
+        self.assertEqual(read_prompt_file(self.brief, self.repo), "do it")
+
+    def test_anything_else_is_refused(self):
+        secret = os.path.join(self.d, "secret")
+        link = os.path.join(self.repo, ".ai", "tasks", "x", "link.md")
+        os.symlink(secret, link)
+        big = os.path.join(self.repo, ".ai", "tasks", "x", "big.md")
+        with open(big, "w") as f:
+            f.write("x" * (256 * 1024 + 1))
+        for path in (secret, link, big, os.path.join(self.repo, ".ai", "tasks", "x"),
+                     os.path.join(self.repo, ".ai", "tasks", "..", "..", "..", "secret"), "/etc/hosts"):
+            self.assertRaises(Fail, read_prompt_file, path, self.repo)
+
+    def test_no_prompt_file_open_is_left_unchecked(self):
+        here = os.path.join(os.path.dirname(HERE), "vendor", "herdr-task", "herdr_task")
+        for name in os.listdir(here):
+            if name.endswith(".py"):
+                with open(os.path.join(here, name)) as f:
+                    self.assertNotIn("open(args.prompt_file", f.read(), name)
 
 
 if __name__ == "__main__":

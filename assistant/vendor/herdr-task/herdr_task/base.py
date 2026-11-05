@@ -156,3 +156,20 @@ def bundle():
                 with open(os.path.join(PACKAGE, name), "rb") as f:
                     z.writestr(zipfile.ZipInfo(f"herdr_task/{name}", (1980, 1, 1, 0, 0, 0)), f.read(), zipfile.ZIP_DEFLATED)
     return buf.getvalue()
+
+
+# dotmesh hardening.patch: herdr-task runs outside the sandbox in the Assistant's session, so
+# --prompt-file would read any file (~/.ssh, .env) into a worker's brief. A brief comes from the
+# task folder's .ai/tasks/ only (where the plan subagent writes it), as a plain file of a sane size.
+PROMPT_MAX = 256 * 1024
+
+
+def read_prompt_file(path, folder):
+    base = os.path.realpath(folder) + os.sep + os.path.join(".ai", "tasks") + os.sep
+    real = os.path.realpath(os.path.expanduser(path))
+    if not real.startswith(base) or not os.path.isfile(real):
+        raise Fail(f"--prompt-file reads a brief under {base} only.")
+    if os.path.getsize(real) > PROMPT_MAX:
+        raise Fail(f"--prompt-file: {path} is over {PROMPT_MAX // 1024} KiB.")
+    with open(real) as f:
+        return f.read()
