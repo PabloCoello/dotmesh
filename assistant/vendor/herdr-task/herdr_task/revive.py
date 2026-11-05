@@ -129,7 +129,31 @@ def read_record(k):
         rec = json.loads(((k.get("labels") or {}).get(LABEL)) or "null")
     except ValueError:
         return None
-    return rec if isinstance(rec, dict) else None
+    return rec if isinstance(rec, dict) and sane_record(rec) else None
+
+
+# dotmesh hardening.patch: a record is typed into a shell outside the sandbox, so one that this
+# tick could not have written (another program, a forged `hc label`) reads as no record at all.
+# Only claude starts here (lockdown.patch), on a session id and a log under ~/.claude/projects.
+SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+LOOSE = {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"}
+
+
+def sane_record(rec):
+    argv = rec.get("argv")
+    if rec.get("kind") != "claude" or not isinstance(argv, list) or argv[:1] != ["claude"]:
+        return False
+    if not all(isinstance(a, str) for a in argv) or LOOSE & set(argv) or "--permission-mode=bypassPermissions" in argv:
+        return False
+    if any(a == "--permission-mode" and argv[i + 1:i + 2] == ["bypassPermissions"] for i, a in enumerate(argv)):
+        return False
+    session, log, cwd = rec.get("session"), rec.get("log"), rec.get("cwd")
+    if session is not None and not (isinstance(session, str) and SESSION_ID.match(session)):
+        return False
+    projects = os.path.realpath(os.path.join(HOME, ".claude", "projects")) + os.sep
+    if log is not None and not (isinstance(log, str) and log.endswith(".jsonl") and os.path.realpath(log).startswith(projects)):
+        return False
+    return cwd is None or (isinstance(cwd, str) and os.path.isabs(cwd))
 
 
 def write_record(k, rec):

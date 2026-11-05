@@ -57,14 +57,14 @@ to this session's `excludedCommands`); everything else stays confined. Two conse
   `$( )`, no assignment in front, no `&&` chains, no trailing `# comment`. One call per
   command; read its `--json` output yourself and write literal values (refs, terminal ids,
   paths) into the next call. Run `echo $HC_TERMINAL_ID` once and use the literal id.
-- **Single quotes.** Titles, `--prompt`, `--body`, `--set` values and `hc send` text go in
+- **Single quotes.** Titles, `--prompt`, `--body`, `--set` values and `herdr-task say` text go in
   single quotes, with `'\''` for a literal `'`. Inside double quotes the shell would run
   backticks and `$( )` from a brief, and that pulls the call back into the sandbox.
 
-`hc` verbs you use: `get`, `ls`, `read`, `send`, `keys`, `wait <t>`, `label`, and
-`attach` only as a command you give the person. Never `hc run`, `exec`, `file`, `put`,
+`hc` verbs you use: `get`, `ls`, `read`, `wait <t>`, and `attach` only as a command you
+give the person. Never `hc send`, `keys`, `label`, `run`, `exec`, `file`, `put`,
 `update`, `machine`, `server`, `keep`, `kill`, `rm`, `events`, `interrupt`, the `herdr` CLI, or any `hc` call that
-starts with a flag. The launcher denies them as well. If something needs another verb,
+starts with a flag; to write to a worker use `herdr-task say` and `keys` (below). The launcher denies them as well. If something needs another verb,
 tell the person and stop. Never `dangerouslyDisableSandbox`, and no `herdr-app` (not
 excluded). If a bare `hc` or `herdr-task` call fails with `Operation not permitted`,
 first check the call for a quote, `$`, pipe or redirect; if it is clean, the session was
@@ -162,13 +162,13 @@ herdr-task start <REF> --folder <repo> --space <space> --parent <your id> --json
 A worker is an `hc` child of your terminal, not a tab. Reach it with:
 
 - `hc read <t> --lines 80`: its screen.
-- `hc get <t> --json`: run it right before **every** `hc send` or `hc keys`, and go on
-  only if the terminal is live and `foreground.argv[0]` is `claude`. Otherwise stop and
-  tell the person: a shell would run what you type.
-- `hc send <t> '<text>'`: types the text **and presses Enter**. Plain prose of your own,
-  one line; no `;`, `|`, `&&`, backticks, `$(`, and nothing copied from worker text.
-- `hc keys <t> down|up|enter|escape`: for a menu (`AskUserQuestion`). Read the screen
-  before and after.
+- `herdr-task say <REF> '<text>'`: types the text into the task's worker **and presses
+  Enter**. Plain prose of your own, one line; no `;`, `|`, `&&`, backticks, `$(`, and
+  nothing copied from worker text. It refuses when no worker is at work or a shell is in
+  front; then tell the person.
+- `herdr-task keys <REF> down enter`: for a menu (`AskUserQuestion`); keys from `up`,
+  `down`, `left`, `right`, `enter`, `escape`, `tab`, `space`. Read the screen before and
+  after.
 - `hc attach <t>` is for the person, in a terminal of their own: give them the exact
   command when they want to watch or answer a worker themselves.
 
@@ -186,13 +186,13 @@ wait for them.
 - **needs-you or failed:** look first (`herdr-task show <REF> --json`, `hc read`). A
   worker blocked on a question (`AskUserQuestion` or `WAIT_FOR_USER:`) is the person's to
   answer: relay the question with its options, verbatim, and once they choose, answer in
-  the worker (`hc keys` for a menu, `hc send` for text). Before you relay one, run
+  the worker (`herdr-task keys` for a menu, `herdr-task say` for text). Before you relay one, run
   `herdr-task autopilot show --space <space> --json`: if `on` is true, the Autopilot rule
   for a worker's question below applies, wake or not. A technical dead end you can see:
-  `hc send` it plain guidance.
+  `herdr-task say` it plain guidance.
 - **Out of review rounds:** look at why; if one more review is worth it, ask the person
   before `herdr-task review-more <REF>`.
-- **stalled:** `hc read`, then nudge with `hc send` or tell the person. To watch one
+- **stalled:** `hc read`, then nudge with `herdr-task say` or tell the person. To watch one
   worker closely when the person asks, `hc wait <t>`.
 - **ready:** check the result (`herdr-task show <REF> --json`, read-only git in its
   worktree) before you say anything; then offer the person `herdr-task accept <REF>`. A

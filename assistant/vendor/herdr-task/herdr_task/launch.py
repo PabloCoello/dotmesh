@@ -71,7 +71,7 @@ def own_rules(path):
 WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "scheduler", "autopilot",
                "fix", "merge", "accept", "done", "reopen", "rm", "unarchive", "backup", "restore-spaces",
                "review-more", "config", "review", "progress", "complete", "machines", "home",
-               "assistants", "tell-assistant", "request", "_allow", "_session-note", "_track", "--on", "--")
+               "assistants", "tell-assistant", "request", "say", "keys", "_allow", "_session-note", "_track", "--on", "--")
 
 
 def worker_settings(path, rules):

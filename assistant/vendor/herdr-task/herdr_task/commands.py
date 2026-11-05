@@ -17,7 +17,7 @@ from .settings import (
     task_settings, worker_argv, worktrees_on,
 )
 from .agents import (
-    agent_running, busy_again, detail, fit, LINE_MAX, live_agents, ready_turns, STATUSES, SUMMARY_MAX, WORKING_AGAIN,
+    agent_running, busy_again, claude_in_front, detail, fit, LINE_MAX, live_agents, ready_turns, STATUSES, SUMMARY_MAX, WORKING_AGAIN,
 )
 from .sessions import refresh_sessions
 from .github import finish, gh, github, merged_here, own_work, pr_adopt, pr_open, pr_pending, pr_problem, pr_view, update_main, watch_main
@@ -874,6 +874,47 @@ def tell(s, t, msg, args):
     space = bare(args.space) if getattr(args, "space", None) else (t.get("space") or default_space())
     a, _ = start_again(s, t, space, getattr(args, "agent", None), getattr(args, "argv", None), message=msg)
     return a["address"], True
+
+
+# dotmesh hardening.patch: the Assistant writes to a worker only through these two verbs, never
+# with hc send or hc keys (denied in its session). The target is always the task's own worker,
+# never a terminal named by the caller, and only while its claude is in front.
+SAY_KEYS = ("up", "down", "left", "right", "enter", "escape", "tab", "space")
+
+
+def task_worker(s, t):
+    live = workers(s, t)
+    if not live:
+        raise Fail(f"{s.ref(t)} has no worker at work to write to.")
+    return live[-1]["address"]
+
+
+def cmd_say(args):
+    with open_store(args) as s:
+        t = s.find(args.id)
+        addr = task_worker(s, t)
+        from .news import send_or_hold
+        got = send_or_hold(addr, args.text)
+        if not got:
+            raise Fail(f"Couldn't type into {addr}: hc send failed or its claude has exited (a shell is in front).")
+        v = view(s, t)
+    say(args, {**v, "terminal": addr, "sent": got}, f"{s.ref(t)}: {got} to {addr}")
+
+
+def cmd_keys(args):
+    bad = [k for k in args.keys if k not in SAY_KEYS]
+    if bad or not 0 < len(args.keys) <= 20:
+        raise Fail(f"Keys are up to 20 of: {', '.join(SAY_KEYS)}." + (f" Not {', '.join(bad)}." if bad else ""))
+    with open_store(args) as s:
+        t = s.find(args.id)
+        addr = task_worker(s, t)
+        if not claude_in_front(addr):
+            raise Fail(f"Couldn't press keys in {addr}: its claude has exited (a shell is in front).")
+        for k in args.keys:
+            if run(["hc", "keys", addr, k]).returncode != 0:
+                raise Fail(f"hc keys {k} failed in {addr}.")
+        v = view(s, t)
+    say(args, {**v, "terminal": addr, "keys": args.keys}, f"{s.ref(t)}: pressed {' '.join(args.keys)} in {addr}")
 
 
 def local_merge_msg(s, t):

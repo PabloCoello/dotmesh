@@ -14,7 +14,7 @@ from .launch import cmd_allow, name_tabs
 from .commands import (
     cmd_accept, cmd_add, cmd_alert, cmd_config, cmd_edit, cmd_fix, cmd_list, cmd_merge, cmd_ready,
     cmd_resume, cmd_review, cmd_review_more, cmd_reviewed, cmd_rm, cmd_show, cmd_start, cmd_state, cmd_status,
-    cmd_switch, cmd_unarchive, cmd_where,
+    cmd_keys, cmd_say, cmd_switch, cmd_unarchive, cmd_where,
 )
 from .tick import cmd_tick
 from .backups import cmd_backup, cmd_restore_spaces
@@ -256,6 +256,11 @@ def main():
     c = cmd("accept", cmd_accept, "the person's Accept on a Ready task: merges first when there is something to merge, then done")
     agent_opts(c)
     c.add_argument("--space")
+    # dotmesh hardening.patch: the Assistant's only way to write to a worker.
+    c = cmd("say", cmd_say, "type a message (and Enter) into the task's worker, only while its claude is in front: say 4 'use the blue one'")
+    c.add_argument("text")
+    c = cmd("keys", cmd_keys, "press keys in the task's worker, for a menu: keys 4 down enter (up, down, left, right, enter, escape, tab, space)")
+    c.add_argument("keys", nargs="+")
     cmd("reopen", lambda a: cmd_state(a, "reopen"), "undo done or ready; a queued or scheduled task goes back to to do")
     cmd("unarchive", cmd_unarchive, "bring an archived task back into its list (only when the person asks; writing to it does too)")
     c = cmd("edit", cmd_edit, "change a task")
