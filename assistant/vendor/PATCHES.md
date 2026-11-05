@@ -87,6 +87,14 @@ Riesgos que el parche no quita, aceptados:
   otra como lista. Con `merge: ask`, que es lo que se siembra, eso no integra nada; con `auto` o
   `checks`, `finalize` pide la integración al agente de esa tarea, que es un `claude`
   confinado.
+- Las noticias llegan al coordinador con `hc send`, que las teclea y pulsa Enter. Si el
+  coordinador es una shell, zsh las ejecuta como comandos, y el resumen de `ready` lo escribe
+  el worker: un `;` dentro bastaría para encadenar una orden sin confinar (medido el
+  05-11-2026 con una shell marcada a mano; el `<` inicial dio error de sintaxis). Por eso el
+  lanzador `assistant` ya no hace `exec`: espera a `claude` y quita la etiqueta
+  `herdr.role=coordinator` al salir, también con INT, TERM o HUP. Queda un `kill -9` del
+  lanzador, que deja la etiqueta puesta; `hc label <t> herdr.role=` la quita a mano. Nunca
+  marques una shell como coordinadora.
 - `in_shell()` arranca `claude` desde el shell interactivo del usuario, así que sus alias y
   funciones se aplican después de `vet_argv`. Son ficheros del usuario que un comando
   confinado no puede escribir.

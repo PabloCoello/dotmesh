@@ -3,7 +3,7 @@
 #
 # - Marks the terminal herdr.role=coordinator, which is how herdr-task finds the space's
 #   Assistant to deliver task news to it (launch.py is_coordinator).
-# - Starts claude with the `assistant` output style and, for this session only, hc and
+# - Starts claude (and waits for it) with the `assistant` output style and, for this session only, hc and
 #   herdr-task excluded from the Bash sandbox. The machine's template keeps its own list:
 #   a --settings array merges with it (measured 2026-09-28, scripts/test-scribe-flow.sh).
 #   Extra arguments go to claude.
@@ -18,6 +18,15 @@ fi
 command -v hc >/dev/null 2>&1 || { echo "assistant: hc is not on PATH." >&2; exit 1; }
 command -v herdr-task >/dev/null 2>&1 || { echo "assistant: herdr-task is not on PATH (make assistant-install)." >&2; exit 1; }
 
-hc label "$HC_TERMINAL_ID" herdr.role=coordinator >/dev/null
+# The label lives only while claude does. herdr-task types its news into the coordinator
+# with `hc send`, Enter included; left on the shell after claude exits, a worker's ready
+# summary would run there as a command, outside the sandbox (measured 05-11-2026). So no
+# exec: wait for claude and take the label off on any exit.
+unlabel() { hc label "$HC_TERMINAL_ID" herdr.role= >/dev/null 2>&1 || true; }
+trap unlabel EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
-exec claude --settings '{"outputStyle":"assistant","sandbox":{"excludedCommands":["hc *","herdr-task *"]}}' "$@"
+hc label "$HC_TERMINAL_ID" herdr.role=coordinator >/dev/null
+claude --settings '{"outputStyle":"assistant","sandbox":{"excludedCommands":["hc *","herdr-task *"]}}' "$@"
