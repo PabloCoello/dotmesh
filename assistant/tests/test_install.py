@@ -161,10 +161,34 @@ class Install(unittest.TestCase):
         os.makedirs(self.h(".claude/output-styles"))
         os.symlink(os.path.join(os.path.dirname(ROOT), "claude", ".claude", "output-styles", "assistant.md"),
                    self.h(".claude/output-styles/assistant.md"))
+        self.trust({self.h(".herdr/worktrees"): {"hasTrustDialogAccepted": True}})
         r = self.run_install("--status")
         # The checkout's own uncommitted assistant/ files are real drift while this branch is open.
         bad = [l for l in r.stdout.splitlines() if l.startswith("  --  ") and "sin confirmar" not in l]
         self.assertEqual(bad, [], r.stdout)
+
+    def trust(self, projects):
+        with open(self.h(".claude.json"), "w") as f:
+            json.dump({"projects": projects}, f)
+
+    def test_status_flags_worktrees_claude_does_not_trust(self):
+        """Measured in M10: one trusted ~/.herdr/worktrees covers every worker's worktree under it."""
+        self.assertEqual(self.run_install().returncode, 0)
+        wt = self.h(".herdr/worktrees")
+        for projects in (None, {}, {wt: {"hasTrustDialogAccepted": False}},
+                         {wt + "/app": {"hasTrustDialogAccepted": True}}):
+            if projects is None:
+                if os.path.exists(self.h(".claude.json")):
+                    os.remove(self.h(".claude.json"))
+            else:
+                self.trust(projects)
+            self.assertIn("no confía", self.run_install("--status").stdout, projects)
+        with open(self.h(".claude.json"), "w") as f:
+            f.write("{not json")
+        self.assertIn("no confía", self.run_install("--status").stdout)
+        for ok_dir in (wt, self.h(".herdr"), self.home):
+            self.trust({ok_dir: {"hasTrustDialogAccepted": True}})
+            self.assertNotIn("no confía", self.run_install("--status").stdout, ok_dir)
 
     def test_status_flags_a_persona_link_that_points_elsewhere(self):
         self.assertEqual(self.run_install().returncode, 0)

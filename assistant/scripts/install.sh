@@ -74,6 +74,24 @@ status() {
         -- assistant/vendor assistant/bin assistant/templates 2>/dev/null | { ! read -r _; }; then
     warn "assistant: hay cambios sin confirmar en assistant/{vendor,bin,templates}; revísalos"; bad=1
   fi
+  # Los workers arrancan en ~/.herdr/worktrees/<repo>/task-*. Claude Code abre el diálogo de
+  # confianza en cada uno salvo que confíe en esa carpeta o en una superior (medido en M10), y
+  # un worker parado en ese diálogo no avanza. Se confía una vez, abriendo claude allí.
+  if ! python3 -I - "$HOME/.claude.json" "$STORE/worktrees" "$HOME" <<'PY' 2>/dev/null
+import json, os, sys
+path, wt, home = sys.argv[1:]
+projects = json.load(open(path)).get("projects") or {}
+d = wt
+while True:
+    if (projects.get(d) or {}).get("hasTrustDialogAccepted") is True:
+        sys.exit(0)
+    if d == home or d == os.path.dirname(d):
+        sys.exit(1)
+    d = os.path.dirname(d)
+PY
+  then
+    warn "assistant: Claude no confía en $STORE/worktrees; los workers se pararían en el diálogo de confianza (assistant/README.md)"; bad=1
+  fi
   case ":$PATH:" in
     *":$BIN:"*) ;;
     *) warn "assistant: $BIN no está en el PATH; los workers no reconocerían 'herdr-task'"; bad=1 ;;
