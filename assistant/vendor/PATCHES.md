@@ -78,14 +78,16 @@ Riesgos que el parche no quita, aceptados:
   que ejecutan o escriben (`run`, `exec`, `file`, `put`, `update`, `machine`, `server`…),
   cualquier llamada a `hc` o `herdr-task` que empiece por una opción (`hc --json run`) y los
   verbos de `herdr-task` que actúan por un worker o en otra máquina
-  (`assistant/tests/test_launcher.py`). `send` y `keys` siguen permitidos: la persona los
-  usa para contestar a los workers y comprueba antes con `hc get` que delante hay un
-  `claude`. Medido el 05-11-2026 con `claude -p` y esos mismos `--settings` sin la persona,
+  (`assistant/tests/test_launcher.py`). `send`, `keys` y `label` se deniegan desde
+  `hardening.patch` (abajo): el Assistant escribe a un worker con `herdr-task say` y `keys`.
+  Medido el 05-11-2026 con `claude -p` y esos mismos `--settings` sin la persona,
   bajo `bypassPermissions`: `hc run true`, `hc --json run true`, `hc exec -- true`,
   `herdr-task ready 1` y `herdr pane list` se deniegan; `hc ls`, `herdr-task list --json` y
   `herdr-task review-more 1` corren. La regla deny se aplica también a un comando excluido de
   la caja, y `herdr-task review` no se lleva por delante `review-more`. Un worker puede hacerle llegar texto con `ready --summary`,
-  que es un canal de inyección de instrucciones hacia ella, no de ejecución.
+  que es un canal de inyección de instrucciones hacia ella. Mientras `hc send` y `hc keys`
+  estuvieron permitidos, también era un canal de ejecución: una inyección lograda podía
+  teclear un comando en cualquier shell. `hardening.patch` lo cierra.
 - El worker es una sesión maker más: hereda de la máquina `allowUnsandboxedCommands`, los
   cuatro comandos excluidos de la plantilla y `bypassPermissions`. El parche no amplía esa
   postura, pero tampoco la estrecha, y el worker corre sin nadie delante.
@@ -233,8 +235,8 @@ git no exige nada, porque allí no hay rama que integrar. Se comprueba en cinco 
   mientras esperaba a sus tareas `--after` o a tener hueco. Una tarea que puso en cola el
   Assistant a mano sigue como en upstream.
 
-Un encargo cerrado no se puede volver a abrir con el mismo nombre mientras siga en el almacén,
-así que una automatización que apuntaba a él necesita otro encargo (`auto edit --base`) y
+Un encargo cerrado sin `--remove` sigue en el almacén y no se puede volver a abrir con el
+mismo nombre, así que una automatización que apuntaba a él necesita otro encargo (`auto edit --base`) y
 `auto resume`. La vista de la automatización muestra su `base`.
 
 Queda fuera la integración automática en un encargo: con la integración «por su cuenta» y sin
@@ -243,6 +245,55 @@ rechaza porque el encargo está desplegado en su worktree. No escribe en la carp
 la tarea espera a la persona.
 
 Prueba: `assistant/tests/test_auto_request.py`.
+
+## `hardening.patch`
+
+La puerta de seguridad final del 05-11-2026 revisó el paquete entero y encontró cinco huecos
+que los parches anteriores dejaban abiertos. Este parche cierra los que están en herdr-task;
+el lanzador y el output style `assistant` cambian en el mismo commit.
+
+- **Escribir a un worker.** La sesión del Assistant tenía `hc send` y `hc keys` fuera del
+  sandbox, contra cualquier terminal, y solo el texto de su output style exigía comprobar antes
+  que delante hubiera un `claude`. Como esa sesión lee texto de los workers, una inyección
+  lograda podía teclear un comando en una shell sin confinar. Ahora hay dos verbos nuevos:
+  `herdr-task say <id> '<texto>'` y `herdr-task keys <id> <tecla>...`. Los dos escriben
+  siempre al worker vivo de la tarea, nunca a un terminal que elija quien llama, y solo
+  con `claude` delante (la comprobación de `news-guard.patch`). `keys` acepta hasta 20
+  teclas de una lista cerrada: `up`, `down`, `left`, `right`, `enter`, `escape`, `tab` y
+  `space`. El lanzador deniega `hc send`, `hc keys` y `hc label`, y los workers tienen
+  denegados `say` y `keys`.
+- **Exclusión por verbos.** El lanzador excluía `hc *` y `herdr-task *` y denegaba una
+  lista de verbos. Un verbo nuevo de upstream, o una forma que la regla no reconociera,
+  habría corrido fuera de la caja. Ahora excluye verbo a verbo: de `hc`, solo `get`, `ls`,
+  `read` y `wait`; de `herdr-task`, los verbos que usa el Assistant. Cualquier otra forma
+  se queda en la caja, donde el socket de herdr-core no responde. La lista de verbos
+  denegados se mantiene como segunda línea. `test_launcher.py` comprueba que cada verbo
+  de `cli.py` está excluido o denegado, y nunca las dos cosas a la vez.
+- **Registros de reanudación.** `revive.py` teclea en una shell recuperada lo que dice la
+  etiqueta `herdr.resume` del terminal. Con `hc label` al alcance del Assistant, una etiqueta
+  falsificada llevaba cualquier comando a esa shell. Además de denegar `hc label`,
+  `read_record` descarta los registros que el tick no pudo escribir: argv que no empiece por
+  `claude` a secas, flags que se salten los permisos, una sesión que no sea un UUID, un log
+  fuera de `~/.claude/projects` o una carpeta relativa.
+- **`--prompt-file`.** herdr-task corre fuera de la caja, así que `--prompt-file` podía leer
+  cualquier fichero (`~/.ssh`, un `.env`) y llevarlo al brief de un worker. Ahora solo lee un
+  fichero normal bajo `<carpeta>/.ai/tasks/`, con la ruta ya resuelta y como mucho 256 KiB,
+  en `add`, `edit` y las automatizaciones.
+- **Configuración que ejecuta código.** La persona confía una vez en `~/.herdr/worktrees`,
+  así que unos hooks, un servidor MCP o unos ajustes que un worker commitee correrían fuera
+  de la caja al abrir una sesión o un commit en el worktree del encargo. Antes de integrar,
+  `accept` lista lo que la tarea cambia en `.claude/`, `.codex/`, `.opencode/`, `.husky/`,
+  `.githooks/`, `.vscode/` y `.devcontainer/`, y en `.mcp.json`, `.pre-commit-config.yaml`,
+  `lefthook.yml`, `.envrc` y `opencode.json`. Si hay algo, se niega hasta recibir
+  `--config-ok`. El Assistant solo lo pasa cuando la persona ha visto la lista y ha dicho
+  que sí. Se comprueban los commits de la rama, no lo que quede sin confirmar en el
+  worktree de la tarea, porque eso no se integra.
+
+Queda abierto: el sandbox no impide que un comando confinado con este checkout como carpeta
+de trabajo escriba en `assistant/`, código que luego corre fuera. `make health` avisa de los
+cambios sin confirmar en `vendor/`, `bin/` y `templates/`, pero solo cuando se ejecuta.
+
+Prueba: `assistant/tests/test_hardening.py` y `test_launcher.py`.
 
 Las pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
 

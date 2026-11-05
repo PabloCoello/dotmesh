@@ -186,7 +186,8 @@ class Install(unittest.TestCase):
         with open(self.h(".claude.json"), "w") as f:
             f.write("{not json")
         self.assertIn("no confía", self.run_install("--status").stdout)
-        for ok_dir in (wt, self.h(".herdr"), self.home):
+        # Claude may key the folder by its resolved path (on macOS a temp HOME sits under /private).
+        for ok_dir in (wt, self.h(".herdr"), self.home, os.path.realpath(wt)):
             self.trust({ok_dir: {"hasTrustDialogAccepted": True}})
             self.assertNotIn("no confía", self.run_install("--status").stdout, ok_dir)
 

@@ -81,13 +81,15 @@ status() {
 import json, os, sys
 path, wt, home = sys.argv[1:]
 projects = json.load(open(path)).get("projects") or {}
-d = wt
-while True:
-    if (projects.get(d) or {}).get("hasTrustDialogAccepted") is True:
-        sys.exit(0)
-    if d == home or d == os.path.dirname(d):
-        sys.exit(1)
-    d = os.path.dirname(d)
+# Both spellings: the path as written and with its symlinks resolved.
+for d, top in ((wt, home), (os.path.realpath(wt), os.path.realpath(home))):
+    while True:
+        if (projects.get(d) or {}).get("hasTrustDialogAccepted") is True:
+            sys.exit(0)
+        if d == top or d == os.path.dirname(d):
+            break
+        d = os.path.dirname(d)
+sys.exit(1)
 PY
   then
     warn "assistant: Claude no confía en $STORE/worktrees; los workers se pararían en el diálogo de confianza (assistant/README.md)"; bad=1

@@ -77,7 +77,7 @@ The `collie/` package is Linux/macOS-only and intentionally **not** in `PACKAGES
 
 The `terminal-browser/` package is Linux/macOS-only and intentionally **not** in `PACKAGES` nor in `make install`: nothing in it is stowed, and its patch turns off Chromium site isolation, which is acceptable only for the user's own pages (the rules are in its README, and repeated in the three global instruction files because the skill is linked globally). `make terminal-browser-install` runs `terminal-browser/scripts/install.sh`: the pinned release, verified by SHA-256, no sudo, idempotent, then `harden.sh` (web MIDI denied, downloads cancelled), `tune.sh` (painting capped at 30 fps: on Linux every frame is copied by CPU, and at the display rate the browser pegs a core and input lags) and `site-isolation.sh`. In Claude Code a `PostToolUse` hook on `Artifact` (`offer-terminal-browser.sh`) tells the agent, after a first publish inside a herdr pane, to offer opening the artifact beside the conversation; it only offers, and only a claude.ai artifact URL of the exact shape reaches the context. The AppArmor profile that upstream writes with sudo is printed as a one-time step instead. Never run `terminal-browser upgrade`: it skips the pin and silently drops the patch, and `make health` reports that as `sin parche`. Upstream's `setup`, which the installer runs and the CLI reruns after every upgrade, touches two things outside the app. It links its agent skill into `~/.claude/skills`, `~/.agents/skills` and `~/.codex/skills` as symlinks into the install, a second skill source that is accepted because it versions with the binary it describes. And it adds `terminal.integrated.enableImages` to VS Code's `settings.json`, a symlink into this repo that already carries the line. herdr needs `kitty_graphics = true`, already in its config.
 
-The `assistant/` package is intentionally **not** in `PACKAGES` nor in `make install`: it puts a coordinator next to herdr-core whose session runs `hc` and `herdr-task` outside the sandbox, so it is installed on purpose. `make assistant-install` runs `assistant/scripts/install.sh`, idempotent and without sudo: it links the two binaries and the two templates from `~/.local/bin` and `~/.config/herdr-core/templates` back into this checkout, seeds `~/.herdr/shepherdr.json` only when missing (local merge on confirmation, one review round, Autopilot off) and never touches `~/.claude/settings.json`, because the sandbox exclusion is per session. It refuses next to an installed shepherdr or a `~/.herdr` it did not create. Workers stop at Claude's trust dialog unless `~/.herdr/worktrees` is trusted once; `--status`, which `make health` runs, reports that, missing links, and uncommitted changes under `vendor/`, `bin/` or `templates/` (that code runs unconfined). The five local patches over the pinned upstream are in `assistant/vendor/PATCHES.md`; never run `shepherdr update`.
+The `assistant/` package is intentionally **not** in `PACKAGES` nor in `make install`: it puts a coordinator next to herdr-core whose session runs `hc` and `herdr-task` outside the sandbox, so it is installed on purpose. `make assistant-install` runs `assistant/scripts/install.sh`, idempotent and without sudo: it links the two binaries and the two templates from `~/.local/bin` and `~/.config/herdr-core/templates` back into this checkout, seeds `~/.herdr/shepherdr.json` only when missing (local merge on confirmation, one review round, Autopilot off) and never touches `~/.claude/settings.json`, because the sandbox exclusion is per session. It refuses next to an installed shepherdr or a `~/.herdr` it did not create. Workers stop at Claude's trust dialog unless `~/.herdr/worktrees` is trusted once (so `accept` refuses, until `--config-ok`, a task that changes hooks, MCP or settings files there); `--status`, which `make health` runs, reports that, missing links, and uncommitted changes under `vendor/`, `bin/` or `templates/` (that code runs unconfined). The six local patches over the pinned upstream are in `assistant/vendor/PATCHES.md`; never run `shepherdr update`.
 
 ## Skills as the integration point
 
@@ -310,12 +310,17 @@ The agent system has two layers, identical in concept across the three tools.
   `hc run`, `exec`, `send`, `keys`, `file write` and `update --from` all do,
   and a deny rule by prefix is dodged with `hc --json run`. That is why the
   exclusion lives only where it is needed (ADR 0004, amendment). The
-  Assistant's launcher (`assistant/bin/assistant`) adds both with `--settings`
-  to its own session, an accepted risk: that session writes no code and the
-  user drives it. The same `--settings` denies the `hc` verbs that run programs
-  or write files (`run`, `exec`, `file`, `put`, `update`, …), any `hc` or
-  `herdr-task` call that starts with a flag, and the `herdr-task` verbs that act
-  for a worker or another machine; the `assistant` persona names the same list.
+  Assistant's launcher (`assistant/bin/assistant`) excludes them verb by verb
+  with `--settings` in its own session, an accepted risk: that session writes no
+  code and the user drives it. Only the read-only `hc` verbs (`get`, `ls`,
+  `read`, `wait`) and the `herdr-task` verbs the persona uses leave the box, so
+  a new upstream verb or an unrecognised form stays inside. The same
+  `--settings` also denies the `hc` verbs that run programs, write files or type
+  into a terminal (`run`, `exec`, `file`, `put`, `update`, `send`, `keys`,
+  `label`, …), any `hc` or `herdr-task` call that starts with a flag, and the
+  `herdr-task` verbs that act for a worker or another machine; the `assistant`
+  persona names the same list and writes to a worker only through the guarded
+  `herdr-task say` and `keys` (`assistant/vendor/hardening.patch`).
   A task worker gets, through the `--settings` that
   `herdr-task` injects, one exclusion per verb it needs (`herdr-task ready *`,
   `status *`, …), so any other form, `herdr-task -- start` included, stays in

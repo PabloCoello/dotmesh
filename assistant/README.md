@@ -9,7 +9,7 @@ interrumpe cuando hace falta una decisión tuya.
 
 El paquete tiene tres piezas. La primera es `herdr-task`, el CLI de tareas de
 [shepherdr](https://github.com/eliasstravik/shepherdr) (MIT), copiado en `vendor/herdr-task/`
-y anclado a una versión con cinco parches locales. La segunda es el lanzador `bin/assistant`,
+y anclado a una versión con seis parches locales. La segunda es el lanzador `bin/assistant`,
 que abre la sesión del Assistant. La tercera son las plantillas del worker y del revisor
 (`templates/`). La persona `assistant` vive en el paquete `claude/` y llega con `make stow`.
 El porqué de este diseño, y de no escribir un coordinador propio, está en el
@@ -41,7 +41,10 @@ Falta un paso, que se hace una sola vez. Claude Code muestra un diálogo de conf
 primera vez que se abre en una carpeta, y un worker parado en ese diálogo no avanza. Los
 workers arrancan en `~/.herdr/worktrees/<repo>/task-*`, y basta con confiar en la carpeta
 común. Para ello, abre `claude` en `~/.herdr/worktrees`, acepta el diálogo y sal. Esa
-confianza vale para todas las subcarpetas.
+confianza vale para todas las subcarpetas. Como contrapartida, Claude tampoco preguntará antes de
+cargar los hooks, servidores MCP o ajustes que un worker haya commiteado allí. Por eso
+`accept` se para si la tarea cambia ficheros de ese tipo (`.claude/`, `.mcp.json`, hooks de
+git…) y te los enseña; solo se integran cuando tú das el visto bueno.
 
 `make health` comprueba la instalación con `scripts/install.sh --status`. Avisa si falta `hc`,
 algún enlace, la persona, los ajustes o la confianza en `~/.herdr/worktrees`, y también si hay
@@ -123,12 +126,21 @@ integra porque se lo pida un despertar.
 ## Qué queda confinado y qué no
 
 Bajo `bypassPermissions`, el sandbox de Bash es el único freno, y `hc` no funciona dentro de
-él. Por eso el lanzador saca `hc` y `herdr-task` del sandbox, solo para la sesión del
-Assistant, con su propio `--settings`. Esa sesión lee texto que escriben los workers, de modo
-que el mismo `--settings` deniega los verbos que ejecutan programas o escriben ficheros
-(`hc run`, `exec`, `file`, `put`…), cualquier llamada que empiece por una opción y los verbos
-de `herdr-task` que actúan por un worker o hacia otra máquina. Las reglas de denegación se
-aplican aunque el comando esté excluido (medido el 05-11-2026 con `claude -p`).
+él. Por eso el lanzador saca del sandbox, solo para la sesión del Assistant y con su propio
+`--settings`, los verbos que necesita, uno a uno: de `hc`, solo los de lectura (`get`, `ls`,
+`read`, `wait`); de `herdr-task`, los que usa la persona. Cualquier otra forma se queda en la
+caja, donde no llega a herdr-core. Esa sesión lee texto que escriben los workers, de modo que
+el mismo `--settings` deniega además los verbos que ejecutan programas, escriben ficheros o
+teclean en un terminal (`hc run`, `exec`, `file`, `send`, `keys`, `label`…), cualquier llamada
+que empiece por una opción y los verbos de `herdr-task` que actúan por un worker o hacia otra
+máquina. Las reglas de denegación se aplican aunque el comando esté excluido (medido el
+05-11-2026 con `claude -p`).
+
+Para contestar a un worker, el Assistant usa `herdr-task say` (texto) y `herdr-task keys`
+(teclas de una lista cerrada, para un menú). Los dos escriben solo al worker de la tarea que
+se nombra, y solo mientras su `claude` está en primer plano. `--prompt-file` solo lee un
+brief de `.ai/tasks/` de la carpeta, y la reanudación tras un reinicio descarta cualquier
+registro que no haya podido escribir herdr-task.
 
 Los workers tienen menos todavía. Cada uno excluye del sandbox solo los verbos de
 `herdr-task` que necesita (`ready`, `status`, `reviewed`…), uno a uno, y tiene denegados los

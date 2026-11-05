@@ -121,6 +121,14 @@ Decisión nueva, tomada con el usuario:
 Queda un riesgo aceptado: la sesión del Assistant puede lanzar procesos sin confinar. Es una
 sesión que no escribe código y que el usuario dirige.
 
+Segunda enmienda (05-11-2026), tras la puerta de seguridad final: el riesgo aceptado era
+mayor de lo escrito, porque esa sesión lee texto de los workers y `hc send`, `hc keys` y
+`hc label` le dejaban teclear en cualquier shell. Desde `hardening.patch`, el lanzador
+excluye del sandbox verbo a verbo (de `hc`, solo `get`, `ls`, `read` y `wait`) y deniega
+`send`, `keys` y `label`; el Assistant escribe a un worker con `herdr-task say` y `keys`, que
+solo llegan al worker de la tarea y con `claude` delante. El detalle, en
+`assistant/vendor/PATCHES.md`.
+
 ## Consecuencias
 
 - Código de terceros corre sin confinar. `herdr-task` y `hc` están en `excludedCommands`,
