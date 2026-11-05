@@ -1,0 +1,23 @@
+#!/bin/sh
+# assistant: starts the dotmesh Assistant (ADR 0004) in this herdr-core terminal.
+#
+# - Marks the terminal herdr.role=coordinator, which is how herdr-task finds the space's
+#   Assistant to deliver task news to it (launch.py is_coordinator).
+# - Starts claude with the `assistant` output style and, for this session only, hc and
+#   herdr-task excluded from the Bash sandbox. The machine's template keeps its own list:
+#   a --settings array merges with it (measured 2026-09-28, scripts/test-scribe-flow.sh).
+#   Extra arguments go to claude.
+#
+# Run it yourself from a terminal of the herdr app, never from inside an agent.
+set -eu
+
+if [ -z "${HC_TERMINAL_ID:-}" ]; then
+  echo "assistant: run it in a herdr-core terminal (HC_TERMINAL_ID is not set)." >&2
+  exit 1
+fi
+command -v hc >/dev/null 2>&1 || { echo "assistant: hc is not on PATH." >&2; exit 1; }
+command -v herdr-task >/dev/null 2>&1 || { echo "assistant: herdr-task is not on PATH (make assistant-install)." >&2; exit 1; }
+
+hc label "$HC_TERMINAL_ID" herdr.role=coordinator >/dev/null
+
+exec claude --settings '{"outputStyle":"assistant","sandbox":{"excludedCommands":["hc *","herdr-task *"]}}' "$@"

@@ -286,6 +286,27 @@ The agent system has two layers, identical in concept across the three tools.
   directly, not to what a script it launches runs: a command inside a shell
   script inherits the sandbox.
 
+  Two more commands are excluded per session, never in the template: `hc` and
+  `herdr-task`, which talk to the herdr-core socket (measured on 2026-11-05,
+  `hc ls` inside the box fails with `cannot start core: Operation not
+  permitted`). The herdr-core daemon spawns whatever it is asked to, outside
+  the box, so a session that reaches it can run anything unconfined:
+  `hc run`, `exec`, `send`, `keys`, `file write` and `update --from` all do,
+  and a deny rule by prefix is dodged with `hc --json run`. That is why the
+  exclusion lives only where it is needed (ADR 0004, amendment). The
+  Assistant's launcher (`assistant/bin/assistant`) adds both with `--settings`
+  to its own session, an accepted risk: that session writes no code and the
+  user drives it. A task worker gets, through the `--settings` that
+  `herdr-task` injects, one exclusion per verb it needs (`herdr-task ready *`,
+  `status *`, …), so any other form, `herdr-task -- start` included, stays in
+  the box and cannot reach the socket; every other verb is also denied. The
+  vendored `herdr-task` carries a patch (`assistant/vendor/lockdown.patch`)
+  that starts nothing but a `claude` whose flags cannot loosen its own sandbox
+  and reads no paths from the environment. A `--settings` array merges with
+  the machine's rather than replacing it (measured on 2026-09-28, see
+  `scripts/test-scribe-flow.sh`), so the template's four stay in force in both
+  — and a worker keeps the posture of any maker session, hatch included.
+
   **The exclusion reaches only the bare command, and that is new.** Measured on
   2026-09-14 and again on 2026-09-20 against v2.1.274: when any first-level
   command of a chained call was excluded, the **whole call** ran outside the
