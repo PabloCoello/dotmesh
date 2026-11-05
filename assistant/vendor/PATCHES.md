@@ -80,8 +80,11 @@ Riesgos que el parche no quita, aceptados:
   verbos de `herdr-task` que actúan por un worker o en otra máquina
   (`assistant/tests/test_launcher.py`). `send` y `keys` siguen permitidos: la persona los
   usa para contestar a los workers y comprueba antes con `hc get` que delante hay un
-  `claude`. Que Claude Code aplique esas reglas a un comando excluido de la caja está
-  pendiente de medir en vivo. Un worker puede hacerle llegar texto con `ready --summary`,
+  `claude`. Medido el 05-11-2026 con `claude -p` y esos mismos `--settings` sin la persona,
+  bajo `bypassPermissions`: `hc run true`, `hc --json run true`, `hc exec -- true`,
+  `herdr-task ready 1` y `herdr pane list` se deniegan; `hc ls`, `herdr-task list --json` y
+  `herdr-task review-more 1` corren. La regla deny se aplica también a un comando excluido de
+  la caja, y `herdr-task review` no se lleva por delante `review-more`. Un worker puede hacerle llegar texto con `ready --summary`,
   que es un canal de inyección de instrucciones hacia ella, no de ejecución.
 - El worker es una sesión maker más: hereda de la máquina `allowUnsandboxedCommands`, los
   cuatro comandos excluidos de la plantilla y `bypassPermissions`. El parche no amplía esa
