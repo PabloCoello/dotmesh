@@ -255,6 +255,7 @@ def main():
     cmd("done", lambda a: cmd_state(a, "done"), "mark done (the person's call: only when they ask; agents finish with ready)")
     c = cmd("accept", cmd_accept, "the person's Accept on a Ready task: merges first when there is something to merge, then done")
     agent_opts(c)
+    c.add_argument("--config-ok", action="store_true", help="the person has reviewed the hooks, MCP or settings files it changes (dotmesh hardening.patch)")
     c.add_argument("--space")
     # dotmesh hardening.patch: the Assistant's only way to write to a worker.
     c = cmd("say", cmd_say, "type a message (and Enter) into the task's worker, only while its claude is in front: say 4 'use the blue one'")

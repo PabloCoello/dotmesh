@@ -6,6 +6,7 @@
   reads one it could not have written as no record: only claude, a real session id, a log under
   ~/.claude/projects, no flag that skips permissions.
 - --prompt-file reads a brief from the task folder's .ai/tasks/ only (herdr-task runs unconfined).
+- accept names the hooks, MCP and settings files a task changes and waits for --config-ok.
 
 Run: python3 -m unittest discover -s assistant/tests
 """
@@ -141,6 +142,29 @@ class PromptFile(unittest.TestCase):
             if name.endswith(".py"):
                 with open(os.path.join(here, name)) as f:
                     self.assertNotIn("open(args.prompt_file", f.read(), name)
+
+
+class ConfigPaths(unittest.TestCase):
+    def paths(self, out, ok=True):
+        s = mock.Mock(loc={"folder": "/repo"})
+        with mock.patch.object(commands, "git", lambda *a: (ok, out, "")):
+            return commands.config_paths(s, {"base": "request/x", "branch": "task-4"})
+
+    def test_config_that_runs_code_is_named(self):
+        out = "\n".join(["hola.sh", ".claude/settings.json", "sub/.mcp.json", ".husky/pre-commit",
+                         ".pre-commit-config.yaml", "docs/claude.md", ".vscode/tasks.json", "a/.envrc"])
+        self.assertEqual(self.paths(out), [".claude/settings.json", "sub/.mcp.json", ".husky/pre-commit",
+                                           ".pre-commit-config.yaml", ".vscode/tasks.json", "a/.envrc"])
+
+    def test_ordinary_changes_pass_and_a_failed_diff_does_not(self):
+        self.assertEqual(self.paths("hola.sh\ntest_hola.sh"), [])
+        self.assertTrue(self.paths("", ok=False))
+
+    def test_accept_checks_before_it_merges(self):
+        import inspect
+        src = inspect.getsource(commands.cmd_accept)
+        self.assertLess(src.index("config_paths(s, t)"), src.index('t["accepted_at"] = now()'))
+        self.assertIn('getattr(args, "config_ok", False)', src)
 
 
 if __name__ == "__main__":

@@ -1021,6 +1021,21 @@ def ff_merge(s, t):
     return git(main, "fetch", ".", f"{br}:{base}")[0]
 
 
+# dotmesh hardening.patch: the person trusts ~/.herdr/worktrees once, so a hook, an MCP server or a
+# settings file a worker commits would run, outside the sandbox, the next time a session or a
+# commit opens in the request's worktree. accept names them and waits for --config-ok.
+CONFIG_DIRS = {".claude", ".codex", ".opencode", ".husky", ".githooks", ".vscode", ".devcontainer"}
+CONFIG_FILES = {".mcp.json", ".pre-commit-config.yaml", "lefthook.yml", "lefthook.yaml", ".lefthook.yml", ".envrc", "opencode.json"}
+
+
+def config_paths(s, t):
+    base, br = t.get("base") or "main", t.get("branch")
+    ok, out, _ = git(s.loc["folder"], "diff", "--name-only", "--no-renames", f"{base}...{br}") if br else (False, "", "")
+    if not ok:
+        return ["(its changes couldn't be listed)"]
+    return [p for p in out.split("\n") if p and (CONFIG_DIRS & set(p.split("/")[:-1]) or p.split("/")[-1] in CONFIG_FILES)]
+
+
 def cmd_accept(args):
     """The person's Accept on a Ready task (the one thing they do in the Tasks panel): Done at
     once when there is nothing to merge, else merged first, as the merge settings say how: a pull
@@ -1050,8 +1065,13 @@ def cmd_accept(args):
         t = s.find(args.id)
         if t["state"] != "ready":
             raise Fail(f"{s.ref(t)} isn't ready ({t['state']}); only a Ready task can be accepted.")
-        t.pop("attention", None)
         wt = t.get("worktree") if t.get("mode") == "worktree" else None
+        if wt and not getattr(args, "config_ok", False):
+            touched = config_paths(s, t)
+            if touched:
+                raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens in that folder: "
+                           f"{', '.join(touched[:10])}. Review them; accept with --config-ok once the person has.")
+        t.pop("attention", None)
         t["accepted_at"] = now()
         s.dirty = True
         if not wt:
