@@ -49,6 +49,16 @@ class Guard(unittest.TestCase):
                     mock.patch.object(agents, "claude_child", lambda pid, c=child: c):
                 self.assertIs(agents.claude_in_front("t1"), want, argv)
 
+    def test_the_launcher_counts_as_an_agent_running(self):
+        """Autopilot waited for "its Assistant to run": hc names the launcher by its shell (bash)."""
+        k = {"state": "live", "foreground": {"name": "bash", "pid": 7, "argv": ["/bin/sh", agents.LAUNCHER]}}
+        for child, want in ((True, True), (False, False)):
+            with mock.patch.object(agents, "claude_child", lambda pid, c=child: c):
+                self.assertIs(agents.agent_running(k), want)
+        shell = {"state": "live", "foreground": {"name": "zsh", "pid": 7, "argv": ["-zsh"]}}
+        with mock.patch.object(agents, "claude_child", lambda pid: True):
+            self.assertFalse(agents.agent_running(shell))
+
     def test_claude_child_reads_ps(self):
         out = "  1 /sbin/launchd\n 7 /Users/x/.local/bin/claude --settings {}\n 8 claude\n"
         r = mock.Mock(returncode=0, stdout=out)

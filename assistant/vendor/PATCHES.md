@@ -125,6 +125,10 @@ etiqueta al salir. Como el lanzador sigue en primer plano antes de que arranque 
 después de que salga, esa forma cuenta solo si se cumplen tres condiciones: el intérprete es
 `/bin/sh` o `/usr/bin/sh`, la ruta es absoluta y su ruta real es la del lanzador de este
 checkout, y el proceso en primer plano tiene un hijo directo `claude` vivo según `ps`.
+`agent_running`, que el resto de herdr-task usa para saber si un terminal tiene su agente en
+marcha, acepta lo mismo (`launcher_running`): hc nombra el primer plano del lanzador por su
+shell, `bash`, y sin esto Autopilot esperaba indefinidamente con «Waiting for its Assistant to
+run» (medido el 05-11-2026 en la prueba del criterio 12).
 Medido el 05-11-2026 en M10: el primer plano del coordinador era
 `["/bin/sh", "~/.local/bin/assistant"]` y las noticias se quedaban en el buzón sin entregar. `news_send`, `send_or_hold`,
 `held_pass` y el empujón de `tick` lo comprueban antes de cada `hc send`; si falla, el texto no

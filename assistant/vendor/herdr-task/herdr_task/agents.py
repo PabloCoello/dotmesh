@@ -28,11 +28,16 @@ def claude_in_front(address):
     argv = [str(a) for a in (k.get("foreground") or {}).get("argv") or []]
     if k.get("state") != "live" or not argv:
         return False
-    if os.path.basename(argv[0]) == "claude":
-        return True
+    return os.path.basename(argv[0]) == "claude" or launcher_running(k)
+
+
+def launcher_running(k):
+    """The Assistant's launcher in front with its claude still running (an `hc get` record)."""
+    fg = k.get("foreground") or {}
+    argv = [str(a) for a in fg.get("argv") or []]
     if len(argv) < 2 or argv[0] not in SH or not os.path.isabs(argv[1]) or os.path.realpath(argv[1]) != LAUNCHER:
         return False
-    return claude_child((k.get("foreground") or {}).get("pid"))
+    return claude_child(fg.get("pid"))
 
 
 def claude_child(pid):
@@ -68,7 +73,8 @@ def detail(k):
 def agent_running(k):
     fg = (k.get("foreground") or {}).get("name") or ""
     if fg:
-        return os.path.basename(fg) not in SHELLS
+        # hc names the Assistant's launcher by its shell; its claude runs under it (news-guard.patch).
+        return os.path.basename(fg) not in SHELLS or launcher_running(k)
     return bool(k.get("agent")) and k.get("agent") not in SHELLS
 
 
