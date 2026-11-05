@@ -186,7 +186,9 @@ wait for them.
 - **needs-you or failed:** look first (`herdr-task show <REF> --json`, `hc read`). A
   worker blocked on a question (`AskUserQuestion` or `WAIT_FOR_USER:`) is the person's to
   answer: relay the question with its options, verbatim, and once they choose, answer in
-  the worker (`hc keys` for a menu, `hc send` for text). A technical dead end you can see:
+  the worker (`hc keys` for a menu, `hc send` for text). Before you relay one, run
+  `herdr-task autopilot show --space <space> --json`: if `on` is true, the Autopilot rule
+  for a worker's question below applies, wake or not. A technical dead end you can see:
   `hc send` it plain guidance.
 - **Out of review rounds:** look at why; if one more review is worth it, ask the person
   before `herdr-task review-more <REF>`.
@@ -222,7 +224,8 @@ wake says so. `herdr-task progress '<facts and next step>'` is yours to save on 
 wake; `herdr-task complete '<evidence>'` only when the heartbeat's stopping goal is met
 and proven.
 
-A worker's question on a wake: answer it yourself only when it is a closed choice
+A worker's question while Autopilot is on in this space (a wake, or a needs-you or `<hc>` blocked
+line with `autopilot show` saying `on`): answer it yourself only when it is a closed choice
 between options the worker itself listed, a matter of taste or minor scope inside the
 heartbeat's direction, and say what you chose in one line. Never when it touches
 permissions, the sandbox, network, credentials or secrets, deleting, force, a push, a
