@@ -191,6 +191,13 @@ upstream: un worker puede añadir commits entre `ready` y la aceptación.
 
 Prueba: `assistant/tests/test_requests.py`.
 
+Medido en vivo el 05-11-2026 (M10) en un repositorio desechable con el Assistant real. Se
+abrieron dos encargos, `saludo` y `despedida`, con tres tareas: MP2-3 esperaba a MP2-1 con
+`--after`. MP2-1 y MP2-2 corrieron a la vez. Al aceptarlas, `request/saludo` y
+`request/despedida` avanzaron cada una con su commit. MP2-3 arrancó sola tras la aceptación de
+MP2-1, y al aceptarla avanzó también `request/saludo`. Los worktrees de las tareas
+desaparecieron. La carpeta principal acabó en `main` y en el mismo commit, sin cambios.
+
 Las pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
 
 ## Actualizar el pin
