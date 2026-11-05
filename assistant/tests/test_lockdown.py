@@ -143,7 +143,8 @@ class WorkerSettings(unittest.TestCase):
 
     def test_every_other_verb_is_denied(self):
         """Every verb cli.py defines, read from its source, is either the worker's own or denied."""
-        src = open(os.path.join(BIN, "herdr_task", "cli.py")).read()
+        with open(os.path.join(BIN, "herdr_task", "cli.py")) as f:
+            src = f.read()
         verbs = set(re.findall(r'(?:\bcmd|sub\.add_parser)\(\s*"([\w-]+)"', src))
         self.assertTrue({"tell-assistant", "review", "machines", "home", "start", "ready"} <= verbs, verbs)
         deny = self.worker(["claude"])["permissions"]["deny"]
