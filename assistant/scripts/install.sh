@@ -56,6 +56,13 @@ status() {
     if linked "${SRCS[$i]}" "${DSTS[$i]}"; then ok "assistant: $(basename "${DSTS[$i]}") enlazado a dotmesh"
     else warn "assistant: $(basename "${DSTS[$i]}") sin enlazar (corre 'make assistant-install')"; bad=1; fi
   done
+  # La persona llega con 'make stow' (paquete claude), no con este instalador.
+  local persona="$HOME/.claude/output-styles/assistant.md" here=""
+  [ -L "$persona" ] && [ -e "$persona" ] && [ "$(basename "$(readlink "$persona")")" = assistant.md ] &&
+    here="$(cd "$(dirname "$persona")" && cd "$(dirname "$(readlink "$persona")")" 2>/dev/null && pwd -P)"
+  if [ -n "$here" ] && [ "$here" = "$(cd "$REPO_ROOT/claude/.claude/output-styles" && pwd -P)" ]; then
+    ok "assistant: persona assistant enlazada"
+  else warn "assistant: falta la persona ~/.claude/output-styles/assistant.md (corre 'make stow')"; bad=1; fi
   if [ -f "$SETTINGS" ]; then ok "assistant: ajustes en ~/.herdr/shepherdr.json"
   else warn "assistant: faltan los ajustes ~/.herdr/shepherdr.json (corre 'make assistant-install')"; bad=1; fi
   # Una tarea con pull request o un main_watch reactivan gh y git fetch (PATCHES.md).

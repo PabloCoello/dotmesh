@@ -68,7 +68,9 @@ freno real que queda, así que no lo esquives por comodidad.
 - **`hc` y `herdr-task` se excluyen por sesión, nunca en la plantilla.** El
   daemon de herdr-core arranca fuera de la caja lo que se le pida (`hc run`,
   `send`, `file write`…), así que solo los excluye la sesión del Assistant,
-  con el `--settings` de su lanzador (`assistant/bin/assistant`). Un worker de
+  con el `--settings` de su lanzador (`assistant/bin/assistant`), que además
+  niega los verbos de `hc` que ejecutan o escriben (`run`, `exec`, `file`…) y
+  cualquier llamada que empiece por una opción. Un worker de
   `herdr-task` excluye solo sus propios verbos, uno a uno (`herdr-task ready *`,
   `status *`…), y tiene negados todos los demás. Si una sesión normal necesita `hc`, no lo añadas a
   la plantilla: ADR 0004, enmienda.

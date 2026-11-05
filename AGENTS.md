@@ -167,6 +167,18 @@ The agent system has two layers, identical in concept across the three tools.
   `maker`), `mode: primary` agents in OpenCode (native selector), and workflow
   modes in Codex. The active persona is meant to be visible — the Claude
   statusline prints it.
+
+  A third output style, `assistant` (`claude/.claude/output-styles/assistant.md`),
+  sits outside the 2 + 7 shape and is a documented parity exception, like
+  `flow-artifacts`: Claude Code only, never a default, and started by the
+  `assistant` launcher (`assistant/bin/assistant`, ADR 0004) rather than chosen in
+  `settings.json`. It coordinates one herdr space and writes no code: it shapes the
+  ask, opens a request (`herdr-task request open`), starts one `maker` worker per
+  task in its own worktree and relays what needs the person. The workers keep the
+  machine's default persona. OpenCode and Codex have no counterpart, because the
+  launcher, its per-session sandbox exclusion and herdr-task's worker are built on
+  Claude Code. Its file reaches `~/.claude/output-styles/` with `make stow`;
+  `make health` reports it through `assistant/scripts/install.sh --status`.
 - **Seven subagents** — the workers a persona delegates to, never switched into by
   hand: `build`, `plan`, `review`, `security`, `editor`, `maths`, `reviser`. Their
   descriptions carry "use proactively" triggers so delegation fires on the
@@ -296,7 +308,11 @@ The agent system has two layers, identical in concept across the three tools.
   exclusion lives only where it is needed (ADR 0004, amendment). The
   Assistant's launcher (`assistant/bin/assistant`) adds both with `--settings`
   to its own session, an accepted risk: that session writes no code and the
-  user drives it. A task worker gets, through the `--settings` that
+  user drives it. The same `--settings` denies the `hc` verbs that run programs
+  or write files (`run`, `exec`, `file`, `put`, `update`, …), any `hc` or
+  `herdr-task` call that starts with a flag, and the `herdr-task` verbs that act
+  for a worker or another machine; the `assistant` persona names the same list.
+  A task worker gets, through the `--settings` that
   `herdr-task` injects, one exclusion per verb it needs (`herdr-task ready *`,
   `status *`, …), so any other form, `herdr-task -- start` included, stays in
   the box and cannot reach the socket; every other verb is also denied. The
@@ -504,7 +520,8 @@ The agent system has two layers, identical in concept across the three tools.
 
 The personas encode the delegation contract (when to fire which subagent) so the
 flow runs without manual agent-switching — the recurring reason the old
-ten-agent setup went unused. Keep this 2 + 7 shape in sync across
+ten-agent setup went unused. Keep this 2 + 7 shape (the `assistant` exception
+above aside) in sync across
 `claude/.claude/{output-styles,agents}/`, `opencode/.config/opencode/agents/`
 and `codex/.codex/AGENTS.md`.
 

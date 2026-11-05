@@ -74,7 +74,14 @@ Riesgos que el parche no quita, aceptados:
 
 - La sesión del Assistant excluye `hc` y `herdr-task` enteros, y `hc` (`send`, `keys`,
   `file write`, `update --from`) ejecuta o escribe fuera de la caja. Esa sesión no escribe
-  código y la dirige el usuario. Un worker puede hacerle llegar texto con `ready --summary`,
+  código y la dirige el usuario. Su lanzador niega con `permissions.deny` los verbos de `hc`
+  que ejecutan o escriben (`run`, `exec`, `file`, `put`, `update`, `machine`, `server`…),
+  cualquier llamada a `hc` o `herdr-task` que empiece por una opción (`hc --json run`) y los
+  verbos de `herdr-task` que actúan por un worker o en otra máquina
+  (`assistant/tests/test_launcher.py`). `send` y `keys` siguen permitidos: la persona los
+  usa para contestar a los workers y comprueba antes con `hc get` que delante hay un
+  `claude`. Que Claude Code aplique esas reglas a un comando excluido de la caja está
+  pendiente de medir en vivo. Un worker puede hacerle llegar texto con `ready --summary`,
   que es un canal de inyección de instrucciones hacia ella, no de ejecución.
 - El worker es una sesión maker más: hereda de la máquina `allowUnsandboxedCommands`, los
   cuatro comandos excluidos de la plantilla y `bypassPermissions`. El parche no amplía esa

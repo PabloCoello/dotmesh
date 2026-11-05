@@ -28,5 +28,25 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
+# hc and herdr-task run outside the sandbox in this session, and this session reads worker
+# text. So the verbs that run programs, write files or act for a worker are also denied here,
+# a second line under the persona's rules. A leading flag (`hc --json run`) dodges a prefix
+# rule, so any form that starts with a flag is denied too. Deny rules hold under
+# bypassPermissions. Kept in step with assistant/tests/test_launcher.py.
+SETTINGS='{"outputStyle":"assistant",
+"sandbox":{"excludedCommands":["hc *","herdr-task *"]},
+"permissions":{"deny":[
+"Bash(hc run:*)","Bash(hc exec:*)","Bash(hc file:*)","Bash(hc put:*)","Bash(hc update:*)",
+"Bash(hc machine:*)","Bash(hc connect:*)","Bash(hc server:*)","Bash(hc keep:*)","Bash(hc kill:*)",
+"Bash(hc rm:*)","Bash(hc events:*)","Bash(hc interrupt:*)","Bash(herdr)","Bash(herdr *)","Bash(hc -*)",
+"Bash(herdr-task ready:*)","Bash(herdr-task status:*)","Bash(herdr-task reviewed:*)",
+"Bash(herdr-task review)","Bash(herdr-task review *)","Bash(herdr-task tick:*)","Bash(herdr-task scheduler:*)",
+"Bash(herdr-task machines:*)","Bash(herdr-task home:*)","Bash(herdr-task assistants:*)",
+"Bash(herdr-task tell-assistant:*)","Bash(herdr-task backup:*)","Bash(herdr-task restore-spaces:*)",
+"Bash(herdr-task switch:*)","Bash(herdr-task merge:*)","Bash(herdr-task fix:*)",
+"Bash(herdr-task autopilot on:*)","Bash(herdr-task autopilot off:*)","Bash(herdr-task autopilot set:*)",
+"Bash(herdr-task _allow:*)","Bash(herdr-task _session-note:*)","Bash(herdr-task _track:*)",
+"Bash(herdr-task -*)"]}}'
+
 hc label "$HC_TERMINAL_ID" herdr.role=coordinator >/dev/null
-claude --settings '{"outputStyle":"assistant","sandbox":{"excludedCommands":["hc *","herdr-task *"]}}' "$@"
+claude --settings "$SETTINGS" "$@"

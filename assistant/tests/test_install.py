@@ -150,16 +150,31 @@ class Install(unittest.TestCase):
         r = self.run_install("--status")
         self.assertEqual(r.returncode, 1)
         self.assertIn("  --  ", r.stdout)
+        self.assertIn("falta la persona", r.stdout)
         self.assertEqual(self.run_install("--status", "extra").returncode, 1)
 
     def test_status_is_clean_after_install(self):
         self.fake("hc")
         self.path = f"{self.h('.local/bin')}:{self.path}"
         self.assertEqual(self.run_install().returncode, 0)
+        # What `make stow` does for the persona: a link into the checkout.
+        os.makedirs(self.h(".claude/output-styles"))
+        os.symlink(os.path.join(os.path.dirname(ROOT), "claude", ".claude", "output-styles", "assistant.md"),
+                   self.h(".claude/output-styles/assistant.md"))
         r = self.run_install("--status")
         # The checkout's own uncommitted assistant/ files are real drift while this branch is open.
         bad = [l for l in r.stdout.splitlines() if l.startswith("  --  ") and "sin confirmar" not in l]
         self.assertEqual(bad, [], r.stdout)
+
+    def test_status_flags_a_persona_link_that_points_elsewhere(self):
+        self.assertEqual(self.run_install().returncode, 0)
+        os.makedirs(self.h(".claude/output-styles"))
+        os.symlink(os.path.join(os.path.dirname(ROOT), "claude", ".claude", "output-styles", "maker.md"),
+                   self.h(".claude/output-styles/assistant.md"))
+        self.assertIn("falta la persona", self.run_install("--status").stdout)
+        os.remove(self.h(".claude/output-styles/assistant.md"))
+        os.symlink(self.h("nowhere/assistant.md"), self.h(".claude/output-styles/assistant.md"))
+        self.assertIn("falta la persona", self.run_install("--status").stdout)
 
     def test_status_flags_a_task_with_a_pull_request(self):
         self.assertEqual(self.run_install().returncode, 0)

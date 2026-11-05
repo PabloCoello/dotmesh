@@ -40,7 +40,7 @@ tokens=$(printf '%s' "$input" | jq -r '.context_window.total_input_tokens // ((.
 cwd=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
 cost=$(printf '%s' "$input" | jq -r '.cost.total_cost_usd // 0')
 # Persona activa (output style). "default" no es estado: solo se pinta cuando hay
-# una persona explícita (maker/scribe), para que se vea de un vistazo cuál manda.
+# una persona explícita (maker/scribe/assistant), para que se vea de un vistazo cuál manda.
 style=$(printf '%s' "$input" | jq -r '.output_style.name // empty')
 
 # Saneado: entero o 0.
