@@ -3,7 +3,7 @@
 
 # vscode se stowea solo en macOS (~/Library/…); en Linux VS Code lee ~/.config/Code/User,
 # que configura vscode-install vía install.sh. gnome sigue el mismo patrón condicional.
-PACKAGES := shell git starship ghostty herdr herdr-app opencode codex claude agents nvim
+PACKAGES := shell git starship ghostty herdr opencode codex claude agents nvim
 ifeq ($(shell uname -s),Darwin)
 PACKAGES += vscode
 endif
@@ -269,6 +269,12 @@ collie-install:
 .PHONY: terminal-browser-install
 terminal-browser-install:
 	@bash "$(abspath terminal-browser/scripts/install.sh)"
+
+# Enlaza los atajos de la app gráfica de herdr. Fuera de PACKAGES: la app regenera su
+# keys.json al instante y Stow abortaría contra él (ver herdr-app/README.md). Solo macOS.
+.PHONY: herdr-app-install
+herdr-app-install:
+	@bash "$(abspath herdr-app/scripts/install.sh)"
 
 .PHONY: nvim-install
 nvim-install:
