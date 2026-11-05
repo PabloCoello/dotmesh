@@ -79,10 +79,9 @@ Riesgos que el parche no quita, aceptados:
 - El worker es una sesión maker más: hereda de la máquina `allowUnsandboxedCommands`, los
   cuatro comandos excluidos de la plantilla y `bypassPermissions`. El parche no amplía esa
   postura, pero tampoco la estrecha, y el worker corre sin nadie delante.
-- Sin medir: si la exclusión `herdr-task ready *` casa con una asignación delante
-  (`PYTHONPATH=… herdr-task ready …`). Si casa, el intérprete cargaría código del worker antes
-  de que corra el parche; es la medición M4b del spec. Mientras tanto no añade nada a la
-  postura del punto anterior.
+- Medido el 05-11-2026 desde un worker: ni una asignación delante
+  (`X=1 herdr-task status …`) ni un `$( )` en los argumentos sacan la llamada de la caja.
+  La exclusión por verbo solo casa con el comando desnudo.
 - `ready`, `reviewed` y `status` aceptan la referencia de otra tarea: un worker puede marcar
   otra como lista. Con `merge: ask`, que es lo que se siembra, eso no integra nada; con `auto` o
   `checks`, `finalize` pide la integración al agente de esa tarea, que es un `claude`
