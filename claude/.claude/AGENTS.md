@@ -72,7 +72,9 @@ freno real que queda, así que no lo esquives por comodidad.
   niega los verbos de `hc` que ejecutan o escriben (`run`, `exec`, `file`…) y
   cualquier llamada que empiece por una opción. Un worker de
   `herdr-task` excluye solo sus propios verbos, uno a uno (`herdr-task ready *`,
-  `status *`…), y tiene negados todos los demás. Si una sesión normal necesita `hc`, no lo añadas a
+  `status *`…), y tiene negados todos los demás. Ni el Assistant ni los workers
+  tienen la escotilla: herdr-task trata como agente a quien llama sin terminal
+  de control, y con la escotilla bastaría un pty para pasar por la persona. Si una sesión normal necesita `hc`, no lo añadas a
   la plantilla: ADR 0004, enmienda.
 - **La exclusión vale para el comando que lanzas, no para lo que ese comando
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que

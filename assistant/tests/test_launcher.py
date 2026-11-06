@@ -38,6 +38,7 @@ class Launcher(unittest.TestCase):
     def test_settings(self):
         s = settings()
         self.assertEqual(s["outputStyle"], "assistant")
+        self.assertIs(s["sandbox"]["allowUnsandboxedCommands"], False)  # no hatch: no pty for herdr-task
         ex = s["sandbox"]["excludedCommands"]
         self.assertNotIn("hc *", ex)
         self.assertNotIn("herdr-task *", ex)

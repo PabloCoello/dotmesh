@@ -149,7 +149,7 @@ index c43180e..5f601a2 100644
      cmd("unarchive", cmd_unarchive, "bring an archived task back into its list (only when the person asks; writing to it does too)")
      c = cmd("edit", cmd_edit, "change a task")
 diff --git a/herdr_task/commands.py b/herdr_task/commands.py
-index 989d241..6d962ba 100644
+index 989d241..32e11ce 100644
 --- a/herdr_task/commands.py
 +++ b/herdr_task/commands.py
 @@ -9,15 +9,16 @@ import shlex
@@ -171,7 +171,7 @@ index 989d241..6d962ba 100644
  )
  from .sessions import refresh_sessions
  from .github import finish, gh, github, merged_here, own_work, pr_adopt, pr_open, pr_pending, pr_problem, pr_view, update_main, watch_main
-@@ -89,11 +90,40 @@ def cmd_list(args):
+@@ -89,11 +90,49 @@ def cmd_list(args):
              print("No archived tasks." if args.archived else "No tasks.")
  
  
@@ -184,8 +184,9 @@ index 989d241..6d962ba 100644
 +        return
 +    if getattr(args, "here", False):
 +        raise Fail("--here is for the person, at a terminal of their own (dotmesh hardening).")
++    from .settings import SET_KEYS
 +    for pair in getattr(args, "set", None) or []:
-+        if pair.split("=", 1)[0].strip().lower() == "merge":
++        if SET_KEYS.get(pair.split("=", 1)[0].strip().lower()) == "merge":  # merge, brief.merge
 +            raise Fail("--set merge is for the person, at a terminal of their own (dotmesh hardening).")
 +    here = locate(None)
 +    if here["kind"] != "repo":
@@ -198,8 +199,16 @@ index 989d241..6d962ba 100644
 +
 +
 +def agent_task_ok(s, t):
-+    if no_terminal() and (t.get("mode") != "worktree" or not str(t.get("base") or "").startswith("request/")
-+                          or "merge" in (t.get("set") or {})):
++    if not no_terminal():
++        return
++    from .request import open_request
++    try:
++        # Its base, or the main folder's branch when it's the same (set_base doesn't keep it then).
++        open_request(s, t.get("base") or current_base(s.loc["folder"]))
++        open_req = True
++    except Fail:
++        open_req = False
++    if t.get("mode") != "worktree" or not open_req or "merge" in (t.get("set") or {}):
 +        raise Fail(f"{s.ref(t)} works outside a request's worktree or under its own merge setting: "
 +                   "the person starts it, at a terminal of their own (dotmesh hardening).")
 +
@@ -214,7 +223,7 @@ index 989d241..6d962ba 100644
      at = scheduled_at(args)  # refused before anything is added
      with open_store(args) as s:
          repo = s.loc["kind"] == "repo"
-@@ -105,6 +135,7 @@ def cmd_add(args):
+@@ -105,6 +144,7 @@ def cmd_add(args):
          set_opts(t, args)
          space = bare(args.space) if args.space else caller_space()
          set_base(s, t, args.base, space, new=True)
@@ -222,7 +231,7 @@ index 989d241..6d962ba 100644
          set_notes(t, args)
          if args.after:
              set_after(s, t, *parse_after(s, args.after))
-@@ -271,6 +302,7 @@ def begin(s, t, argv, space, parent=None):
+@@ -271,6 +311,7 @@ def begin(s, t, argv, space, parent=None):
  
  
  def cmd_start(args):
@@ -230,7 +239,7 @@ index 989d241..6d962ba 100644
      with open_store(args) as s:
          t = s.find(args.id)
          live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
-@@ -282,6 +314,7 @@ def cmd_start(args):
+@@ -282,6 +323,7 @@ def cmd_start(args):
              t["mode"] = "here"
          elif args.worktree and worktrees_on(s):
              t["mode"] = "worktree"
@@ -238,7 +247,7 @@ index 989d241..6d962ba 100644
          q = t.get("queue") or {}
          space = bare(args.space) if args.space else (q.get("space") or default_space())
          argv = agent_argv(None, args.argv) if args.argv else worker_argv(s, t, space, args.agent) if args.agent else \
-@@ -631,6 +664,12 @@ def finalize(s, t):
+@@ -631,6 +673,12 @@ def finalize(s, t):
                  err = merge_now(s, t)
                  return msg + (f" Merging it waits: {err}" if err else " Merged; done.")
              return msg + " It merges by itself once its checks pass."
@@ -251,7 +260,7 @@ index 989d241..6d962ba 100644
          try:
              sent, started = tell(s, t, local_merge_msg(s, t), None)
              t["merge_requested"] = now()
-@@ -711,6 +750,7 @@ def cmd_unarchive(args):
+@@ -711,6 +759,7 @@ def cmd_unarchive(args):
  
  
  def cmd_edit(args):
@@ -259,7 +268,7 @@ index 989d241..6d962ba 100644
      with open_store(args) as s:
          t = s.find(args.id)
          old = t["title"]
-@@ -719,8 +759,7 @@ def cmd_edit(args):
+@@ -719,8 +768,7 @@ def cmd_edit(args):
          if args.prompt is not None:
              t["prompt"] = args.prompt
          if args.prompt_file:
@@ -269,7 +278,7 @@ index 989d241..6d962ba 100644
          pick = [t.get(k) for k in ("agent", "model", "effort")]
          set_opts(t, args)
          if [t.get(k) for k in ("agent", "model", "effort")] != pick:
-@@ -744,6 +783,8 @@ def cmd_edit(args):
+@@ -744,6 +792,8 @@ def cmd_edit(args):
              if args.worktree and s.loc["kind"] != "repo":
                  raise Fail("Worktrees need a git repo.")
              t["mode"] = "here" if args.here else "worktree"
@@ -278,7 +287,7 @@ index 989d241..6d962ba 100644
          s.dirty = True
          tabs = task_tabs(s, t) if t["title"] != old else []
          v = view(s, t)
-@@ -876,6 +917,84 @@ def tell(s, t, msg, args):
+@@ -876,6 +926,86 @@ def tell(s, t, msg, args):
      return a["address"], True
  
  
@@ -305,7 +314,7 @@ index 989d241..6d962ba 100644
 +        return f"say takes one line of 1 to {SAY_MAX} characters."
 +    if any(ord(c) < 32 or 127 <= ord(c) < 160 or c in "\u2028\u2029" for c in text):
 +        return "say takes one line, without control characters."
-+    if text.lstrip()[0] in "!/#":
++    if text.lstrip("".join(c for c in set(text) if c.isspace() or unicodedata.category(c) == "Cf"))[:1] in tuple("!/#"):
 +        return "say doesn't start with !, / or # (claude would take it as a command)."
 +    return None
 +
@@ -316,7 +325,9 @@ index 989d241..6d962ba 100644
 +
 +
 +def menu_open(addr):
-+    return bool(MENU.search(run(["hc", "read", addr, "--lines", "40"]).stdout or ""))
++    """True also when the screen can't be read: nothing goes unread."""
++    r = run(["hc", "read", addr, "--lines", "40"])
++    return r.returncode != 0 or not (r.stdout or "").strip() or bool(MENU.search(r.stdout))
 +
 +
 +def cmd_say(args):
@@ -363,7 +374,7 @@ index 989d241..6d962ba 100644
  def local_merge_msg(s, t):
      main, wt, br, base = s.loc["folder"], t["worktree"], t["branch"], t.get("base") or "main"
      q = shlex.quote
-@@ -962,13 +1081,16 @@ def in_base(s, t):
+@@ -962,13 +1092,16 @@ def in_base(s, t):
      return bool(tip) and (tip == t.get("start") or git(s.loc["folder"], "merge-base", "--is-ancestor", tip, t.get("base") or "main")[0])
  
  
@@ -381,7 +392,7 @@ index 989d241..6d962ba 100644
      # dotmesh request-worktree.patch: the merge lands where the base is checked out, the main
      # folder or an open request's worktree. Anywhere else `fetch .` refuses, as upstream did.
      where = checked_out_at(main, base, merge_targets(s))
-@@ -976,10 +1098,67 @@ def ff_merge(s, t):
+@@ -976,10 +1109,67 @@ def ff_merge(s, t):
          if os.path.realpath(where) != os.path.realpath(main) and \
                  git(where, "status", "--porcelain", "--untracked-files=no")[1]:
              raise Fail(f"{where} has uncommitted changes on {base}. Commit or stash them there, then accept again.")
@@ -451,7 +462,7 @@ index 989d241..6d962ba 100644
  
  
  def cmd_accept(args):
-@@ -1005,14 +1184,29 @@ def cmd_accept(args):
+@@ -1005,14 +1195,29 @@ def cmd_accept(args):
          # failed once, doesn't stand in the way. Without one, only a failed try doesn't.
          elif t.get("attention") and not t.get("pr") and not t["attention"].startswith(("Couldn't ask for the merge", MERGE_FAILED)):
              raise Fail(f"{s.ref(t)} needs attention first: {t['attention']}")
@@ -482,7 +493,7 @@ index 989d241..6d962ba 100644
          t["accepted_at"] = now()
          s.dirty = True
          if not wt:
-@@ -1028,7 +1222,7 @@ def cmd_accept(args):
+@@ -1028,7 +1233,7 @@ def cmd_accept(args):
              # Its own work already in the base branch, or none of its own: nothing to merge.
              t["merged"] = merged_here(s, t)
              finish(s, t, even_if_busy=True)

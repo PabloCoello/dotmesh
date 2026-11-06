@@ -259,7 +259,10 @@ Varias medidas se apoyan en una medición: el Bash de un agente no tiene termina
 Medido el 06-11-2026 desde una sesión de Claude Code, dentro y fuera de la caja: `stdin` no
 es un terminal y abrir `/dev/tty` da `ENXIO`. Un terminal de la persona sí lo tiene. Por eso
 lo que solo debe hacer la persona se comprueba con `base.no_terminal()`, y no con una opción
-que quien llama pudiera pasar.
+que quien llama pudiera pasar. La premisa se sostiene mientras el agente no pueda darle un
+terminal a herdr-task: dentro de la caja puede crear un pty, pero herdr-task no llega
+entonces ni al almacén ni al socket, y fuera de ella solo sale con la escotilla. Por eso ni
+el Assistant ni los workers la tienen.
 
 - **Escribir a un worker.** La sesión del Assistant tenía `hc send` y `hc keys` fuera del
   sandbox, contra cualquier terminal, y solo el texto de su output style exigía comprobar antes
@@ -272,8 +275,9 @@ que quien llama pudiera pasar.
   `space`. El lanzador deniega `hc send`, `hc keys` y `hc label`, y los workers tienen
   denegados `say` y `keys`. `say` escribe una sola línea de texto: rechaza los caracteres de
   control (también los C1 y los separadores de línea de Unicode) y una línea que empiece por
-  `!`, `/` o `#`, que `claude` tomaría como un comando. Tampoco escribe mientras la persona
-  teclea en ese worker ni mientras este muestra un menú, como el diálogo de permisos: un
+  `!`, `/` o `#`, aunque vayan precedidos de caracteres invisibles, porque `claude` la
+  tomaría como un comando. Tampoco escribe mientras la persona teclea en ese worker ni
+  mientras este muestra un menú (o su pantalla no se puede leer), como el diálogo de permisos: un
   `1` contestaría ese menú. Los menús se contestan con `keys`, que vuelve a comprobar antes
   de cada tecla que `claude` sigue delante y que la persona no está tecleando.
 - **Exclusión por verbos.** El lanzador excluía `hc *` y `herdr-task *` y denegaba una
@@ -305,17 +309,20 @@ que quien llama pudiera pasar.
   comprueba sobre el descriptor abierto que es un fichero normal con un solo nombre (un
   enlace duro a `~/.aws/credentials` pasaría la comprobación de ruta), que no pasa de
   256 KiB y que es UTF-8.
-- **Workers sin escotilla.** Un worker conservaba `dangerouslyDisableSandbox`, como cualquier
-  sesión maker. Con ella podía escribir en la carpeta principal o integrar él mismo, sin
-  pasar por `accept`. Ahora sus ajustes llevan `allowUnsandboxedCommands: false`. Los
+- **Workers y Assistant sin escotilla.** Un worker conservaba `dangerouslyDisableSandbox`,
+  como cualquier sesión maker. Con ella podía escribir en la carpeta principal o integrar él
+  mismo, sin pasar por `accept`. El Assistant también la tenía, y con ella podía lanzar
+  herdr-task dentro de un pty, leer el código de confirmación y teclearlo. Ahora los ajustes
+  de los dos llevan `allowUnsandboxedCommands: false`. Los
   workers de M1 y M10 hicieron todos sus commits dentro de la caja, así que su flujo no
   necesita la escotilla. Lo que sí la necesita (red por SSH, `pre-commit`, `uv`) falla en el
   worker, y lo hace la persona en el worktree del encargo.
 - **Dónde trabaja una tarea del Assistant.** `add` aceptaba cualquier `--folder`, `--here`
   (sin worktree y, por tanto, sin `accept`) y `--set merge`. Ahora, una llamada sin terminal
   de control solo añade, edita y arranca tareas del repo en el que corre, cada una en su
-  worktree y con `--base request/<slug>`, sin `--here`, sin otra `--folder` y sin cambiar
-  su política de integración. Las automatizaciones siguen la misma regla. Desde un terminal
+  worktree y sobre un encargo abierto, sin `--here`, sin otra `--folder` y sin cambiar su
+  política de integración (ni con `merge` ni con su alias `brief.merge`). Una rama que se
+  llame `request/…` sin ser un encargo abierto no basta. Las automatizaciones siguen la misma regla. Desde un terminal
   suyo, la persona puede hacer todo eso.
 - **Configuración que ejecuta código.** La persona confía una vez en `~/.herdr/worktrees`,
   así que unos hooks, un servidor MCP o unos ajustes que un worker commitee correrían fuera
@@ -343,19 +350,30 @@ Quedan abiertos:
   sin que se vea. En dotmesh, además, un fichero enlazado por Stow (`shell/.zshrc`, un
   `Makefile`, una skill) o un `AGENTS.md` toman efecto en la siguiente sesión sin ser
   configuración en este sentido. Hay que leer el diff antes de aceptar.
+- La vía de pull request (`finalize` y `accept` con `t["pr"]`) no pasa por la comprobación
+  de configuración ni fija el commit. Aquí no existe, porque `local-only.patch` desactiva
+  GitHub; si ese parche se retira, hay que cubrirla antes.
 - Cuando la integración no es un avance rápido, `accept` pide al worker que integre él, y
   ese worker puede añadir commits después de la comprobación. Pasa lo mismo con
   `finalize` si la persona fija la integración «por su cuenta». Con la base en un encargo
   y sin escotilla, esa vía falla de todos modos (ver `auto-request.patch`).
-- Un worker escribe en el `.git` común al hacer commit, así que podría mover con
-  `git update-ref` la rama de un encargo sin pasar por `accept`. No está medido si la caja
-  se lo permite.
+- Un worker escribe en el `.git` común al hacer commit. Podría mover con `git update-ref` la
+  rama de un encargo sin pasar por `accept`, o escribir en `.git/hooks` o `.git/config`
+  (`core.hooksPath`, `core.fsmonitor`, alias), que corren sin confinar cuando la persona o
+  una sesión hacen commit. No está medido qué parte del `.git` común le deja escribir la
+  caja.
 - Los hooks que un worker commitee en su propio worktree corren cuando un revisor o una
   reanudación abren `claude` allí, con la caja del propio worker.
 - `say` filtra la forma del texto, no su contenido: es una instrucción libre al worker, y
-  `keys enter` puede aprobar un diálogo de permisos. Ahí manda la persona del Assistant.
-- Que `allowUnsandboxedCommands: false` en el `--settings` de un worker gana a la plantilla
-  de la máquina sigue el orden de precedencia de Claude Code; no se ha medido en vivo.
+  `keys enter` puede aprobar un diálogo de permisos. Ahí manda la persona del Assistant. El
+  menú se reconoce por su texto en pantalla (`❯ 1.`, «Do you want to…»); uno dibujado de
+  otra forma no se ve, y entre esa lectura y el tecleo pasa un instante.
+- `no_terminal()` depende de cómo lanza Claude Code su Bash. Si una versión futura lo lanzara
+  en un pty, la comprobación daría por presente a la persona sin avisar. Conviene repetir la
+  medición al subir de versión.
+- Que `allowUnsandboxedCommands: false` en el `--settings` del worker y del Assistant gana a
+  la plantilla de la máquina sigue el orden de precedencia de Claude Code; no se ha medido
+  en vivo.
 - El sandbox no impide que un comando confinado con este checkout como carpeta
 de trabajo escriba en `assistant/`, código que luego corre fuera. `make health` avisa de los
 cambios sin confirmar en `vendor/`, `bin/` y `templates/`, pero solo cuando se ejecuta.

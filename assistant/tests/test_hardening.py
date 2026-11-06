@@ -86,10 +86,12 @@ class Say(unittest.TestCase):
 
     def test_a_permission_menu_is_recognised(self):
         screen = " Do you want to proceed?\n ❯ 1. Yes\n   2. No\n"
-        with mock.patch.object(commands, "run", lambda c: mock.Mock(stdout=screen)):
+        with mock.patch.object(commands, "run", lambda c: mock.Mock(returncode=0, stdout=screen)):
             self.assertTrue(commands.menu_open("t9"))
-        with mock.patch.object(commands, "run", lambda c: mock.Mock(stdout="❯ use 1. the blue one\n")):
+        with mock.patch.object(commands, "run", lambda c: mock.Mock(returncode=0, stdout="❯ use 1. the blue one\n")):
             self.assertFalse(commands.menu_open("t9"))
+        with mock.patch.object(commands, "run", lambda c: mock.Mock(returncode=1, stdout="")):
+            self.assertTrue(commands.menu_open("t9"))  # unread screen: refused
 
     def test_keys_presses_only_listed_keys_with_claude_in_front(self):
         ran = []
@@ -291,7 +293,7 @@ class ConfigPaths(unittest.TestCase):
 class SayText(unittest.TestCase):
     def test_say_types_plain_lines_only(self):
         self.assertIsNone(commands.say_problem("use the blue one"))
-        for bad in ("!rm -rf ~", " /clear", "#remember x", "a\nb", "a\rb", "\x1b[A", "", "x" * 2001):
+        for bad in ("!rm -rf ~", " /clear", "\u200b/clear", "\ufeff!ls", "#remember x", "a\nb", "a\rb", "\x1b[A", "", "x" * 2001):
             self.assertIsNotNone(commands.say_problem(bad), repr(bad))
 
     def test_keys_recheck_before_every_key_and_wait_for_the_person(self):

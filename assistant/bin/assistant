@@ -35,7 +35,9 @@ trap 'exit 129' HUP
 # terminal or act for a worker are also denied here, a second line under the persona's rules;
 # it writes to a worker only through `herdr-task say` and `keys` (hardening.patch). A leading
 # flag (`hc --json run`) dodges a prefix rule, so any form that starts with a flag is denied
-# too. Deny rules hold under bypassPermissions. Kept in step with assistant/tests/test_launcher.py.
+# too. Deny rules hold under bypassPermissions. And no escape hatch (dangerouslyDisableSandbox):
+# an unconfined call could give herdr-task a terminal (a pty) and pass for the person
+# (hardening.patch, base.no_terminal). Kept in step with assistant/tests/test_launcher.py.
 SETTINGS='{"outputStyle":"assistant",
 "sandbox":{"excludedCommands":[
 "hc get","hc get *","hc ls","hc ls *","hc read","hc read *","hc wait","hc wait *",
@@ -49,7 +51,8 @@ SETTINGS='{"outputStyle":"assistant",
 "herdr-task resume *","herdr-task review-more","herdr-task review-more *","herdr-task rm",
 "herdr-task rm *","herdr-task say","herdr-task say *","herdr-task show","herdr-task show *",
 "herdr-task start","herdr-task start *","herdr-task unarchive","herdr-task unarchive *",
-"herdr-task where","herdr-task where *"]},
+"herdr-task where","herdr-task where *"],
+"allowUnsandboxedCommands":false},
 "permissions":{"deny":[
 "Bash(hc run:*)","Bash(hc exec:*)","Bash(hc file:*)","Bash(hc put:*)","Bash(hc update:*)",
 "Bash(hc machine:*)","Bash(hc connect:*)","Bash(hc server:*)","Bash(hc keep:*)","Bash(hc kill:*)",

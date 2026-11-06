@@ -99,8 +99,9 @@ def agent_limits(args):
         return
     if getattr(args, "here", False):
         raise Fail("--here is for the person, at a terminal of their own (dotmesh hardening).")
+    from .settings import SET_KEYS
     for pair in getattr(args, "set", None) or []:
-        if pair.split("=", 1)[0].strip().lower() == "merge":
+        if SET_KEYS.get(pair.split("=", 1)[0].strip().lower()) == "merge":  # merge, brief.merge
             raise Fail("--set merge is for the person, at a terminal of their own (dotmesh hardening).")
     here = locate(None)
     if here["kind"] != "repo":
@@ -113,8 +114,16 @@ def agent_limits(args):
 
 
 def agent_task_ok(s, t):
-    if no_terminal() and (t.get("mode") != "worktree" or not str(t.get("base") or "").startswith("request/")
-                          or "merge" in (t.get("set") or {})):
+    if not no_terminal():
+        return
+    from .request import open_request
+    try:
+        # Its base, or the main folder's branch when it's the same (set_base doesn't keep it then).
+        open_request(s, t.get("base") or current_base(s.loc["folder"]))
+        open_req = True
+    except Fail:
+        open_req = False
+    if t.get("mode") != "worktree" or not open_req or "merge" in (t.get("set") or {}):
         raise Fail(f"{s.ref(t)} works outside a request's worktree or under its own merge setting: "
                    "the person starts it, at a terminal of their own (dotmesh hardening).")
 
@@ -940,7 +949,7 @@ def say_problem(text):
         return f"say takes one line of 1 to {SAY_MAX} characters."
     if any(ord(c) < 32 or 127 <= ord(c) < 160 or c in "\u2028\u2029" for c in text):
         return "say takes one line, without control characters."
-    if text.lstrip()[0] in "!/#":
+    if text.lstrip("".join(c for c in set(text) if c.isspace() or unicodedata.category(c) == "Cf"))[:1] in tuple("!/#"):
         return "say doesn't start with !, / or # (claude would take it as a command)."
     return None
 
@@ -951,7 +960,9 @@ MENU = re.compile(r"^\s*❯\s*\d+\.\s|Do you want to (proceed|make this edit|cre
 
 
 def menu_open(addr):
-    return bool(MENU.search(run(["hc", "read", addr, "--lines", "40"]).stdout or ""))
+    """True also when the screen can't be read: nothing goes unread."""
+    r = run(["hc", "read", addr, "--lines", "40"])
+    return r.returncode != 0 or not (r.stdout or "").strip() or bool(MENU.search(r.stdout))
 
 
 def cmd_say(args):

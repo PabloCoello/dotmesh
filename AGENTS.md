@@ -312,7 +312,7 @@ The agent system has two layers, identical in concept across the three tools.
   exclusion lives only where it is needed (ADR 0004, amendment). The
   Assistant's launcher (`assistant/bin/assistant`) excludes them verb by verb
   with `--settings` in its own session, an accepted risk: that session writes no
-  code and the user drives it. Only the read-only `hc` verbs (`get`, `ls`,
+  code, the user drives it, and its `--settings` closes the hatch (`allowUnsandboxedCommands: false`), so it cannot hand herdr-task a pty and pass for the person. Only the read-only `hc` verbs (`get`, `ls`,
   `read`, `wait`) and the `herdr-task` verbs the persona uses leave the box, so
   a new upstream verb or an unrecognised form stays inside. The same
   `--settings` also denies the `hc` verbs that run programs, write files or type

@@ -138,7 +138,9 @@ el mismo `--settings` deniega además los verbos que ejecutan programas, escribe
 teclean en un terminal (`hc run`, `exec`, `file`, `send`, `keys`, `label`…), cualquier llamada
 que empiece por una opción y los verbos de `herdr-task` que actúan por un worker o hacia otra
 máquina. Las reglas de denegación se aplican aunque el comando esté excluido (medido el
-05-11-2026 con `claude -p`).
+05-11-2026 con `claude -p`). La sesión no tiene la escotilla del sandbox
+(`dangerouslyDisableSandbox`): con ella podría darle a herdr-task un terminal falso y hacerse
+pasar por ti.
 
 Para contestar a un worker, el Assistant usa `herdr-task say` (texto) y `herdr-task keys`
 (teclas de una lista cerrada, para un menú). Los dos escriben solo al worker de la tarea que
@@ -151,8 +153,7 @@ carpeta o `--set merge` quedan para ti, desde un terminal tuyo. `--prompt-file` 
 brief de `.ai/tasks/` de la carpeta, y la reanudación tras un reinicio descarta cualquier
 registro que no haya podido escribir herdr-task.
 
-Los workers tienen menos todavía. No tienen la escotilla del sandbox
-(`dangerouslyDisableSandbox`), así que lo que necesite red por SSH, `pre-commit` o `uv`
+Los workers tienen menos todavía. Tampoco tienen la escotilla, así que lo que necesite red por SSH, `pre-commit` o `uv`
 falla en el worker y lo haces tú en el worktree del encargo. Cada uno excluye del sandbox solo los verbos de
 `herdr-task` que necesita (`ready`, `status`, `reviewed`…), uno a uno, y tiene denegados los
 demás. `herdr-task` solo arranca un `claude` cuyos flags no pueden aflojar su propio sandbox.

@@ -121,7 +121,9 @@ class Cli(unittest.TestCase):
     def test_an_agent_adds_only_request_worktree_tasks_of_its_repo(self):
         self.ht("request", "open", "pagos", "--folder", self.repo)
         other = new_repo(os.path.join(self.home, "otro"))
+        git(self.repo, "branch", "request/sin-abrir")
         for extra in (["--here"], ["--set", "merge=on its own"], ["--set", " MERGE =after checks"],
+                      ["--set", "brief.merge=on its own"], ["--base", "request/sin-abrir"],
                       ["--folder", other], ["--folder", self.home], ["--base", "main"]):
             r = self.ht("add", "x", *(["--base", "request/pagos"] if "--base" not in extra else []), *extra, ok=False)
             self.assertIn("dotmesh hardening", r.stderr, extra)
@@ -130,6 +132,11 @@ class Cli(unittest.TestCase):
         self.ht("add", "bien", "--base", "request/pagos")
         r = self.ht("edit", "1", "--set", "merge=on its own", ok=False)
         self.assertIn("dotmesh hardening", r.stderr)
+        r = self.ht("edit", "1", "--set", "brief.merge=on its own", ok=False)
+        self.assertIn("dotmesh hardening", r.stderr)
+        r = self.ht("auto", "add", "a", "--prompt", "x", "--base", "request/pagos", "--every", "weekdays 9:00",
+                    "--set", "merge=on its own", ok=False)
+        self.assertNotEqual(r.returncode, 0)
         r = self.ht("edit", "1", "--base", "main", ok=False)
         self.assertIn("dotmesh hardening", r.stderr)
         r = self.ht("start", "1", "--here", ok=False)
