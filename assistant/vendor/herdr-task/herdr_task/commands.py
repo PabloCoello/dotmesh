@@ -104,9 +104,11 @@ def task_views(s, archived=False):
 # dotmesh interface.patch: the board, read only: this folder's tasks grouped by request (encargo),
 # what needs the person first. --watch redraws it every few seconds until interrupted.
 def cmd_board(args):
+    if args.watch and (args.json or not sys.stdout.isatty()):
+        raise Fail("--watch redraws a terminal: run it in a pane, without --json.")
     try:
         while True:
-            with Store(locate(args.folder)) as s:
+            with Store(locate(args.folder), write=False) as s:
                 groups = board_groups(task_views(s))
                 folder = s.loc["folder"]
             if args.json:

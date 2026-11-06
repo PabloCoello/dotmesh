@@ -410,8 +410,65 @@ def name_tabs(pairs):
 
 
 def task_tabs(s, task):
-    """The tabs its live agents are in (hc ls leaves labels out: hc get has them)."""
-    return sorted({(detail(k).get("labels") or {}).get("herdr.tab") for k in live_agents(s.key(task))} - {None})
+    """The tabs its live agents are in (hc ls leaves labels out: hc get has them). dotmesh
+    interface.patch: not its request's tab, which its siblings share and keeps the request's name."""
+    tabs = set()
+    for k in live_agents(s.key(task)):
+        labels = detail(k).get("labels") or {}
+        if not labels.get("herdr.request"):
+            tabs.add(labels.get("herdr.tab"))
+    return sorted(tabs - {None})
+
+
+# dotmesh interface.patch: a request's workers are panes of one herdr-app tab named after it. A
+# terminal labelled herdr.space shows in that space, in the tab herdr.tab names or in a new one
+# Herdr makes (measured 2026-11-06); a tab whose terminals have all ended goes by itself. So the
+# first worker makes the tab and herdr-task names it; the next ones find it by that name.
+REQUEST_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+
+
+def request_slug(task):
+    base = task.get("base") or ""
+    slug = base[len("request/"):] if base.startswith("request/") else None
+    return slug if slug and REQUEST_SLUG.fullmatch(slug) else None
+
+
+def app_tabs(space):
+    """The tabs of this machine's herdr-app space, or None (no herdr-app, no such space)."""
+    if not space or "/" in space or not shutil.which("herdr-app"):
+        return None
+    try:
+        spaces = json.loads(run(["herdr-app", "ls"]).stdout).get("spaces", [])
+    except (ValueError, AttributeError):
+        return None
+    return next((sp.get("tabs") or [] for sp in spaces if sp.get("id") == space), None)
+
+
+def pane_labels(task, space):
+    """(hc labels that make the worker a pane of its request's tab, the name to give the tab
+    Herdr makes for it, or None). Nothing for a task outside a request or with no window."""
+    slug = request_slug(task)
+    if not slug or not space or "/" in space or not shutil.which("herdr-app"):
+        return [], None
+    tabs = app_tabs(space)
+    if tabs is None:
+        print(f"herdr-task: space {space} isn't in the window; the worker runs hidden.", file=sys.stderr)
+        return [], None
+    tab = next((t["id"] for t in tabs if t.get("name") == slug), None)
+    labels = ["--label", f"herdr.space={space}", "--label", f"herdr.request={slug}"]
+    return (labels + ["--label", f"herdr.tab={tab}"], None) if tab else (labels, slug)
+
+
+def name_new_tab(space, address, name, tries=20):
+    """Names the tab Herdr made for terminal `address` (it shows a moment after hc run). Bounded
+    to about two seconds: launch() runs under the folder's store lock. False when it didn't."""
+    for _ in range(tries):
+        tab = next((t["id"] for t in app_tabs(space) or []
+                    if any(x.get("terminal") == address for x in t.get("terminals") or [])), None)
+        if tab:
+            return run(["herdr-app", "do", "tab.rename", "--id", tab, "--name", name]).returncode == 0
+        time.sleep(0.1)
+    return False
 
 
 def retag_tabs(s):
@@ -564,8 +621,9 @@ def folder_for(s, task):
 def launch(s, task, argv, space, message=None, parent=None, resume=None, role=None):
     """Starts one agent for the task with no tab or pane of its own (a space can hold thousands
     of tasks): an hc child of `parent`, which parent_for() makes the space's coordinator, reached
-    through the Tasks panel. Labels: herdr.task (its task), herdr.task.space (its space; never
-    herdr.space, which Herdr gives a pane), herdr.agent, herdr.coordinator (its coordinator's tab,
+    through the Tasks panel. Labels: herdr.task (its task), herdr.task.space (its space),
+    herdr.space/herdr.request/herdr.tab only for a request's worker (dotmesh interface.patch,
+    pane_labels: Herdr gives it a pane in the request's tab), herdr.agent, herdr.coordinator (its coordinator's tab,
     which keeps it under a restarted coordinator) and herdr.role=reviewer for a reviewer, kept
     apart from the task's agents. Returns its record."""
     # dotmesh lockdown.patch: nothing but a confined claude reaches hc run.
@@ -593,6 +651,8 @@ def launch(s, task, argv, space, message=None, parent=None, resume=None, role=No
         labels += ["--label", f"herdr.coordinator={ctab}"]
     if role:
         labels += ["--label", f"herdr.role={role}"]
+    pane, new_tab = pane_labels(task, bare(space)) if not role else ([], None)
+    labels += pane
     rel = ["--parent", parent, "--outlive-parent"] if parent else ["--no-parent"]
     name = agent_name(s, task, "review" if role else None)
     # HERDR_BROWSER_TASK: which task's browser herdr-browser drives (HERD-57), for it and its children.
@@ -604,6 +664,8 @@ def launch(s, task, argv, space, message=None, parent=None, resume=None, role=No
         out = {}
     if r.returncode != 0 or not out.get("address"):
         raise Fail((r.stderr or r.stdout).strip() or "hc run failed")
+    if new_tab:
+        name_new_tab(bare(space), out["address"], new_tab)
     a = {"address": out["address"], "agent": agent_key(argv), "argv": argv, "at": now()}
     if parent:
         a["parent"] = parent

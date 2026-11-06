@@ -91,14 +91,19 @@ class Commands(Cli):
         self.ht("add", "recibo", "--base", "request/pagos")
 
     def test_board_groups_by_request(self):
-        out = self.ht("board").stdout
-        self.assertRegex(out, r"(?s)informe .*2 to do|pagos .*2 to do")
-        lines = out.splitlines()
+        lines = self.ht("board").stdout.splitlines()
+        self.assertIn("2 to do", next(x for x in lines if x.startswith("pagos ")))
+        self.assertIn("1 to do", next(x for x in lines if x.startswith("informe ")))
         heads = [x.split()[0] for x in lines if not x.startswith(" ")]
         self.assertEqual(sorted(heads), ["informe", "pagos"])
         pagos = lines.index(next(x for x in lines if x.startswith("pagos")))
         self.assertIn("cobro", lines[pagos + 1])
         self.assertIn("recibo", lines[pagos + 2])
+
+    def test_watch_wants_a_terminal(self):
+        r = self.ht("board", "--watch", ok=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--watch", r.stderr)
 
     def test_board_json(self):
         out = json.loads(self.ht("board", "--json").stdout)
@@ -122,6 +127,120 @@ class Commands(Cli):
         self.assertIn("2 to do", line)
         js = json.loads(self.ht("request", "list", "--json").stdout)
         self.assertEqual(js["requests"]["pagos"]["counts"], {"todo": 2})
+
+
+
+# ---- the request's tab in herdr-app ------------------------------------------------------------
+
+import contextlib  # noqa: E402
+import io  # noqa: E402
+from unittest import mock  # noqa: E402
+
+import herdr_task.launch as launch  # noqa: E402
+
+LS = {"spaces": [{"id": "sp1", "tabs": [
+    {"id": "tbA", "name": "coord", "terminals": [{"terminal": "t1"}]},
+    {"id": "tbP", "name": "pagos", "terminals": [{"terminal": "t2"}]},
+    {"id": "tb3", "name": "3", "terminals": [{"terminal": "t9"}]}]}]}
+
+
+class AppTab(unittest.TestCase):
+    """A fake herdr-app on PATH: `ls` prints LS, `do` appends its argv to a log."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.log = os.path.join(self.dir, "log")
+        with open(os.path.join(self.dir, "ls.json"), "w") as f:
+            json.dump(LS, f)
+        with open(os.path.join(self.dir, "herdr-app"), "w") as f:
+            f.write(f'#!/bin/sh\nif [ "$1" = ls ]; then cat {self.dir}/ls.json; else echo "$@" >> {self.log}; echo "{{}}"; fi\n')
+        os.chmod(os.path.join(self.dir, "herdr-app"), 0o755)
+        p = mock.patch.dict(os.environ, {"PATH": self.dir + ":/usr/bin:/bin"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def done(self):
+        return open(self.log).read() if os.path.exists(self.log) else ""
+
+    def test_a_worker_joins_its_request_s_tab(self):
+        labels, name = launch.pane_labels({"base": "request/pagos"}, "sp1")
+        self.assertEqual(labels, ["--label", "herdr.space=sp1", "--label", "herdr.request=pagos", "--label", "herdr.tab=tbP"])
+        self.assertIsNone(name)
+
+    def test_the_first_worker_lets_herdr_make_the_tab_and_names_it(self):
+        labels, name = launch.pane_labels({"base": "request/login-sso"}, "sp1")
+        self.assertEqual(labels, ["--label", "herdr.space=sp1", "--label", "herdr.request=login-sso"])
+        self.assertEqual(name, "login-sso")
+        self.assertTrue(launch.name_new_tab("sp1", "t9", "login-sso"))
+        self.assertEqual(self.done().split(), ["do", "tab.rename", "--id", "tb3", "--name", "login-sso"])
+
+    def test_no_pane_without_a_request_or_for_another_machine(self):
+        for task, space in (({"base": "main"}, "sp1"), ({}, "sp1"), ({"base": "request/pagos"}, "vm/sp1"),
+                            ({"base": "request/pagos"}, None), ({"base": "request/Mal=x"}, "sp1")):
+            self.assertEqual(launch.pane_labels(task, space), ([], None), (task, space))
+
+    def test_an_unknown_space_stays_hidden_with_a_line_saying_so(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(launch.pane_labels({"base": "request/pagos"}, "sp9"), ([], None))
+        self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
+
+    def test_without_herdr_app_nothing_changes(self):
+        os.remove(os.path.join(self.dir, "herdr-app"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(launch.pane_labels({"base": "request/pagos"}, "sp1"), ([], None))
+        self.assertEqual(err.getvalue(), "")
+
+    def test_renaming_a_task_leaves_its_request_s_tab_alone(self):
+        agents = {"t2": {"labels": {"herdr.tab": "tbP", "herdr.request": "pagos"}},
+                  "t5": {"labels": {"herdr.tab": "tbX"}}}
+        s = mock.Mock()
+        s.key.return_value = "k"
+        with mock.patch.object(launch, "live_agents", return_value=[{"address": a} for a in agents]), \
+                mock.patch.object(launch, "detail", side_effect=lambda k: agents[k["address"]]):
+            self.assertEqual(launch.task_tabs(s, {}), ["tbX"])
+
+    def test_naming_gives_up_when_the_tab_never_shows(self):
+        self.assertFalse(launch.name_new_tab("sp1", "t404", "pagos", tries=2))
+        self.assertEqual(self.done(), "")
+
+    def test_a_window_that_answers_garbage_is_no_window(self):
+        with open(os.path.join(self.dir, "ls.json"), "w") as f:
+            f.write("not json")
+        self.assertIsNone(launch.app_tabs("sp1"))
+
+    def launched(self, role=None):
+        calls = []
+
+        def run(args, **kw):
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0, json.dumps({"address": "t7"}), "")
+        s = mock.Mock()
+        s.key.return_value = "k"
+        s.loc = {"folder": self.dir}
+        task = {"base": "request/pagos", "agents": [], "mode": "worktree", "id": 1, "title": "x"}
+        with mock.patch.dict(os.environ, {"HOME": self.dir}), mock.patch.object(launch, "run", side_effect=run), \
+                mock.patch.object(launch, "low_priority", side_effect=lambda c, n: c), \
+                mock.patch.object(launch, "folder_for", return_value=self.dir), \
+                mock.patch.object(launch, "own_argv", side_effect=lambda c, *a: c), \
+                mock.patch.object(launch, "git_denies", return_value=[]), \
+                mock.patch.object(launch, "agent_name", return_value="hat-1-x"), \
+                mock.patch.object(launch, "track"), mock.patch.object(launch, "vet_argv"), \
+                mock.patch.object(launch, "app_tabs", return_value=LS["spaces"][0]["tabs"]):
+            launch.launch(s, task, ["claude"], "sp1", role=role)
+        return next(c for c in calls if c[:2] == ["hc", "run"])
+
+    def test_a_reviewer_stays_hidden(self):
+        hc = self.launched(role="reviewer")
+        self.assertFalse(any(a.startswith(("herdr.space=", "herdr.tab=", "herdr.request=")) for a in hc), hc)
+
+    def test_launch_passes_the_pane_labels_to_hc_run(self):
+        hc = self.launched()
+        self.assertIn("herdr.tab=tbP", hc)
+        self.assertIn("herdr.space=sp1", hc)
+        self.assertIn("herdr.request=pagos", hc)
 
 
 if __name__ == "__main__":
