@@ -140,6 +140,7 @@ class WorkerSettings(unittest.TestCase):
                              sorted(f"herdr-task {v} *" for v in launch.OWN))
             self.assertNotIn("hc *", json.dumps(cfg))
             self.assertNotIn("herdr-task *", cfg["sandbox"]["excludedCommands"])
+            self.assertIs(cfg["sandbox"]["allowUnsandboxedCommands"], False)  # no escape hatch
 
     def test_every_other_verb_is_denied(self):
         """Every verb cli.py defines, read from its source, is either the worker's own or denied."""

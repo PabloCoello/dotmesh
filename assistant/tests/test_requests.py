@@ -55,7 +55,7 @@ class Cli(unittest.TestCase):
         os.chmod(os.path.join(bindir, "hc"), 0o755)
 
     def ht(self, *args, ok=True):
-        r = subprocess.run([sys.executable, os.path.join(BIN, "herdr-task"), *args], capture_output=True, text=True,
+        r = subprocess.run([sys.executable, os.path.join(BIN, "herdr-task"), *args], capture_output=True, text=True, cwd=self.repo,
                            env={"HOME": self.home, "PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"})
         if ok:
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -116,6 +116,24 @@ class Cli(unittest.TestCase):
         r = self.ht("request", "close", "pagos", "--remove", "--folder", self.repo, ok=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertTrue(os.path.isdir(self.wt()))
+
+    # dotmesh hardening.patch: these calls have no terminal, as an agent's Bash doesn't.
+    def test_an_agent_adds_only_request_worktree_tasks_of_its_repo(self):
+        self.ht("request", "open", "pagos", "--folder", self.repo)
+        other = new_repo(os.path.join(self.home, "otro"))
+        for extra in (["--here"], ["--set", "merge=on its own"], ["--set", " MERGE =after checks"],
+                      ["--folder", other], ["--folder", self.home], ["--base", "main"]):
+            r = self.ht("add", "x", *(["--base", "request/pagos"] if "--base" not in extra else []), *extra, ok=False)
+            self.assertIn("dotmesh hardening", r.stderr, extra)
+        r = self.ht("add", "x", ok=False)  # no --base: the folder's current branch, not a request
+        self.assertIn("dotmesh hardening", r.stderr)
+        self.ht("add", "bien", "--base", "request/pagos")
+        r = self.ht("edit", "1", "--set", "merge=on its own", ok=False)
+        self.assertIn("dotmesh hardening", r.stderr)
+        r = self.ht("edit", "1", "--base", "main", ok=False)
+        self.assertIn("dotmesh hardening", r.stderr)
+        r = self.ht("start", "1", "--here", ok=False)
+        self.assertIn("dotmesh hardening", r.stderr)
 
     def test_remove_takes_work_that_is_on_a_remote(self):
         self.ht("request", "open", "pagos", "--folder", self.repo)

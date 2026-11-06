@@ -10,7 +10,13 @@ agent runs now gets its agent typed back into that shell: the same terminal, lab
 task, resuming that very session. Its session gone (no log, or the CLI says "No conversation
 found"): a new one starts there with a short handover (as the chat's lostSession), which its
 chat shows as a New session. Each machine's tick does its own terminals only, under the tick's
-lock, so one agent never comes back twice."""
+lock, so one agent never comes back twice.
+
+dotmesh hardening.patch: only a record of a worker's own flags and settings is written or read
+(sane_record), so the Assistant's (its launcher's --settings) never is: it doesn't come back by
+itself after a crash, and the person runs `assistant` again, which puts the coordinator label and
+its removal back with it. A worker whose settings changed since its record (herdr-secret added
+or removed) comes back from its task's record, rebuilt with today's settings."""
 
 import json
 import os
@@ -249,6 +255,8 @@ def task_record(k, t):
         return None
     if (k.get("labels") or {}).get("herdr.role") != "reviewer":
         argv = own_argv(argv)
+    if not sane_argv(argv):  # dotmesh hardening.patch: the store is outside the sandbox too
+        return None
     return {"kind": kind, "session": a.get("session"), "log": a.get("log"), "argv": argv, "cwd": k.get("cwd"),
             "pid": None, "working": t.get("state") == "running", "shell": True}
 

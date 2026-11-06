@@ -45,8 +45,10 @@ confianza vale para todas las subcarpetas. Como contrapartida, Claude tampoco pr
 cargar los hooks, servidores MCP o ajustes que un worker haya commiteado allí. Por eso
 `accept` se para si la tarea cambia ficheros de ese tipo (`.claude/`, `.mcp.json`, hooks de
 git, enlaces simbólicos…) y el Assistant te los enseña. Para integrarla, ejecutas tú
-`herdr-task accept <tarea> --config-ok` en un terminal tuyo y tecleas la referencia de la
-tarea. El Assistant no puede dar ese paso, porque su Bash no tiene terminal.
+`herdr-task accept <tarea> --config-ok` en un terminal tuyo y tecleas el código que te
+muestra. El Assistant no puede dar ese paso, porque su Bash no tiene terminal. Esa
+comprobación no ve lo que esos ficheros ejecutan ni lo que en dotmesh se activa por Stow,
+así que lee el diff antes de aceptar.
 
 `make health` comprueba la instalación con `scripts/install.sh --status`. Avisa si falta `hc`,
 algún enlace, la persona, los ajustes o la confianza en `~/.herdr/worktrees`, y también si hay
@@ -141,12 +143,17 @@ máquina. Las reglas de denegación se aplican aunque el comando esté excluido 
 Para contestar a un worker, el Assistant usa `herdr-task say` (texto) y `herdr-task keys`
 (teclas de una lista cerrada, para un menú). Los dos escriben solo al worker de la tarea que
 se nombra, y solo mientras su `claude` está en primer plano. `say` rechaza el texto de varias
-líneas o que empieza por `!`, `/` o `#`, que `claude` trataría como un comando, y `keys` no
-teclea mientras escribes en ese terminal. `--prompt-file` solo lee un
+líneas o que empieza por `!`, `/` o `#`, que `claude` trataría como un comando, y ninguno de
+los dos escribe mientras tecleas en ese terminal; `say` tampoco mientras el worker muestra un
+menú. Desde su sesión, el Assistant solo crea y arranca tareas de su repo, en un worktree
+sobre un encargo y con la política de integración que tú hayas fijado; `--here`, otra
+carpeta o `--set merge` quedan para ti, desde un terminal tuyo. `--prompt-file` solo lee un
 brief de `.ai/tasks/` de la carpeta, y la reanudación tras un reinicio descarta cualquier
 registro que no haya podido escribir herdr-task.
 
-Los workers tienen menos todavía. Cada uno excluye del sandbox solo los verbos de
+Los workers tienen menos todavía. No tienen la escotilla del sandbox
+(`dangerouslyDisableSandbox`), así que lo que necesite red por SSH, `pre-commit` o `uv`
+falla en el worker y lo haces tú en el worktree del encargo. Cada uno excluye del sandbox solo los verbos de
 `herdr-task` que necesita (`ready`, `status`, `reviewed`…), uno a uno, y tiene denegados los
 demás. `herdr-task` solo arranca un `claude` cuyos flags no pueden aflojar su propio sandbox.
 Las noticias que escriben los workers pasan por el news-guard, un parche que comprueba qué

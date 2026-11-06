@@ -251,7 +251,15 @@ Prueba: `assistant/tests/test_auto_request.py`.
 
 La puerta de seguridad final del 05-11-2026 revisó el paquete entero y encontró cinco huecos
 que los parches anteriores dejaban abiertos. Este parche cierra los que están en herdr-task;
-el lanzador y el output style `assistant` cambian en el mismo commit.
+el lanzador y el output style `assistant` cambian en el mismo commit. Dos rondas más de
+revisión, el 05 y el 06-11, encontraron rodeos a esos cierres, y el parche recoge también
+sus arreglos.
+
+Varias medidas se apoyan en una medición: el Bash de un agente no tiene terminal de control.
+Medido el 06-11-2026 desde una sesión de Claude Code, dentro y fuera de la caja: `stdin` no
+es un terminal y abrir `/dev/tty` da `ENXIO`. Un terminal de la persona sí lo tiene. Por eso
+lo que solo debe hacer la persona se comprueba con `base.no_terminal()`, y no con una opción
+que quien llama pudiera pasar.
 
 - **Escribir a un worker.** La sesión del Assistant tenía `hc send` y `hc keys` fuera del
   sandbox, contra cualquier terminal, y solo el texto de su output style exigía comprobar antes
@@ -262,7 +270,12 @@ el lanzador y el output style `assistant` cambian en el mismo commit.
   con `claude` delante (la comprobación de `news-guard.patch`). `keys` acepta hasta 20
   teclas de una lista cerrada: `up`, `down`, `left`, `right`, `enter`, `escape`, `tab` y
   `space`. El lanzador deniega `hc send`, `hc keys` y `hc label`, y los workers tienen
-  denegados `say` y `keys`.
+  denegados `say` y `keys`. `say` escribe una sola línea de texto: rechaza los caracteres de
+  control (también los C1 y los separadores de línea de Unicode) y una línea que empiece por
+  `!`, `/` o `#`, que `claude` tomaría como un comando. Tampoco escribe mientras la persona
+  teclea en ese worker ni mientras este muestra un menú, como el diálogo de permisos: un
+  `1` contestaría ese menú. Los menús se contestan con `keys`, que vuelve a comprobar antes
+  de cada tecla que `claude` sigue delante y que la persona no está tecleando.
 - **Exclusión por verbos.** El lanzador excluía `hc *` y `herdr-task *` y denegaba una
   lista de verbos. Un verbo nuevo de upstream, o una forma que la regla no reconociera,
   habría corrido fuera de la caja. Ahora excluye verbo a verbo: de `hc`, solo `get`, `ls`,
@@ -279,13 +292,31 @@ el lanzador y el output style `assistant` cambian en el mismo commit.
   `fastMode` solo, o `fastMode` más exactamente los ajustes propios del worker
   (`launch.worker_settings`). Además, la sesión tiene que ser un UUID, el log tiene que estar
   bajo `~/.claude/projects` y la carpeta, ser absoluta. Un registro que no pasa no se escribe
-  en la etiqueta. Queda sin comprobar que la carpeta sea la del terminal.
+  en la etiqueta. El argv que guarda el almacén de tareas, que también está fuera de la caja,
+  pasa la misma comprobación. Queda sin comprobar que la carpeta sea la del terminal. Como
+  consecuencia, el registro del propio Assistant, que lleva el `--settings` del lanzador, no se
+  escribe nunca: tras una caída, el Assistant no vuelve solo y la persona lanza `assistant` de
+  nuevo, que es también lo que vuelve a poner y quitar la marca de coordinador.
 - **`--prompt-file`.** herdr-task corre fuera de la caja, así que `--prompt-file` podía leer
   cualquier fichero (`~/.ssh`, un `.env`) y llevarlo al brief de un worker. Ahora solo lee un
-  fichero bajo `<carpeta>/.ai/tasks/`, en `add`, `edit` y las automatizaciones. Lo abre sin
-  seguir un enlace al final y comprueba sobre el descriptor abierto que es un fichero normal,
-  con un solo nombre (un enlace duro a `~/.aws/credentials` pasaría la comprobación de ruta),
-  que sigue siendo el que nombra la ruta, que no pasa de 256 KiB y que es UTF-8.
+  fichero bajo `<carpeta>/.ai/tasks/`, en `add`, `edit` y las automatizaciones. Lo abre
+  componente a componente desde la carpeta, sin seguir ningún enlace simbólico, de modo que
+  cambiar un directorio por un enlace después de comprobar la ruta no lo desvía. Después
+  comprueba sobre el descriptor abierto que es un fichero normal con un solo nombre (un
+  enlace duro a `~/.aws/credentials` pasaría la comprobación de ruta), que no pasa de
+  256 KiB y que es UTF-8.
+- **Workers sin escotilla.** Un worker conservaba `dangerouslyDisableSandbox`, como cualquier
+  sesión maker. Con ella podía escribir en la carpeta principal o integrar él mismo, sin
+  pasar por `accept`. Ahora sus ajustes llevan `allowUnsandboxedCommands: false`. Los
+  workers de M1 y M10 hicieron todos sus commits dentro de la caja, así que su flujo no
+  necesita la escotilla. Lo que sí la necesita (red por SSH, `pre-commit`, `uv`) falla en el
+  worker, y lo hace la persona en el worktree del encargo.
+- **Dónde trabaja una tarea del Assistant.** `add` aceptaba cualquier `--folder`, `--here`
+  (sin worktree y, por tanto, sin `accept`) y `--set merge`. Ahora, una llamada sin terminal
+  de control solo añade, edita y arranca tareas del repo en el que corre, cada una en su
+  worktree y con `--base request/<slug>`, sin `--here`, sin otra `--folder` y sin cambiar
+  su política de integración. Las automatizaciones siguen la misma regla. Desde un terminal
+  suyo, la persona puede hacer todo eso.
 - **Configuración que ejecuta código.** La persona confía una vez en `~/.herdr/worktrees`,
   así que unos hooks, un servidor MCP o unos ajustes que un worker commitee correrían fuera
   de la caja al abrir una sesión o un commit en el worktree del encargo. Antes de integrar,
@@ -293,25 +324,38 @@ el lanzador y el output style `assistant` cambian en el mismo commit.
   `.opencode/`, `.cursor/`, `.husky/`, `.githooks/`, `.vscode/` y `.devcontainer/`, en
   ficheros como `.mcp.json`, `.pre-commit-config.yaml`, `lefthook.yml`, `.envrc`,
   `opencode.json(c)`, `mise.toml` o `.yarnrc.yml`, y cualquier enlace simbólico o submódulo,
-  apunte adonde apunte. Compara en minúsculas, a cualquier profundidad y en cualquier
-  componente de la ruta, y lee el diff con `-z`, sin renombrados. Si hay algo, se niega.
-  Con `--config-ok` pide además que se teclee la referencia de la tarea en un terminal: el
-  Bash de un agente no tiene, así que solo la persona puede darlo, desde un terminal suyo.
-  Integra exactamente el commit comprobado; si la rama se ha movido desde entonces, se
-  niega. `finalize`, la integración automática al decir `ready`, tampoco integra una tarea
-  así: espera al `accept` de la persona.
+  apunte adonde apunte. También cuenta `lefthook` con cualquier extensión, `.gitmodules`,
+  `.gitattributes`, `.tool-versions`, `.nvim.lua`, `.exrc`, `.idea/`, `.zed/`, `.mise/` y
+  `.cargo/`. Compara los nombres como los compara macOS (en NFC, sin los caracteres
+  invisibles que ignora y con `casefold`, de modo que `.mcp.jſon` cuenta), a cualquier
+  profundidad y en cualquier componente de la ruta, y lee el diff con `-z`, sin renombrados.
+  Si hay algo, se niega. Con `--config-ok`, muestra la lista y un código aleatorio en
+  `/dev/tty` y pide teclearlo allí. Un agente no tiene terminal, así que solo la persona
+  puede confirmarlo, y lo hace con el almacén de tareas desbloqueado. Integra exactamente el
+  commit comprobado, también cuando la base no está desplegada en ninguna carpeta; si la
+  rama se ha movido desde entonces, se niega. `finalize`, la integración automática al decir
+  `ready`, tampoco integra una tarea así: espera al `accept` de la persona.
 
 Quedan abiertos:
 
+- La comprobación de `accept` mira los ficheros de configuración, no lo que estos ejecutan.
+  Un worker puede cambiar el script al que llama un hook existente (`entry: ./scripts/x.sh`)
+  sin que se vea. En dotmesh, además, un fichero enlazado por Stow (`shell/.zshrc`, un
+  `Makefile`, una skill) o un `AGENTS.md` toman efecto en la siguiente sesión sin ser
+  configuración en este sentido. Hay que leer el diff antes de aceptar.
 - Cuando la integración no es un avance rápido, `accept` pide al worker que integre él, y
-  ese worker puede añadir commits después de la comprobación. Con la base en un encargo,
-  esa vía falla de todos modos (ver `auto-request.patch`).
+  ese worker puede añadir commits después de la comprobación. Pasa lo mismo con
+  `finalize` si la persona fija la integración «por su cuenta». Con la base en un encargo
+  y sin escotilla, esa vía falla de todos modos (ver `auto-request.patch`).
+- Un worker escribe en el `.git` común al hacer commit, así que podría mover con
+  `git update-ref` la rama de un encargo sin pasar por `accept`. No está medido si la caja
+  se lo permite.
 - Los hooks que un worker commitee en su propio worktree corren cuando un revisor o una
-  reanudación abren `claude` allí. Eso depende del sandbox del propio worker, que protege
-  `.claude/settings.json` pero conserva la escotilla.
-- `say` filtra la forma del texto (una línea que no empieza por `!`, `/` ni `#`, sin
-  caracteres de control), no su contenido, y `keys enter` puede aprobar un diálogo de
-  permisos del worker. Ahí manda la persona del Assistant.
+  reanudación abren `claude` allí, con la caja del propio worker.
+- `say` filtra la forma del texto, no su contenido: es una instrucción libre al worker, y
+  `keys enter` puede aprobar un diálogo de permisos. Ahí manda la persona del Assistant.
+- Que `allowUnsandboxedCommands: false` en el `--settings` de un worker gana a la plantilla
+  de la máquina sigue el orden de precedencia de Claude Code; no se ha medido en vivo.
 - El sandbox no impide que un comando confinado con este checkout como carpeta
 de trabajo escriba en `assistant/`, código que luego corre fuera. `make health` avisa de los
 cambios sin confirmar en `vendor/`, `bin/` y `templates/`, pero solo cuando se ejecuta.

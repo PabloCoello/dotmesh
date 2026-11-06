@@ -74,9 +74,12 @@ WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "sche
                "assistants", "tell-assistant", "request", "say", "keys", "_allow", "_session-note", "_track", "--on", "--")
 
 
+# dotmesh hardening.patch: and no escape hatch (dangerouslyDisableSandbox). A worker commits inside
+# the sandbox (measured in M1 and M10: every commit ran confined), and with the hatch it could
+# write to the main folder or merge by itself, around accept.
 def worker_settings(path, rules):
     return {"permissions": {"allow": rules, "deny": [f"Bash({path} {v}:*)" for v in WORKER_DENY]},
-            "sandbox": {"excludedCommands": [f"{path} {v} *" for v in OWN]}}
+            "sandbox": {"excludedCommands": [f"{path} {v} *" for v in OWN], "allowUnsandboxedCommands": False}}
 
 
 def own_argv(argv):

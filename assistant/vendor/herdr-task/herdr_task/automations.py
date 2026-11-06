@@ -22,7 +22,7 @@ from .queues import queue_reason
 from .archive import archive_pass
 from .output import say
 from .scheduler import ensure_scheduler, script_hash
-from .commands import begin
+from .commands import agent_limits, begin
 from .request import unattended_problem
 from .news import news_pass
 from .tick import end_done_pass, lost_logs_pass, memory_guard, retry_pass, tick_store
@@ -277,6 +277,8 @@ def cmd_auto(args):
         # Another machine's automation asks (fetch_feed): this folder's tasks now. Reads only.
         print(json.dumps(feed(args.folder)))
         return
+    if sub in ("add", "edit"):
+        agent_limits(args)  # dotmesh hardening.patch
     with open_store(args) as s:
         autos = s.data.setdefault("automations", [])
         msg = ""

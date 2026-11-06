@@ -170,24 +170,30 @@ def read_prompt_file(path, folder):
     real = os.path.realpath(os.path.expanduser(path))
     if not real.startswith(base):
         raise Fail(f"--prompt-file reads a brief under {base} only.")
-    # Read from the descriptor that was checked: no symlink at the end, a plain file with one name
-    # (a hard link to ~/.aws/credentials would pass the path check), and still the same file as
-    # the path names after opening.
+    # Opened one component at a time from the folder, none of them followed if it is a symlink, so
+    # a directory swapped for a link after the check above can't redirect it. Then read from the
+    # descriptor: a plain file with one name (a hard link to ~/.aws/credentials would pass the
+    # path check).
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    parts = real[len(base):].split(os.sep)
+    fd = None
     try:
-        fd = os.open(real, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        fd = os.open(os.path.realpath(folder), os.O_RDONLY | os.O_DIRECTORY)
+        for i, name in enumerate([".ai", "tasks", *parts]):
+            last = i == len(parts) + 1
+            flags = os.O_RDONLY | nofollow | (getattr(os, "O_NONBLOCK", 0) if last else os.O_DIRECTORY)
+            nxt = os.open(name, flags, dir_fd=fd)
+            os.close(fd)
+            fd = nxt
     except OSError:
+        if fd is not None:
+            os.close(fd)
         raise Fail(f"--prompt-file: can't open {path}.")
     st = os.fstat(fd)
     if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
         os.close(fd)
         raise Fail(f"--prompt-file: {path} isn't a plain file with a single name.")
     with os.fdopen(fd, "rb") as f:
-        try:
-            same = os.path.samestat(st, os.stat(real)) and os.path.realpath(real) == real
-        except OSError:
-            same = False
-        if not same:
-            raise Fail(f"--prompt-file: {path} changed while it was read.")
         data = f.read(PROMPT_MAX + 1)
     if len(data) > PROMPT_MAX:
         raise Fail(f"--prompt-file: {path} is over {PROMPT_MAX // 1024} KiB.")
@@ -195,3 +201,25 @@ def read_prompt_file(path, folder):
         return data.decode("utf-8")
     except UnicodeDecodeError:
         raise Fail(f"--prompt-file: {path} isn't UTF-8 text.")
+
+
+# dotmesh hardening.patch: a call from an agent's Bash has no controlling terminal (measured on
+# 2026-11-06 inside and outside the sandbox: /dev/tty gives ENXIO), while the person's terminal
+# has one. What only the person may do checks this, not a flag the caller could pass.
+def no_terminal():
+    try:
+        with open("/dev/tty", "rb"):
+            return False
+    except OSError:
+        return True
+
+
+def ask_at_terminal(question, expected):
+    """The person's answer, typed at their terminal (/dev/tty, never stdin): True when it matches."""
+    try:
+        with open("/dev/tty", "r+") as tty:
+            tty.write(question)
+            tty.flush()
+            return tty.readline().strip() == expected
+    except OSError:
+        return False

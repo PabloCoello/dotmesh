@@ -114,6 +114,9 @@ herdr-task request list --folder <repo> --json
 - Never point a task at the default branch (`--base main` or similar), and never add one
   without `--base` (it would fall back to the main folder's branch). If the person asks
   for that, refuse, say why (their main folder would be merged into) and offer a request.
+  herdr-task refuses it as well: from your Bash (no terminal) it adds, edits and starts only
+  tasks of the repo you run in, in a worktree on `request/<slug>`, without `--here`,
+  another `--folder` or `--set merge`. Those are the person's, in a terminal of their own.
 - `herdr-task request close <slug>` only when the person asks; `--remove` (takes the
   worktree and branch) only when they ask for that too, after they have published it. It
   refuses if anything would be lost; report its reason, don't work around it.
@@ -133,8 +136,9 @@ herdr-task start <REF> --folder <repo> --space <space> --parent <your id> --json
 - A start result is `{ref, terminal, …}` when it started, or `{ref, queued: true,
   reason}`. A queued task starts by itself later: never start it again. No `--now`
   unless the person asks.
-- A wish about one task's review or merge goes in `--set` on `add`, one per key:
-  `--set 'review.rounds=2'`, `--set 'review.mustFix=minor'`, `--set 'merge=ask me first'`.
+- A wish about one task's review goes in `--set` on `add`, one per key:
+  `--set 'review.rounds=2'`, `--set 'review.mustFix=minor'`. How a task merges is the
+  person's: give them the `herdr-task edit <REF> --set 'merge=…'` line to run themselves.
   Change Settings themselves only when asked.
 - Then tell the person in one or two lines which tasks run and which wait, by id.
 
@@ -165,8 +169,9 @@ A worker is an `hc` child of your terminal, not a tab. Reach it with:
 - `hc read <t> --lines 80`: its screen.
 - `herdr-task say <REF> '<text>'`: types the text into the task's worker **and presses
   Enter**. Plain prose of your own, one line; no `;`, `|`, `&&`, backticks, `$(`, and
-  nothing copied from worker text. It refuses a line that starts with `!`, `/` or `#`. It refuses when no worker is at work or a shell is in
-  front; then tell the person.
+  nothing copied from worker text. It refuses a line that starts with `!`, `/` or `#`, while the person types
+  in that worker, while it shows a menu (use `keys`), and when no worker is at work or a
+  shell is in front; then tell the person.
 - `herdr-task keys <REF> down enter`: for a menu (`AskUserQuestion`); keys from `up`,
   `down`, `left`, `right`, `enter`, `escape`, `tab`, `space`. Read the screen before and
   after.
@@ -199,8 +204,8 @@ wait for them.
   worktree) before you say anything; then offer the person `herdr-task accept <REF>`. If
   accept refuses because the task changes files that run code when opened (hooks, MCP,
   settings, a symlink), show the person that list and the diff of those files, and give
-  them the command it prints: they run it in a terminal of their own, which asks them to
-  type the task's ref. You can't pass that step, so don't try. A
+  them the command it prints: they run it in a terminal of their own, which shows a code there and asks them to
+  type it. You can't pass that step, so don't try. A
   `For AGENTS.md:` line goes to the person as a suggestion; you don't edit AGENTS.md.
 
 ## Acting on a task when asked

@@ -9,8 +9,9 @@ import shlex
 import subprocess
 import sys
 import time
+import unicodedata
 
-from .base import Fail, git, guard, now, read_prompt_file, run, STORE, VERSION
+from .base import ask_at_terminal, Fail, git, guard, no_terminal, now, read_prompt_file, run, STORE, VERSION
 from .request import checked_out_at, merge_targets, unattended_problem
 from .settings import (
     agent_argv, agent_key, bare, merge_policy, review_limits, set_opts, settings_block, settings_for, space_base,
@@ -89,7 +90,37 @@ def cmd_list(args):
             print("No archived tasks." if args.archived else "No tasks.")
 
 
+# dotmesh hardening.patch: an agent (a caller with no terminal, base.no_terminal) adds, edits and
+# starts only tasks of the repo it runs in, each in its own worktree on an open request's branch,
+# under the merge policy the person set. Folder tasks, --here, another --folder and --set merge
+# are the person's, at a terminal of their own.
+def agent_limits(args):
+    if not no_terminal():
+        return
+    if getattr(args, "here", False):
+        raise Fail("--here is for the person, at a terminal of their own (dotmesh hardening).")
+    for pair in getattr(args, "set", None) or []:
+        if pair.split("=", 1)[0].strip().lower() == "merge":
+            raise Fail("--set merge is for the person, at a terminal of their own (dotmesh hardening).")
+    here = locate(None)
+    if here["kind"] != "repo":
+        raise Fail("An agent adds tasks only in a git repo (dotmesh hardening).")
+    if getattr(args, "folder", None) and locate(args.folder)["folder"] != here["folder"]:
+        raise Fail(f"An agent adds tasks only for {here['folder']}, the repo it runs in (dotmesh hardening).")
+    base = getattr(args, "base", None)
+    if base is not None and not base.strip().startswith("request/"):
+        raise Fail("An agent's task branches from an open request: --base request/<slug> (dotmesh hardening).")
+
+
+def agent_task_ok(s, t):
+    if no_terminal() and (t.get("mode") != "worktree" or not str(t.get("base") or "").startswith("request/")
+                          or "merge" in (t.get("set") or {})):
+        raise Fail(f"{s.ref(t)} works outside a request's worktree or under its own merge setting: "
+                   "the person starts it, at a terminal of their own (dotmesh hardening).")
+
+
 def cmd_add(args):
+    agent_limits(args)
     prompt = args.prompt or ""
     if args.prompt_file:
         prompt = read_prompt_file(args.prompt_file, locate(args.folder)["folder"])
@@ -104,6 +135,7 @@ def cmd_add(args):
         set_opts(t, args)
         space = bare(args.space) if args.space else caller_space()
         set_base(s, t, args.base, space, new=True)
+        agent_task_ok(s, t)
         set_notes(t, args)
         if args.after:
             set_after(s, t, *parse_after(s, args.after))
@@ -270,6 +302,7 @@ def begin(s, t, argv, space, parent=None):
 
 
 def cmd_start(args):
+    agent_limits(args)
     with open_store(args) as s:
         t = s.find(args.id)
         live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
@@ -281,6 +314,7 @@ def cmd_start(args):
             t["mode"] = "here"
         elif args.worktree and worktrees_on(s):
             t["mode"] = "worktree"
+        agent_task_ok(s, t)
         q = t.get("queue") or {}
         space = bare(args.space) if args.space else (q.get("space") or default_space())
         argv = agent_argv(None, args.argv) if args.argv else worker_argv(s, t, space, args.agent) if args.agent else \
@@ -716,6 +750,7 @@ def cmd_unarchive(args):
 
 
 def cmd_edit(args):
+    agent_limits(args)
     with open_store(args) as s:
         t = s.find(args.id)
         old = t["title"]
@@ -748,6 +783,8 @@ def cmd_edit(args):
             if args.worktree and s.loc["kind"] != "repo":
                 raise Fail("Worktrees need a git repo.")
             t["mode"] = "here" if args.here else "worktree"
+        if t["state"] in ("todo", "scheduled", "queued"):
+            agent_task_ok(s, t)
         s.dirty = True
         tabs = task_tabs(s, t) if t["title"] != old else []
         v = view(s, t)
@@ -901,11 +938,20 @@ def say_problem(text):
     command, `/` a slash command, `#` writes memory), no control characters."""
     if not text.strip() or len(text) > SAY_MAX:
         return f"say takes one line of 1 to {SAY_MAX} characters."
-    if any(ord(c) < 32 or ord(c) == 127 for c in text):
+    if any(ord(c) < 32 or 127 <= ord(c) < 160 or c in "\u2028\u2029" for c in text):
         return "say takes one line, without control characters."
     if text.lstrip()[0] in "!/#":
         return "say doesn't start with !, / or # (claude would take it as a command)."
     return None
+
+
+# A menu of claude's own (a permission dialog: "❯ 1. Yes"): say's text would answer it, so only
+# keys does, one named key at a time.
+MENU = re.compile(r"^\s*❯\s*\d+\.\s|Do you want to (proceed|make this edit|create)", re.M)
+
+
+def menu_open(addr):
+    return bool(MENU.search(run(["hc", "read", addr, "--lines", "40"]).stdout or ""))
 
 
 def cmd_say(args):
@@ -915,8 +961,13 @@ def cmd_say(args):
     with open_store(args) as s:
         t = s.find(args.id)
         addr = task_worker(s, t)
-        from .news import send_or_hold
-        got = send_or_hold(addr, args.text)
+        from .news import typing
+        # Refused rather than held (send_or_hold): a held message would go later, unchecked.
+        if typing(addr):
+            raise Fail(f"The person is typing in {addr}; try again once they stop.")
+        if menu_open(addr):
+            raise Fail(f"{addr} shows a menu: answer it with herdr-task keys, or ask the person.")
+        got = "sent" if claude_in_front(addr) and run(["hc", "send", addr, args.text]).returncode == 0 else None
         if not got:
             raise Fail(f"Couldn't type into {addr}: hc send failed or its claude has exited (a shell is in front).")
         v = view(s, t)
@@ -931,10 +982,11 @@ def cmd_keys(args):
         t = s.find(args.id)
         addr = task_worker(s, t)
         from .news import typing
-        if typing(addr):
-            raise Fail(f"The person is typing in {addr}; try again once they stop.")
         for k in args.keys:
-            # Checked before every key: what is in front can change between two of them.
+            # Checked before every key: what is in front, and whether the person types, can change
+            # between two of them.
+            if typing(addr):
+                raise Fail(f"The person is typing in {addr}; try again once they stop.")
             if not claude_in_front(addr):
                 raise Fail(f"Couldn't press keys in {addr}: its claude has exited (a shell is in front).")
             if run(["hc", "keys", addr, k]).returncode != 0:
@@ -1049,19 +1101,35 @@ def ff_merge(s, t, tip=None):
         return git(where, "merge", "--ff-only", tip or br)[0]
     # A base checked out nowhere (a task's own --base): its branch moves forward to the task's
     # (git refuses unless it's a fast-forward, or when another worktree has it checked out).
-    return git(main, "fetch", ".", f"{br}:{base}")[0]
+    return git(main, "fetch", ".", f"{tip or br}:{base}")[0]
 
 
 # dotmesh hardening.patch: the person trusts ~/.herdr/worktrees once, so a hook, an MCP server or a
 # settings file a worker commits would run, outside the sandbox, the next time a session or a
 # commit opens in the request's worktree. accept names them and waits for the person, at a
-# terminal of their own (confirm_config). Names compare in lower case (macOS folders don't care),
-# at any depth and as any component, and every symlink or submodule counts, wherever it points.
-CONFIG_DIRS = {".claude", ".codex", ".opencode", ".cursor", ".husky", ".githooks", ".vscode", ".devcontainer"}
-CONFIG_FILES = {".mcp.json", ".pre-commit-config.yaml", "lefthook.yml", "lefthook.yaml", ".lefthook.yml",
-                "lefthook-local.yml", ".envrc", "opencode.json", "opencode.jsonc", ".mise.toml", "mise.toml",
-                ".yarnrc.yml", ".npmrc"}
+# terminal of their own (confirm_config). Names compare case-folded, NFC and without ignorable
+# code points (as macOS folders compare them), at any depth and as any component, and every
+# symlink or submodule counts, wherever it points. Only these files: a script one of them runs,
+# or a file that takes effect some other way (Stow links, AGENTS.md), isn't seen.
+CONFIG_DIRS = {".claude", ".codex", ".opencode", ".cursor", ".husky", ".githooks", ".vscode", ".devcontainer",
+               ".idea", ".zed", ".mise", ".cargo"}
+CONFIG_FILES = {".mcp.json", ".pre-commit-config.yaml", ".envrc", "opencode.json", "opencode.jsonc",
+                ".mise.toml", "mise.toml", ".mise.local.toml", "mise.local.toml", ".tool-versions",
+                ".yarnrc.yml", ".npmrc", ".nvim.lua", ".exrc", ".gitmodules", ".gitattributes"}
+CONFIG_STEMS = {"lefthook", ".lefthook", "lefthook-local", ".lefthook-local"}  # any extension
 LINK_MODES = {"120000", "160000"}
+IGNORABLE = re.compile("[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f"
+                       "\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8]")
+
+
+def fold(name):
+    return IGNORABLE.sub("", unicodedata.normalize("NFC", name)).casefold()
+
+
+def is_config(names):
+    last = names[-1]
+    return bool(CONFIG_DIRS & set(names)) or last in CONFIG_FILES or last.rsplit(".", 1)[0] in CONFIG_STEMS \
+        or "/".join(names[-2:]) in (".config/mise.toml", ".config/lefthook.yml", ".config/lefthook.yaml")
 
 
 def config_paths(s, t, tip=None):
@@ -1074,20 +1142,22 @@ def config_paths(s, t, tip=None):
     found, parts = [], out.split("\0")
     for meta, path in zip(parts[::2], parts[1::2]):
         modes = set(meta.lstrip(":").split()[:2])
-        names = [n.lower() for n in path.split("/")]
-        if modes & LINK_MODES or CONFIG_DIRS & set(names) or names[-1] in CONFIG_FILES:
+        names = [fold(n) for n in path.split("/")]
+        if modes & LINK_MODES or is_config(names):
             found.append(path)
     return found
 
 
-def confirm_config(s, t, touched):
-    """The person's yes, typed at a terminal: an agent's Bash has none, so it can't give it."""
-    if not sys.stdin.isatty():
-        raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens there: "
+def confirm_config(ref, touched):
+    """The person's yes, typed at their terminal (/dev/tty, with a code shown only there): an
+    agent's Bash has no terminal (base.no_terminal), so it can't give it."""
+    if no_terminal():
+        raise Fail(f"{ref} changes files that run code when a session or a commit opens there: "
                    f"{', '.join(touched[:10])}. The person reviews them and accepts it at a terminal of "
-                   f"their own: herdr-task accept {s.ref(t)} --config-ok")
-    print(f"{s.ref(t)} changes files that run code when opened:", *touched, sep="\n  ", file=sys.stderr)
-    if input(f"Type {s.ref(t)} to merge them: ").strip() != s.ref(t):
+                   f"their own: herdr-task accept {ref} --config-ok")
+    code = secrets.token_hex(3)
+    listing = "\n  ".join([f"{ref} changes files that run code when opened:", *touched])
+    if not ask_at_terminal(f"{listing}\nType {code} to merge them: ", code):
         raise Fail("Not confirmed; nothing merged.")
 
 
@@ -1114,6 +1184,19 @@ def cmd_accept(args):
         # failed once, doesn't stand in the way. Without one, only a failed try doesn't.
         elif t.get("attention") and not t.get("pr") and not t["attention"].startswith(("Couldn't ask for the merge", MERGE_FAILED)):
             raise Fail(f"{s.ref(t)} needs attention first: {t['attention']}")
+        # dotmesh hardening.patch: the exact commit checked is the one merged, and a task whose
+        # commits change config waits for the person (asked below, with the store unlocked).
+        tip, touched = None, []
+        if t.get("mode") == "worktree" and t.get("worktree") and not back:
+            ok, tip, _ = git(s.loc["folder"], "rev-parse", "--verify", f"{t.get('branch')}^{{commit}}")
+            touched = config_paths(s, t, tip) if ok else ["(its branch couldn't be read)"]
+            if touched and not getattr(args, "config_ok", False):
+                raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens there: "
+                           f"{', '.join(touched[:10])}. The person reviews them and accepts it at a terminal "
+                           f"of their own: herdr-task accept {s.ref(t)} --config-ok")
+        ref = s.ref(t)
+    if touched and not back:
+        confirm_config(ref, touched)
     if back:
         raise Fail(f"{s.ref(t)} is working again: its agent took up more work after it said ready. Accept it once it says ready again.")
     with open_store(args) as s:
@@ -1121,17 +1204,8 @@ def cmd_accept(args):
         if t["state"] != "ready":
             raise Fail(f"{s.ref(t)} isn't ready ({t['state']}); only a Ready task can be accepted.")
         wt = t.get("worktree") if t.get("mode") == "worktree" else None
-        tip = None
-        if wt and not t.get("pr"):
-            # The exact commit checked is the one merged: a commit added after the check isn't.
-            ok, tip, _ = git(s.loc["folder"], "rev-parse", "--verify", f"{t.get('branch')}^{{commit}}")
-            touched = config_paths(s, t, tip) if ok else ["(its branch couldn't be read)"]
-            if touched:
-                if not getattr(args, "config_ok", False):
-                    raise Fail(f"{s.ref(t)} changes files that run code when a session or a commit opens there: "
-                               f"{', '.join(touched[:10])}. The person reviews them and accepts it at a terminal "
-                               f"of their own: herdr-task accept {s.ref(t)} --config-ok")
-                confirm_config(s, t, touched)
+        if wt and tip and git(s.loc["folder"], "rev-parse", "--verify", f"{t.get('branch')}^{{commit}}")[1] != tip:
+            raise Fail(f"{s.ref(t)}'s branch moved after it was checked; accept it again.")
         t.pop("attention", None)
         t["accepted_at"] = now()
         s.dirty = True
