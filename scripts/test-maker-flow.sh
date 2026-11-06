@@ -62,6 +62,31 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODEL="${MAKER_FLOW_MODEL:-sonnet}"
 TIMEOUT="${MAKER_FLOW_TIMEOUT:-900}"
 RUNS="${MAKER_FLOW_RUNS:-3}"
+
+# macOS ships no `timeout`. Fall back to coreutils' gtimeout, then to perl's
+# alarm, which survives exec: the child dies of SIGALRM (142), mapped to 124
+# so the callers see the same code as GNU timeout.
+with_auth() {
+  if [ -n "${OAUTH_TOK:-}" ]; then
+    CLAUDE_CODE_OAUTH_TOKEN="$OAUTH_TOK" "$@"
+  else
+    "$@"
+  fi
+}
+
+with_timeout() {
+  local secs="$1" rc=0
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@" || rc=$?
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@" || rc=$?
+  else
+    perl -e 'alarm shift; exec @ARGV or exit 127' "$secs" "$@" || rc=$?
+    [ "$rc" -eq 142 ] && rc=124
+  fi
+  return "$rc"
+}
 # both | maker | control. Correr un solo brazo sirve para comparar contra una
 # ejecución de aceptación previa sin repetir el brazo que no cambia.
 ARMS="${MAKER_FLOW_ARMS:-both}"
@@ -123,6 +148,27 @@ echo "  modelo: $MODEL · timeout por run: ${TIMEOUT}s · runs por brazo: $RUNS"
 echo "  brazos: $ARMS · AGENTS.md: ${WITH_AGENTS:-no} · hooks: ${WITH_HOOKS:-no} · modo: ${MODE:-por defecto}"
 
 REAL_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
+# macOS keeps the session in the Keychain, not in .credentials.json, and the
+# Keychain entry is keyed by config dir: an isolated CLAUDE_CONFIG_DIR reads
+# nothing and the arm dies with "Not logged in" (measured 2026-11-06). Hand the
+# nested sessions the access token through the environment instead. It never
+# touches disk or the output; it expires within hours, longer than a run.
+# Default config only: another CLAUDE_CONFIG_DIR has its own Keychain entry and
+# this would read a different account's. The token is not exported; it goes to
+# the claude call alone (with_auth), not to the rest of the harness.
+OAUTH_TOK=""
+if [ ! -e "$REAL_CONFIG/.credentials.json" ] && [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] \
+  && [ -z "${CLAUDE_CONFIG_DIR:-}" ] && [ "$(uname -s)" = Darwin ]; then
+  if OAUTH_TOK=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).claudeAiOauth.accessToken))' 2>/dev/null) \
+    && [ -n "$OAUTH_TOK" ]; then
+    :
+  else
+    OAUTH_TOK=""
+    echo "WARN: no hay sesión de Claude en el llavero; los brazos dirán «Not logged in»" >&2
+  fi
+fi
 if [ ! -d "$REPO_ROOT/claude/.claude/agents" ]; then
   echo "ERROR: no encuentro claude/.claude/agents en $REPO_ROOT"
   exit 1
@@ -320,7 +366,7 @@ run_arm() {
   set +e
   # --dangerously-skip-permissions evita los diálogos; --add-dir no es un
   # sandbox de SO. Se acepta porque el árbol es temporal y el prompt mínimo.
-  echo "$PROMPT" | (cd "$workdir" && CLAUDE_CONFIG_DIR="$config" timeout "$TIMEOUT" claude -p \
+  echo "$PROMPT" | (cd "$workdir" && with_auth with_timeout "$TIMEOUT" env CLAUDE_CONFIG_DIR="$config" claude -p \
     --model "$MODEL" \
     --output-format stream-json --verbose \
     --dangerously-skip-permissions \

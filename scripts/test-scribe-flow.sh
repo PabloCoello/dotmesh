@@ -30,6 +30,31 @@ PASS=0
 FAIL=0
 
 pass() { echo "PASS: $*"; PASS=$((PASS + 1)); }
+
+# macOS no trae `timeout`. Se prueba gtimeout de coreutils y, si tampoco está,
+# el alarm de perl, que sobrevive al exec: el hijo muere por SIGALRM (142), que
+# se traduce a 124 para que el llamador vea el mismo código que con GNU timeout.
+with_auth() {
+  if [ -n "${OAUTH_TOK:-}" ]; then
+    CLAUDE_CODE_OAUTH_TOKEN="$OAUTH_TOK" "$@"
+  else
+    "$@"
+  fi
+}
+
+with_timeout() {
+  local secs="$1" rc=0
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@" || rc=$?
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@" || rc=$?
+  else
+    perl -e 'alarm shift; exec @ARGV or exit 127' "$secs" "$@" || rc=$?
+    [ "$rc" -eq 142 ] && rc=124
+  fi
+  return "$rc"
+}
 fail() { echo "FAIL: $*"; FAIL=$((FAIL + 1)); }
 section() { echo ""; echo "--- $* ---"; }
 
@@ -109,6 +134,26 @@ trap cleanup EXIT
 # dangerouslyDisableSandbox está deshabilitado.
 # ---------------------------------------------------------------------------
 REAL_CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
+# macOS guarda la sesión en el llavero, no en .credentials.json, y la entrada
+# depende del config dir: con un CLAUDE_CONFIG_DIR aislado no se encuentra y la
+# sesión anidada responde «Not logged in» (medido el 06-11-2026). Se le pasa el
+# token de acceso por el entorno; no toca disco ni la salida, y caduca en horas.
+# Solo con el config por defecto: otro CLAUDE_CONFIG_DIR tiene otra entrada en
+# el llavero y se leería la de otra cuenta. El token no se exporta: va solo en
+# la llamada a claude (with_auth), no al resto del arnés.
+OAUTH_TOK=""
+if [ ! -e "$REAL_CONFIG/.credentials.json" ] && [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] \
+  && [ -z "${CLAUDE_CONFIG_DIR:-}" ] && [ "$(uname -s)" = Darwin ]; then
+  if OAUTH_TOK=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).claudeAiOauth.accessToken))' 2>/dev/null) \
+    && [ -n "$OAUTH_TOK" ]; then
+    :
+  else
+    OAUTH_TOK=""
+    echo "WARN: no hay sesión de Claude en el llavero; la sesión dirá «Not logged in»" >&2
+  fi
+fi
 SCRIBE_CONFIG=$(mktemp -d)
 CLEANUP_DIRS+=("$SCRIBE_CONFIG")
 cp -rL "$REPO_ROOT/claude/.claude/agents" "$SCRIBE_CONFIG/agents"
@@ -124,7 +169,9 @@ fi
 # ---------------------------------------------------------------------------
 setup_workdir() {
   local fixture_dir="$1"
-  TMPWORK=$(mktemp -d)
+  # pwd -P: en macOS mktemp da /var/…, que es un enlace a /private/var/…, y git
+  # devuelve la raíz resuelta; mesh-review vería el documento fuera del repo.
+  TMPWORK=$(cd "$(mktemp -d)" && pwd -P)
   CLEANUP_DIRS+=("$TMPWORK")
 
   cp "$fixture_dir/doc.md" "$TMPWORK/"
@@ -200,7 +247,7 @@ run_claude_scribe() {
   # que es una decisión meditada y comando a comando de una sesión con una
   # persona delante. failIfUnavailable hace que un anfitrión sin bubblewrap
   # tumbe la ejecución en vez de medir en silencio una sesión sin confinar.
-  raw_response=$(cd "$workdir" && echo "$prompt" | CLAUDE_CONFIG_DIR="$SCRIBE_CONFIG" timeout 600 claude -p \
+  raw_response=$(cd "$workdir" && echo "$prompt" | with_auth with_timeout 600 env CLAUDE_CONFIG_DIR="$SCRIBE_CONFIG" claude -p \
     --output-format json \
     --dangerously-skip-permissions \
     --settings '{"outputStyle":"scribe","sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"excludedCommands":[]}}' \
@@ -371,7 +418,9 @@ events_before_fix=$(find "$WORK_FIX/.ai/review/doc.md" -maxdepth 1 -name "*.json
 # Prompt que guía al agente a usar fix (no emit crudo).
 # Sigue el flujo de pass-flow.md §6: editar el doc → git add → mesh-review fix.
 # No menciona el subcomando emit.
-PROMPT_FIX=$(cat <<PROMPT
+# read y no $(cat <<…): el bash 3.2 de macOS no analiza un heredoc con
+# paréntesis dentro de una sustitución de comando.
+IFS= read -r -d '' PROMPT_FIX <<PROMPT || true
 Tu tarea: resolver el comentario pendiente del documento en "$WORK_FIX/doc.md".
 
 Pasos (ejecuta exactamente en este orden):
@@ -399,7 +448,6 @@ PASO 3 — Produce la respuesta estructurada con estas tres secciones EXACTAS:
 ## Preguntas
 (preguntas para el humano; escribe "Ninguna" si no hay)
 PROMPT
-)
 
 echo "  Ejecutando claude -p (puede tardar varios minutos)..."
 RESULT_TEXT_FIX=""
