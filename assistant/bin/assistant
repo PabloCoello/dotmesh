@@ -67,5 +67,30 @@ SETTINGS='{"outputStyle":"assistant",
 "Bash(herdr-task _allow:*)","Bash(herdr-task _session-note:*)","Bash(herdr-task _track:*)",
 "Bash(herdr-task -*)"]}}'
 
+# The board beside the Assistant (interface.patch): a pane to its right running
+# `herdr-task board --watch` for this folder, once per tab (labelled herdr.board=<tab>).
+# Best effort: without herdr-app, or if any step fails, the Assistant starts as before.
+json_get() { python3 -c "import json,sys
+try: d=json.load(sys.stdin)
+except ValueError: sys.exit(0)
+$1" 2>/dev/null; }
+board_pane() {
+  command -v herdr-app >/dev/null 2>&1 || return 0
+  tab=$(hc get "$HC_TERMINAL_ID" --json | json_get 'print((d.get("labels") or {}).get("herdr.tab") or "")')
+  [ -n "$tab" ] || return 0
+  live=$(hc ls --json --label "herdr.board=$tab" | json_get 'print(sum(1 for k in d.get("terminals",[]) if k.get("state")=="live"))')
+  [ "${live:-0}" = 0 ] || return 0
+  pane=$(herdr-app ls | TERM_ID="$HC_TERMINAL_ID" json_get 'import os
+print(next((x["pane"] for s in d.get("spaces",[]) for t in s.get("tabs",[]) for x in t.get("terminals",[]) if x.get("terminal")==os.environ["TERM_ID"]),""))')
+  [ -n "$pane" ] || return 0
+  args=$(PANE="$pane" FOLDER="$(pwd -P)" python3 -c 'import json,os
+print(json.dumps({"direction":"right","pane":os.environ["PANE"],"argv":["herdr-task","board","--watch","--folder",os.environ["FOLDER"]]}))')
+  new=$(herdr-app do pane.split "$args" | json_get 'print(d.get("terminal") or "")')
+  [ -n "$new" ] || return 0
+  hc label "$new" "herdr.board=$tab" >/dev/null 2>&1 || true
+  herdr-app do pane.focus --pane "$pane" >/dev/null 2>&1 || true
+}
+board_pane || true
+
 hc label "$HC_TERMINAL_ID" herdr.role=coordinator >/dev/null
 claude --settings "$SETTINGS" "$@"

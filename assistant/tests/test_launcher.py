@@ -6,6 +6,9 @@ Run: python3 -m unittest discover -s assistant/tests
 import json
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +90,59 @@ class Launcher(unittest.TestCase):
                     "herdr-task progress 'x'", "herdr-task alert 'x'", "herdr-task review-more 1",
                     "herdr-task resume 1", "herdr-task done 1", "herdr-task reopen 1", "herdr-task board --json"):
             self.assertFalse(denied(cmd, rules), cmd)
+
+
+# dotmesh interface.patch: the board opens in a pane to the right of the Assistant, once per tab.
+class BoardPane(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.write("hc", """
+echo "hc $*" >> {d}/log
+case "$1" in
+  get) echo '{{"labels":{{"herdr.tab":"tbA","herdr.space":"sp1"}}}}' ;;
+  ls) if [ -f {d}/live ]; then echo '{{"terminals":[{{"address":"t9","state":"live"}}]}}'; else echo '{{"terminals":[]}}'; fi ;;
+esac""")
+        self.write("herdr-app", """
+echo "herdr-app $*" >> {d}/log
+case "$1" in
+  ls) echo '{{"spaces":[{{"id":"sp1","tabs":[{{"id":"tbA","terminals":[{{"terminal":"t1","pane":"p1"}}]}}]}}]}}' ;;
+  do) echo '{{"pane":"p2","terminal":"t2"}}' ;;
+esac""")
+        self.write("claude", "exit 0")
+        self.write("herdr-task", "exit 0")
+
+    def write(self, name, body):
+        path = os.path.join(self.dir, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n" + body.format(d=self.dir) + "\n")
+        os.chmod(path, 0o755)
+
+    def run_launcher(self):
+        r = subprocess.run(["sh", LAUNCHER], capture_output=True, text=True, cwd=self.dir,
+                           env={"PATH": self.dir + ":/usr/bin:/bin", "HC_TERMINAL_ID": "t1", "HOME": self.dir})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(os.path.join(self.dir, "log")) as f:
+            return f.read().splitlines()
+
+    def test_splits_right_with_the_board_and_labels_it(self):
+        log = self.run_launcher()
+        split = next(x for x in log if "pane.split" in x)
+        args = json.loads(split.split("pane.split ", 1)[1])
+        self.assertEqual(args["direction"], "right")
+        self.assertEqual(args["pane"], "p1")
+        self.assertEqual(args["argv"], ["herdr-task", "board", "--watch", "--folder", os.path.realpath(self.dir)])
+        self.assertIn("hc label t2 herdr.board=tbA", log)
+        self.assertTrue(any("pane.focus" in x and "p1" in x for x in log), log)
+
+    def test_a_live_board_in_the_tab_is_not_opened_again(self):
+        open(os.path.join(self.dir, "live"), "w").close()
+        self.assertFalse(any("pane.split" in x for x in self.run_launcher()))
+
+    def test_without_herdr_app_claude_still_starts(self):
+        os.remove(os.path.join(self.dir, "herdr-app"))
+        log = self.run_launcher()
+        self.assertFalse(any(x.startswith("herdr-app") for x in log))
 
 
 if __name__ == "__main__":
