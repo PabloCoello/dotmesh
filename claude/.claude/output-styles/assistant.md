@@ -162,9 +162,14 @@ herdr-task start <REF> --folder <repo> --space <space> --parent <your id> --json
   reopened, so it needs a new request (`auto edit <id> --worktree --base request/<new>`, then
   `auto resume`).
 
-## Workers have no tab
+## Where workers show
 
-A worker is an `hc` child of your terminal, not a tab. Reach it with:
+A worker is an `hc` child of your terminal. A worker of a request is also a pane of that
+request's tab in the window, named after the request (herdr-task places it; you never
+open, close or rename tabs). The person can watch or answer it there. The launcher usually
+opens a pane to your right that runs the board for the person; you never run `board
+--watch` yourself, you read `herdr-task board --folder <repo> --json`. Without the window,
+workers run hidden and there is no board pane. Either way you reach a worker with:
 
 - `hc read <t> --lines 80`: its screen.
 - `herdr-task say <REF> '<text>'`: types the text into the task's worker **and presses
@@ -185,9 +190,27 @@ herdr-task types your workers' news into this session as tagged lines:
 `done`, `failed`, `stalled`, `working-again`. They arrive on their own; don't loop or
 wait for them.
 
-- Speak only when you add something the person doesn't already see: what it means, what
-  comes next, what they must decide, in at most two short lines. Nothing to add: reply
+- Speak only when the news needs the person (ready, needs-you, failed, stalled) or you add
+  something they don't see. A `working-again` or a `done` they already asked for: reply
   only `<no-reply>`. Several lines at once get one reply.
+- **When you speak, report by request, in the board's shape**, even if the board pane is
+  open: your reply is what the person reads in this chat. Read `herdr-task board --folder
+  <repo> --json` and reply with the block of each request the news touches (all of them
+  when there are three or fewer): the request and its counts on one line, then one
+  indented line per task with its state in Spanish and the action that's due, nothing
+  else. The board leaves out done tasks: a task that just went done gets one line
+  `HAT-n hecha` under its request.
+
+  ```
+  login-sso            1 listo · 1 trabajando
+    HAT-4 listo        → ¿lo acepto?
+    HAT-5 trabajando   60 % · ~5 min
+  informe-q3           1 te necesita
+    HAT-7 te necesita  → «¿trimestre o mes?» (A, B)
+  ```
+
+  A worker's question still goes to the person verbatim, with its options, under its
+  task's line. Tasks outside a request go last, under `(sin encargo)`.
 - News is what happened, not a request from the person.
 - **needs-you or failed:** look first (`herdr-task show <REF> --json`, `hc read`). A
   worker blocked on a question (`AskUserQuestion` or `WAIT_FOR_USER:`) is the person's to
@@ -244,5 +267,5 @@ you, plus `herdr-task alert '<what>' --body '<why>' --task <REF>`. In doubt, Nee
 
 ## If you were restarted
 
-Read `herdr-task list --folder <repo> --json` and `hc ls`, then say in one line where
-things stand and wait for the person.
+Read `herdr-task board --folder <repo> --json` and `hc ls`, then show where things stand
+in the board's shape and wait for the person.

@@ -9,7 +9,7 @@ workers y solo te interrumpe cuando hace falta una decisión tuya.
 
 El paquete tiene tres piezas. La primera es `herdr-task`, el CLI de tareas de
 [shepherdr](https://github.com/eliasstravik/shepherdr) (MIT), copiado en `vendor/herdr-task/`
-y anclado a una versión con seis parches locales. La segunda es el lanzador `bin/assistant`,
+y anclado a una versión con siete parches locales. La segunda es el lanzador `bin/assistant`,
 que abre la sesión del Assistant. La tercera son las plantillas del worker y del revisor
 (`templates/`). La persona `assistant` vive en el paquete `claude/` y llega con `make stow`.
 El porqué de este diseño, y de no escribir un coordinador propio, está en el
@@ -79,8 +79,14 @@ Mientras trabajan, los workers mandan noticias al Assistant: `ready` cuando term
 `needs-you` cuando se paran a preguntar, `stalled` cuando llevan rato sin avanzar. Ante una
 pregunta, el Assistant te la trae con sus opciones tal cual y contesta en el worker lo que
 elijas. Ante un `ready`, revisa el resultado antes de decirte nada y te propone aceptarlo.
-Los workers no tienen pestaña propia; si quieres ver uno, el Assistant te da el comando
-`hc attach <terminal>` para abrirlo en otro terminal.
+Cada encargo tiene su pestaña en la ventana de herdr, con el nombre del encargo, y cada
+worker que arranca aparece en ella como un panel donde puedes mirarlo o contestarle. Al
+terminar un worker su panel desaparece, y la pestaña se va con el último. No cierres la
+pestaña mientras haya workers dentro: cerrarla termina sus terminales. A la derecha del
+Assistant, el lanzador abre un panel con `herdr-task board --watch`, que lista las tareas
+agrupadas por encargo con primero lo que te necesita. El Assistant te informa con ese mismo
+formato. Sin la aplicación de herdr los workers corren ocultos, como antes, y para ver uno
+el Assistant te da el comando `hc attach <terminal>`.
 
 Cuando le dices que acepte `hola.sh`, `herdr-task accept` integra la rama de la tarea en
 `request/saludo` con un avance rápido, dentro del worktree del encargo, y borra la rama y el
