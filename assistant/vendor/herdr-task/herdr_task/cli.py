@@ -12,7 +12,7 @@ from .base import bundle, Fail, guard, run, STORE, sync_held, VERSION
 from .agents import LINE_MAX, SUMMARY_MAX
 from .launch import cmd_allow, name_tabs
 from .commands import (
-    cmd_accept, cmd_add, cmd_alert, cmd_config, cmd_edit, cmd_fix, cmd_list, cmd_merge, cmd_ready,
+    cmd_accept, cmd_add, cmd_alert, cmd_board, cmd_config, cmd_edit, cmd_fix, cmd_list, cmd_merge, cmd_ready,
     cmd_resume, cmd_review, cmd_review_more, cmd_reviewed, cmd_rm, cmd_show, cmd_start, cmd_state, cmd_status,
     cmd_keys, cmd_say, cmd_switch, cmd_unarchive, cmd_where,
 )
@@ -207,6 +207,9 @@ def main():
     c = cmd("list", cmd_list, "list tasks", id=False)
     c.add_argument("--all", action="store_true", help="every folder's tasks on this machine")
     c.add_argument("--archived", action="store_true", help="the archived tasks instead (Done ones archive themselves after a week), latest first")
+    # dotmesh interface.patch
+    c = cmd("board", cmd_board, "this folder's tasks grouped by request, what needs you first (read only)", id=False)
+    c.add_argument("--watch", action="store_true", help="redraw it every few seconds until interrupted")
     c = cmd("add", cmd_add, "add a task; prints its id", id=False)
     c.add_argument("title")
     c.add_argument("--prompt")

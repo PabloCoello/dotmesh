@@ -85,7 +85,7 @@ class Launcher(unittest.TestCase):
                     "herdr-task add 'x' --prompt 'y'", "herdr-task start 1", "herdr-task accept 1",
                     "herdr-task request open x", "herdr-task config --json", "herdr-task autopilot show",
                     "herdr-task progress 'x'", "herdr-task alert 'x'", "herdr-task review-more 1",
-                    "herdr-task resume 1", "herdr-task done 1", "herdr-task reopen 1"):
+                    "herdr-task resume 1", "herdr-task done 1", "herdr-task reopen 1", "herdr-task board --json"):
             self.assertFalse(denied(cmd, rules), cmd)
 
 

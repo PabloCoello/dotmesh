@@ -1,0 +1,215 @@
+diff --git a/herdr_task/cli.py b/herdr_task/cli.py
+index 5f601a2..4a1e8e6 100644
+--- a/herdr_task/cli.py
++++ b/herdr_task/cli.py
+@@ -12,7 +12,7 @@ from .base import bundle, Fail, guard, run, STORE, sync_held, VERSION
+ from .agents import LINE_MAX, SUMMARY_MAX
+ from .launch import cmd_allow, name_tabs
+ from .commands import (
+-    cmd_accept, cmd_add, cmd_alert, cmd_config, cmd_edit, cmd_fix, cmd_list, cmd_merge, cmd_ready,
++    cmd_accept, cmd_add, cmd_alert, cmd_board, cmd_config, cmd_edit, cmd_fix, cmd_list, cmd_merge, cmd_ready,
+     cmd_resume, cmd_review, cmd_review_more, cmd_reviewed, cmd_rm, cmd_show, cmd_start, cmd_state, cmd_status,
+     cmd_keys, cmd_say, cmd_switch, cmd_unarchive, cmd_where,
+ )
+@@ -207,6 +207,9 @@ def main():
+     c = cmd("list", cmd_list, "list tasks", id=False)
+     c.add_argument("--all", action="store_true", help="every folder's tasks on this machine")
+     c.add_argument("--archived", action="store_true", help="the archived tasks instead (Done ones archive themselves after a week), latest first")
++    # dotmesh interface.patch
++    c = cmd("board", cmd_board, "this folder's tasks grouped by request, what needs you first (read only)", id=False)
++    c.add_argument("--watch", action="store_true", help="redraw it every few seconds until interrupted")
+     c = cmd("add", cmd_add, "add a task; prints its id", id=False)
+     c.add_argument("title")
+     c.add_argument("--prompt")
+diff --git a/herdr_task/commands.py b/herdr_task/commands.py
+index 1402068..f1ec4f8 100644
+--- a/herdr_task/commands.py
++++ b/herdr_task/commands.py
+@@ -29,7 +29,7 @@ from .launch import (
+ from .store import is_task_list, locate, open_store, prefixes_in_use, read_list, Store, store_files
+ from .queues import after_refs, parse_after, queue_reason, set_after
+ from .archive import unarchive
+-from .output import line, minutes, say, view
++from .output import board_groups, board_text, line, minutes, say, view
+ from .scheduler import ensure_scheduler
+ from .proof import evidence, find_proof
+ from .when import when_from
+@@ -55,18 +55,8 @@ def cmd_list(args):
+         if not os.path.isdir(folder):
+             continue
+         with Store(locate(folder)) as s:
+-            out = []
++            out = task_views(s, args.archived)
+             archived = sum(1 for t in s.data["tasks"] if t.get("archived"))
+-            for t in s.data["tasks"]:
+-                if bool(t.get("archived")) != args.archived:
+-                    continue
+-                mine = live_agents(s.key(t)) if t["state"] in ("running", "ready") else []
+-                if mine:
+-                    refresh_sessions(s, t, mine)
+-                v = view(s, t, [detail(k) for k in mine] if mine else [])
+-                if t["state"] == "queued":
+-                    v["reason"] = queue_reason(s, t)
+-                out.append(v)
+             if args.archived:
+                 out.sort(key=lambda v: -(v.get("archived") or 0))
+             groups.append({"folder": s.loc["folder"], "name": s.loc["name"], "kind": s.loc["kind"], "tasks": out,
+@@ -77,8 +67,13 @@ def cmd_list(args):
+     for g in groups:
+         if args.all:
+             print(f"{g['name']}  {g['folder']}")
++        if not args.all and not args.archived:
++            # dotmesh interface.patch: one folder's tasks grouped by request, as the board.
++            shown = board_groups(g["tasks"])
++            if shown:
++                print(board_text(shown))
+         for v in g["tasks"]:
+-            if v["state"] != "done" or args.all or args.archived:
++            if args.all or args.archived:
+                 print(("  " if args.all else "") + line(v))
+         hidden = sum(1 for v in g["tasks"] if v["state"] == "done") if not args.archived else 0
+         more = [f"{hidden} done"] if hidden and not args.all else []
+@@ -90,6 +85,45 @@ def cmd_list(args):
+             print("No archived tasks." if args.archived else "No tasks.")
+ 
+ 
++def task_views(s, archived=False):
++    """Each task's view (archived ones, or the rest), with its live agents and queue reason."""
++    out = []
++    for t in s.data["tasks"]:
++        if bool(t.get("archived")) != archived:
++            continue
++        mine = live_agents(s.key(t)) if t["state"] in ("running", "ready") else []
++        if mine:
++            refresh_sessions(s, t, mine)
++        v = view(s, t, [detail(k) for k in mine] if mine else [])
++        if t["state"] == "queued":
++            v["reason"] = queue_reason(s, t)
++        out.append(v)
++    return out
++
++
++# dotmesh interface.patch: the board, read only: this folder's tasks grouped by request (encargo),
++# what needs the person first. --watch redraws it every few seconds until interrupted.
++def cmd_board(args):
++    try:
++        while True:
++            with Store(locate(args.folder)) as s:
++                groups = board_groups(task_views(s))
++                folder = s.loc["folder"]
++            if args.json:
++                print(json.dumps({"folder": folder, "requests": groups}))
++                return
++            if not args.watch:
++                print(board_text(groups))
++                return
++            print("\033[H\033[2J" + board_text(groups), flush=True)
++            time.sleep(BOARD_EVERY)
++    except KeyboardInterrupt:
++        return
++
++
++BOARD_EVERY = 3
++
++
+ # dotmesh hardening.patch: an agent (a caller with no terminal, base.no_terminal) adds, edits and
+ # starts only tasks of the repo it runs in, each in its own worktree on an open request's branch,
+ # under the merge policy the person set. Folder tasks, --here, another --folder and --set merge
+diff --git a/herdr_task/launch.py b/herdr_task/launch.py
+index 80c8aa8..1b1fa4a 100644
+--- a/herdr_task/launch.py
++++ b/herdr_task/launch.py
+@@ -71,7 +71,7 @@ def own_rules(path):
+ WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "scheduler", "autopilot",
+                "fix", "merge", "accept", "done", "reopen", "rm", "unarchive", "backup", "restore-spaces",
+                "review-more", "config", "review", "progress", "complete", "machines", "home",
+-               "assistants", "tell-assistant", "request", "say", "keys", "_allow", "_session-note", "_track", "--on", "--")
++               "assistants", "tell-assistant", "request", "say", "keys", "board", "_allow", "_session-note", "_track", "--on", "--")
+ 
+ 
+ # dotmesh hardening.patch: and no escape hatch (dangerouslyDisableSandbox). A worker commits inside
+diff --git a/herdr_task/output.py b/herdr_task/output.py
+index e93de79..e8c9754 100644
+--- a/herdr_task/output.py
++++ b/herdr_task/output.py
+@@ -94,3 +94,51 @@ def line(v):
+         w = v["report"]
+         extra = w["text"] + (f" · {w['done']}%" if w.get("done") is not None else "") + (f" · ~{minutes(w['left'])} left" if w.get("left") is not None else "")
+     return f"{v['ref']:<7} {word:<9} {v['title']}" + (f"  ({extra})" if extra else "")
++
++
++# dotmesh interface.patch: the board, tasks grouped by request (encargo), the neediest first.
++BOARD_ORDER = ("needs", "ready", "merging", "working", "queued", "scheduled", "todo")
++COUNT_WORDS = {"needs": "needs you", "ready": "ready", "merging": "merging", "working": "working",
++               "queued": "queued", "scheduled": "scheduled", "todo": "to do"}
++
++
++def request_of(v):
++    """The request a task belongs to (its base is request/<slug>), else None."""
++    base = v.get("base") or ""
++    return base[len("request/"):] if base.startswith("request/") else None
++
++
++def counts_of(views):
++    out = {}
++    for v in views:
++        if v["status"] in BOARD_ORDER:
++            out[v["status"]] = out.get(v["status"], 0) + 1
++    return out
++
++
++def counts_line(counts):
++    return " · ".join(f"{counts[k]} {COUNT_WORDS[k]}" for k in BOARD_ORDER if counts.get(k)) or "nothing active"
++
++
++def board_groups(views):
++    """[{request, counts, tasks}] for the tasks not done: in each group by BOARD_ORDER (then as
++    listed), groups by their neediest task, then name; tasks with no request last."""
++    groups = {}
++    for v in views:
++        if v["status"] in BOARD_ORDER:
++            groups.setdefault(request_of(v), []).append(v)
++    rank = BOARD_ORDER.index
++    out = [{"request": r, "counts": counts_of(ts), "tasks": sorted(ts, key=lambda v: rank(v["status"]))}
++           for r, ts in groups.items()]
++    out.sort(key=lambda g: (g["request"] is None, rank(g["tasks"][0]["status"]), g["request"] or ""))
++    return out
++
++
++def board_text(groups):
++    if not groups:
++        return "Nothing on the board."
++    rows = []
++    for g in groups:
++        rows.append(f"{g['request'] or '(no request)':<20} {counts_line(g['counts'])}")
++        rows += ["  " + line(v) for v in g["tasks"]]
++    return "\n".join(rows)
+diff --git a/herdr_task/request.py b/herdr_task/request.py
+index 6ee1858..a42598e 100644
+--- a/herdr_task/request.py
++++ b/herdr_task/request.py
+@@ -13,7 +13,7 @@ import re
+ from .base import Fail, git, now, WORKTREES
+ from .github import remote_of
+ from .launch import base_ref, current_base
+-from .output import say
++from .output import counts_line, counts_of, request_of, say
+ from .store import open_store
+ 
+ SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+@@ -88,8 +88,13 @@ def cmd_request(args):
+             raise Fail("Requests need a git repo.")
+         main, reqs = s.loc["folder"], s.data.setdefault("requests", {})
+         if verb == "list":
+-            return say(args, {"requests": reqs},
+-                       "\n".join(f"{k}  {r['state']}  {r['branch']}  {r['worktree']}" for k, r in sorted(reqs.items()))
++            # dotmesh interface.patch: how many of its tasks are in each state (done ones aside).
++            from .commands import task_views
++            views = task_views(s)
++            shown = {k: {**r, "counts": counts_of([v for v in views if request_of(v) == k])} for k, r in reqs.items()}
++            return say(args, {"requests": shown},
++                       "\n".join(f"{k}  {r['state']}  {counts_line(r['counts'])}  {r['branch']}  {r['worktree']}"
++                                 for k, r in sorted(shown.items()))
+                        or "No requests.")
+         slug = args.slug
+         if not SLUG.fullmatch(slug or ""):

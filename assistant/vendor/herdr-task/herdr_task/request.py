@@ -13,7 +13,7 @@ import re
 from .base import Fail, git, now, WORKTREES
 from .github import remote_of
 from .launch import base_ref, current_base
-from .output import say
+from .output import counts_line, counts_of, request_of, say
 from .store import open_store
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
@@ -88,8 +88,13 @@ def cmd_request(args):
             raise Fail("Requests need a git repo.")
         main, reqs = s.loc["folder"], s.data.setdefault("requests", {})
         if verb == "list":
-            return say(args, {"requests": reqs},
-                       "\n".join(f"{k}  {r['state']}  {r['branch']}  {r['worktree']}" for k, r in sorted(reqs.items()))
+            # dotmesh interface.patch: how many of its tasks are in each state (done ones aside).
+            from .commands import task_views
+            views = task_views(s)
+            shown = {k: {**r, "counts": counts_of([v for v in views if request_of(v) == k])} for k, r in reqs.items()}
+            return say(args, {"requests": shown},
+                       "\n".join(f"{k}  {r['state']}  {counts_line(r['counts'])}  {r['branch']}  {r['worktree']}"
+                                 for k, r in sorted(shown.items()))
                        or "No requests.")
         slug = args.slug
         if not SLUG.fullmatch(slug or ""):
