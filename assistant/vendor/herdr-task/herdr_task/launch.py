@@ -77,12 +77,129 @@ WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "sche
 # dotmesh hardening.patch: and no escape hatch (dangerouslyDisableSandbox). A worker commits inside
 # the sandbox (measured in M1 and M10: every commit ran confined), and with the hatch it could
 # write to the main folder or merge by itself, around accept.
-def worker_settings(path, rules):
-    return {"permissions": {"allow": rules, "deny": [f"Bash({path} {v}:*)" for v in WORKER_DENY]},
-            "sandbox": {"excludedCommands": [f"{path} {v} *" for v in OWN], "allowUnsandboxedCommands": False}}
+def worker_settings(path, rules, deny=()):
+    box = {"excludedCommands": [f"{path} {v} *" for v in OWN], "allowUnsandboxedCommands": False}
+    if deny:
+        box["filesystem"] = {"denyWrite": list(deny)}
+    return {"permissions": {"allow": rules, "deny": [f"Bash({path} {v}:*)" for v in WORKER_DENY]}, "sandbox": box}
 
 
-def own_argv(argv):
+# dotmesh hardening.patch: measured 2026-11-06, a worker inside the sandbox writes the common .git
+# (its commits do), and `git update-ref` moved main and request/* there, around accept. So its
+# sandbox denies every write there but objects, reflogs, its own worktree dir and the path of its
+# own branch under refs/heads; at each level of that path, the other names (loose or packed) are
+# denied, so a sibling task's branch is too. It is read from what herdr-task trusts, the main
+# folder and the task's recorded worktree and branch, never from the worker's own gitdir, and it
+# refuses rather than return less. On macOS, names that do not exist yet are denied too (measured);
+# on Linux the sandbox may plant a placeholder file for those (AGENTS.md), so only existing paths.
+# A --here task commits in the main folder and shares that .git: it gets none (launch()).
+GIT_STATE = ("HEAD", "index", "packed-refs", "config", "config.worktree", "ORIG_HEAD", "FETCH_HEAD",
+             "MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE", "CHERRY_PICK_HEAD", "REVERT_HEAD",
+             "BISECT_LOG", "sequencer", "rebase-merge", "rebase-apply", "info", "hooks", "modules",
+             "shallow", "description")
+GIT_REFS = ("tags", "remotes", "notes", "replace", "stash", "prefetch", "rewritten", "bisect")
+
+
+def check_branch(branch):
+    parts = (branch or "").split("/")
+    if not branch or "\0" in branch or parts[0] == "request" or any(p in ("", ".", "..") for p in parts):
+        raise Fail(f"{branch!r} can't be a worker's branch here (dotmesh hardening).")
+    return parts
+
+
+def safe_dir(d):
+    """mkdir -p, refusing a symlink on the way (a worker could have planted one in a shared dir)."""
+    if os.path.islink(d):
+        raise Fail(f"{d!r} is a symlink (dotmesh hardening).")
+    os.makedirs(d, exist_ok=True)
+
+
+def materialize(common, heads):
+    """Linux: every name the list denies exists first. A packed-only branch gets its loose file,
+    with the same value (a loose ref shadows the packed one, so this changes nothing), and the
+    namespaces get empty dirs. Measured on macOS: `update-ref` to the same value writes nothing.
+    refs/stash is a file ref and is left alone, as is a branch named just `request`."""
+    root = os.path.join(common, "refs", "heads")
+    for d in [os.path.join(root, "request")] + [os.path.join(common, "refs", n) for n in GIT_REFS if n != "stash"]:
+        if not os.path.lexists(d):
+            safe_dir(d)
+    for oid, name in heads:
+        path = os.path.join(common, *name.split("/"))
+        rel = os.path.relpath(os.path.dirname(path), root)
+        cur = root
+        for part in ([] if rel == "." else rel.split(os.sep)):
+            cur = os.path.join(cur, part)
+            safe_dir(cur)
+        if os.path.lexists(path):
+            continue
+        # A worker can still swap a dir on its own branch's path for a symlink between the checks
+        # above and the write: check where the dir really is right before writing, and write
+        # through a temp file linked into place, so no reader sees an empty ref and none is replaced.
+        if os.path.realpath(os.path.dirname(path)) != os.path.dirname(path):
+            raise Fail(f"{os.path.dirname(path)!r} moved (dotmesh hardening).")
+        tmp = f"{path}.herdr-{secrets.token_hex(4)}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(oid + "\n")
+            try:
+                os.link(tmp, path, follow_symlinks=False)
+            except FileExistsError:
+                pass
+        finally:
+            os.unlink(tmp)
+
+
+def git_denies(main, worktree, branch):
+    parts = check_branch(branch)
+    ok, cd, _ = git(main, "rev-parse", "--git-common-dir")
+    ok2, refs, _ = git(main, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads/")
+    if not (ok and ok2):
+        raise Fail(f"Can't read the git dir of {main!r} (dotmesh hardening).")
+    common, wt = os.path.realpath(os.path.join(main, cd)), os.path.realpath(worktree)
+    ahead = sys.platform == "darwin"
+    try:
+        wts = os.path.join(common, "worktrees")
+        own = []
+        for d in sorted(os.listdir(wts)) if os.path.isdir(wts) else []:
+            try:
+                with open(os.path.join(wts, d, "gitdir")) as f:
+                    if os.path.realpath(os.path.dirname(f.read().strip())) == wt:
+                        own.append(d)
+            except OSError:
+                pass
+        if len(own) != 1:
+            raise Fail(f"Can't tell which worktree of {main!r} is {worktree!r} (dotmesh hardening).")
+
+        def others(sub, extra, keep):
+            d = os.path.join(common, sub)
+            names = set(extra) | (set(os.listdir(d)) if os.path.isdir(d) else set())
+            return [os.path.join(d, n) for n in sorted(names) if n not in keep]
+
+        # Measured: the sandbox refuses to create a directory that holds a denied path, so with
+        # packed refs the worker could not make refs/heads/task/ for its own first commit.
+        d = os.path.join(common, "refs", "heads")
+        for part in parts[:-1]:
+            d = os.path.join(d, part)
+            safe_dir(d)
+        pairs = [tuple(r.split(" ", 1)) for r in refs.splitlines() if " refs/heads/" in r]
+        if not ahead:
+            materialize(common, [(o, n) for o, n in pairs if n != "refs/heads/" + branch])
+        heads = [n[len("refs/heads/"):].split("/") for _, n in pairs]
+        out = others("", GIT_STATE, {"objects", "logs", "refs", "worktrees"})
+        out += others("refs", GIT_REFS, {"heads"})
+        for i, mine in enumerate(parts):
+            known = {h[i] for h in heads if len(h) > i and h[:i] == parts[:i]}
+            out += others(os.path.join("refs", "heads", *parts[:i]), known | ({"request"} if i == 0 else set()), {mine})
+        out += others("worktrees", (), {own[0]})
+        out.append(os.path.join(wts, own[0], "config.worktree"))  # read with extensions.worktreeConfig
+    except OSError as e:
+        raise Fail(f"Can't list the git dir of {main!r}: {e.strerror} (dotmesh hardening).")
+    out = [os.path.normpath(p) for p in out]
+    return out if ahead else [p for p in out if os.path.lexists(p)]
+
+
+def own_argv(argv, deny=()):
     """An agent's argv with its own herdr-task commands allowed (Claude Code and Codex)."""
     path, out = own_path(), list(argv)
     k = agent_key(out)
@@ -94,7 +211,7 @@ def own_argv(argv):
         # Upstream merged its allow rules into any --settings (JSON or a file). Here the worker's
         # --settings is always ours, keeping only fastMode from what was there: an argv saved
         # before this patch (revive.task_record) may carry anything.
-        mine = worker_settings(path, rules)
+        mine = worker_settings(path, rules, deny)
         if "--settings" in out[:-1]:
             i = out.index("--settings")
             try:
@@ -428,6 +545,11 @@ def folder_for(s, task):
     own = task.get("base") if task.get("base_set") else None
     base = base_ref(main, own) if own else current_base(main)
     exists = git(main, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}")[0]
+    if exists and not task.get("branch"):
+        # dotmesh hardening.patch: a worker can't move a branch that exists, but it can create one
+        # under its own refs/heads/task/ with the name the next task will get (`list` shows it), so
+        # that task would start from its commits. Only a branch the task names is reused.
+        raise Fail(f"{branch} already exists and {task.get('id')} didn't name it: delete or rename it first.")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     add = ["worktree", "add", path, branch] if exists else ["worktree", "add", "-b", branch, path, own or "HEAD"]
     ok, _, err = git(main, *add)
@@ -453,7 +575,14 @@ def launch(s, task, argv, space, message=None, parent=None, resume=None, role=No
     key = s.key(task)
     cmd = list(resume or argv)
     if not role:
-        cmd = own_argv(cmd)
+        own_argv(cmd)  # refuses before folder_for() makes a worktree
+        if task.get("mode") == "worktree" and task.get("branch"):
+            check_branch(task["branch"])
+    folder = folder_for(s, task)
+    if not role:
+        deny = git_denies(s.loc["folder"], folder, task.get("branch")) if task.get("mode") == "worktree" else []
+        task["git_deny"] = deny  # revive.task_record restarts it with the same list
+        cmd = own_argv(cmd, deny)
     if message:
         # dotmesh lockdown.patch: a message is never read as a flag.
         cmd = cmd + (["--", message] if message.startswith("-") else [message])
@@ -467,7 +596,7 @@ def launch(s, task, argv, space, message=None, parent=None, resume=None, role=No
     rel = ["--parent", parent, "--outlive-parent"] if parent else ["--no-parent"]
     name = agent_name(s, task, "review" if role else None)
     # HERDR_BROWSER_TASK: which task's browser herdr-browser drives (HERD-57), for it and its children.
-    r = run(["hc", "run", "--bg", "--json", "--keep", "--cwd", folder_for(s, task), "--name", name,
+    r = run(["hc", "run", "--bg", "--json", "--keep", "--cwd", folder, "--name", name,
              *labels, *rel, "--", *low_priority(["env", f"HERDR_BROWSER_TASK={key}", *in_shell(cmd)], name)])
     try:
         out = json.loads(r.stdout)

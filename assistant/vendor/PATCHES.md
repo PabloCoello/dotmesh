@@ -320,6 +320,55 @@ el Assistant ni los workers la tienen.
   comando de control creó el fichero. Los workers de M1 y M10 hicieron todos sus commits dentro de la caja, así que su flujo no
   necesita la escotilla. Lo que sí la necesita (red por SSH, `pre-commit`, `uv`) falla en el
   worker, y lo hace la persona en el worktree del encargo.
+- **El worker no mueve ramas ajenas.** Medido el 06-11-2026 con un `claude -p` real cuya
+  carpeta era un worktree bajo `~/.herdr/worktrees` y cuyo `.git` común quedaba fuera de
+  ella. Dentro de la caja, el worker hacía commit y también movía con `git update-ref`
+  cualquier rama: `request/x`, y en la misma prueba sobre la sesión principal, `main`, aunque
+  estuviera en uso en otro worktree. Escribía también en `info/`. La caja ya le negaba
+  `.git/config` y `.git/hooks/*`.
+
+  Ahora `launch.git_denies` añade al `--settings` del worker un `sandbox.filesystem.denyWrite`
+  con todo lo que hay en el `.git` común salvo `objects`, `logs`, su propio directorio en
+  `worktrees/` y la ruta de su propia rama bajo `refs/heads`. En cada nivel de esa ruta se
+  niegan los demás nombres, sueltos o empaquetados en `packed-refs`, así que tampoco mueve la
+  rama de otra tarea. La lista sale de lo que herdr-task registra (la carpeta principal y el
+  worktree y la rama de la tarea), nunca del gitdir del worker, que él puede reescribir o
+  dejar con el HEAD desacoplado. Si no puede calcularla, se niega a arrancar en vez de dar
+  una lista más corta. Se guarda en la tarea (`git_deny`), y `revive.task_record` relanza con
+  esa misma lista, o no relanza si falta. `revive.sane_settings` acepta un `denyWrite` de
+  rutas absolutas, porque solo estrecha la caja. Una tarea `--here` comparte el `.git` de la
+  carpeta principal y no recibe lista.
+
+  En macOS la lista incluye nombres que aún no existen (`refs/heads/request`, `refs/replace`,
+  `refs/tags`, `MERGE_HEAD`, `info`…), porque la caja los niega igual. Esto tiene un efecto
+  medido: la caja tampoco deja crear un directorio que contiene una ruta negada. Con las refs
+  empaquetadas no existía `refs/heads/task/`, y el primer commit del worker fallaba. Por eso
+  herdr-task crea antes los directorios de la rama del worker, y se niega si encuentra un
+  symlink en esa ruta.
+
+  En Linux, la caja puede plantar un fichero vacío en una ruta negada que no existe (un
+  `MERGE_HEAD` vacío rompería git), así que la lista se queda en rutas existentes. Para que
+  eso no deje fuera las ramas empaquetadas, que es lo normal tras un `clone` o un `gc`,
+  herdr-task escribe antes el fichero suelto de cada una con el mismo valor (una ref suelta
+  tapa a la empaquetada, así que nada se mueve) y crea vacíos `refs/heads/request` y los
+  espacios de `refs/` (`tags`, `replace`…). Se escriben a mano porque `update-ref` al mismo
+  valor no escribe nada (medido en macOS). Los ficheros de estado que no existen
+  (`MERGE_HEAD`, `ORIG_HEAD`…) siguen sin negar en Linux. Nada de este párrafo está medido
+  en Linux.
+
+  Una rama que aún no existe bajo `refs/heads/task/` no se puede negar por adelantado. Un
+  worker podría crear la de la próxima tarea (`herdr-task list` le da el número y el título)
+  apuntando a sus commits, y esa tarea arrancaría desde ellos. Por eso `folder_for` ya no
+  reutiliza una rama existente salvo que la tarea la nombre (`--set branch`), y la rama
+  nombrada se valida antes de crear el worktree.
+
+  Medido al final con el `--settings` que genera `own_argv`, con `main` solo en
+  `packed-refs`: el commit del worker sale. `update-ref` sobre `main`, otra rama, una rama
+  hermana `task/3-otra` y `request/x` falla con `Operation not permitted`. También fallan
+  renombrar `refs/heads`, `refs` o `worktrees` y escribir el `config.worktree` de su propio
+  directorio, que la lista niega de forma explícita. Escribir `objects/info/alternates` también
+  falló, aunque `objects` no está en la lista; la causa no se ha encontrado, y la protección no
+  cuenta con ello.
 - **Dónde trabaja una tarea del Assistant.** `add` aceptaba cualquier `--folder`, `--here`
   (sin worktree y, por tanto, sin `accept`) y `--set merge`. Ahora, una llamada sin terminal
   de control solo añade, edita, arranca y reanuda tareas del repo en el que corre, cada una en su
@@ -369,16 +418,26 @@ Quedan abiertos:
   y sin escotilla, fallan sus dos vías (`git fetch .` y `merge` en la carpeta del encargo:
   la primera la rechaza git y la segunda escribe fuera de su carpeta; no se ha medido en
   vivo). Mover la rama con `update-ref` es la viñeta siguiente.
-- Un worker escribe en el `.git` común al hacer commit, y con eso puede mover cualquier rama
-  del repositorio de la persona. Medido el 06-11-2026 con un `claude -p` real (Claude Code,
-  macOS) cuya carpeta era un worktree bajo `~/.herdr/worktrees` y cuyo `.git` común quedaba
-  fuera de ella. Dentro de la caja, el commit y `git update-ref refs/heads/request/x HEAD`
-  salieron con código 0, y también `info/attributes`. `git config` (`.git/config`) y crear
-  `.git/hooks/post-checkout` fallaron con `Operation not permitted`. Lo mismo dio la sesión
-  principal sobre un repositorio de prueba. Ahí `git update-ref refs/heads/main HEAD` movió
-  también `main`, aunque estuviera en uso en otro worktree y `git branch -f` lo rechazara.
-  Así que un worker no puede plantar hooks ni configuración, pero sí puede mover `main` o la
-  rama de un encargo a un commit suyo sin pasar por `accept`, y nada lo avisa.
+- La protección del `.git` común (viñeta «El worker no mueve ramas ajenas») es una foto del
+  arranque. Una rama o un worktree creados después, con nombres nuevos, quedan escribibles
+  hasta que el worker se relanza; un worker puede crear `worktrees/<nombre>` con un `gitdir`
+  que apunte al worktree de otra tarea, y esa tarea no vuelve a arrancar (se niega, no se
+  abre). En Linux no se ha medido nada de esta protección. Un repositorio con el formato
+  `reftable` guarda las refs de otra forma y no está cubierto.
+- En Linux, los ficheros de estado que no existen al arrancar (`MERGE_HEAD`,
+  `CHERRY_PICK_HEAD`, `sequencer/`, `rebase-merge/`, `shallow`…) no se niegan. Un worker podría
+  crear un `MERGE_HEAD` con su commit, y el siguiente `git commit` de la persona en la
+  carpeta principal sería un merge que trae su historia sin pasar por `accept`; un
+  `sequencer/todo` con líneas `exec` correría en un `--continue`. Sin medir en Linux.
+- `revive` relanza con la lista guardada al arrancar, no con una nueva, así que lo creado
+  después sigue sin negar tras un revive; en Linux la filtra a rutas que existen. Una tarea
+  que `start` deja con el worktree hecho y luego rechaza `git_denies` deja ese worktree
+  detrás (`begin` llama a `folder_for` antes que `launch`). Si un worker planta la rama de la
+  próxima tarea, esa tarea no arranca hasta que la persona la borre: se niega, no se abre.
+- `objects/` y `logs/` siguen escribibles, porque el worker crea ahí sus commits y sus reflogs.
+  Podría reescribir un objeto suelto o un pack a los que ya apunta otra rama (`accept`
+  compara la punta, no recalcula los hashes), y los reflogs de `main` y `request/*` dejan de
+  servir para recuperar nada tras pasar un worker. No se ha medido ni cubierto.
 - Los hooks que un worker commitee en su propio worktree corren cuando un revisor o una
   reanudación abren `claude` allí, con la caja del propio worker.
 - `say` filtra la forma del texto, no su contenido: es una instrucción libre al worker, y

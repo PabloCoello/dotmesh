@@ -20,6 +20,7 @@ or removed) comes back from its task's record, rebuilt with today's settings."""
 
 import json
 import os
+import sys
 import re
 import shlex
 
@@ -159,7 +160,15 @@ def sane_settings(value):
         return True
     from .launch import own_path, own_rules, worker_settings
     path = own_path()
-    return cfg == worker_settings(path, own_rules(path))
+    # Write denies (launch.git_denies) only narrow the sandbox: any list of absolute paths passes.
+    box = cfg.get("sandbox")
+    fs = box.get("filesystem") if isinstance(box, dict) else None
+    deny = ()
+    if fs is not None:
+        deny = fs.get("denyWrite") if isinstance(fs, dict) and list(fs) == ["denyWrite"] else None
+        if not (isinstance(deny, list) and deny and all(isinstance(p, str) and p.startswith("/") for p in deny)):
+            return False
+    return cfg == worker_settings(path, own_rules(path), deny)
 
 
 def sane_argv(argv):
@@ -254,7 +263,13 @@ def task_record(k, t):
     if not kind:
         return None
     if (k.get("labels") or {}).get("herdr.role") != "reviewer":
-        argv = own_argv(argv)
+        deny = t.get("git_deny")
+        if t.get("mode") == "worktree" and not (isinstance(deny, list) and deny):
+            return None  # dotmesh hardening.patch: no recorded write denies, no restart
+        if deny and not sys.platform == "darwin":
+            # Linux: the sandbox may plant a placeholder for a path that no longer exists.
+            deny = [p for p in deny if isinstance(p, str) and os.path.lexists(p)]
+        argv = own_argv(argv, deny or ())
     if not sane_argv(argv):  # dotmesh hardening.patch: the store is outside the sandbox too
         return None
     return {"kind": kind, "session": a.get("session"), "log": a.get("log"), "argv": argv, "cwd": k.get("cwd"),
