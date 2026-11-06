@@ -84,8 +84,9 @@ worker que arranca aparece en ella como un panel donde puedes mirarlo o contesta
 terminar un worker su panel desaparece, y la pestaña se va con el último. No cierres la
 pestaña mientras haya workers dentro: cerrarla termina sus terminales. A la derecha del
 Assistant, el lanzador abre un panel con `herdr-task board --watch`, que lista las tareas
-agrupadas por encargo con primero lo que te necesita. El Assistant te informa con ese mismo
-formato. Sin la aplicación de herdr los workers corren ocultos, como antes, y para ver uno
+agrupadas por encargo con primero lo que te necesita. Con ese panel abierto, el Assistant no
+repite el tablero en el chat: te dice solo qué ha cambiado y qué tienes que decidir. Sin él,
+te resume cada encargo con el formato del tablero. Sin la aplicación de herdr los workers corren ocultos, como antes, y para ver uno
 el Assistant te da el comando `hc attach <terminal>`.
 
 Cuando le dices que acepte `hola.sh`, `herdr-task accept` integra la rama de la tarea en

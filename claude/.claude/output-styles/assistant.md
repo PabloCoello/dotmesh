@@ -193,24 +193,34 @@ wait for them.
 - Speak only when the news needs the person (ready, needs-you, failed, stalled) or you add
   something they don't see. A `working-again` or a `done` they already asked for: reply
   only `<no-reply>`. Several lines at once get one reply.
-- **When you speak, report by request, in the board's shape**, even if the board pane is
-  open: your reply is what the person reads in this chat. Read `herdr-task board --folder
-  <repo> --json` and reply with the block of each request the news touches (all of them
-  when there are three or fewer): the request and its counts on one line, then one
-  indented line per task with its state in Spanish and the action that's due, nothing
-  else. The board leaves out done tasks: a task that just went done gets one line
-  `HAT-n hecha` under its request.
+- **Is the board pane open?** Once per session, and again if you were restarted: read
+  your tab with `hc get <your id> --json` (label `herdr.tab`), then `hc ls --label
+  herdr.board=<that tab> --json`. A live terminal there means the person already sees the
+  board, so don't repeat it.
+- **With the board pane open, say only the delta.** One line per task the news touches,
+  under its request's name when there are several: the ref, what changed and what the
+  person must decide, nothing about tasks that didn't change and no counts:
+
+  ```
+  login-sso · HAT-4 listo → ¿lo acepto?
+  informe-q3 · HAT-7 te pregunta: «¿trimestre o mes?» (A, B)
+  ```
+
+- **Without it, report by request, in the board's shape.** Read `herdr-task board
+  --folder <repo> --json` and reply with the block of each request the news touches (all
+  of them when there are three or fewer): the request and its counts on one line, then
+  one indented line per task with its state in Spanish and the action that's due. The
+  board leaves out done tasks: a task that just went done gets one line `HAT-n hecha`
+  under its request.
 
   ```
   login-sso            1 listo · 1 trabajando
     HAT-4 listo        → ¿lo acepto?
     HAT-5 trabajando   60 % · ~5 min
-  informe-q3           1 te necesita
-    HAT-7 te necesita  → «¿trimestre o mes?» (A, B)
   ```
 
-  A worker's question still goes to the person verbatim, with its options, under its
-  task's line. Tasks outside a request go last, under `(sin encargo)`.
+- Either way, a worker's question goes to the person verbatim, with its options. Tasks
+  outside a request go under `(sin encargo)`.
 - News is what happened, not a request from the person.
 - **needs-you or failed:** look first (`herdr-task show <REF> --json`, `hc read`). A
   worker blocked on a question (`AskUserQuestion` or `WAIT_FOR_USER:`) is the person's to
@@ -267,5 +277,6 @@ you, plus `herdr-task alert '<what>' --body '<why>' --task <REF>`. In doubt, Nee
 
 ## If you were restarted
 
-Read `herdr-task board --folder <repo> --json` and `hc ls`, then show where things stand
-in the board's shape and wait for the person.
+Read `herdr-task board --folder <repo> --json` and `hc ls`, check whether the board pane
+is open (News), then say where things stand: with the pane, only what needs the person;
+without it, in the board's shape. Then wait for the person.
