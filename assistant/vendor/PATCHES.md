@@ -89,9 +89,9 @@ Riesgos que el parche no quita, aceptados:
   que es un canal de inyección de instrucciones hacia ella. Mientras `hc send` y `hc keys`
   estuvieron permitidos, también era un canal de ejecución: una inyección lograda podía
   teclear un comando en cualquier shell. `hardening.patch` lo cierra.
-- El worker es una sesión maker más: hereda de la máquina `allowUnsandboxedCommands`, los
-  cuatro comandos excluidos de la plantilla y `bypassPermissions`. El parche no amplía esa
-  postura, pero tampoco la estrecha, y el worker corre sin nadie delante.
+- El worker es una sesión maker más: hereda de la máquina los cuatro comandos excluidos de
+  la plantilla y `bypassPermissions`, y corre sin nadie delante. Este parche no amplía esa
+  postura; `hardening.patch` la estrecha después quitándole la escotilla.
 - Medido el 05-11-2026 desde un worker: ni una asignación delante
   (`X=1 herdr-task status …`) ni un `$( )` en los argumentos sacan la llamada de la caja.
   La exclusión por verbo solo casa con el comando desnudo.
@@ -319,11 +319,14 @@ el Assistant ni los workers la tienen.
   worker, y lo hace la persona en el worktree del encargo.
 - **Dónde trabaja una tarea del Assistant.** `add` aceptaba cualquier `--folder`, `--here`
   (sin worktree y, por tanto, sin `accept`) y `--set merge`. Ahora, una llamada sin terminal
-  de control solo añade, edita y arranca tareas del repo en el que corre, cada una en su
+  de control solo añade, edita, arranca y reanuda tareas del repo en el que corre, cada una en su
   worktree y sobre un encargo abierto, sin `--here`, sin otra `--folder` y sin cambiar su
   política de integración (ni con `merge` ni con su alias `brief.merge`). Una rama que se
-  llame `request/…` sin ser un encargo abierto no basta. Las automatizaciones siguen la misma regla. Desde un terminal
-  suyo, la persona puede hacer todo eso.
+  llame `request/…` sin ser un encargo abierto no basta, y una tarea de otro repo, aunque se
+  nombre por su id, tampoco. No reanuda una tarea Done. Las automatizaciones siguen la
+  misma regla. Desde un terminal suyo, la persona puede hacer todo eso. Como efecto
+  secundario, el Assistant tampoco puede cambiar el título de una tarea `--here` de la
+  persona que aún no ha empezado.
 - **Configuración que ejecuta código.** La persona confía una vez en `~/.herdr/worktrees`,
   así que unos hooks, un servidor MCP o unos ajustes que un worker commitee correrían fuera
   de la caja al abrir una sesión o un commit en el worktree del encargo. Antes de integrar,
@@ -356,7 +359,9 @@ Quedan abiertos:
 - Cuando la integración no es un avance rápido, `accept` pide al worker que integre él, y
   ese worker puede añadir commits después de la comprobación. Pasa lo mismo con
   `finalize` si la persona fija la integración «por su cuenta». Con la base en un encargo
-  y sin escotilla, esa vía falla de todos modos (ver `auto-request.patch`).
+  y sin escotilla, fallan sus dos vías (`git fetch .` y `merge` en la carpeta del encargo:
+  la primera la rechaza git y la segunda escribe fuera de su carpeta; no se ha medido en
+  vivo). Mover la rama con `update-ref` es la viñeta siguiente.
 - Un worker escribe en el `.git` común al hacer commit. Podría mover con `git update-ref` la
   rama de un encargo sin pasar por `accept`, o escribir en `.git/hooks` o `.git/config`
   (`core.hooksPath`, `core.fsmonitor`, alias), que corren sin confinar cuando la persona o

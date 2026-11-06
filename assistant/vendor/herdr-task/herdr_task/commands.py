@@ -116,6 +116,9 @@ def agent_limits(args):
 def agent_task_ok(s, t):
     if not no_terminal():
         return
+    # The store a task id picks (HAT-4 from anywhere) must be this repo's too.
+    if os.path.realpath(s.loc["folder"]) != os.path.realpath(locate(None)["folder"]):
+        raise Fail(f"{s.ref(t)} belongs to {s.loc['folder']}; an agent works on its own repo's tasks only (dotmesh hardening).")
     from .request import open_request
     try:
         # Its base, or the main folder's branch when it's the same (set_base doesn't keep it then).
@@ -861,8 +864,12 @@ def start_again(s, t, space, key=None, argv_json=None, message=None, parent=None
 
 
 def cmd_resume(args):
+    agent_limits(args)
     with open_store(args) as s:
         t = s.find(args.id)
+        agent_task_ok(s, t)
+        if t["state"] == "done" and no_terminal():
+            raise Fail(f"{s.ref(t)} is done: the person resumes it, at a terminal of their own (dotmesh hardening).")
         live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
         if live:
             raise Fail(f"{s.ref(t)} still has an agent ({live[0]['address']}). Use switch to replace it.")

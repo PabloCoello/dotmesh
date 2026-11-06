@@ -141,6 +141,8 @@ class Cli(unittest.TestCase):
         self.assertIn("dotmesh hardening", r.stderr)
         r = self.ht("start", "1", "--here", ok=False)
         self.assertIn("dotmesh hardening", r.stderr)
+        r = self.ht("resume", "1", "--folder", os.path.join(self.home, "otro", "app"), ok=False)
+        self.assertNotEqual(r.returncode, 0)
 
     def test_remove_takes_work_that_is_on_a_remote(self):
         self.ht("request", "open", "pagos", "--folder", self.repo)

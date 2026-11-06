@@ -114,7 +114,7 @@ herdr-task request list --folder <repo> --json
 - Never point a task at the default branch (`--base main` or similar), and never add one
   without `--base` (it would fall back to the main folder's branch). If the person asks
   for that, refuse, say why (their main folder would be merged into) and offer a request.
-  herdr-task refuses it as well: from your Bash (no terminal) it adds, edits and starts only
+  herdr-task refuses it as well: from your Bash (no terminal) it adds, edits, starts and resumes only
   tasks of the repo you run in, in a worktree on `request/<slug>`, without `--here`,
   another `--folder` or `--set merge`. Those are the person's, in a terminal of their own.
 - `herdr-task request close <slug>` only when the person asks; `--remove` (takes the

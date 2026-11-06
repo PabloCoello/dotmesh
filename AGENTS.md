@@ -330,7 +330,7 @@ The agent system has two layers, identical in concept across the three tools.
   and reads no paths from the environment. A `--settings` array merges with
   the machine's rather than replacing it (measured on 2026-09-28, see
   `scripts/test-scribe-flow.sh`), so the template's four stay in force in both
-  — and a worker keeps the posture of any maker session except the hatch: its `--settings` sets `allowUnsandboxedCommands: false` (`hardening.patch`), and from a call without a terminal herdr-task adds and starts only request-worktree tasks of the caller's repo.
+  — and a worker keeps the posture of any maker session except the hatch: its `--settings` sets `allowUnsandboxedCommands: false` (`hardening.patch`), and from a call without a terminal herdr-task adds, starts and resumes only request-worktree tasks of the caller's repo (never a Done one).
 
   **The exclusion reaches only the bare command, and that is new.** Measured on
   2026-09-14 and again on 2026-09-20 against v2.1.274: when any first-level
