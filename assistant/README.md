@@ -2,10 +2,10 @@
 
 Cuando una petición se parte en varias tareas, llevarlas a mano obliga a abrir un pane por
 tarea y a vigilar cuál se ha parado a preguntar. Además, hay que cuidar que ninguna toque la
-carpeta en la que trabajas. El Assistant se encarga de esa coordinación. Le cuentas lo que quieres, lo concreta
-contigo, lo parte en tareas y arranca cada una como un worker: una sesión de `claude` con la
-persona `maker`, en su propio worktree de git. Después vigila a los workers y solo te
-interrumpe cuando hace falta una decisión tuya.
+carpeta en la que trabajas. El Assistant se encarga de esa coordinación. Le cuentas lo que
+quieres, lo concreta contigo, lo parte en tareas y arranca cada una como un **worker**: una
+sesión de `claude` con la persona `maker`, en su propio worktree de git. Después vigila a los
+workers y solo te interrumpe cuando hace falta una decisión tuya.
 
 El paquete tiene tres piezas. La primera es `herdr-task`, el CLI de tareas de
 [shepherdr](https://github.com/eliasstravik/shepherdr) (MIT), copiado en `vendor/herdr-task/`
@@ -31,8 +31,8 @@ plantillas en `~/.config/herdr-core/templates` y siembra `~/.herdr/shepherdr.jso
 Los ajustes sembrados piden una ronda de revisión con el revisor `claude`, integración local
 con tu confirmación y Autopilot apagado. El script es idempotente y no usa sudo. Tampoco toca
 `~/.claude/settings.json`, porque la exclusión del sandbox que necesita el Assistant se aplica
-solo a su sesión (se explica más abajo). El script se niega a instalar si encuentra un shepherdr instalado o un
-`~/.herdr` que no creó él, porque esta copia no convive con otra.
+solo a su sesión (se explica más abajo). El script se niega a instalar si encuentra un
+shepherdr instalado o un `~/.herdr` que no creó él, porque esta copia no convive con otra.
 
 El paquete queda fuera de `PACKAGES` y de `make install`, igual que `collie/` y
 `terminal-browser/`: se instala a propósito, no como efecto secundario.
@@ -41,8 +41,10 @@ Falta un paso, que se hace una sola vez. Claude Code muestra un diálogo de conf
 primera vez que se abre en una carpeta, y un worker parado en ese diálogo no avanza. Los
 workers arrancan en `~/.herdr/worktrees/<repo>/task-*`, y basta con confiar en la carpeta
 común. Para ello, abre `claude` en `~/.herdr/worktrees`, acepta el diálogo y sal. Esa
-confianza vale para todas las subcarpetas. Como contrapartida, Claude tampoco preguntará antes de
-cargar los hooks, servidores MCP o ajustes que un worker haya commiteado allí. Por eso
+confianza vale para todas las subcarpetas.
+
+Como contrapartida, Claude tampoco preguntará antes de cargar los hooks, servidores MCP o
+ajustes que un worker haya commiteado allí. Por eso
 `accept` se para si la tarea cambia ficheros de ese tipo (`.claude/`, `.mcp.json`, hooks de
 git, enlaces simbólicos…) y el Assistant te los enseña. Para integrarla, ejecutas tú
 `herdr-task accept <tarea> --config-ok` en un terminal tuyo y tecleas el código que te
@@ -69,9 +71,9 @@ ella, de modo que tu carpeta principal no cambia ni de rama ni de ficheros mient
 workers trabajan.
 
 En el ejemplo, le pides al Assistant un script de saludo con su prueba. El Assistant abre el
-encargo `saludo`, añade `hola.sh` y añade `test_hola.sh` con `--after` sobre la primera, porque
-la prueba necesita que el script exista. Después arranca las dos. `hola.sh` empieza enseguida
-y `test_hola.sh` espera en cola.
+encargo `saludo`, añade `hola.sh` y añade `test_hola.sh` con `--after` sobre la primera (la
+segunda espera a que se acepte la primera), porque la prueba necesita que el script exista.
+Después arranca las dos. `hola.sh` empieza enseguida y `test_hola.sh` espera en cola.
 
 Mientras trabajan, los workers mandan noticias al Assistant: `ready` cuando terminan,
 `needs-you` cuando se paran a preguntar, `stalled` cuando llevan rato sin avanzar. Ante una
@@ -133,40 +135,52 @@ Bajo `bypassPermissions`, el sandbox de Bash es el único freno, y `hc` no funci
 él. Por eso el lanzador saca del sandbox, solo para la sesión del Assistant y con su propio
 `--settings`, los verbos que necesita, uno a uno: de `hc`, solo los de lectura (`get`, `ls`,
 `read`, `wait`); de `herdr-task`, los que usa la persona. Cualquier otra forma se queda en la
-caja, donde no llega a herdr-core. Esa sesión lee texto que escriben los workers, de modo que
-el mismo `--settings` deniega además los verbos que ejecutan programas, escriben ficheros o
-teclean en un terminal (`hc run`, `exec`, `file`, `send`, `keys`, `label`…), cualquier llamada
-que empiece por una opción y los verbos de `herdr-task` que actúan por un worker o hacia otra
-máquina. Las reglas de denegación se aplican aunque el comando esté excluido (medido el
-05-11-2026 con `claude -p`). La sesión no tiene la escotilla del sandbox
-(`dangerouslyDisableSandbox`): con ella podría darle a herdr-task un terminal falso y hacerse
-pasar por ti.
+caja, donde no llega a herdr-core.
+
+Esa sesión lee texto que escriben los workers, y ese texto podría intentar darle órdenes. Por
+eso el mismo `--settings` deniega además tres grupos de llamadas. El primero son los verbos de
+`hc` que ejecutan programas, escriben ficheros o teclean en un terminal (`run`, `exec`, `file`,
+`send`, `keys`, `label`…). El segundo, cualquier llamada que empiece por una opción. El
+tercero, los verbos de `herdr-task` que actúan por un worker o hacia otra máquina. Las reglas
+de denegación se aplican aunque el comando esté excluido (medido el 05-11-2026 con `claude
+-p`). La sesión no tiene la escotilla del sandbox (`dangerouslyDisableSandbox`): con ella
+podría darle a herdr-task un terminal falso y hacerse pasar por ti.
 
 Para contestar a un worker, el Assistant usa `herdr-task say` (texto) y `herdr-task keys`
 (teclas de una lista cerrada, para un menú). Los dos escriben solo al worker de la tarea que
 se nombra, y solo mientras su `claude` está en primer plano. `say` rechaza el texto de varias
-líneas o que empieza por `!`, `/` o `#`, que `claude` trataría como un comando, y ninguno de
-los dos escribe mientras tecleas en ese terminal; `say` tampoco mientras el worker muestra un
-menú. Desde su sesión, el Assistant solo crea y arranca tareas de su repo, en un worktree
-sobre un encargo y con la política de integración que tú hayas fijado; `--here`, otra
-carpeta o `--set merge` quedan para ti, desde un terminal tuyo. `--prompt-file` solo lee un
-brief de `.ai/tasks/` de la carpeta, y la reanudación tras un reinicio descarta cualquier
-registro que no haya podido escribir herdr-task.
+líneas o que empieza por `!`, `/` o `#`, porque `claude` lo trataría como un comando. Ninguno
+de los dos escribe mientras tecleas en ese terminal, y `say` tampoco mientras el worker
+muestra un menú.
 
-Los workers tienen menos todavía. Tampoco tienen la escotilla, así que lo que necesite red por SSH, `pre-commit` o `uv`
-falla en el worker y lo haces tú en el worktree del encargo. Cada uno excluye del sandbox solo los verbos de
-`herdr-task` que necesita (`ready`, `status`, `reviewed`…), uno a uno, y tiene denegados los
-demás. `herdr-task` solo arranca un `claude` cuyos flags no pueden aflojar su propio sandbox.
+Desde su sesión, el Assistant solo crea, arranca y reanuda tareas de su propio repo, cada una
+en un worktree sobre un encargo abierto y con la política de integración que tú hayas fijado.
+`--here`, otra carpeta o `--set merge` quedan para ti, desde un terminal tuyo. `--prompt-file`
+solo lee un brief de `.ai/tasks/` de la carpeta, y la reanudación tras un reinicio descarta
+cualquier registro que no haya podido escribir herdr-task.
+
+Los workers tienen menos todavía. Tampoco tienen la escotilla, así que lo que necesite red por
+SSH, `pre-commit` o `uv` falla en el worker y lo haces tú en el worktree del encargo. Cada uno
+excluye del sandbox solo los verbos de `herdr-task` que necesita (`ready`, `status`,
+`reviewed`…), uno a uno, y tiene denegados los demás. `herdr-task` solo arranca un `claude`
+cuyas opciones no pueden aflojar su propio sandbox. Además, el sandbox del worker no le deja
+escribir en el `.git` que comparten todos los worktrees, salvo lo que necesita para hacer
+commit en su propia rama. Sin esa restricción, un worker podía mover `main` o la rama del
+encargo con `git update-ref` sin pasar por `accept` (medido el 06-11-2026 en macOS; en Linux
+no está medido).
+
 Las noticias que escriben los workers pasan por el news-guard, un parche que comprueba qué
 hay en primer plano antes de teclearlas: solo se entregan a un terminal donde corre `claude`,
 o al lanzador con su `claude` vivo, nunca a una shell. Todo es local: sin `gh`, sin push y sin
 `git fetch` de fondo.
 
-Quedan dos huecos conocidos. Entre la comprobación de que `claude` está delante y el tecleo
-de una noticia pasan unos segundos; si `claude` sale justo en ese intervalo, el texto puede
-acabar escrito en la shell. Y un `kill -9` del lanzador deja la marca de coordinador en el terminal. El
-detalle de cada parche y de estas mediciones está en [`vendor/PATCHES.md`](vendor/PATCHES.md),
-y la postura del sandbox, en el [`AGENTS.md`](../AGENTS.md) del repo.
+Quedan huecos conocidos. Entre la comprobación de que `claude` está delante y el tecleo de una
+noticia pasan unos segundos; si `claude` sale justo en ese intervalo, el texto puede acabar
+escrito en la shell. Un `kill -9` del lanzador deja la marca de coordinador en el terminal. La
+protección del `.git` común se calcula al arrancar el worker, así que no cubre las ramas
+creadas después. La lista completa está en el apartado «Quedan abiertos» de
+[`vendor/PATCHES.md`](vendor/PATCHES.md), junto al detalle de cada parche y de sus
+mediciones. La postura del sandbox está en el [`AGENTS.md`](../AGENTS.md) del repo.
 
 ## Trampas conocidas
 
@@ -185,6 +199,11 @@ y la postura del sandbox, en el [`AGENTS.md`](../AGENTS.md) del repo.
 
 El pin está en `scripts/vendor/upstreams.tsv`. Para subirlo, compara `mods/tasks/bin` entre el
 commit anclado y el nuevo, y lee el diff entero, porque este código corre fuera del sandbox.
-Después sustituye la copia, confírmala sin cambios, actualiza la fila de `upstreams.tsv`, reaplica los parches en el orden de
-`vendor/PATCHES.md` y pasa las pruebas con `python3 -m unittest discover -s assistant/tests`.
+Después sigue estos pasos:
+
+1. Sustituye la copia y confírmala sin cambios.
+2. Actualiza la fila de `upstreams.tsv`.
+3. Reaplica los parches en el orden de `vendor/PATCHES.md`.
+4. Pasa las pruebas con `python3 -m unittest discover -s assistant/tests`.
+
 Nunca `shepherdr update` ni `npx`, porque se saltan el pin.
