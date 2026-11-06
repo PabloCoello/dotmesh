@@ -149,7 +149,7 @@ index c43180e..5f601a2 100644
      cmd("unarchive", cmd_unarchive, "bring an archived task back into its list (only when the person asks; writing to it does too)")
      c = cmd("edit", cmd_edit, "change a task")
 diff --git a/herdr_task/commands.py b/herdr_task/commands.py
-index 989d241..66df5da 100644
+index 989d241..1402068 100644
 --- a/herdr_task/commands.py
 +++ b/herdr_task/commands.py
 @@ -9,15 +9,16 @@ import shlex
@@ -319,7 +319,15 @@ index 989d241..66df5da 100644
          s.dirty = True
          tabs = task_tabs(s, t) if t["title"] != old else []
          v = view(s, t)
-@@ -811,8 +876,12 @@ def start_again(s, t, space, key=None, argv_json=None, message=None, parent=None
+@@ -778,6 +843,7 @@ def cmd_config(args):
+ def cmd_rm(args):
+     with open_store(args) as s:
+         t = s.find(args.id)
++        own_repo(s, t)
+         s.data["tasks"].remove(t)
+         for o in s.data["tasks"]:
+             if t["id"] in (o.get("after") or []):
+@@ -811,8 +877,12 @@ def start_again(s, t, space, key=None, argv_json=None, message=None, parent=None
  
  
  def cmd_resume(args):
@@ -332,7 +340,7 @@ index 989d241..66df5da 100644
          live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
          if live:
              raise Fail(f"{s.ref(t)} still has an agent ({live[0]['address']}). Use switch to replace it.")
-@@ -876,6 +945,86 @@ def tell(s, t, msg, args):
+@@ -876,6 +946,88 @@ def tell(s, t, msg, args):
      return a["address"], True
  
  
@@ -381,6 +389,7 @@ index 989d241..66df5da 100644
 +        raise Fail(problem)
 +    with open_store(args) as s:
 +        t = s.find(args.id)
++        own_repo(s, t)
 +        addr = task_worker(s, t)
 +        from .news import typing
 +        # Refused rather than held (send_or_hold): a held message would go later, unchecked.
@@ -401,6 +410,7 @@ index 989d241..66df5da 100644
 +        raise Fail(f"Keys are up to 20 of: {', '.join(SAY_KEYS)}." + (f" Not {', '.join(bad)}." if bad else ""))
 +    with open_store(args) as s:
 +        t = s.find(args.id)
++        own_repo(s, t)
 +        addr = task_worker(s, t)
 +        from .news import typing
 +        for k in args.keys:
@@ -419,7 +429,7 @@ index 989d241..66df5da 100644
  def local_merge_msg(s, t):
      main, wt, br, base = s.loc["folder"], t["worktree"], t["branch"], t.get("base") or "main"
      q = shlex.quote
-@@ -962,13 +1111,16 @@ def in_base(s, t):
+@@ -962,13 +1114,16 @@ def in_base(s, t):
      return bool(tip) and (tip == t.get("start") or git(s.loc["folder"], "merge-base", "--is-ancestor", tip, t.get("base") or "main")[0])
  
  
@@ -437,7 +447,7 @@ index 989d241..66df5da 100644
      # dotmesh request-worktree.patch: the merge lands where the base is checked out, the main
      # folder or an open request's worktree. Anywhere else `fetch .` refuses, as upstream did.
      where = checked_out_at(main, base, merge_targets(s))
-@@ -976,10 +1128,67 @@ def ff_merge(s, t):
+@@ -976,10 +1131,67 @@ def ff_merge(s, t):
          if os.path.realpath(where) != os.path.realpath(main) and \
                  git(where, "status", "--porcelain", "--untracked-files=no")[1]:
              raise Fail(f"{where} has uncommitted changes on {base}. Commit or stash them there, then accept again.")
@@ -507,7 +517,7 @@ index 989d241..66df5da 100644
  
  
  def cmd_accept(args):
-@@ -990,6 +1199,7 @@ def cmd_accept(args):
+@@ -990,6 +1202,7 @@ def cmd_accept(args):
      error, how, sent, started, back = None, "done", None, False, False
      with open_store(args) as s:
          t = s.find(args.id)
@@ -515,7 +525,7 @@ index 989d241..66df5da 100644
          if t["state"] != "ready":
              raise Fail(f"{s.ref(t)} isn't ready ({t['state']}); only a Ready task can be accepted.")
          # Its agent at work again since it said ready: never accepted half done. Working again
-@@ -1005,14 +1215,29 @@ def cmd_accept(args):
+@@ -1005,14 +1218,29 @@ def cmd_accept(args):
          # failed once, doesn't stand in the way. Without one, only a failed try doesn't.
          elif t.get("attention") and not t.get("pr") and not t["attention"].startswith(("Couldn't ask for the merge", MERGE_FAILED)):
              raise Fail(f"{s.ref(t)} needs attention first: {t['attention']}")
@@ -546,7 +556,7 @@ index 989d241..66df5da 100644
          t["accepted_at"] = now()
          s.dirty = True
          if not wt:
-@@ -1028,7 +1253,7 @@ def cmd_accept(args):
+@@ -1028,7 +1256,7 @@ def cmd_accept(args):
              # Its own work already in the base branch, or none of its own: nothing to merge.
              t["merged"] = merged_here(s, t)
              finish(s, t, even_if_busy=True)

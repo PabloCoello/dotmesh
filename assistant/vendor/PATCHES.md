@@ -323,12 +323,14 @@ el Assistant ni los workers la tienen.
   worktree y sobre un encargo abierto, sin `--here`, sin otra `--folder` y sin cambiar su
   política de integración (ni con `merge` ni con su alias `brief.merge`). Una rama que se
   llame `request/…` sin ser un encargo abierto no basta. Una tarea de otro repo, aunque se
-  nombre por su id, no se edita, ni se arranca, ni se reanuda, ni se reabre, ni se acepta.
+  nombre por su id, no se toca: ni `edit`, `start`, `resume`, `reopen`, `done`, `accept`,
+  `review-more` y `rm`, ni `say` o `keys` a su worker.
   `accept` y `review-more` pasan las mismas comprobaciones que `start`, porque los dos pueden
   arrancar de nuevo al worker de la tarea. Una tarea Done no se reabre ni se reanuda. Las automatizaciones siguen la
   misma regla. Desde un terminal suyo, la persona puede hacer todo eso. Como efecto
   secundario, el Assistant tampoco puede cambiar el título de una tarea `--here` de la
-  persona que aún no ha empezado.
+  persona que aún no ha empezado. Sí puede editar el brief de una que ya está en marcha, y
+  ese cambio cuenta cuando la persona la reanude.
 - **Configuración que ejecuta código.** La persona confía una vez en `~/.herdr/worktrees`,
   así que unos hooks, un servidor MCP o unos ajustes que un worker commitee correrían fuera
   de la caja al abrir una sesión o un commit en el worktree del encargo. Antes de integrar,

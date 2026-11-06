@@ -29,6 +29,9 @@ from herdr_task.base import Fail, read_prompt_file  # noqa: E402
 
 
 class FakeStore:
+    # This repo, as locate() sees it from here: own_repo passes.
+    loc = {"folder": commands.locate(None)["folder"]}
+
     def find(self, id):
         return {"id": 4, "title": "x"}
 

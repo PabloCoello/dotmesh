@@ -56,7 +56,7 @@ class Cli(unittest.TestCase):
 
     def ht(self, *args, ok=True, cwd=None):
         r = subprocess.run([sys.executable, os.path.join(BIN, "herdr-task"), *args], capture_output=True, text=True,
-                           cwd=cwd or self.repo,
+                           cwd=cwd or self.repo, start_new_session=True,  # no controlling terminal, as an agent's Bash
                            env={"HOME": self.home, "PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"})
         if ok:
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -147,7 +147,8 @@ class Cli(unittest.TestCase):
         self.ht("request", "open", "fuera", cwd=other)
         self.ht("add", "ajena", "--base", "request/fuera", cwd=other)
         for verb in (["edit", "OTR-1", "--title", "y"], ["start", "OTR-1"], ["resume", "OTR-1"],
-                     ["reopen", "OTR-1"], ["accept", "OTR-1"], ["review-more", "OTR-1"]):
+                     ["reopen", "OTR-1"], ["accept", "OTR-1"], ["review-more", "OTR-1"],
+                     ["done", "OTR-1"], ["say", "OTR-1", "hola"], ["keys", "OTR-1", "enter"], ["rm", "OTR-1"]):
             r = self.ht(*verb, ok=False)
             self.assertIn("own repo's tasks only", r.stderr, verb)
         # Done is the person's: an agent neither reopens nor resumes it.

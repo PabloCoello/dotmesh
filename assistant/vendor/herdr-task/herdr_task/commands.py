@@ -843,6 +843,7 @@ def cmd_config(args):
 def cmd_rm(args):
     with open_store(args) as s:
         t = s.find(args.id)
+        own_repo(s, t)
         s.data["tasks"].remove(t)
         for o in s.data["tasks"]:
             if t["id"] in (o.get("after") or []):
@@ -990,6 +991,7 @@ def cmd_say(args):
         raise Fail(problem)
     with open_store(args) as s:
         t = s.find(args.id)
+        own_repo(s, t)
         addr = task_worker(s, t)
         from .news import typing
         # Refused rather than held (send_or_hold): a held message would go later, unchecked.
@@ -1010,6 +1012,7 @@ def cmd_keys(args):
         raise Fail(f"Keys are up to 20 of: {', '.join(SAY_KEYS)}." + (f" Not {', '.join(bad)}." if bad else ""))
     with open_store(args) as s:
         t = s.find(args.id)
+        own_repo(s, t)
         addr = task_worker(s, t)
         from .news import typing
         for k in args.keys:
