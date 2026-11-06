@@ -313,8 +313,11 @@ el Assistant ni los workers la tienen.
   como cualquier sesión maker. Con ella podía escribir en la carpeta principal o integrar él
   mismo, sin pasar por `accept`. El Assistant también la tenía, y con ella podía lanzar
   herdr-task dentro de un pty, leer el código de confirmación y teclearlo. Ahora los ajustes
-  de los dos llevan `allowUnsandboxedCommands: false`. Los
-  workers de M1 y M10 hicieron todos sus commits dentro de la caja, así que su flujo no
+  de los dos llevan `allowUnsandboxedCommands: false`. Ese ajuste, pasado por `--settings`,
+  se impone a la plantilla de la máquina. Se midió el 06-11-2026 con dos `claude -p` reales
+  que pedían `touch ~/.probe-hatch-*` con `dangerouslyDisableSandbox`. Con el ajuste, el
+  comando corrió dentro de la caja y falló con `Operation not permitted`. Sin el ajuste, el
+  comando de control creó el fichero. Los workers de M1 y M10 hicieron todos sus commits dentro de la caja, así que su flujo no
   necesita la escotilla. Lo que sí la necesita (red por SSH, `pre-commit`, `uv`) falla en el
   worker, y lo hace la persona en el worktree del encargo.
 - **Dónde trabaja una tarea del Assistant.** `add` aceptaba cualquier `--folder`, `--here`
@@ -366,11 +369,16 @@ Quedan abiertos:
   y sin escotilla, fallan sus dos vías (`git fetch .` y `merge` en la carpeta del encargo:
   la primera la rechaza git y la segunda escribe fuera de su carpeta; no se ha medido en
   vivo). Mover la rama con `update-ref` es la viñeta siguiente.
-- Un worker escribe en el `.git` común al hacer commit. Podría mover con `git update-ref` la
-  rama de un encargo sin pasar por `accept`, o escribir en `.git/hooks` o `.git/config`
-  (`core.hooksPath`, `core.fsmonitor`, alias), que corren sin confinar cuando la persona o
-  una sesión hacen commit. No está medido qué parte del `.git` común le deja escribir la
-  caja.
+- Un worker escribe en el `.git` común al hacer commit, y con eso puede mover cualquier rama
+  del repositorio de la persona. Medido el 06-11-2026 con un `claude -p` real (Claude Code,
+  macOS) cuya carpeta era un worktree bajo `~/.herdr/worktrees` y cuyo `.git` común quedaba
+  fuera de ella. Dentro de la caja, el commit y `git update-ref refs/heads/request/x HEAD`
+  salieron con código 0, y también `info/attributes`. `git config` (`.git/config`) y crear
+  `.git/hooks/post-checkout` fallaron con `Operation not permitted`. Lo mismo dio la sesión
+  principal sobre un repositorio de prueba. Ahí `git update-ref refs/heads/main HEAD` movió
+  también `main`, aunque estuviera en uso en otro worktree y `git branch -f` lo rechazara.
+  Así que un worker no puede plantar hooks ni configuración, pero sí puede mover `main` o la
+  rama de un encargo a un commit suyo sin pasar por `accept`, y nada lo avisa.
 - Los hooks que un worker commitee en su propio worktree corren cuando un revisor o una
   reanudación abren `claude` allí, con la caja del propio worker.
 - `say` filtra la forma del texto, no su contenido: es una instrucción libre al worker, y
@@ -380,9 +388,6 @@ Quedan abiertos:
 - `no_terminal()` depende de cómo lanza Claude Code su Bash. Si una versión futura lo lanzara
   en un pty, la comprobación daría por presente a la persona sin avisar. Conviene repetir la
   medición al subir de versión.
-- Que `allowUnsandboxedCommands: false` en el `--settings` del worker y del Assistant gana a
-  la plantilla de la máquina sigue el orden de precedencia de Claude Code; no se ha medido
-  en vivo.
 - El sandbox no impide que un comando confinado con este checkout como carpeta
 de trabajo escriba en `assistant/`, código que luego corre fuera. `make health` avisa de los
 cambios sin confirmar en `vendor/`, `bin/` y `templates/`, pero solo cuando se ejecuta.
