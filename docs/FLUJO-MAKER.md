@@ -6,6 +6,11 @@ la ejecuta y qué guardarraíles mecánicos la respaldan. La fuente normativa es
 de subagente son los de Claude Code y OpenCode; en Codex las mismas fases son
 pasadas del flujo descrito en `codex/.codex/AGENTS.md`.
 
+La persona `assistant` (ADR 0004, solo Claude Code) queda fuera de este mapa. No
+recorre las fases: concreta el encargo con `idea-refine`, `grilling` o el
+subagente `plan`, y cada tarea la ejecuta un worker que sigue este flujo completo
+con la persona `maker`, gate de `review` incluido.
+
 ## El camino de un cambio
 
 Los rectángulos de doble borde son subagentes (contexto aislado, la sesión

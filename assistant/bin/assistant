@@ -1,0 +1,70 @@
+#!/bin/sh
+# assistant: starts the dotmesh Assistant (ADR 0004) in this herdr-core terminal.
+#
+# - Marks the terminal herdr.role=coordinator, which is how herdr-task finds the space's
+#   Assistant to deliver task news to it (launch.py is_coordinator).
+# - Starts claude (and waits for it) with the `assistant` output style and, for this session only, hc and
+#   herdr-task excluded from the Bash sandbox. The machine's template keeps its own list:
+#   a --settings array merges with it (measured 2026-09-28, scripts/test-scribe-flow.sh).
+#   Extra arguments go to claude.
+#
+# Run it yourself from a terminal of the herdr app, never from inside an agent.
+set -eu
+
+if [ -z "${HC_TERMINAL_ID:-}" ]; then
+  echo "assistant: run it in a herdr-core terminal (HC_TERMINAL_ID is not set)." >&2
+  exit 1
+fi
+command -v hc >/dev/null 2>&1 || { echo "assistant: hc is not on PATH." >&2; exit 1; }
+command -v herdr-task >/dev/null 2>&1 || { echo "assistant: herdr-task is not on PATH (make assistant-install)." >&2; exit 1; }
+
+# The label lives only while claude does. herdr-task types its news into the coordinator
+# with `hc send`, Enter included; left on the shell after claude exits, a worker's ready
+# summary would run there as a command, outside the sandbox (measured 05-11-2026). So no
+# exec: wait for claude and take the label off on any exit.
+unlabel() { hc label "$HC_TERMINAL_ID" herdr.role= >/dev/null 2>&1 || true; }
+trap unlabel EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+# hc and herdr-task run outside the sandbox in this session, verb by verb: only the read-only hc
+# verbs and the herdr-task verbs the persona uses, so any other form (a new upstream verb, a
+# leading flag, a quoted verb) stays in the sandbox, where herdr-core's socket is unreachable.
+# This session reads worker text, so the verbs that run programs, write files, type into a
+# terminal or act for a worker are also denied here, a second line under the persona's rules;
+# it writes to a worker only through `herdr-task say` and `keys` (hardening.patch). A leading
+# flag (`hc --json run`) dodges a prefix rule, so any form that starts with a flag is denied
+# too. Deny rules hold under bypassPermissions. And no escape hatch (dangerouslyDisableSandbox):
+# an unconfined call could give herdr-task a terminal (a pty) and pass for the person
+# (hardening.patch, base.no_terminal). Kept in step with assistant/tests/test_launcher.py.
+SETTINGS='{"outputStyle":"assistant",
+"sandbox":{"excludedCommands":[
+"hc get","hc get *","hc ls","hc ls *","hc read","hc read *","hc wait","hc wait *",
+"herdr-task accept","herdr-task accept *","herdr-task add","herdr-task add *",
+"herdr-task alert","herdr-task alert *","herdr-task auto","herdr-task auto *",
+"herdr-task autopilot","herdr-task autopilot *","herdr-task complete","herdr-task complete *",
+"herdr-task config","herdr-task config *","herdr-task done","herdr-task done *",
+"herdr-task edit","herdr-task edit *","herdr-task keys","herdr-task keys *","herdr-task list",
+"herdr-task list *","herdr-task progress","herdr-task progress *","herdr-task reopen",
+"herdr-task reopen *","herdr-task request","herdr-task request *","herdr-task resume",
+"herdr-task resume *","herdr-task review-more","herdr-task review-more *","herdr-task rm",
+"herdr-task rm *","herdr-task say","herdr-task say *","herdr-task show","herdr-task show *",
+"herdr-task start","herdr-task start *","herdr-task unarchive","herdr-task unarchive *",
+"herdr-task where","herdr-task where *"],
+"allowUnsandboxedCommands":false},
+"permissions":{"deny":[
+"Bash(hc run:*)","Bash(hc exec:*)","Bash(hc file:*)","Bash(hc put:*)","Bash(hc update:*)",
+"Bash(hc machine:*)","Bash(hc connect:*)","Bash(hc server:*)","Bash(hc keep:*)","Bash(hc kill:*)",
+"Bash(hc rm:*)","Bash(hc events:*)","Bash(hc interrupt:*)","Bash(hc send:*)","Bash(hc keys:*)","Bash(hc label:*)","Bash(herdr)","Bash(herdr *)","Bash(hc -*)",
+"Bash(herdr-task ready:*)","Bash(herdr-task status:*)","Bash(herdr-task reviewed:*)",
+"Bash(herdr-task review)","Bash(herdr-task review *)","Bash(herdr-task tick:*)","Bash(herdr-task scheduler:*)",
+"Bash(herdr-task machines:*)","Bash(herdr-task home:*)","Bash(herdr-task assistants:*)",
+"Bash(herdr-task tell-assistant:*)","Bash(herdr-task backup:*)","Bash(herdr-task restore-spaces:*)",
+"Bash(herdr-task switch:*)","Bash(herdr-task merge:*)","Bash(herdr-task fix:*)",
+"Bash(herdr-task autopilot on:*)","Bash(herdr-task autopilot off:*)","Bash(herdr-task autopilot set:*)",
+"Bash(herdr-task _allow:*)","Bash(herdr-task _session-note:*)","Bash(herdr-task _track:*)",
+"Bash(herdr-task -*)"]}}'
+
+hc label "$HC_TERMINAL_ID" herdr.role=coordinator >/dev/null
+claude --settings "$SETTINGS" "$@"

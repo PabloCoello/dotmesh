@@ -1,0 +1,203 @@
+diff --git a/herdr_task/cli.py b/herdr_task/cli.py
+index ed1b0a0..7200c58 100644
+--- a/herdr_task/cli.py
++++ b/herdr_task/cli.py
+@@ -22,6 +22,7 @@ from .automations import auto_list, cmd_auto, cmd_scheduler, cmd_track, EVENTS,
+ from .machines import cmd_assistants, cmd_machines, cmd_sync_auto, cmd_tell
+ from .autopilot import cmd_autopilot, cmd_complete, cmd_progress
+ from .home import cmd_home
++from .request import cmd_request
+ from .assistant_settings import cmd_session_note
+ 
+ 
+@@ -289,6 +290,20 @@ def main():
+     cmd("backup", cmd_backup, "save a backup of every connected machine's spaces and the sidebar now (the scheduler does every 10 minutes)", id=False)
+     c = cmd("restore-spaces", cmd_restore_spaces, "dry run: what a backup would recreate (no backup: list them)", id=False)
+     c.add_argument("backup", nargs="?", help="a backup's name or folder, or latest")
++    # dotmesh request-worktree.patch: requests, a branch and worktree several tasks merge into.
++    rq = sub.add_parser("request", help="requests: a branch with its own worktree that tasks join with --base request/<slug>").add_subparsers(dest="request")
++    for name, help in (("open", "make its branch and worktree"), ("list", "this folder's requests"),
++                       ("close", "mark it closed")):
++        c = rq.add_parser(name, help=help)
++        if name != "list":
++            c.add_argument("slug", help="lowercase letters, digits and -")
++        c.add_argument("--folder", help="the task folder (default: here)")
++        c.add_argument("--json", action="store_true")
++        c.set_defaults(fn=cmd_request)
++        if name == "open":
++            c.add_argument("--from", dest="from_", help="the branch it starts from (default: the remote's default branch, else the current one)")
++        if name == "close":
++            c.add_argument("--remove", action="store_true", help="also remove its worktree and branch, once nothing would be lost")
+     au = sub.add_parser("auto", help="automations: a saved task that a time or an event adds again").add_subparsers(dest="auto")
+ 
+     def auto_cmd(name, help, id=True, fields=False):
+diff --git a/herdr_task/commands.py b/herdr_task/commands.py
+index 25a9c1e..c9240ff 100644
+--- a/herdr_task/commands.py
++++ b/herdr_task/commands.py
+@@ -11,6 +11,7 @@ import sys
+ import time
+ 
+ from .base import Fail, git, guard, now, run, STORE, VERSION
++from .request import checked_out_at, merge_targets
+ from .settings import (
+     agent_argv, agent_key, bare, merge_policy, review_limits, set_opts, settings_block, settings_for, space_base,
+     task_settings, worker_argv, worktrees_on,
+@@ -963,12 +964,17 @@ def ff_merge(s, t):
+     checked out in the main folder and the branch already holds it: exactly the tested work, no
+     new combination). Returns whether it did; git refuses to touch uncommitted files."""
+     main, br, base = s.loc["folder"], t.get("branch"), t.get("base") or "main"
+-    ok, cur, _ = git(main, "symbolic-ref", "--short", "HEAD")
+     if not (br and git(main, "merge-base", "--is-ancestor", base, br)[0]):
+         return False
+-    if ok and cur == base:
+-        return git(main, "merge", "--ff-only", br)[0]
+-    # A base not checked out here (a task's own --base): its branch moves forward to the task's
++    # dotmesh request-worktree.patch: the merge lands where the base is checked out, the main
++    # folder or an open request's worktree. Anywhere else `fetch .` refuses, as upstream did.
++    where = checked_out_at(main, base, merge_targets(s))
++    if where:
++        if os.path.realpath(where) != os.path.realpath(main) and \
++                git(where, "status", "--porcelain", "--untracked-files=no")[1]:
++            raise Fail(f"{where} has uncommitted changes on {base}. Commit or stash them there, then accept again.")
++        return git(where, "merge", "--ff-only", br)[0]
++    # A base checked out nowhere (a task's own --base): its branch moves forward to the task's
+     # (git refuses unless it's a fast-forward, or when another worktree has it checked out).
+     return git(main, "fetch", ".", f"{br}:{base}")[0]
+ 
+diff --git a/herdr_task/launch.py b/herdr_task/launch.py
+index 71571da..915db7f 100644
+--- a/herdr_task/launch.py
++++ b/herdr_task/launch.py
+@@ -71,7 +71,7 @@ def own_rules(path):
+ WORKER_DENY = ("start", "add", "switch", "resume", "edit", "auto", "tick", "scheduler", "autopilot",
+                "fix", "merge", "accept", "done", "reopen", "rm", "unarchive", "backup", "restore-spaces",
+                "review-more", "config", "review", "progress", "complete", "machines", "home",
+-               "assistants", "tell-assistant", "_allow", "_session-note", "_track", "--on", "--")
++               "assistants", "tell-assistant", "request", "_allow", "_session-note", "_track", "--on", "--")
+ 
+ 
+ def worker_settings(path, rules):
+diff --git a/herdr_task/request.py b/herdr_task/request.py
+new file mode 100644
+index 0000000..9d6939a
+--- /dev/null
++++ b/herdr_task/request.py
+@@ -0,0 +1,117 @@
++"""dotmesh request-worktree.patch: a request (encargo) is a branch with its own worktree that
++several tasks branch from and merge into (`add --base request/<slug>`), so their work comes
++together away from the main folder, which is left as it is.
++
++    herdr-task request open <slug> [--from <branch>]   its branch and worktree
++    herdr-task request list                            this folder's requests
++    herdr-task request close <slug> [--remove]         marks it closed; --remove also takes the
++                                                       worktree and branch, once nothing is lost
++"""
++import os
++import re
++
++from .base import Fail, git, now, WORKTREES
++from .github import remote_of
++from .launch import base_ref, current_base
++from .output import say
++from .store import open_store
++
++SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
++
++
++def checked_out_at(main, branch, allowed):
++    """The worktree that has `branch` checked out when it is one of `allowed` (realpaths), else
++    None. A task's or the user's other worktree is never merged into."""
++    ok, out, _ = git(main, "worktree", "list", "--porcelain")
++    path = None
++    for line in out.split("\n") if ok else []:
++        if line.startswith("worktree "):
++            path = line[len("worktree "):]
++        elif line == f"branch refs/heads/{branch}" and path and os.path.realpath(path) in allowed:
++            return path
++    return None
++
++
++def merge_targets(s):
++    """Where ff_merge may merge: the main folder and this folder's open requests' worktrees."""
++    reqs = (s.data.get("requests") or {}).values()
++    return {os.path.realpath(s.loc["folder"])} | {os.path.realpath(r["worktree"]) for r in reqs
++                                                   if r.get("state") == "open" and r.get("worktree")}
++
++
++def default_branch(main):
++    """The remote's default branch when it is also here, else the folder's current one."""
++    ok, ref, _ = git(main, "symbolic-ref", "--short", f"refs/remotes/{remote_of(main)}/HEAD")
++    name = ref.split("/", 1)[1] if ok and "/" in ref else None
++    if name and git(main, "show-ref", "--verify", "--quiet", f"refs/heads/{name}")[0]:
++        return name
++    return current_base(main)
++
++
++def published(main, tip, into):
++    """Every commit up to `tip` is in `into` or on a remote-tracking branch (as last fetched)."""
++    if into and git(main, "merge-base", "--is-ancestor", tip, into)[0]:
++        return True
++    return bool(git(main, "for-each-ref", "--contains", tip, "--format=%(refname)", "refs/remotes")[1])
++
++
++def cmd_request(args):
++    verb = args.request
++    with open_store(args, write=verb != "list") as s:
++        if s.loc["kind"] != "repo":
++            raise Fail("Requests need a git repo.")
++        main, reqs = s.loc["folder"], s.data.setdefault("requests", {})
++        if verb == "list":
++            return say(args, {"requests": reqs},
++                       "\n".join(f"{k}  {r['state']}  {r['branch']}  {r['worktree']}" for k, r in sorted(reqs.items()))
++                       or "No requests.")
++        slug = args.slug
++        if not SLUG.fullmatch(slug or ""):
++            raise Fail(f"{slug!r} isn't a request name: lowercase letters, digits and -, up to 40.")
++        branch = f"request/{slug}"
++        if verb == "open":
++            if slug in reqs and not reqs[slug].get("removed"):
++                raise Fail(f"Request {slug} exists ({reqs[slug]['state']}).")
++            if git(main, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}")[0]:
++                raise Fail(f"Branch {branch} already exists.")
++            src = base_ref(main, args.from_) if args.from_ else default_branch(main)
++            path = os.path.join(WORKTREES, os.path.basename(main), f"request-{slug}")
++            if os.path.exists(path):
++                raise Fail(f"{path} already exists.")
++            os.makedirs(os.path.dirname(path), exist_ok=True)
++            ok, _, err = git(main, "worktree", "add", "-b", branch, path, src)
++            if not ok:
++                raise Fail(err or "git worktree add failed")
++            reqs[slug] = {"branch": branch, "worktree": path, "from": src, "state": "open", "created": now()}
++            s.dirty = True
++            return say(args, reqs[slug], f"Request {slug}: {branch} at {path}. Tasks join it with --base {branch}.")
++        if slug not in reqs:
++            raise Fail(f"There is no request {slug}.")
++        r = reqs[slug]
++        if args.remove:
++            busy = [s.ref(t) for t in s.data["tasks"] if t.get("base") == branch and t.get("state") != "done"]
++            if busy:
++                raise Fail(f"Tasks still work on {branch}: {', '.join(busy)}.")
++            wt = r["worktree"]
++            git(main, "worktree", "prune")
++            if os.path.isdir(wt):
++                # --ignored too: `worktree remove` deletes ignored files (.env, builds) unasked.
++                ok, dirty, err = git(wt, "status", "--porcelain", "--ignored")
++                if not ok or dirty:
++                    raise Fail(f"{wt} has uncommitted, untracked or ignored files; nothing removed." if ok else err)
++            ok, tip, _ = git(main, "rev-parse", "--verify", f"refs/heads/{branch}")
++            if ok and not published(main, tip, r.get("from")):
++                raise Fail(f"{branch} has commits that are neither in {r.get('from')} nor on a remote; nothing removed.")
++            if os.path.isdir(wt):
++                ok, _, err = git(main, "worktree", "remove", wt)
++                if not ok:
++                    raise Fail(err or "git worktree remove failed")
++            # Deleted only if it still points where `published` looked: a commit added since stays.
++            if tip:
++                ok, _, err = git(main, "update-ref", "-d", f"refs/heads/{branch}", tip)
++                if not ok:
++                    raise Fail(f"{branch} wasn't deleted: {err or 'git update-ref failed'}")
++            r["removed"] = now()
++        r["state"], r["closed"] = "closed", r.get("closed") or now()
++        s.dirty = True
++        return say(args, r, f"Request {slug} closed" + (", worktree and branch removed." if args.remove else "."))

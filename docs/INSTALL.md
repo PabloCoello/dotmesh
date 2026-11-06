@@ -94,7 +94,7 @@ make vscode-install # configura VS Code en ~/.config/Code/User/ (Linux no usa St
 | `ghostty` | `~/.config/ghostty/{config,themes/dotmesh}` |
 | `herdr` | `~/.config/herdr/config.toml` |
 | `vscode` | `~/Library/Application Support/Code/User/` (macOS, vía Stow) · `~/.config/Code/User/` (Linux, vía `make vscode-install`) |
-| `opencode` | `~/.config/opencode/{agents/,commands/,opencode.json,README.md,plugins/herdr-agent-state.js,herdr-tui-session.js,tui.jsonc}` |
+| `opencode` | `~/.config/opencode/{agents/,commands/,opencode.json,README.md,plugins/herdr-agent-state.js,herdr-tui-session.js,tui.jsonc,cli.json,herdr-opencode/tui.js}` |
 | `codex` | `~/.codex/{config.toml,AGENTS.md,hooks.json,herdr-agent-state.sh}` |
 | `claude` | `~/.claude/{settings.json,agents/,commands/,hooks/,mcp/,output-styles/,statusline.sh}` |
 | `agents` | `~/.agents/skills/<skill>/` |
@@ -222,7 +222,8 @@ agente:
   `config.toml`.
 - opencode: `~/.config/opencode/plugins/herdr-agent-state.js` más el plugin de
   la TUI, `~/.config/opencode/{herdr-tui-session.js,tui.jsonc}`, que reporta la
-  sesión que eliges en el selector.
+  sesión que eliges en el selector. Desde herdr 0.9.5 se añade una segunda
+  entrada, `cli.json` más `herdr-opencode/tui.js`, que reexporta el mismo plugin.
 
 `make stow` los enlaza en una máquina nueva; no hace falta correr `herdr
 integration install` (que reescribiría esos ficheros de forma destructiva).

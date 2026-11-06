@@ -65,6 +65,17 @@ freno real que queda, así que no lo esquives por comodidad.
   escriben por todo `$HOME` cuando instalan dotfiles; `herdr`, que necesita su
   socket Unix; y `gh`, que dentro de la caja pierde el token del llavero y se
   degrada a anónimo sin decirlo.
+- **`hc` y `herdr-task` se excluyen por sesión, nunca en la plantilla.** El
+  daemon de herdr-core arranca fuera de la caja lo que se le pida (`hc run`,
+  `send`, `file write`…), así que solo los excluye la sesión del Assistant,
+  con el `--settings` de su lanzador (`assistant/bin/assistant`), que además
+  niega los verbos de `hc` que ejecutan o escriben (`run`, `exec`, `file`…) y
+  cualquier llamada que empiece por una opción. Un worker de
+  `herdr-task` excluye solo sus propios verbos, uno a uno (`herdr-task ready *`,
+  `status *`…), y tiene negados todos los demás. Ni el Assistant ni los workers
+  tienen la escotilla: herdr-task trata como agente a quien llama sin terminal
+  de control, y con la escotilla bastaría un pty para pasar por la persona. Si una sesión normal necesita `hc`, no lo añadas a
+  la plantilla: ADR 0004, enmienda.
 - **La exclusión vale para el comando que lanzas, no para lo que ese comando
   lance.** Dentro de un script todo hereda la caja. Por eso un harness que
   arranca sesiones headless se corre por su target de `make`, no llamando al

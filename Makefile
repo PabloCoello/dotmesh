@@ -41,6 +41,7 @@ help:
 	@echo "  make vendor-check   - Comprueba metadatos upstream de componentes vendorizados (no actualiza nada)"
 	@echo "  make collie-install - Instala Collie (puente móvil de herdr) y enlaza sus presets"
 	@echo "  make terminal-browser-install - Instala Terminal Browser fijado y con el parche para artefactos de claude.ai"
+	@echo "  make assistant-install - Instala el Assistant de herdr (herdr-task vendorizado, plantillas, ajustes)"
 	@echo "  make nvim-install   - Instala Neovim >= 0.11 y el CLI de tree-sitter en ~/.local/bin (sin sudo, idempotente)"
 	@echo "  make link-skills - Symlink ~/.claude/skills -> ~/.agents/skills"
 	@echo "  make seed-claude-settings - Copia settings.json base a ~/.claude (no sobreescribe)"
@@ -270,6 +271,19 @@ collie-install:
 terminal-browser-install:
 	@bash "$(abspath terminal-browser/scripts/install.sh)"
 
+# Enlaza los atajos de la app gráfica de herdr. Fuera de PACKAGES: la app regenera su
+# keys.json al instante y Stow abortaría contra él (ver herdr-app/README.md). Solo macOS.
+.PHONY: herdr-app-install
+herdr-app-install:
+	@bash "$(abspath herdr-app/scripts/install.sh)"
+
+# Instala el Assistant (ADR 0004): herdr-task vendorizado, lanzador, plantillas y ajustes
+# iniciales. Fuera de PACKAGES y de `make install`: arranca agentes fuera del sandbox y se
+# instala a propósito. Se niega junto a un shepherdr (ver assistant/vendor/PATCHES.md).
+.PHONY: assistant-install
+assistant-install:
+	@bash "$(abspath assistant/scripts/install.sh)"
+
 .PHONY: nvim-install
 nvim-install:
 	@bash "$(abspath nvim/scripts/install-nvim.sh)"
@@ -350,6 +364,11 @@ health:
 		[ -L "$$HOME/.config/herdr/plugins/config/herdr.collie/keys.toml" ] \
 			&& echo "  ok  presets de collie enlazados" \
 			|| echo "  --  presets de collie sin enlazar (corre 'make collie-install')"; \
+	fi
+	@if [ -e "$$HOME/.herdr/.dotmesh-assistant" ] || [ -L "$$HOME/.local/bin/herdr-task" ]; then \
+		bash "$(abspath assistant/scripts/install.sh)" --status || true; \
+	else \
+		echo "  --  assistant no instalado (opcional: corre 'make assistant-install')"; \
 	fi
 	@app="$${XDG_DATA_HOME:-$$HOME/.local/share}/terminal-browser/app"; \
 	if [ -d "$$app" ]; then \

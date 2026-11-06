@@ -8,6 +8,7 @@ se descartó, por qué y qué la reabriría.
 | [0001](0001-auto-mode-no-por-defecto.md) | Auto mode no es el modo de permisos por defecto | 12-09-2026 |
 | [0002](0002-flujo-de-fases-obligatorio.md) | El flujo de fases sigue siendo obligatorio | 12-09-2026 |
 | [0003](0003-hooks-de-bash-separados.md) | Los hooks de Bash no se fusionan | 12-09-2026 |
+| [0004](0004-assistant-sobre-herdr-task.md) | El Assistant se construye sobre herdr-task vendorizado | 05-11-2026 |
 
 Las reservas a la auditoría externa que no son decisiones están en
 [`../RESERVAS-AUDITORIA.md`](../RESERVAS-AUDITORIA.md).

@@ -105,6 +105,9 @@ file, shared skills, Codex plugins, MCP servers, and explicit user requests.
 The setup has two **personas** (the equivalent of Claude's output styles and
 OpenCode's `primary` agents) and a set of **helper passes** the persona invokes.
 When the user names one of these, apply the matching behaviour.
+Claude Code has a third persona, `assistant` (the herdr Assistant, ADR 0004), with
+no Codex counterpart: it needs Claude Code's launcher and sandbox exclusion. If the
+user asks for it here, say so and work as `maker`.
 
 Personas — the stance you operate in:
 
