@@ -322,8 +322,10 @@ el Assistant ni los workers la tienen.
   de control solo añade, edita, arranca y reanuda tareas del repo en el que corre, cada una en su
   worktree y sobre un encargo abierto, sin `--here`, sin otra `--folder` y sin cambiar su
   política de integración (ni con `merge` ni con su alias `brief.merge`). Una rama que se
-  llame `request/…` sin ser un encargo abierto no basta, y una tarea de otro repo, aunque se
-  nombre por su id, tampoco. No reanuda una tarea Done. Las automatizaciones siguen la
+  llame `request/…` sin ser un encargo abierto no basta. Una tarea de otro repo, aunque se
+  nombre por su id, no se edita, ni se arranca, ni se reanuda, ni se reabre, ni se acepta.
+  `accept` y `review-more` pasan las mismas comprobaciones que `start`, porque los dos pueden
+  arrancar de nuevo al worker de la tarea. Una tarea Done no se reabre ni se reanuda. Las automatizaciones siguen la
   misma regla. Desde un terminal suyo, la persona puede hacer todo eso. Como efecto
   secundario, el Assistant tampoco puede cambiar el título de una tarea `--here` de la
   persona que aún no ha empezado.

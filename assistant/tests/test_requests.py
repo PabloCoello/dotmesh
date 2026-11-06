@@ -54,8 +54,9 @@ class Cli(unittest.TestCase):
             f.write("#!/bin/sh\necho '{}'\n")
         os.chmod(os.path.join(bindir, "hc"), 0o755)
 
-    def ht(self, *args, ok=True):
-        r = subprocess.run([sys.executable, os.path.join(BIN, "herdr-task"), *args], capture_output=True, text=True, cwd=self.repo,
+    def ht(self, *args, ok=True, cwd=None):
+        r = subprocess.run([sys.executable, os.path.join(BIN, "herdr-task"), *args], capture_output=True, text=True,
+                           cwd=cwd or self.repo,
                            env={"HOME": self.home, "PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"})
         if ok:
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -141,8 +142,19 @@ class Cli(unittest.TestCase):
         self.assertIn("dotmesh hardening", r.stderr)
         r = self.ht("start", "1", "--here", ok=False)
         self.assertIn("dotmesh hardening", r.stderr)
-        r = self.ht("resume", "1", "--folder", os.path.join(self.home, "otro", "app"), ok=False)
-        self.assertNotEqual(r.returncode, 0)
+        # A task of another repo, named by its id from here: refused for every verb that changes it.
+        self.ht("config", "--prefix", "OTR", cwd=other)
+        self.ht("request", "open", "fuera", cwd=other)
+        self.ht("add", "ajena", "--base", "request/fuera", cwd=other)
+        for verb in (["edit", "OTR-1", "--title", "y"], ["start", "OTR-1"], ["resume", "OTR-1"],
+                     ["reopen", "OTR-1"], ["accept", "OTR-1"], ["review-more", "OTR-1"]):
+            r = self.ht(*verb, ok=False)
+            self.assertIn("own repo's tasks only", r.stderr, verb)
+        # Done is the person's: an agent neither reopens nor resumes it.
+        self.ht("done", "1")
+        for verb in ("reopen", "resume"):
+            r = self.ht(verb, "1", ok=False)
+            self.assertIn("dotmesh hardening", r.stderr, verb)
 
     def test_remove_takes_work_that_is_on_a_remote(self):
         self.ht("request", "open", "pagos", "--folder", self.repo)

@@ -113,12 +113,18 @@ def agent_limits(args):
         raise Fail("An agent's task branches from an open request: --base request/<slug> (dotmesh hardening).")
 
 
+def own_repo(s, t):
+    """An agent's task is in the repo it runs in: the store a task id picks (HAT-4 from anywhere)
+    can be another repo's."""
+    if no_terminal() and os.path.realpath(s.loc["folder"]) != os.path.realpath(locate(None)["folder"]):
+        raise Fail(f"{s.ref(t)} belongs to {s.loc['folder']}; an agent works on its own repo's tasks only (dotmesh hardening).")
+
+
 def agent_task_ok(s, t):
+    """What an agent may start, or have started for it (start, resume, accept, review-more)."""
     if not no_terminal():
         return
-    # The store a task id picks (HAT-4 from anywhere) must be this repo's too.
-    if os.path.realpath(s.loc["folder"]) != os.path.realpath(locate(None)["folder"]):
-        raise Fail(f"{s.ref(t)} belongs to {s.loc['folder']}; an agent works on its own repo's tasks only (dotmesh hardening).")
+    own_repo(s, t)
     from .request import open_request
     try:
         # Its base, or the main folder's branch when it's the same (set_base doesn't keep it then).
@@ -317,6 +323,7 @@ def cmd_start(args):
     agent_limits(args)
     with open_store(args) as s:
         t = s.find(args.id)
+        own_repo(s, t)
         live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
         if live:
             raise Fail(f"{s.ref(t)} is already running ({live[0]['address']}). Use switch or resume.")
@@ -524,6 +531,7 @@ def cmd_review_more(args):
     labels = caller_labels()
     with open_store(args) as s:
         t = s.find(args.id)
+        agent_task_ok(s, t)  # dotmesh hardening.patch: its agent may be started again
         if labels.get("herdr.task") == s.key(t) or labels.get("herdr.role") == "reviewer":
             raise Fail("A task's own agent can't add review rounds: say why in your chat and end your turn; your Assistant decides.")
         on, rounds = review_limits(s, t)
@@ -735,6 +743,9 @@ def cmd_review(args):
 def cmd_state(args, state):
     with open_store(args) as s:
         t = s.find(args.id)
+        own_repo(s, t)
+        if state == "reopen" and t["state"] == "done" and no_terminal():
+            raise Fail(f"{s.ref(t)} is done: the person reopens it, at a terminal of their own (dotmesh hardening).")
         if state == "reopen":
             state = "running" if t.get("started") and t["state"] not in ("queued", "scheduled") else "todo"
             for k in ("reviews", "review", "auto_merge", "merged", "nothing_to_merge", "accepted_at"):
@@ -765,6 +776,7 @@ def cmd_edit(args):
     agent_limits(args)
     with open_store(args) as s:
         t = s.find(args.id)
+        own_repo(s, t)
         old = t["title"]
         if args.title is not None:
             t["title"] = args.title.strip() or t["title"]
@@ -1187,6 +1199,7 @@ def cmd_accept(args):
     error, how, sent, started, back = None, "done", None, False, False
     with open_store(args) as s:
         t = s.find(args.id)
+        agent_task_ok(s, t)  # dotmesh hardening.patch: a merge by its agent may start one
         if t["state"] != "ready":
             raise Fail(f"{s.ref(t)} isn't ready ({t['state']}); only a Ready task can be accepted.")
         # Its agent at work again since it said ready: never accepted half done. Working again

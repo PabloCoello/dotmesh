@@ -149,7 +149,7 @@ index c43180e..5f601a2 100644
      cmd("unarchive", cmd_unarchive, "bring an archived task back into its list (only when the person asks; writing to it does too)")
      c = cmd("edit", cmd_edit, "change a task")
 diff --git a/herdr_task/commands.py b/herdr_task/commands.py
-index 989d241..05c2199 100644
+index 989d241..66df5da 100644
 --- a/herdr_task/commands.py
 +++ b/herdr_task/commands.py
 @@ -9,15 +9,16 @@ import shlex
@@ -171,7 +171,7 @@ index 989d241..05c2199 100644
  )
  from .sessions import refresh_sessions
  from .github import finish, gh, github, merged_here, own_work, pr_adopt, pr_open, pr_pending, pr_problem, pr_view, update_main, watch_main
-@@ -89,11 +90,52 @@ def cmd_list(args):
+@@ -89,11 +90,58 @@ def cmd_list(args):
              print("No archived tasks." if args.archived else "No tasks.")
  
  
@@ -198,12 +198,18 @@ index 989d241..05c2199 100644
 +        raise Fail("An agent's task branches from an open request: --base request/<slug> (dotmesh hardening).")
 +
 +
++def own_repo(s, t):
++    """An agent's task is in the repo it runs in: the store a task id picks (HAT-4 from anywhere)
++    can be another repo's."""
++    if no_terminal() and os.path.realpath(s.loc["folder"]) != os.path.realpath(locate(None)["folder"]):
++        raise Fail(f"{s.ref(t)} belongs to {s.loc['folder']}; an agent works on its own repo's tasks only (dotmesh hardening).")
++
++
 +def agent_task_ok(s, t):
++    """What an agent may start, or have started for it (start, resume, accept, review-more)."""
 +    if not no_terminal():
 +        return
-+    # The store a task id picks (HAT-4 from anywhere) must be this repo's too.
-+    if os.path.realpath(s.loc["folder"]) != os.path.realpath(locate(None)["folder"]):
-+        raise Fail(f"{s.ref(t)} belongs to {s.loc['folder']}; an agent works on its own repo's tasks only (dotmesh hardening).")
++    own_repo(s, t)
 +    from .request import open_request
 +    try:
 +        # Its base, or the main folder's branch when it's the same (set_base doesn't keep it then).
@@ -226,7 +232,7 @@ index 989d241..05c2199 100644
      at = scheduled_at(args)  # refused before anything is added
      with open_store(args) as s:
          repo = s.loc["kind"] == "repo"
-@@ -105,6 +147,7 @@ def cmd_add(args):
+@@ -105,6 +153,7 @@ def cmd_add(args):
          set_opts(t, args)
          space = bare(args.space) if args.space else caller_space()
          set_base(s, t, args.base, space, new=True)
@@ -234,15 +240,18 @@ index 989d241..05c2199 100644
          set_notes(t, args)
          if args.after:
              set_after(s, t, *parse_after(s, args.after))
-@@ -271,6 +314,7 @@ def begin(s, t, argv, space, parent=None):
+@@ -271,8 +320,10 @@ def begin(s, t, argv, space, parent=None):
  
  
  def cmd_start(args):
 +    agent_limits(args)
      with open_store(args) as s:
          t = s.find(args.id)
++        own_repo(s, t)
          live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
-@@ -282,6 +326,7 @@ def cmd_start(args):
+         if live:
+             raise Fail(f"{s.ref(t)} is already running ({live[0]['address']}). Use switch or resume.")
+@@ -282,6 +333,7 @@ def cmd_start(args):
              t["mode"] = "here"
          elif args.worktree and worktrees_on(s):
              t["mode"] = "worktree"
@@ -250,7 +259,15 @@ index 989d241..05c2199 100644
          q = t.get("queue") or {}
          space = bare(args.space) if args.space else (q.get("space") or default_space())
          argv = agent_argv(None, args.argv) if args.argv else worker_argv(s, t, space, args.agent) if args.agent else \
-@@ -631,6 +676,12 @@ def finalize(s, t):
+@@ -479,6 +531,7 @@ def cmd_review_more(args):
+     labels = caller_labels()
+     with open_store(args) as s:
+         t = s.find(args.id)
++        agent_task_ok(s, t)  # dotmesh hardening.patch: its agent may be started again
+         if labels.get("herdr.task") == s.key(t) or labels.get("herdr.role") == "reviewer":
+             raise Fail("A task's own agent can't add review rounds: say why in your chat and end your turn; your Assistant decides.")
+         on, rounds = review_limits(s, t)
+@@ -631,6 +684,12 @@ def finalize(s, t):
                  err = merge_now(s, t)
                  return msg + (f" Merging it waits: {err}" if err else " Merged; done.")
              return msg + " It merges by itself once its checks pass."
@@ -263,15 +280,27 @@ index 989d241..05c2199 100644
          try:
              sent, started = tell(s, t, local_merge_msg(s, t), None)
              t["merge_requested"] = now()
-@@ -711,6 +762,7 @@ def cmd_unarchive(args):
+@@ -684,6 +743,9 @@ def cmd_review(args):
+ def cmd_state(args, state):
+     with open_store(args) as s:
+         t = s.find(args.id)
++        own_repo(s, t)
++        if state == "reopen" and t["state"] == "done" and no_terminal():
++            raise Fail(f"{s.ref(t)} is done: the person reopens it, at a terminal of their own (dotmesh hardening).")
+         if state == "reopen":
+             state = "running" if t.get("started") and t["state"] not in ("queued", "scheduled") else "todo"
+             for k in ("reviews", "review", "auto_merge", "merged", "nothing_to_merge", "accepted_at"):
+@@ -711,16 +773,17 @@ def cmd_unarchive(args):
  
  
  def cmd_edit(args):
 +    agent_limits(args)
      with open_store(args) as s:
          t = s.find(args.id)
++        own_repo(s, t)
          old = t["title"]
-@@ -719,8 +771,7 @@ def cmd_edit(args):
+         if args.title is not None:
+             t["title"] = args.title.strip() or t["title"]
          if args.prompt is not None:
              t["prompt"] = args.prompt
          if args.prompt_file:
@@ -281,7 +310,7 @@ index 989d241..05c2199 100644
          pick = [t.get(k) for k in ("agent", "model", "effort")]
          set_opts(t, args)
          if [t.get(k) for k in ("agent", "model", "effort")] != pick:
-@@ -744,6 +795,8 @@ def cmd_edit(args):
+@@ -744,6 +807,8 @@ def cmd_edit(args):
              if args.worktree and s.loc["kind"] != "repo":
                  raise Fail("Worktrees need a git repo.")
              t["mode"] = "here" if args.here else "worktree"
@@ -290,7 +319,7 @@ index 989d241..05c2199 100644
          s.dirty = True
          tabs = task_tabs(s, t) if t["title"] != old else []
          v = view(s, t)
-@@ -811,8 +864,12 @@ def start_again(s, t, space, key=None, argv_json=None, message=None, parent=None
+@@ -811,8 +876,12 @@ def start_again(s, t, space, key=None, argv_json=None, message=None, parent=None
  
  
  def cmd_resume(args):
@@ -303,7 +332,7 @@ index 989d241..05c2199 100644
          live = [k for k in map(detail, live_agents(s.key(t))) if agent_running(k)]
          if live:
              raise Fail(f"{s.ref(t)} still has an agent ({live[0]['address']}). Use switch to replace it.")
-@@ -876,6 +933,86 @@ def tell(s, t, msg, args):
+@@ -876,6 +945,86 @@ def tell(s, t, msg, args):
      return a["address"], True
  
  
@@ -390,7 +419,7 @@ index 989d241..05c2199 100644
  def local_merge_msg(s, t):
      main, wt, br, base = s.loc["folder"], t["worktree"], t["branch"], t.get("base") or "main"
      q = shlex.quote
-@@ -962,13 +1099,16 @@ def in_base(s, t):
+@@ -962,13 +1111,16 @@ def in_base(s, t):
      return bool(tip) and (tip == t.get("start") or git(s.loc["folder"], "merge-base", "--is-ancestor", tip, t.get("base") or "main")[0])
  
  
@@ -408,7 +437,7 @@ index 989d241..05c2199 100644
      # dotmesh request-worktree.patch: the merge lands where the base is checked out, the main
      # folder or an open request's worktree. Anywhere else `fetch .` refuses, as upstream did.
      where = checked_out_at(main, base, merge_targets(s))
-@@ -976,10 +1116,67 @@ def ff_merge(s, t):
+@@ -976,10 +1128,67 @@ def ff_merge(s, t):
          if os.path.realpath(where) != os.path.realpath(main) and \
                  git(where, "status", "--porcelain", "--untracked-files=no")[1]:
              raise Fail(f"{where} has uncommitted changes on {base}. Commit or stash them there, then accept again.")
@@ -478,7 +507,15 @@ index 989d241..05c2199 100644
  
  
  def cmd_accept(args):
-@@ -1005,14 +1202,29 @@ def cmd_accept(args):
+@@ -990,6 +1199,7 @@ def cmd_accept(args):
+     error, how, sent, started, back = None, "done", None, False, False
+     with open_store(args) as s:
+         t = s.find(args.id)
++        agent_task_ok(s, t)  # dotmesh hardening.patch: a merge by its agent may start one
+         if t["state"] != "ready":
+             raise Fail(f"{s.ref(t)} isn't ready ({t['state']}); only a Ready task can be accepted.")
+         # Its agent at work again since it said ready: never accepted half done. Working again
+@@ -1005,14 +1215,29 @@ def cmd_accept(args):
          # failed once, doesn't stand in the way. Without one, only a failed try doesn't.
          elif t.get("attention") and not t.get("pr") and not t["attention"].startswith(("Couldn't ask for the merge", MERGE_FAILED)):
              raise Fail(f"{s.ref(t)} needs attention first: {t['attention']}")
@@ -509,7 +546,7 @@ index 989d241..05c2199 100644
          t["accepted_at"] = now()
          s.dirty = True
          if not wt:
-@@ -1028,7 +1240,7 @@ def cmd_accept(args):
+@@ -1028,7 +1253,7 @@ def cmd_accept(args):
              # Its own work already in the base branch, or none of its own: nothing to merge.
              t["merged"] = merged_here(s, t)
              finish(s, t, even_if_busy=True)
