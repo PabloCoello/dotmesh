@@ -455,6 +455,49 @@ Prueba: `assistant/tests/test_hardening.py` y `test_launcher.py`.
 
 Las pruebas se lanzan con `python3 -m unittest discover -s assistant/tests`.
 
+## `interface.patch`
+
+Ordena la interfaz por encargo. Se aplica después de `hardening.patch`.
+
+- **Verbo `board`** (`commands.py`, `output.py`): las tareas sin terminar de una carpeta,
+  agrupadas por encargo (la rama base `request/<slug>`), con primero lo que necesita a la
+  persona y después, por este orden, lo listo, lo que se está integrando (`merging`), lo que
+  trabaja, lo que espera en cola, lo programado y lo pendiente. Las
+  tareas sin encargo van al final. Abre el almacén en solo lectura. `--watch` lo redibuja
+  cada tres segundos y se niega sin terminal o con `--json`, para que una llamada de Bash
+  del Assistant, que corre fuera del sandbox, no se quede en un bucle. `list` agrupa igual
+  (su `--json` no cambia) y `request list` añade el recuento de tareas por estado.
+  `board` sale del sandbox en la sesión del Assistant (`assistant/bin/assistant`) y queda
+  en `WORKER_DENY` para los workers.
+- **Pestaña por encargo** (`launch.py`): un worker cuya rama base es `request/<slug>` se
+  lanza con las etiquetas `herdr.space`, `herdr.request=<slug>` y, si el espacio ya tiene
+  una pestaña con ese nombre, `herdr.tab`. herdr-app lo muestra entonces como panel. Sin
+  `herdr.tab`, herdr-app crea una pestaña y `name_new_tab` la renombra al encargo. No se
+  usa `tab.new` porque siempre abre un terminal de más, y una pestaña sin terminales vivos
+  desaparece sola (medido el 06-11-2026), así que no hay identificador que guardar ni
+  pestaña que cerrar. El slug se vuelve a validar contra `[a-z0-9][a-z0-9-]{0,39}`. Los
+  revisores, los espacios de otra máquina (`vm/sp…`) y las tareas sin encargo siguen ocultos;
+  sin herdr-app, todo queda como antes. Si el espacio no está en la ventana, se avisa en una
+  línea.
+- `task_tabs` ignora a los agentes con `herdr.request`, para que renombrar una tarea o
+  cambiar el prefijo no renombre la pestaña que comparten las tareas del encargo.
+
+Quedan abiertos:
+
+- La pestaña se busca por nombre. Si la persona crea otra con el mismo nombre, los workers
+  entran en ella; si renombra la del encargo, el siguiente worker abre una nueva. Dos carpetas
+  que comparten espacio pueden crear dos pestañas a la vez (dentro de una carpeta el lock del
+  almacén serializa los arranques), y si la pestaña se vacía entre `herdr-app ls` y `hc run`,
+  `herdr.tab` apunta a una que ya no existe; esto último no está medido.
+- Cerrar la pestaña en herdr-app termina los terminales de sus workers.
+- Un worker en pestaña lleva `herdr.space`, que `autopilot.my_space` toma como espacio por
+  defecto del Assistant. Es un valor por defecto, no una barrera (`--space` lo sustituye), y
+  los workers tienen `autopilot` negado.
+- La salida de un worker llega a la ventana, con sus secuencias de escape (OSC 52 incluida).
+  Riesgo aceptado en la enmienda del 06-11-2026 del ADR 0004.
+
+Prueba: `assistant/tests/test_interface.py` y `test_launcher.py` (panel del tablero).
+
 ## Actualizar el pin
 
 1. Clona upstream en un directorio aparte y compara `mods/tasks/bin` entre el commit anclado

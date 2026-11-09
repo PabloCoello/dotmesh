@@ -29,7 +29,7 @@ from .launch import (
 from .store import is_task_list, locate, open_store, prefixes_in_use, read_list, Store, store_files
 from .queues import after_refs, parse_after, queue_reason, set_after
 from .archive import unarchive
-from .output import line, minutes, say, view
+from .output import board_groups, board_text, line, minutes, say, view
 from .scheduler import ensure_scheduler
 from .proof import evidence, find_proof
 from .when import when_from
@@ -55,18 +55,8 @@ def cmd_list(args):
         if not os.path.isdir(folder):
             continue
         with Store(locate(folder)) as s:
-            out = []
+            out = task_views(s, args.archived)
             archived = sum(1 for t in s.data["tasks"] if t.get("archived"))
-            for t in s.data["tasks"]:
-                if bool(t.get("archived")) != args.archived:
-                    continue
-                mine = live_agents(s.key(t)) if t["state"] in ("running", "ready") else []
-                if mine:
-                    refresh_sessions(s, t, mine)
-                v = view(s, t, [detail(k) for k in mine] if mine else [])
-                if t["state"] == "queued":
-                    v["reason"] = queue_reason(s, t)
-                out.append(v)
             if args.archived:
                 out.sort(key=lambda v: -(v.get("archived") or 0))
             groups.append({"folder": s.loc["folder"], "name": s.loc["name"], "kind": s.loc["kind"], "tasks": out,
@@ -77,8 +67,13 @@ def cmd_list(args):
     for g in groups:
         if args.all:
             print(f"{g['name']}  {g['folder']}")
+        if not args.all and not args.archived:
+            # dotmesh interface.patch: one folder's tasks grouped by request, as the board.
+            shown = board_groups(g["tasks"])
+            if shown:
+                print(board_text(shown))
         for v in g["tasks"]:
-            if v["state"] != "done" or args.all or args.archived:
+            if args.all or args.archived:
                 print(("  " if args.all else "") + line(v))
         hidden = sum(1 for v in g["tasks"] if v["state"] == "done") if not args.archived else 0
         more = [f"{hidden} done"] if hidden and not args.all else []
@@ -88,6 +83,47 @@ def cmd_list(args):
             print(f"({'; '.join(more)})")
         elif not g["tasks"] and not args.all:
             print("No archived tasks." if args.archived else "No tasks.")
+
+
+def task_views(s, archived=False):
+    """Each task's view (archived ones, or the rest), with its live agents and queue reason."""
+    out = []
+    for t in s.data["tasks"]:
+        if bool(t.get("archived")) != archived:
+            continue
+        mine = live_agents(s.key(t)) if t["state"] in ("running", "ready") else []
+        if mine:
+            refresh_sessions(s, t, mine)
+        v = view(s, t, [detail(k) for k in mine] if mine else [])
+        if t["state"] == "queued":
+            v["reason"] = queue_reason(s, t)
+        out.append(v)
+    return out
+
+
+# dotmesh interface.patch: the board, read only: this folder's tasks grouped by request (encargo),
+# what needs the person first. --watch redraws it every few seconds until interrupted.
+def cmd_board(args):
+    if args.watch and (args.json or not sys.stdout.isatty()):
+        raise Fail("--watch redraws a terminal: run it in a pane, without --json.")
+    try:
+        while True:
+            with Store(locate(args.folder), write=False) as s:
+                groups = board_groups(task_views(s))
+                folder = s.loc["folder"]
+            if args.json:
+                print(json.dumps({"folder": folder, "requests": groups}))
+                return
+            if not args.watch:
+                print(board_text(groups))
+                return
+            print("\033[H\033[2J" + board_text(groups), flush=True)
+            time.sleep(BOARD_EVERY)
+    except KeyboardInterrupt:
+        return
+
+
+BOARD_EVERY = 3
 
 
 # dotmesh hardening.patch: an agent (a caller with no terminal, base.no_terminal) adds, edits and

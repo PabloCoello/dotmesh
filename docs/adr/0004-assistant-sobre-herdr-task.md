@@ -129,6 +129,39 @@ excluye del sandbox verbo a verbo (de `hc`, solo `get`, `ls`, `read` y `wait`) y
 solo llegan al worker de la tarea y con `claude` delante. El detalle, en
 `assistant/vendor/PATCHES.md`.
 
+## Enmienda del 06-11-2026: los workers de un encargo son paneles
+
+La alternativa de los paneles del TUI se descartó porque un panel por tarea devolvía la
+vigilancia manual a la persona. Con varios encargos abiertos apareció el problema
+contrario: los workers corrían ocultos, `herdr-task list` mezclaba los encargos y la
+persona no sabía qué pasaba ni dónde contestar. Lo que se rechazó entonces era que la
+persona tuviera que vigilar los paneles; verlos no exige vigilarlos si otro lo hace por ella.
+
+Ahora cada worker de un encargo se lanza como panel de una pestaña de herdr-app con el
+nombre del encargo (`interface.patch`). La vigilancia sigue siendo del Assistant: las
+noticias le llegan igual, y es él quien avisa y resume. El panel solo sirve para que la
+persona mire o conteste a un worker sin `hc attach`. A eso se suman `herdr-task board`, que
+agrupa las tareas por encargo y se abre junto al Assistant, y un formato fijo de resumen
+por encargo en la persona.
+
+Mediciones del 06-11-2026 en macOS:
+
+- Un terminal de `hc run` con la etiqueta `herdr.space` aparece como panel: sin `herdr.tab`
+  herdr-app crea una pestaña nueva, y con ella entra en la indicada. Por eso no se usa
+  `tab.new`, que siempre abre un terminal de más: el primer worker crea la pestaña,
+  `herdr-task` la renombra al encargo y los siguientes la buscan por nombre.
+- Al terminar un worker su panel desaparece, y una pestaña sin terminales vivos desaparece
+  sola, así que ni Done ni `request close` tienen que cerrar nada.
+- herdr-app detecta el estado de un `claude` lanzado así (`app: claude-code`, `idle`) sin el
+  hook `herdr-agent-state.sh`.
+
+Riesgos aceptados, señalados por la puerta de seguridad: la salida de un worker llega
+ahora a la ventana, de modo que una secuencia de escape (OSC 52, por ejemplo) de un worker
+manipulado alcanza la interfaz de la persona; y la persona puede confundir el panel de un
+worker con el del Assistant y escribir en él. Lo segundo es el error menos grave, porque
+el worker sigue confinado. Los mods de interfaz de shepherdr (panel de tareas, tarjetas) se
+descartaron: son JavaScript sin confinar y su botón de aceptar se salta la confirmación.
+
 ## Consecuencias
 
 - Código de terceros corre sin confinar. `herdr-task` y `hc` están en `excludedCommands`,
@@ -140,7 +173,8 @@ solo llegan al worker de la tarea y con `claude` delante. El detalle, en
 - La exclusión solo vale para el comando desnudo. Una tubería, una redirección o un
   `$( )` lo meten en la caja y `hc` falla con el error de socket. Las instrucciones del
   Assistant reescriben los fragmentos de upstream que encadenan con `jq`.
-- El hook `herdr-agent-state.sh` no cubre los workers, que no tienen panel de herdr. El
+- El hook `herdr-agent-state.sh` no cubre los workers, que no tienen panel de herdr (salvo
+  los de un encargo desde la enmienda del 06-11-2026, que herdr-app detecta solo). El
   estado «needs-you» depende de lo que Claude Code publique a `hc` y de que el worker lo
   declare; el spec lo mide en la primera rebanada y fija un plan B.
 - Excepción a la paridad: OpenCode y Codex no tienen Assistant. La tabla de paridad y

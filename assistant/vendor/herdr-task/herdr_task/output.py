@@ -94,3 +94,51 @@ def line(v):
         w = v["report"]
         extra = w["text"] + (f" · {w['done']}%" if w.get("done") is not None else "") + (f" · ~{minutes(w['left'])} left" if w.get("left") is not None else "")
     return f"{v['ref']:<7} {word:<9} {v['title']}" + (f"  ({extra})" if extra else "")
+
+
+# dotmesh interface.patch: the board, tasks grouped by request (encargo), the neediest first.
+BOARD_ORDER = ("needs", "ready", "merging", "working", "queued", "scheduled", "todo")
+COUNT_WORDS = {"needs": "needs you", "ready": "ready", "merging": "merging", "working": "working",
+               "queued": "queued", "scheduled": "scheduled", "todo": "to do"}
+
+
+def request_of(v):
+    """The request a task belongs to (its base is request/<slug>), else None."""
+    base = v.get("base") or ""
+    return base[len("request/"):] if base.startswith("request/") else None
+
+
+def counts_of(views):
+    out = {}
+    for v in views:
+        if v["status"] in BOARD_ORDER:
+            out[v["status"]] = out.get(v["status"], 0) + 1
+    return out
+
+
+def counts_line(counts):
+    return " · ".join(f"{counts[k]} {COUNT_WORDS[k]}" for k in BOARD_ORDER if counts.get(k)) or "nothing active"
+
+
+def board_groups(views):
+    """[{request, counts, tasks}] for the tasks not done: in each group by BOARD_ORDER (then as
+    listed), groups by their neediest task, then name; tasks with no request last."""
+    groups = {}
+    for v in views:
+        if v["status"] in BOARD_ORDER:
+            groups.setdefault(request_of(v), []).append(v)
+    rank = BOARD_ORDER.index
+    out = [{"request": r, "counts": counts_of(ts), "tasks": sorted(ts, key=lambda v: rank(v["status"]))}
+           for r, ts in groups.items()]
+    out.sort(key=lambda g: (g["request"] is None, rank(g["tasks"][0]["status"]), g["request"] or ""))
+    return out
+
+
+def board_text(groups):
+    if not groups:
+        return "Nothing on the board."
+    rows = []
+    for g in groups:
+        rows.append(f"{g['request'] or '(no request)':<20} {counts_line(g['counts'])}")
+        rows += ["  " + line(v) for v in g["tasks"]]
+    return "\n".join(rows)
